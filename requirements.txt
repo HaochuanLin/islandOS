@@ -1,0 +1,4 @@
+# islandOS MVP simulation prototype
+# Python >= 3.8 is required (dataclasses, type hints)
+numpy>=1.21
+matplotlib>=3.5
