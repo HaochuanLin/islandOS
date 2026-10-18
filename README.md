@@ -129,7 +129,7 @@ The points below are the **intended** impact of the approach. The current protot
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-username>/islandOS.git
+git clone https://github.com/HaochuanLin/islandOS.git
 cd islandOS
 
 # 2. (Optional) create a virtual environment
