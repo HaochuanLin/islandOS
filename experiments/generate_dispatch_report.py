@@ -85,7 +85,34 @@ def _svg_chart(rows: list[dict]) -> str:
 def generate_report(output_dir: str | Path) -> dict:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    rows = run_comparison()
+    audit_records: list[dict] = []
+    rows = run_comparison(audit_records=audit_records)
+    audit_failures = sum(record["status"] != "pass" for record in audit_records)
+    audit_payload = {
+        "project": "IslandOS",
+        "audit_version": 1,
+        "experiment": "synthetic_dispatch_policy_comparison",
+        "data_status": "synthetic illustrative scenarios; not field measurements",
+        "time_step_hours": 1.0,
+        "timestep_record_count": len(audit_records),
+        "failed_timestep_count": audit_failures,
+        "overall_status": "pass" if audit_failures == 0 else "fail",
+        "checks": [
+            "renewable power budget: available = used + remaining",
+            "per-load inventory conservation: before + produced - spill - served = after",
+            "per-load demand balance: served + unmet = requested demand energy/volume",
+            "configured inventory bounds and explicit component constraint violations",
+        ],
+        "limitations": [
+            "Synthetic illustrative scenarios, not field measurements.",
+            "This audit validates accounting and configured bounds, not plant safety, model fidelity, or field feasibility.",
+            "A component constraint violation is reported as a failed timestep even when arithmetic balances hold.",
+        ],
+        "timesteps": audit_records,
+    }
+    (out / "audit_report.json").write_text(json.dumps(audit_payload, indent=2), encoding="utf-8")
+    if audit_failures:
+        raise RuntimeError(f"Dispatch audit failed for {audit_failures} timestep records")
     payload = {
         "project": "IslandOS",
         "experiment": "synthetic_dispatch_policy_comparison",
@@ -146,7 +173,7 @@ def generate_report(output_dir: str | Path) -> dict:
         "",
         "    python experiments/generate_dispatch_report.py --output-dir build/dispatch-report",
         "",
-        "Generated from experiments/compare_dispatch_policies.py. Power-budget accounting checks run in the simulator before results are returned.",
+        "Generated from experiments/compare_dispatch_policies.py. The machine-readable `audit_report.json` records hourly power, inventory and demand-balance residuals plus capacity/constraint flags. A non-zero audit failure count stops report generation.",
         "",
     ])
     (out / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
@@ -155,7 +182,9 @@ def generate_report(output_dir: str | Path) -> dict:
         "run_count": len(rows),
         "scenario_count": payload["scenario_count"],
         "policy_count": payload["policy_count"],
-        "files": ["REPORT.md", "results.csv", "results.json", "dispatch_comparison.svg"],
+        "audit_status": audit_payload["overall_status"],
+        "audit_timestep_count": len(audit_records),
+        "files": ["REPORT.md", "results.csv", "results.json", "dispatch_comparison.svg", "audit_report.json"],
         "data_status": payload["data_status"],
     }
 
