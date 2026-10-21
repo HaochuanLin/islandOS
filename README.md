@@ -146,7 +146,7 @@ flowchart LR
     F --> G["Choose using disclosed weights"]
 ```
 
-The current optimizer exhaustively searches a **small discrete policy space**: two priority orders × four RO minimum-run durations. The recommendation is selected from the same evaluated Pareto archive. This is a connected, reproducible optimization baseline—not machine learning, NSGA-II, or a global optimum over every possible hourly schedule.\n\n### Experimental NSGA-II optimizer
+The grid-search baseline exhaustively searches a small policy space (two priority orders × four RO minimum-run durations). The separate NSGA-II prototype evolves candidates across priority, RO minimum-run duration, RO start threshold, RO rated power, and chiller rated power. The site-data workflow can optionally add annualized lifecycle cost as a fourth objective when the required cost inputs and complete annual data are available. Neither optimizer covers every possible hourly setpoint, and results remain conditional on simplified physics and supplied inputs.\n\n### Experimental NSGA-II optimizer
 
 Run `python optimization/nsga2_dispatch_optimizer.py --json` to evolve candidate policies with NSGA-II (non-dominated sorting, crowding distance, and tournament selection). It minimizes unmet water demand, unmet cooling demand, and remaining renewable surplus while filtering candidates through the independent dispatch audit. The default run is deterministic (`--seed 20261021`) and reports how many unique candidates were evaluated.
 
@@ -208,7 +208,7 @@ python experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \
 
 The JSON configuration controls RO specific energy and reservoir assumptions, chiller COP and thermal-storage assumptions, and the discrete NSGA-II search ranges. Unknown economic values (electricity price, capital cost, O&M, analysis horizon and discount rate) can remain `null`. The result JSON records the applied equipment/search configuration and lists missing economic fields.
 
-**Important limitation:** these cost fields are reserved inputs only. The current optimizer does not calculate lifecycle costs or use cost as an objective, so providing prices does not make the result cost-optimal. The example equipment values are illustrative defaults, not vendor data or measurements. Document the source, date and uncertainty of every real-site assumption. See [parameter configuration guide](docs/PARAMETER_CONFIGURATION.md).
+**Cost-objective status:** when every required economic field is supplied, the site-data optimizer adds annualized lifecycle cost as a fourth Pareto objective, but only for a complete calendar-year CSV. Partial-year inputs are rejected for cost optimization; backup-generation cost is not yet modeled. This is a first-pass estimate with documented exclusions, not a bankable techno-economic assessment. The example equipment values are illustrative defaults, not vendor data or measurements. Document the source, date and uncertainty of every real-site assumption. See [parameter configuration guide](docs/PARAMETER_CONFIGURATION.md).
 
 ## Implementation status
 
