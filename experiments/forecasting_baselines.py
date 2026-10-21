@@ -92,6 +92,7 @@ def evaluate_baselines(input_csv: str | Path, output_csv: str | Path,
     train_indices = prediction_indices[:split_position]
     test_indices = prediction_indices[split_position:]
 
+    train_index_set = set(train_indices)
     output_rows = []
     for i in prediction_indices:
         output_rows.append({
@@ -99,7 +100,7 @@ def evaluate_baselines(input_csv: str | Path, output_csv: str | Path,
             "actual": values[i],
             "persistence_forecast": values[i - 1],
             "seasonal_naive_24h_forecast": values[i - SEASONAL_LAG_HOURS],
-            "split": "train" if i in set(train_indices) else "test",
+            "split": "train" if i in train_index_set else "test",
         })
 
     output_path = Path(output_csv)
