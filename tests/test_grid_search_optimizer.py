@@ -46,6 +46,12 @@ class TestGridSearchOptimizer(unittest.TestCase):
         chosen = recommend([invalid_but_attractive, feasible])
         self.assertEqual(chosen["candidate_id"], "valid")
 
+    def test_recommendation_rejects_candidate_missing_explicit_audit(self):
+        unaudited = {"candidate_id": "unaudited", "feasible": True, "objectives": {
+            "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
+        with self.assertRaisesRegex(ValueError, "No feasible candidate"):
+            recommend([unaudited])
+
     def test_recommendation_rejects_archive_with_only_infeasible_candidates(self):
         invalid = {"candidate_id": "invalid", "feasible": False, "objectives": {
             "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
