@@ -46,6 +46,22 @@ Keep raw data unchanged. Do not call a value “measured” just because it was 
 
 The JSON reserves fields for electricity price, RO/chiller capital and fixed O&M costs, RO variable O&M, analysis period, discount rate, and currency. They are **not yet a lifecycle-cost model**. Supplying these values does not change the NSGA-II objective functions, and the output must not be described as cost-optimal. A cost model needs a documented system boundary, replacement schedules, discounting, capacity-factor assumptions, and explicit treatment of unmet-service penalties before cost can be optimized responsibly.
 
+## Run an equipment sensitivity check
+
+Use the same hourly CSV and base configuration to test whether conclusions change when one uncertain equipment assumption is varied:
+
+```bash
+python experiments/parameter_sensitivity.py path/to/site_hourly.csv \
+  --config config/site_parameters.example.json \
+  --source-type measured \
+  --relative-change 0.2 \
+  --output build/parameter-sensitivity.json
+```
+
+The current experiment compares a baseline with low/high perturbations for RO specific energy, chiller COP, freshwater reservoir capacity, and thermal-storage capacity. It uses a fixed seed and the same optimizer budget for every case, then records Pareto-objective ranges and feasible-candidate counts. Storage-capacity perturbations are clipped so the capacity cannot fall below the configured initial inventory.
+
+This is a deterministic one-factor-at-a-time stress test, **not** probabilistic uncertainty quantification, a confidence interval, or evidence that a tested value is likely. It does not yet model parameter interactions, cost uncertainty, forecast uncertainty, or lifecycle costs. Conclusions remain conditional on the supplied data and simplified physics.
+
 ## What validation does and does not mean
 
 The validator rejects non-finite/negative cost values, invalid equipment bounds, invalid COP/specific-energy values, and malformed decision ranges. It does not validate manufacturer claims, plant safety, thermodynamics beyond implemented simplified checks, or whether an assumed value represents a real island. Missing costs are allowed and reported as missing.
