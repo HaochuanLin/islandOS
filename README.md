@@ -166,6 +166,19 @@ This is a multi-objective evolutionary-search prototype, **not a trained AI mode
 
 ### Bring your own site data\n\nNo real-island dataset is required to develop the interface. Copy [`data/templates/site_hourly_input_template.csv`](data/templates/site_hourly_input_template.csv), add one row per hour, and provide data in the documented units. The input columns are:\n\n- `timestamp`: ISO-8601 timestamp with timezone, such as `2026-01-01T00:00:00Z`\n- `wind_kw`, `pv_kw`: average wind and solar power during the hour, in kW\n- `critical_load_kw`: average essential electricity demand during the hour, in kW\n- `water_demand_m3`: freshwater demand during that hourly interval, in m³\n- `cooling_demand_kw_th`: cooling demand during the hour, in kW thermal\n\nRun the end-to-end input pipeline:\n\n```bash\npython experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \\\n  --source-type measured \\\n  --output-dir build/site-optimization\n```\n\nUse `--source-type public`, `synthetic`, or `forecast` when appropriate. The runner checks required columns, finite non-negative values, timezone-aware timestamps, strict hourly spacing, and duplicate/out-of-order records. It does not impute, interpolate, or silently repair missing data. It calculates available surplus as `max(wind_kw + pv_kw - critical_load_kw, 0)`.\n\nOutputs: `nsga2_results.json` (input-quality report, data summary, algorithm settings, Pareto solutions and limitations) and `pareto_front.csv` (one row per candidate policy and its objective values). The default behavior stops if essential electricity demand is unmet in any hour. `--allow-critical-shortfall` permits exploratory execution but only reports that deficit; it does **not** optimize backup power or essential-service reliability.\n\n**Important:** the cost objective is a first-pass annualized estimate, not a bankable techno-economic assessment. It requires a full calendar-year input and complete economic fields, and currently omits replacements, taxes, financing, backup-generation costs, emissions, demand charges, and unmet-service penalties. Battery dispatch, forecast uncertainty, and plant safety constraints are not integrated. The model reports candidate trade-offs—not a guaranteed operating schedule. Keep raw data provenance and units with the submitted CSV.
 
+## Forecast-to-dispatch evaluation
+
+A separate evaluator accepts a **paired hourly forecast and realization** and compares forecast-driven rolling dispatch with fixed-priority policies on the same realized profile. This is a dispatch-interface evaluation; it does not turn the weather-parameter model into a renewable-power forecast.
+
+```bash
+python experiments/evaluate_forecast_dispatch.py path/to/paired_hourly.csv \
+  --output build/forecast-dispatch-evaluation.json
+```
+
+The CSV schema, units, timestamp requirements, metrics, interpretation rules, and limitations are documented in [the forecast-to-dispatch guide](docs/FORECAST_DISPATCH_EVALUATION.md). Inputs must provide timestamp-aligned actual surplus and forecast surplus in kW, water demand in m³ per hour, and cooling demand in kW thermal. The evaluator rejects missing values, negative values, timezone-naive timestamps, and hourly gaps instead of silently repairing them.
+
+The report includes forecast MAE/RMSE/bias, unmet water and cooling demand, remaining surplus, constraint violations, and the score difference against the best fixed-priority policy. The perfect-information policy is only a hindsight reference. Label input provenance accurately; synthetic or unverified data are not field evidence.
+
 ## Weather data and forecast baselines
 
 IslandOS includes a NASA POWER hourly importer for `ALLSKY_SFC_SW_DWN`, `T2M`, and `WS10M`, with a provenance sidecar. Example:
