@@ -123,7 +123,15 @@ def simulate(wind, pv, load, water_demand, p: Params):
             can_finish_in_horizon = (t + p.min_run_hours) <= T
             if can_finish_in_horizon and not full:
                 window = curtail[t:t + p.min_run_hours]
-                on = window.mean() >= p.start_ratio * p.ro_power_kw   # same mean-based test in both modes
+                if p.allow_backup_power:
+                    # Backup can cover weak hours, so the mean-based threshold is a
+                    # dispatch heuristic rather than a guarantee of renewable-only operation.
+                    on = window.mean() >= p.start_ratio * p.ro_power_kw
+                else:
+                    # Without backup, every hour of the minimum run must have enough
+                    # curtailed power. A mean check can accept a window with one weak
+                    # hour and force an impossible minimum-run violation.
+                    on = bool(np.all(window >= p.ro_power_kw))
             else:
                 on = False
 
