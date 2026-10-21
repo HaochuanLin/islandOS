@@ -31,6 +31,8 @@ class TestNSGA2DispatchOptimizer(unittest.TestCase):
         self.assertEqual(a["algorithm"], "NSGA-II (non-dominated sorting + crowding distance + tournament selection)")
         self.assertGreaterEqual(a["unique_candidates_evaluated"], 1)
         self.assertTrue(a["pareto_front"])
+        genomes = [tuple(row["genome"]) for row in a["pareto_front"]]
+        self.assertEqual(len(genomes), len(set(genomes)))
         for row in a["pareto_front"]:
             self.assertTrue(row["feasible"])
             self.assertTrue(row["feasibility_audit"]["eligible_for_pareto"])
