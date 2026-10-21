@@ -125,9 +125,8 @@ def _score(result: dict, scenario: Scenario) -> float:
     )
 
 
-def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
-    timestamps, scenario, forecast = load_paired_series(input_csv)
-    actual = list(scenario.available_surplus_kw)
+def _evaluate_policies(scenario: Scenario, forecast: list[float]) -> dict:
+    """Evaluate all dispatch policies on one shared realized profile."""
     policies = {}
     for policy in ("rolling", "ro_first", "ice_first", "perfect_information"):
         result = simulate_rolling(scenario, forecast, policy)
@@ -135,10 +134,85 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
             **result,
             "normalized_score": round(_score(result, scenario), 8),
         }
-
     fixed = {name: policies[name]["normalized_score"] for name in ("ro_first", "ice_first")}
     best_fixed = min(fixed, key=lambda name: (fixed[name], name))
     rolling_score = policies["rolling"]["normalized_score"]
+    return {
+        "policies": policies,
+        "comparison": {
+            "best_fixed_policy": best_fixed,
+            "best_fixed_score": fixed[best_fixed],
+            "rolling_score": rolling_score,
+            "rolling_minus_best_fixed": round(rolling_score - fixed[best_fixed], 8),
+        },
+    }
+
+
+def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
+    timestamps, scenario, forecast = load_paired_series(input_csv)
+    actual = list(scenario.available_surplus_kw)
+    full_evaluation = _evaluate_policies(scenario, forecast)
+
+    # A one-step persistence forecast at time t uses only realized surplus at t-1.
+    # Compare both forecasts on rows 2..N so neither gets a special first-hour case.
+    if len(actual) >= 2:
+        aligned_actual = actual[1:]
+        supplied_aligned = forecast[1:]
+        persistence_forecast = actual[:-1]
+        aligned_scenario = Scenario(
+            name=f"{scenario.name}_aligned_comparison",
+            available_surplus_kw=tuple(aligned_actual),
+            water_demand_m3_per_hour=scenario.water_demand_m3_per_hour[1:],
+            cooling_demand_kw_th=scenario.cooling_demand_kw_th[1:],
+        )
+        supplied_metrics = _forecast_metrics(aligned_actual, supplied_aligned)
+        persistence_metrics = _forecast_metrics(aligned_actual, persistence_forecast)
+        persistence_mae = persistence_metrics["mae_kw"]
+        persistence_rmse = persistence_metrics["rmse_kw"]
+        supplied_dispatch = _evaluate_policies(aligned_scenario, supplied_aligned)
+        persistence_dispatch = _evaluate_policies(aligned_scenario, persistence_forecast)
+        baseline_comparison = {
+            "status": "evaluated",
+            "method": "one-step persistence: forecast[t] = actual_surplus[t-1]",
+            "aligned_hours": len(aligned_actual),
+            "first_aligned_timestamp_utc": timestamps[1],
+            "last_aligned_timestamp_utc": timestamps[-1],
+            "forecast_metrics": {
+                "supplied_forecast": supplied_metrics,
+                "persistence_baseline": persistence_metrics,
+                "mae_skill_vs_persistence": (
+                    round((persistence_mae - supplied_metrics["mae_kw"]) / persistence_mae, 8)
+                    if persistence_mae > 0 else None
+                ),
+                "rmse_skill_vs_persistence": (
+                    round((persistence_rmse - supplied_metrics["rmse_kw"]) / persistence_rmse, 8)
+                    if persistence_rmse > 0 else None
+                ),
+                "skill_interpretation": (
+                    "Positive skill means the supplied forecast has lower error than persistence; "
+                    "null means the persistence denominator is zero."
+                ),
+            },
+            "dispatch_comparison": {
+                "supplied_forecast": supplied_dispatch,
+                "persistence_baseline": persistence_dispatch,
+                "rolling_score_difference_supplied_minus_persistence": round(
+                    supplied_dispatch["comparison"]["rolling_score"]
+                    - persistence_dispatch["comparison"]["rolling_score"], 8
+                ),
+                "interpretation": (
+                    "Both dispatch runs use the same aligned realized surplus, demand series, "
+                    "initial inventory assumptions and simulator. Negative difference means "
+                    "supplied-forecast rolling dispatch scored lower on this aligned window only."
+                ),
+            },
+        }
+    else:
+        baseline_comparison = {
+            "status": "not_evaluated",
+            "reason": "At least two hourly rows are required to construct a one-step persistence forecast.",
+        }
+
     return {
         "experiment": "paired forecast-to-dispatch evaluation",
         "input_csv": str(input_csv),
@@ -155,19 +229,20 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
             "0.45 * unmet cooling / total cooling demand + "
             "0.10 * remaining surplus / total actual surplus; lower is better"
         ),
-        "policy_comparison": policies,
+        "policy_comparison": full_evaluation["policies"],
         "comparison": {
-            "best_fixed_policy": best_fixed,
-            "best_fixed_score": fixed[best_fixed],
-            "rolling_score": rolling_score,
-            "rolling_minus_best_fixed": round(rolling_score - fixed[best_fixed], 8),
+            **full_evaluation["comparison"],
             "interpretation": (
                 "Negative rolling_minus_best_fixed means rolling has a lower score "
                 "for this input series only. Do not generalize from one trace."
             ),
         },
+        "persistence_baseline_comparison": baseline_comparison,
         "limitations": [
             "This evaluates dispatch given a supplied forecast; it does not train or validate a forecast model.",
+            "The persistence comparison excludes the first row for both forecasts and dispatch policies so the evaluation window is aligned.",
+            "Persistence uses only the previous observed surplus; this is a simple benchmark, not a universally appropriate forecast.",
+            "The aligned dispatch comparison resets initial inventories equally for both forecast inputs; it is a controlled window comparison, not continuation of the full-horizon run.",
             "Forecast and realized surplus must be paired by timestamp and use the same kW unit.",
             "Water and cooling demand inputs are treated as known over the tested horizon.",
             "The score weights are illustrative; inspect raw service-deficit metrics as well.",
