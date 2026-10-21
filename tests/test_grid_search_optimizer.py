@@ -1,13 +1,64 @@
 """Tests for the connected grid-search/Pareto recommendation pipeline."""
 import unittest
+from types import SimpleNamespace
+
+import numpy as np
 
 from experiments.compare_dispatch_policies import build_scenarios
 from optimization.grid_search_optimizer import (
-    candidates, dominates, optimize_scenario, pareto_archive, recommend,
+    audit_dispatch_result, candidates, dominates, optimize_scenario, pareto_archive, recommend,
 )
 
 
 class TestGridSearchOptimizer(unittest.TestCase):
+    def test_independent_dispatch_audit_accepts_balanced_power_accounting(self):
+        result = SimpleNamespace(
+            initial_available_power_kw=np.array([100.0, 50.0]),
+            renewable_power_used_kw=np.array([60.0, 10.0]),
+            remaining_power_kw=np.array([40.0, 40.0]),
+            backup_power_kw=np.array([0.0, 0.0]),
+        )
+        audit = audit_dispatch_result(result, constraint_violation_hours=0)
+        self.assertTrue(audit["hard_dispatch_checks_passed"])
+        self.assertTrue(audit["component_constraints_passed"])
+        self.assertTrue(audit["eligible_for_pareto"])
+        self.assertEqual(audit["audit_errors"], [])
+
+    def test_independent_dispatch_audit_rejects_power_balance_violation(self):
+        result = SimpleNamespace(
+            initial_available_power_kw=np.array([100.0]),
+            renewable_power_used_kw=np.array([80.0]),
+            remaining_power_kw=np.array([30.0]),
+            backup_power_kw=np.array([0.0]),
+        )
+        audit = audit_dispatch_result(result, constraint_violation_hours=0)
+        self.assertFalse(audit["hard_dispatch_checks_passed"])
+        self.assertFalse(audit["eligible_for_pareto"])
+        self.assertIn("shared_power_balance_failed", audit["audit_errors"])
+
+    def test_independent_dispatch_audit_rejects_component_constraint_violation(self):
+        result = SimpleNamespace(
+            initial_available_power_kw=np.array([100.0]),
+            renewable_power_used_kw=np.array([60.0]),
+            remaining_power_kw=np.array([40.0]),
+            backup_power_kw=np.array([0.0]),
+        )
+        audit = audit_dispatch_result(result, constraint_violation_hours=1)
+        self.assertTrue(audit["hard_dispatch_checks_passed"])
+        self.assertFalse(audit["component_constraints_passed"])
+        self.assertFalse(audit["eligible_for_pareto"])
+
+    def test_independent_dispatch_audit_rejects_mismatched_series(self):
+        result = SimpleNamespace(
+            initial_available_power_kw=np.array([100.0, 80.0]),
+            renewable_power_used_kw=np.array([60.0]),
+            remaining_power_kw=np.array([40.0, 80.0]),
+            backup_power_kw=np.array([0.0, 0.0]),
+        )
+        audit = audit_dispatch_result(result, constraint_violation_hours=0)
+        self.assertFalse(audit["hard_dispatch_checks_passed"])
+        self.assertIn("power_series_length_mismatch", audit["audit_errors"])
+
     def test_search_space_is_explicit_and_unique(self):
         rows = candidates()
         self.assertEqual(len(rows), 8)
