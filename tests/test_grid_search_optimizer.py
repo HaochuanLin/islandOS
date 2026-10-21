@@ -5,59 +5,70 @@ from types import SimpleNamespace
 import numpy as np
 
 from experiments.compare_dispatch_policies import build_scenarios
+from dispatch_engine import dispatch_flexible_loads
+from flexible_loads import IceStorageConfig, IceStorageLoad, ROConfig, ROWaterLoad
 from optimization.grid_search_optimizer import (
     audit_dispatch_result, candidates, dominates, optimize_scenario, pareto_archive, recommend,
 )
 
 
 class TestGridSearchOptimizer(unittest.TestCase):
-    def test_independent_dispatch_audit_accepts_balanced_power_accounting(self):
-        result = SimpleNamespace(
-            initial_available_power_kw=np.array([100.0, 50.0]),
-            renewable_power_used_kw=np.array([60.0, 10.0]),
-            remaining_power_kw=np.array([40.0, 40.0]),
-            backup_power_kw=np.array([0.0, 0.0]),
-        )
-        audit = audit_dispatch_result(result, constraint_violation_hours=0)
+    def _valid_dispatch_audit_case(self):
+        ro = ROWaterLoad(ROConfig(
+            rated_power_kw=400.0, specific_energy_kwh_m3=3.5,
+            reservoir_capacity_m3=500.0, initial_water_m3=150.0,
+            dead_storage_m3=20.0, min_run_hours=1, allow_backup_power=False,
+        ))
+        ice = IceStorageLoad(IceStorageConfig(
+            rated_power_kw=100.0, coefficient_of_performance=2.5,
+            storage_capacity_kwh_th=400.0, initial_storage_kwh_th=100.0,
+        ))
+        water = np.array([10.0, 10.0])
+        cooling = np.array([50.0, 50.0])
+        requests = [(ro, water), (ice, cooling)]
+        result = dispatch_flexible_loads([500.0, 500.0], requests)
+        demands = {"ro_desalination": water, "ice_cold_storage": cooling}
+        return result, requests, demands
+
+    def test_independent_dispatch_audit_accepts_balanced_physical_results(self):
+        result, requests, demands = self._valid_dispatch_audit_case()
+        audit = audit_dispatch_result(result, requests, demands)
         self.assertTrue(audit["hard_dispatch_checks_passed"])
         self.assertTrue(audit["component_constraints_passed"])
         self.assertTrue(audit["eligible_for_pareto"])
         self.assertEqual(audit["audit_errors"], [])
 
     def test_independent_dispatch_audit_rejects_power_balance_violation(self):
-        result = SimpleNamespace(
-            initial_available_power_kw=np.array([100.0]),
-            renewable_power_used_kw=np.array([80.0]),
-            remaining_power_kw=np.array([30.0]),
-            backup_power_kw=np.array([0.0]),
-        )
-        audit = audit_dispatch_result(result, constraint_violation_hours=0)
+        result, requests, demands = self._valid_dispatch_audit_case()
+        result.remaining_power_kw[0] += 30.0
+        audit = audit_dispatch_result(result, requests, demands)
         self.assertFalse(audit["hard_dispatch_checks_passed"])
         self.assertFalse(audit["eligible_for_pareto"])
         self.assertIn("shared_power_balance_failed", audit["audit_errors"])
 
     def test_independent_dispatch_audit_rejects_component_constraint_violation(self):
-        result = SimpleNamespace(
-            initial_available_power_kw=np.array([100.0]),
-            renewable_power_used_kw=np.array([60.0]),
-            remaining_power_kw=np.array([40.0]),
-            backup_power_kw=np.array([0.0]),
-        )
-        audit = audit_dispatch_result(result, constraint_violation_hours=1)
+        result, requests, demands = self._valid_dispatch_audit_case()
+        result.loads["ro_desalination"].constraint_violation[0] = 1
+        audit = audit_dispatch_result(result, requests, demands)
         self.assertTrue(audit["hard_dispatch_checks_passed"])
         self.assertFalse(audit["component_constraints_passed"])
         self.assertFalse(audit["eligible_for_pareto"])
+        self.assertIn("reported_component_constraint_violation_ro_desalination", audit["audit_errors"])
 
-    def test_independent_dispatch_audit_rejects_mismatched_series(self):
-        result = SimpleNamespace(
-            initial_available_power_kw=np.array([100.0, 80.0]),
-            renewable_power_used_kw=np.array([60.0]),
-            remaining_power_kw=np.array([40.0, 80.0]),
-            backup_power_kw=np.array([0.0, 0.0]),
-        )
-        audit = audit_dispatch_result(result, constraint_violation_hours=0)
+    def test_independent_dispatch_audit_rejects_mismatched_power_series(self):
+        result, requests, demands = self._valid_dispatch_audit_case()
+        result.remaining_power_kw = np.array([1.0])
+        audit = audit_dispatch_result(result, requests, demands)
         self.assertFalse(audit["hard_dispatch_checks_passed"])
         self.assertIn("power_series_length_mismatch", audit["audit_errors"])
+
+    def test_independent_dispatch_audit_rejects_inventory_capacity_violation(self):
+        result, requests, demands = self._valid_dispatch_audit_case()
+        result.loads["ice_cold_storage"].inventory[-1] = 500.0
+        audit = audit_dispatch_result(result, requests, demands)
+        self.assertFalse(audit["component_constraints_passed"])
+        self.assertFalse(audit["eligible_for_pareto"])
+        self.assertIn("thermal_inventory_capacity_failed_ice_cold_storage", audit["audit_errors"])
 
     def test_search_space_is_explicit_and_unique(self):
         rows = candidates()
