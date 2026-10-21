@@ -212,3 +212,17 @@ This is an **exhaustive grid search over a small policy space**, not machine lea
 The RO plug-in now refuses to initiate a new minimum-run cycle when fewer than the required run hours remain in the simulation horizon. Configuration validation also requires a finite RO start ratio in [0, 1] and finite positive rated power / specific energy. Regression tests check per-step freshwater inventory conservation, cold-storage inventory conservation, demand served plus unmet demand, storage bounds, and the late-horizon start edge case.
 
 These checks strengthen internal consistency; they do not establish that the simplified models accurately represent a real desalination plant or industrial cold store.
+
+
+## Forecast-error robustness experiment (synthetic)
+
+Run the deterministic policy-selection sensitivity experiment:
+
+~~~bash
+python experiments/forecast_error_robustness.py
+python experiments/forecast_error_robustness.py --json
+~~~
+
+It evaluates three synthetic surplus profiles under four relative forecast-error patterns: perfect, +20% overforecast, -20% underforecast, and alternating +/-20%. The optimizer selects a candidate using the perturbed profile; that candidate and a fixed-priority baseline are then evaluated against the original profile. A perfect-information result is included as a hindsight reference, not an achievable online policy.
+
+**Important limitation:** the current dispatcher is reactive to the per-step available-power series. This experiment tests how forecast perturbations change policy selection; it does not simulate a fixed hourly schedule committed from a forecast, nor does it validate a trained forecasting model. All data are synthetic.
