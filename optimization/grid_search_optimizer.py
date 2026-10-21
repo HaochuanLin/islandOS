@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 import sys
 
@@ -31,19 +31,19 @@ from flexible_loads import ROConfig, ROWaterLoad
 class Candidate:
     candidate_id: str
     priority: str
-    ro_start_ratio: float
+    ro_min_run_hours: int
 
 
 def candidates() -> list[Candidate]:
     """Finite, explicit search space: two priorities x four RO thresholds."""
     return [
         Candidate(
-            candidate_id=f"{priority}_ro{ratio:.2f}",
+            candidate_id=f"{priority}_run{min_run}h",
             priority=priority,
-            ro_start_ratio=ratio,
+            ro_min_run_hours=min_run,
         )
         for priority in ("ro_first", "ice_first")
-        for ratio in (0.50, 0.65, 0.80, 0.95)
+        for min_run in (1, 2, 3, 4)
     ]
 
 
@@ -54,8 +54,8 @@ def evaluate_candidate(scenario: Scenario, candidate: Candidate) -> dict:
         reservoir_capacity_m3=500.0,
         initial_water_m3=150.0,
         dead_storage_m3=20.0,
-        min_run_hours=2,
-        start_ratio=candidate.ro_start_ratio,
+        min_run_hours=candidate.ro_min_run_hours,
+        start_ratio=0.8,
         allow_backup_power=False,
     ))
     ice = make_ice()
@@ -70,7 +70,7 @@ def evaluate_candidate(scenario: Scenario, candidate: Candidate) -> dict:
     metrics = summarize(candidate.candidate_id, result, scenario)
     metrics["candidate_id"] = candidate.candidate_id
     metrics["priority"] = candidate.priority
-    metrics["ro_start_ratio"] = candidate.ro_start_ratio
+    metrics["ro_min_run_hours"] = candidate.ro_min_run_hours
     metrics["objectives"] = {
         "water_unmet_m3": metrics["water_unmet_m3"],
         "cooling_unmet_kwh_th": metrics["cooling_unmet_kwh_th"],
