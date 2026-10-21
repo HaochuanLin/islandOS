@@ -352,3 +352,19 @@ Reducing surplus is not automatically a win if water or cooling demand goes unme
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+
+## Nan'ao Island scenario (separate, assumption-driven model)
+
+A dedicated, reproducible scenario is available on the `nan-ao-scenario-pilot` branch. It is deliberately separate from the original 24-hour synthetic isolated-island demo above; do not mix their outputs.
+
+Run:
+
+```bash
+python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir outputs/nan_ao
+python -m unittest discover -s tests -v
+```
+
+The scenario writes annual-run CSV, percentile CSV, and a JSON report containing assumptions and limitations. It models assumed export-limitation events as an event-energy abstraction; it is **not** a grid power-flow model and uses no measured Nan'ao curtailment time series. Report all output as **“Scenario-based simulation assumption, not measured real-world data.”** The detailed protocol and equipment boundary are in [docs/NAN_AO_SCENARIO.md](docs/NAN_AO_SCENARIO.md).
+
+Equipment boundary: no publicly accessible official documentation reviewed by the team confirms an operable standby seawater RO unit on Nan'ao main island. The pilot assumes a modular 50 kW RO unit would be procured, installed and owned by the local water authority, subject to site verification, approval and budget. No savings, ROI, emissions or avoided outages are claimed.
