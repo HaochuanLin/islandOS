@@ -220,19 +220,51 @@ def audit_dispatch_result(result, requests, demand_by_name: dict[str, np.ndarray
         ),
     }
 
+OBJECTIVE_KEYS = ("water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh")
+
+
+def objective_validation_errors(row: dict) -> list[str]:
+    """Return explicit reasons a candidate's objective vector cannot be compared."""
+    objectives = row.get("objectives")
+    if not isinstance(objectives, dict):
+        return ["missing_objectives"]
+    errors = []
+    for key in OBJECTIVE_KEYS:
+        if key not in objectives:
+            errors.append(f"missing_objective_{key}")
+            continue
+        try:
+            value = float(objectives[key])
+        except (TypeError, ValueError):
+            errors.append(f"invalid_objective_{key}")
+            continue
+        if not np.isfinite(value):
+            errors.append(f"nonfinite_objective_{key}")
+        elif value < 0:
+            errors.append(f"negative_objective_{key}")
+    return errors
+
+
+def _eligible_candidate(row: dict) -> bool:
+    return (
+        row.get("feasible") is True
+        and row.get("feasibility_audit", {}).get("eligible_for_pareto") is True
+        and not objective_validation_errors(row)
+    )
+
+
 def dominates(a: dict, b: dict) -> bool:
     """Return True when a is no worse in every objective and better in one."""
-    keys = ("water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh")
-    av = [float(a["objectives"][key]) for key in keys]
-    bv = [float(b["objectives"][key]) for key in keys]
+    av = [float(a["objectives"][key]) for key in OBJECTIVE_KEYS]
+    bv = [float(b["objectives"][key]) for key in OBJECTIVE_KEYS]
     return all(x <= y + 1e-9 for x, y in zip(av, bv)) and any(
         x < y - 1e-9 for x, y in zip(av, bv)
     )
 
 
 def pareto_archive(evaluated: list[dict]) -> list[dict]:
-    """Filter infeasible candidates, then return non-dominated evaluated rows."""
-    feasible = [row for row in evaluated if row.get("feasible") is True and row.get("feasibility_audit", {}).get("eligible_for_pareto") is True]
+    """Filter unaudited, infeasible, or invalid-objective rows before dominance."""
+    feasible = [row for row in evaluated if _eligible_candidate(row)]
     return [
         row for row in feasible
         if not any(other is not row and dominates(other, row) for other in feasible)
@@ -243,11 +275,7 @@ def recommend(archive: list[dict]) -> dict:
     """Select an evaluated Pareto candidate with disclosed normalized weights."""
     # Re-check eligibility here too: callers cannot accidentally recommend a
     # candidate merely by passing an unfiltered list as the archive.
-    eligible = [
-        row for row in archive
-        if row.get("feasible") is True
-        and row.get("feasibility_audit", {}).get("eligible_for_pareto") is True
-    ]
+    eligible = [row for row in archive if _eligible_candidate(row)]
     if not eligible:
         raise ValueError("No feasible candidate is available for recommendation")
     archive = eligible
@@ -287,6 +315,33 @@ def optimize_scenario(scenario: Scenario) -> dict:
     evaluated = [evaluate_candidate(scenario, candidate) for candidate in candidates()]
     archive = pareto_archive(evaluated)
     chosen = recommend(archive)
+    archive_ids = {row["candidate_id"] for row in archive}
+    recommended_id = chosen["candidate_id"]
+    candidate_decisions = []
+    for row in evaluated:
+        audit = row.get("feasibility_audit", {})
+        objective_errors = objective_validation_errors(row)
+        eligible = _eligible_candidate(row)
+        in_archive = row["candidate_id"] in archive_ids
+        if not eligible:
+            reasons = list(audit.get("audit_errors", [])) or objective_errors
+            if not reasons:
+                reasons = ["dispatch_feasibility_audit_not_eligible"]
+        elif not in_archive:
+            reasons = ["dominated_by_another_feasible_candidate"]
+        elif row["candidate_id"] != recommended_id:
+            reasons = ["eligible_pareto_candidate_not_selected_by_weighted_score"]
+        else:
+            reasons = []
+        candidate_decisions.append({
+            "candidate_id": row["candidate_id"],
+            "feasible": bool(row.get("feasible") is True and audit.get("eligible_for_pareto") is True),
+            "objective_validation_errors": objective_errors,
+            "eligible_for_pareto": eligible,
+            "in_pareto_archive": in_archive,
+            "recommended": row["candidate_id"] == recommended_id,
+            "decision_reasons": reasons,
+        })
     return {
         "scenario": scenario.name,
         "data_status": "synthetic illustrative scenario; not field measurements",
@@ -300,6 +355,12 @@ def optimize_scenario(scenario: Scenario) -> dict:
             "remaining_surplus_kwh": "minimize",
         },
         "evaluated_candidates": evaluated,
+        "candidate_decisions": candidate_decisions,
+        "decision_reason_legend": {
+            "dominated_by_another_feasible_candidate": "Feasible objective vector is dominated by at least one other eligible candidate.",
+            "eligible_pareto_candidate_not_selected_by_weighted_score": "Candidate is on the Pareto archive but lost the disclosed weighted normalized score/tie-break.",
+            "dispatch_feasibility_audit_not_eligible": "Dispatch audit did not explicitly approve the candidate; inspect feasibility_audit.audit_errors.",
+        },
         "pareto_archive": archive,
         "recommendation": chosen,
     }
