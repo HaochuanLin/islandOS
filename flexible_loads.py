@@ -84,9 +84,15 @@ class ROWaterLoad:
             raise ValueError("forecast_available_power_kw must have one forecast window per time step")
 
         c = self.config
-        if (not np.isfinite(c.rated_power_kw) or not np.isfinite(c.specific_energy_kwh_m3)
-                or c.rated_power_kw <= 0 or c.specific_energy_kwh_m3 <= 0):
-            raise ValueError("RO rated power and specific energy must be finite and positive")
+        numeric_config = (
+            c.rated_power_kw, c.specific_energy_kwh_m3,
+            c.reservoir_capacity_m3, c.initial_water_m3,
+            c.dead_storage_m3, c.start_ratio,
+        )
+        if not all(np.isfinite(value) for value in numeric_config):
+            raise ValueError("RO configuration values must be finite")
+        if c.rated_power_kw <= 0 or c.specific_energy_kwh_m3 <= 0:
+            raise ValueError("RO rated power and specific energy must be positive")
         if not isinstance(c.min_run_hours, int) or c.min_run_hours < 1:
             raise ValueError("min_run_hours must be an integer >= 1")
         if not (0 <= c.dead_storage_m3 <= c.initial_water_m3 <= c.reservoir_capacity_m3):
@@ -198,6 +204,12 @@ class IceStorageLoad:
             raise ValueError("available_power_kw and demand must have equal lengths")
 
         c = self.config
+        numeric_config = (
+            c.rated_power_kw, c.coefficient_of_performance,
+            c.storage_capacity_kwh_th, c.initial_storage_kwh_th,
+        )
+        if not all(np.isfinite(value) for value in numeric_config):
+            raise ValueError("Ice-storage configuration values must be finite")
         if c.rated_power_kw <= 0 or c.coefficient_of_performance <= 0:
             raise ValueError("Chiller rated power and COP must be positive")
         if c.storage_capacity_kwh_th < 0 or not (
