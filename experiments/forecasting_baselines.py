@@ -100,7 +100,7 @@ def evaluate_baselines(input_csv: str | Path, output_csv: str | Path,
             "actual": values[i],
             "persistence_forecast": values[i - 1],
             "seasonal_naive_24h_forecast": values[i - SEASONAL_LAG_HOURS],
-            "split": "train" if i in train_index_set else "test",
+            "split": "history" if i in train_index_set else "test",
         })
 
     output_path = Path(output_csv)
@@ -132,7 +132,7 @@ def evaluate_baselines(input_csv: str | Path, output_csv: str | Path,
         "input_csv": str(input_path),
         "output_csv": str(output_path),
         "output_rows": len(output_rows),
-        "train_rows": len(train_indices),
+        "history_rows_before_test": len(train_indices),
         "test_rows": len(test_indices),
         "first_test_timestamp_utc": timestamps[test_indices[0]].isoformat().replace("+00:00", "Z"),
         "last_test_timestamp_utc": timestamps[test_indices[-1]].isoformat().replace("+00:00", "Z"),
