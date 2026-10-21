@@ -16,7 +16,7 @@ import argparse
 import csv
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -43,7 +43,9 @@ def _parse_timestamp(value: str, line: int) -> datetime:
         raise ValueError(f"Invalid timestamp_utc at CSV line {line}: {value!r}") from exc
     if stamp.tzinfo is None or stamp.utcoffset() is None:
         raise ValueError(f"timestamp_utc must include a timezone at CSV line {line}")
-    return stamp
+    # The schema promises UTC; accept explicit offsets but normalize them before
+    # reporting timestamps so local-offset strings are never mislabeled as UTC.
+    return stamp.astimezone(timezone.utc)
 
 
 def _parse_nonnegative(row: dict[str, str], column: str, line: int) -> float:
