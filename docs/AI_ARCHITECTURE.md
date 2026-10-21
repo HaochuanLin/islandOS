@@ -147,3 +147,12 @@ The weights are not calibrated from island operators or residents. This audit th
 The caller must explicitly label provenance as measured, public, synthetic, or forecast. The report does not infer or certify provenance. Invalid data are rejected with issue codes; the validator does not fill gaps, alter values, convert units, or silently repair time series.
 
 This is a structural gate, not a complete scientific data-governance system. Source documentation must still establish units, sampling conventions, sensor calibration, time-zone interpretation, and data rights. Capacity plausibility, forecast-vs-observation leakage, missing-period policies, and field validation remain future work.
+
+
+## 18. Public environmental-data source adapter
+
+`data_sources/nasa_power_hourly.py` provides an opt-in importer for the NASA POWER Hourly Point API. It requests hourly global horizontal surface shortwave radiation (`ALLSKY_SFC_SW_DWN`), 2 m air temperature (`T2M`), and 10 m wind speed (`WS10M`) using UTC timestamps. The output includes a CSV plus a JSON sidecar with query parameters, retrieval time, location, response metadata, and caveats.
+
+The adapter intentionally does not transform irradiance or wind speed into generated electricity: that requires explicit PV/wind-system parameters and validated conversion models. Nor does it supply critical electrical demand, water demand, or cooling demand. Environmental covariates are kept separate from the operational dataset until an explicit, tested alignment and feature-engineering layer exists.
+
+The NASA POWER service documentation notes that its hourly time standards include UTC and Local Solar Time, and that the data are gridded/model- and satellite-derived products rather than equivalent to measurements at a particular island site. See the official [hourly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/hourly/) and [data FAQ](https://power.larc.nasa.gov/docs/faqs/data/). Unit conversions must be driven by the returned parameter metadata, not assumptions.
