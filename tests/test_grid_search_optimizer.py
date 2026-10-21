@@ -100,6 +100,33 @@ class TestGridSearchOptimizer(unittest.TestCase):
         archive = pareto_archive(evaluated)
         self.assertEqual([row["candidate_id"] for row in archive], ["a"])
 
+    def test_archive_rejects_nonfinite_negative_and_missing_objectives(self):
+        base = {"feasible": True, "feasibility_audit": {"eligible_for_pareto": True}}
+        valid = {"candidate_id": "valid", **base, "objectives": {
+            "water_unmet_m3": 1, "cooling_unmet_kwh_th": 1, "remaining_surplus_kwh": 1}}
+        nonfinite = {"candidate_id": "nonfinite", **base, "objectives": {
+            "water_unmet_m3": float("nan"), "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
+        negative = {"candidate_id": "negative", **base, "objectives": {
+            "water_unmet_m3": -1, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
+        missing = {"candidate_id": "missing", **base, "objectives": {
+            "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0}}
+        self.assertEqual([row["candidate_id"] for row in pareto_archive([valid, nonfinite, negative, missing])], ["valid"])
+
+    def test_scenario_exposes_reason_for_every_candidate_decision(self):
+        result = optimize_scenario(build_scenarios()[0])
+        decisions = result["candidate_decisions"]
+        self.assertEqual(len(decisions), result["candidate_count"])
+        self.assertEqual(len({row["candidate_id"] for row in decisions}), result["candidate_count"])
+        recommended = [row for row in decisions if row["recommended"]]
+        self.assertEqual(len(recommended), 1)
+        self.assertEqual(recommended[0]["candidate_id"], result["recommendation"]["candidate_id"])
+        for row in decisions:
+            self.assertIsInstance(row["decision_reasons"], list)
+            if row["recommended"]:
+                self.assertEqual(row["decision_reasons"], [])
+            else:
+                self.assertTrue(row["decision_reasons"], row)
+
     def test_infeasible_candidate_cannot_be_recommended_even_if_passed_directly(self):
         feasible = {"candidate_id": "valid", "feasible": True, "feasibility_audit": {"eligible_for_pareto": True}, "objectives": {
             "water_unmet_m3": 1, "cooling_unmet_kwh_th": 1, "remaining_surplus_kwh": 1}}
