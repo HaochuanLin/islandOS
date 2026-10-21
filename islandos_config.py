@@ -149,6 +149,18 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _unknown_keys(base: dict[str, Any], override: dict[str, Any], prefix: str = "") -> list[str]:
+    """Find misspelled/unsupported keys instead of silently ignoring them."""
+    unknown: list[str] = []
+    for key, value in override.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if key not in base:
+            unknown.append(path)
+        elif isinstance(value, dict) and isinstance(base[key], dict):
+            unknown.extend(_unknown_keys(base[key], value, path))
+    return unknown
+
+
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     """Load defaults plus optional JSON overrides, then validate the result."""
     config = copy.deepcopy(DEFAULT_CONFIG)
@@ -160,6 +172,12 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
             raise ValueError(f"Invalid JSON configuration {config_path}: {exc}") from exc
         if not isinstance(supplied, dict):
             raise ValueError("Configuration root must be a JSON object")
+        unknown = _unknown_keys(config, supplied)
+        if unknown:
+            raise ValueError(
+                "Unknown configuration key(s): " + ", ".join(unknown)
+                + ". Check spelling against config/site_parameters.example.json."
+            )
         config = _merge(config, supplied)
         config["_loaded_from"] = str(config_path)
     errors = validate_config(config)
