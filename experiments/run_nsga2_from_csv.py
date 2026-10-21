@@ -29,6 +29,10 @@ from experiments.compare_dispatch_policies import Scenario
 from optimization.nsga2_dispatch_optimizer import optimize_scenario
 
 
+def _is_leap_year(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
 def _read_validated_csv(path: Path) -> tuple[list[dict], list[datetime]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -57,6 +61,19 @@ def run_from_csv(
     if quality["status"] != "valid":
         raise ValueError("Input data failed quality validation: " + json.dumps(quality["issues"][:10]))
     rows, timestamps = _read_validated_csv(input_path)
+    economic_status = economics_completeness(config)
+    if economic_status["complete_for_current_declared_fields"]:
+        first = timestamps[0]
+        last = timestamps[-1]
+        expected_hours = 8784 if _is_leap_year(first.year) else 8760
+        expected_last = datetime(first.year, 12, 31, 23, 0, tzinfo=first.tzinfo)
+        expected_first = datetime(first.year, 1, 1, 0, 0, tzinfo=first.tzinfo)
+        if (len(timestamps) != expected_hours or first != expected_first
+                or last != expected_last or any(stamp.year != first.year for stamp in timestamps)):
+            raise ValueError(
+                "Lifecycle-cost objective requires a complete calendar-year CSV: "
+                "Jan 1 00:00 through Dec 31 23:00 with every hourly row present."
+            )
 
     wind = np.array([float(row["wind_kw"]) for row in rows], dtype=float)
     pv = np.array([float(row["pv_kw"]) for row in rows], dtype=float)
@@ -129,7 +146,7 @@ def run_from_csv(
             "economics": config["economics"],
             "economics_completeness": economics_completeness(config),
             "source_policy": config.get("parameter_sources", {}),
-            "note": "Configuration values are assumptions unless supported by documented sources. Economic inputs are recorded but not used by the current objective functions.",
+            "note": "Configuration values are assumptions unless supported by documented sources. The annualized lifecycle-cost objective is enabled only when all required cost fields and a complete calendar-year input profile are present.",
         },
         "optimization": result,
         "interpretation": {
@@ -137,7 +154,7 @@ def run_from_csv(
             "objective_scope": "Minimize unmet water, unmet cooling, and unused available surplus.",
             "not_optimized": [
                 "critical-load reliability or backup generation",
-                "battery dispatch, costs, emissions, and lifecycle impacts",
+                "battery dispatch, emissions, and lifecycle impacts beyond the explicitly modeled annualized cost",
                 "site-specific equipment interlocks or safety constraints",
             ],
             "data_note": "The optimizer uses the supplied time series as its scenario; results are not field validation.",
@@ -147,10 +164,12 @@ def run_from_csv(
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     pareto_path = output_path / "pareto_front.csv"
+    objective_fields = list(result["pareto_front"][0]["objectives"]) if result["pareto_front"] else [
+        "water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh"
+    ]
     fields = [
         "candidate_index", "priority", "ro_min_run_hours", "ro_start_ratio",
-        "ro_rated_power_kw", "ice_rated_power_kw", "water_unmet_m3",
-        "cooling_unmet_kwh_th", "remaining_surplus_kwh",
+        "ro_rated_power_kw", "ice_rated_power_kw", *objective_fields,
     ]
     with pareto_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
