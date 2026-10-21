@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from islandos_config import economics_completeness, load_config, validate_config
+from flexible_loads import IceStorageConfig, ROConfig
 from experiments.compare_dispatch_policies import build_scenarios
 from optimization.nsga2_dispatch_optimizer import optimize_scenario
 
@@ -16,6 +17,19 @@ class TestIslandOSConfig(unittest.TestCase):
         economics = economics_completeness(config)
         self.assertFalse(economics["complete_for_current_declared_fields"])
         self.assertFalse(economics["cost_objective_implemented"])
+
+    def test_low_level_load_defaults_match_shared_config(self):
+        config = load_config()
+        ro = ROConfig()
+        ice = IceStorageConfig()
+        self.assertEqual(ro.specific_energy_kwh_m3, config["equipment"]["ro"]["specific_energy_kwh_m3"])
+        self.assertEqual(ro.reservoir_capacity_m3, config["equipment"]["ro"]["reservoir_capacity_m3"])
+        self.assertEqual(ro.initial_water_m3, config["equipment"]["ro"]["initial_water_m3"])
+        self.assertEqual(ro.dead_storage_m3, config["equipment"]["ro"]["dead_storage_m3"])
+        self.assertEqual(ro.allow_backup_power, config["equipment"]["ro"]["allow_backup_power"])
+        self.assertEqual(ice.coefficient_of_performance, config["equipment"]["ice"]["coefficient_of_performance"])
+        self.assertEqual(ice.storage_capacity_kwh_th, config["equipment"]["ice"]["storage_capacity_kwh_th"])
+        self.assertEqual(ice.initial_storage_kwh_th, config["equipment"]["ice"]["initial_storage_kwh_th"])
 
     def test_invalid_physical_relationship_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
