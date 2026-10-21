@@ -41,7 +41,7 @@ def _make_ice_with_inventory(cold_kwh_th: float) -> IceStorageLoad:
 
 def _run_horizon(
     power, water_demand, cooling_demand, water_inventory, cold_inventory,
-    priority, ro_run_hours_remaining=0,
+    priority, ro_run_hours_remaining=0, ro_fault_lockout_hours_remaining=0,
 ):
     ro = _make_ro_with_inventory(water_inventory)
     ice = _make_ice_with_inventory(cold_inventory)
@@ -53,6 +53,7 @@ def _run_horizon(
     return dispatch_flexible_loads(
         power, requests,
         initial_ro_run_hours_remaining=ro_run_hours_remaining,
+        initial_ro_fault_lockout_hours_remaining=ro_fault_lockout_hours_remaining,
     )
 
 
@@ -70,7 +71,7 @@ def _score(result, water_demand, cooling_demand) -> float:
 
 def _execute_one(
     actual_power, water_demand, cooling_demand, water_inventory, cold_inventory,
-    priority, ro_run_hours_remaining=0, start_ro=False,
+    priority, ro_run_hours_remaining=0, ro_fault_lockout_hours_remaining=0, start_ro=False,
 ):
     # A planned start commits the unit for its configured minimum run even
     # though this call executes only one realized hour.
@@ -80,6 +81,7 @@ def _execute_one(
     result = _run_horizon(
         [actual_power], [water_demand], [cooling_demand],
         water_inventory, cold_inventory, priority, initial_commitment,
+        ro_fault_lockout_hours_remaining,
     )
     ro = result.loads.get("ro_desalination")
     ice = result.loads.get("ice_cold_storage")
@@ -98,6 +100,7 @@ def _execute_one(
         "ice_active": bool(ice is not None and ice.active[0]),
         "ice_power_kw": float(ice.power_used_kw[0]) if ice else 0.0,
         "ro_run_hours_remaining": int(ro.run_hours_remaining) if ro else ro_run_hours_remaining,
+        "ro_fault_lockout_hours_remaining": int(ro.fault_lockout_hours_remaining) if ro else ro_fault_lockout_hours_remaining,
     }
 
 
@@ -115,6 +118,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
     water_inventory = make_ro().config.initial_water_m3
     cold_inventory = make_ice().config.initial_storage_kwh_th
     ro_run_hours_remaining = 0
+    ro_fault_lockout_hours_remaining = 0
     totals = {"water_unmet_m3": 0.0, "cooling_unmet_kwh_th": 0.0,
               "renewable_flexible_load_kwh": 0.0, "remaining_surplus_kwh": 0.0,
               "constraint_violation_hours": 0}
@@ -130,7 +134,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                 predicted = _run_horizon(
                     forecast[t:end], water_demand[t:end], cooling_demand[t:end],
                     water_inventory, cold_inventory, priority,
-                    ro_run_hours_remaining,
+                    ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                 )
                 candidates.append((
                     _score(predicted, water_demand[t:end], cooling_demand[t:end]),
@@ -146,7 +150,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                     predicted = _run_horizon(
                         actual[t:end], water_demand[t:end], cooling_demand[t:end],
                         water_inventory, cold_inventory, priority,
-                        ro_run_hours_remaining,
+                        ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
                         _score(predicted, water_demand[t:end], cooling_demand[t:end]),
@@ -160,6 +164,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                 plan = _run_horizon(
                     forecast[t:end], water_demand[t:end], cooling_demand[t:end],
                     water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
+                    ro_fault_lockout_hours_remaining,
                 )
                 ro_plan = plan.loads.get("ro_desalination")
                 start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
@@ -168,11 +173,13 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
 
         step = _execute_one(
             actual[t], water_demand[t], cooling_demand[t],
-            water_inventory, cold_inventory, chosen, ro_run_hours_remaining, start_ro,
+            water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
+            ro_fault_lockout_hours_remaining, start_ro,
         )
         water_inventory = step["water_inventory"]
         cold_inventory = step["cold_inventory"]
         ro_run_hours_remaining = step["ro_run_hours_remaining"]
+        ro_fault_lockout_hours_remaining = step["ro_fault_lockout_hours_remaining"]
         totals["water_unmet_m3"] += step["water_unmet"]
         totals["cooling_unmet_kwh_th"] += step["cooling_unmet"]
         totals["renewable_flexible_load_kwh"] += step["renewable_used"]
@@ -189,6 +196,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
             "ro_power_kw": round(step["ro_power_kw"], 6),
             "ro_constraint_violation": step["ro_constraint_violation"],
             "ro_run_hours_remaining": step["ro_run_hours_remaining"],
+            "ro_fault_lockout_hours_remaining": step["ro_fault_lockout_hours_remaining"],
             "water_inventory_m3": round(water_inventory, 6),
             "cold_inventory_kwh_th": round(cold_inventory, 6),
             "total_constraint_violations": step["constraint_violations"],
