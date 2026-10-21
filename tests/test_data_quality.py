@@ -11,7 +11,7 @@ class TestDataQuality(unittest.TestCase):
     def write_csv(self, rows, columns=REQUIRED_COLUMNS):
         handle = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", suffix=".csv", delete=False)
         self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
-        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
         handle.close()
@@ -51,6 +51,7 @@ class TestDataQuality(unittest.TestCase):
             self.row(timestamp="2026-01-01T01:00:00+00:00"),
             self.row(timestamp="2026-01-01T01:00:00+00:00"),
             self.row(timestamp="2026-01-01T00:30:00+00:00"),
+            self.row(timestamp="2026-01-01T02:30:00+00:00"),
         ])
         codes = validate_csv(path, "synthetic")["issue_codes"]
         self.assertIn("duplicate_timestamp", codes)
