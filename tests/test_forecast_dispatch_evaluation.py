@@ -75,6 +75,18 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             - baseline["dispatch_comparison"]["persistence_baseline"]["comparison"]["rolling_score"],
         )
 
+    def test_offset_timestamps_are_normalized_to_utc(self):
+        offset_rows = [dict(row) for row in self.rows]
+        start = datetime(2026, 1, 1, 8, tzinfo=timezone(timedelta(hours=8)))
+        for i, row in enumerate(offset_rows):
+            row["timestamp_utc"] = (
+                start + timedelta(hours=i)
+            ).isoformat()
+        self.write_rows(offset_rows)
+        timestamps, _, _ = load_paired_series(self.input)
+        self.assertEqual(timestamps[0], "2026-01-01T00:00:00Z")
+        self.assertEqual(timestamps[-1], "2026-01-01T07:00:00Z")
+
     def test_single_row_reports_persistence_baseline_unavailable(self):
         self.write_rows(self.rows[:1])
         result = evaluate_forecast_dispatch(self.input)
