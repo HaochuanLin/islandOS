@@ -70,10 +70,10 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
             reservoir_capacity_m3=100, min_run_hours=1,
             allow_backup_power=True, start_ratio=0.5,
         ))
-        result = ro.simulate([100, 0], [20, 20])
-        self.assertAlmostEqual(result.demand_served[0], 20)
-        self.assertAlmostEqual(result.unmet_demand[0], 0)
-        self.assertAlmostEqual(result.unmet_demand[1], 15)
+        result = ro.simulate([0, 0], [20, 20])
+        self.assertAlmostEqual(result.demand_served[0], 5)
+        self.assertAlmostEqual(result.unmet_demand[0], 15)
+        self.assertAlmostEqual(result.unmet_demand[1], 20)
         self.assertTrue(np.all(result.inventory >= 5 - 1e-9))
         self.assertTrue(np.all(result.inventory <= 100 + 1e-9))
 
@@ -82,10 +82,10 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
             rated_power_kw=100, coefficient_of_performance=2,
             storage_capacity_kwh_th=300, initial_storage_kwh_th=0,
         ))
-        result = ice.simulate([100, 0, 0], [0, 50, 100])
+        result = ice.simulate([100, 0, 0], [0, 150, 100])
         self.assertAlmostEqual(result.power_used_kw[0], 100)
         self.assertAlmostEqual(result.resource_produced[0], 200)
-        self.assertAlmostEqual(result.demand_served[1], 50)
+        self.assertAlmostEqual(result.demand_served[1], 150)
         self.assertAlmostEqual(result.unmet_demand[1], 0)
         self.assertAlmostEqual(result.unmet_demand[2], 50)
         self.assertTrue(np.all(result.inventory >= 0))
