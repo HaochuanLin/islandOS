@@ -151,7 +151,7 @@ The grid-search baseline exhaustively searches a small policy space (two priorit
 For the finite configured policy space, compare evolutionary search with an exhaustive Pareto reference:
 
 ```bash
-python experiments/benchmark_nsga2_vs_exhaustive.py --scenario typical_day --output build/pareto-benchmark.json
+python experiments/benchmark_nsga2_vs_exhaustive.py --scenario steady_surplus --output build/pareto-benchmark.json
 ```
 
 The benchmark reports exact-front recall and NSGA-II-front precision by candidate genome, along with evaluated candidate counts and the exact Pareto genomes. The exhaustive run is protected by a 100,000-candidate default safety limit (use the `--max-candidates` option to override). These metrics measure search coverage within the configured finite space only; they do not validate the simulator's physics or imply real-site performance. See [the Pareto benchmark guide](docs/PARETO_BENCHMARK.md).
