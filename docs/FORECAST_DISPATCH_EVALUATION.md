@@ -41,6 +41,26 @@ better, but the raw deficit metrics must also be inspected. The report records
 the rolling-minus-best-fixed score difference; a negative value means rolling
 scored better on this specific input only.
 
+## Persistence baseline comparison
+
+When at least two hourly rows are supplied, the evaluator also creates a
+one-step persistence forecast: the forecast for hour t is the realized surplus
+from hour t-1. Both the supplied forecast and persistence baseline are scored
+on rows 2 through N, excluding the first row from both methods. This avoids
+giving either method a different evaluation window.
+
+The report includes MAE/RMSE skill relative to persistence and reruns all
+dispatch policies for both forecast inputs on the same aligned realized surplus,
+water-demand and cooling-demand window. Each run starts from the same configured
+initial inventories. A positive forecast skill means lower forecast error; a
+negative rolling_score_difference_supplied_minus_persistence means rolling
+dispatch with the supplied forecast scored lower on that aligned window.
+
+This is a simple baseline, not necessarily the strongest forecast for every
+location or season. The aligned dispatch comparison is a controlled window
+comparison, not a continuation of the full-horizon run. If the input has only
+one row, the persistence comparison is reported as unavailable.
+
 ## Interpretation boundaries
 
 - The input file's provenance and whether it represents measured, public, or
