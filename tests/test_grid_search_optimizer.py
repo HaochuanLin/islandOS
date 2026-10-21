@@ -38,6 +38,28 @@ class TestGridSearchOptimizer(unittest.TestCase):
         archive = pareto_archive(evaluated)
         self.assertEqual([row["candidate_id"] for row in archive], ["a"])
 
+    def test_infeasible_candidate_cannot_be_recommended_even_if_passed_directly(self):
+        feasible = {"candidate_id": "valid", "feasible": True, "objectives": {
+            "water_unmet_m3": 1, "cooling_unmet_kwh_th": 1, "remaining_surplus_kwh": 1}}
+        invalid_but_attractive = {"candidate_id": "invalid", "feasible": False, "objectives": {
+            "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
+        chosen = recommend([invalid_but_attractive, feasible])
+        self.assertEqual(chosen["candidate_id"], "valid")
+
+    def test_recommendation_rejects_archive_with_only_infeasible_candidates(self):
+        invalid = {"candidate_id": "invalid", "feasible": False, "objectives": {
+            "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
+        with self.assertRaisesRegex(ValueError, "No feasible candidate"):
+            recommend([invalid])
+
+    def test_audit_flag_overrides_feasible_boolean(self):
+        invalid = {"candidate_id": "invalid", "feasible": True,
+                   "feasibility_audit": {"eligible_for_pareto": False}, "objectives": {
+                       "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
+        self.assertEqual(pareto_archive([invalid]), [])
+        with self.assertRaisesRegex(ValueError, "No feasible candidate"):
+            recommend([invalid])
+
     def test_recommendation_must_come_from_archive(self):
         archive = [
             {"candidate_id": "candidate-a", "feasible": True, "objectives": {
