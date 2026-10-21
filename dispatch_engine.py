@@ -79,6 +79,7 @@ def dispatch_flexible_loads(
     requests: Sequence[tuple[FlexibleLoad, Sequence[float]]],
     dt_hours: float = 1.0,
     initial_ro_run_hours_remaining: int = 0,
+    initial_ro_fault_lockout_hours_remaining: int = 0,
 ) -> DispatchResult:
     """Dispatch (load, demand_series) requests against one shared budget.
 
@@ -123,6 +124,7 @@ def dispatch_flexible_loads(
                 residual, demand_array, dt_hours=dt_hours,
                 forecast_available_power_kw=forecast,
                 initial_run_hours_remaining=initial_ro_run_hours_remaining,
+                initial_fault_lockout_hours_remaining=initial_ro_fault_lockout_hours_remaining,
             )
         else:
             result = load.simulate(residual, demand_array, dt_hours=dt_hours)
