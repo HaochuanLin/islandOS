@@ -22,3 +22,12 @@ jobs:
         run: python -m pip install --upgrade pip numpy matplotlib
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
+      - name: Generate reproducible dispatch report
+        run: python experiments/generate_dispatch_report.py --output-dir build/dispatch-report
+      - name: Upload dispatch report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-dispatch-report
+          path: build/dispatch-report/
+          if-no-files-found: error
+          retention-days: 30
