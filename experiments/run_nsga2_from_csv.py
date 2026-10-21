@@ -151,7 +151,11 @@ def run_from_csv(
         "optimization": result,
         "interpretation": {
             "pareto_front": "Trade-off candidates; no single candidate is universally best.",
-            "objective_scope": "Minimize unmet water, unmet cooling, and unused available surplus.",
+            "objective_scope": (
+                "Minimize unmet water, unmet cooling, and unused available surplus"
+                + ("; also minimize annualized lifecycle cost" if result["cost_objective_enabled"] else "")
+                + "."
+            ),
             "not_optimized": [
                 "critical-load reliability or backup generation",
                 "battery dispatch, emissions, and lifecycle impacts beyond the explicitly modeled annualized cost",
