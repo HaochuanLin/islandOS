@@ -131,3 +131,10 @@ This is a **policy-selection sensitivity test**, not a forecast-model evaluation
 `experiments/rolling_horizon_dispatch.py` adds a first receding-horizon loop. At each hour it evaluates two priority orders over a three-hour forecast window, commits only the first-hour action against realized available surplus, carries freshwater and cold-storage inventories forward, and replans at the next step. It compares rolling decisions with fixed priority policies and a perfect-information hindsight reference under synthetic forecast-error profiles.
 
 This is a **prototype of the control loop**, not a validated plant controller. It deliberately sets RO minimum-run duration to one hour in this experiment so the current load interface can carry inventory state between single-step executions; startup persistence, ramping, minimum-down time, forecast uncertainty distributions, and safety interlocks remain unmodeled. Forecasts and demands are synthetic. The older policy-selection sensitivity experiment remains a separate, simpler analysis.
+
+
+## 16. Objective-weight sensitivity audit
+
+`experiments/weight_sensitivity_audit.py` re-scores the existing 12 rolling-dispatch scenario/error outcomes under five illustrative objective weight sets. It reports the number of cases where rolling dispatch scores better than, ties, or scores worse than the best fixed priority policy, plus the mean and range of score deltas. The simulated outcomes are held constant so this analysis isolates the effect of objective weights.
+
+The weights are not calibrated from island operators or residents. This audit therefore reveals whether conclusions are sensitive to scoring assumptions; it does not establish a universal winner, validate physical models, or prove real-world performance.
