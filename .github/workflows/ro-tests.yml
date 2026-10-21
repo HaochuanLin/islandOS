@@ -24,6 +24,18 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Generate reproducible dispatch report
         run: python experiments/generate_dispatch_report.py --output-dir build/dispatch-report
+      - name: Benchmark NSGA-II against exact Pareto fronts
+        run: >-
+          python experiments/benchmark_nsga2_vs_exhaustive.py
+          --population-size 12 --generations 5 --seed 20261021
+          --output build/pareto-benchmark/results.json
+      - name: Upload Pareto benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-pareto-benchmark
+          path: build/pareto-benchmark/results.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload dispatch report
         uses: actions/upload-artifact@v4
         with:
