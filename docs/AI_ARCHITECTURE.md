@@ -138,3 +138,12 @@ This is a **prototype of the control loop**, not a validated plant controller. I
 `experiments/weight_sensitivity_audit.py` re-scores the existing 12 rolling-dispatch scenario/error outcomes under five illustrative objective weight sets. It reports the number of cases where rolling dispatch scores better than, ties, or scores worse than the best fixed priority policy, plus the mean and range of score deltas. The simulated outcomes are held constant so this analysis isolates the effect of objective weights.
 
 The weights are not calibrated from island operators or residents. This audit therefore reveals whether conclusions are sensitive to scoring assumptions; it does not establish a universal winner, validate physical models, or prove real-world performance.
+
+
+## 17. Data ingestion contract and quality gate
+
+`data_quality.py` provides a standard-library-only CSV validation boundary before time-series data enter experiments. The required schema is timestamp (timezone-aware ISO-8601), wind_kw, pv_kw, critical_load_kw, water_demand_m3, and cooling_demand_kw_th. Numeric fields must be finite and non-negative; timestamps must be unique, increasing, and match the configured interval (60 minutes by default).
+
+The caller must explicitly label provenance as measured, public, synthetic, or forecast. The report does not infer or certify provenance. Invalid data are rejected with issue codes; the validator does not fill gaps, alter values, convert units, or silently repair time series.
+
+This is a structural gate, not a complete scientific data-governance system. Source documentation must still establish units, sampling conventions, sensor calibration, time-zone interpretation, and data rights. Capacity plausibility, forecast-vs-observation leakage, missing-period policies, and field validation remain future work.
