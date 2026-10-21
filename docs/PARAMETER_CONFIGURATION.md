@@ -42,9 +42,15 @@ For every non-default value used in a real-site study, record at least:
 
 Keep raw data unchanged. Do not call a value “measured” just because it was typed into the JSON file. The current configuration validator checks structure and numerical consistency, not whether a source is genuine.
 
-## Cost fields: honest status
+## Lifecycle-cost objective: scope and hard gates
 
-The JSON reserves fields for electricity price, RO/chiller capital and fixed O&M costs, RO variable O&M, analysis period, discount rate, and currency. They are **not yet a lifecycle-cost model**. Supplying these values does not change the NSGA-II objective functions, and the output must not be described as cost-optimal. A cost model needs a documented system boundary, replacement schedules, discounting, capacity-factor assumptions, and explicit treatment of unmet-service penalties before cost can be optimized responsibly.
+The optimizer now adds `annualized_lifecycle_cost_per_year` as a fourth Pareto objective **only when all declared economic fields are supplied**: electricity price, RO/chiller capital cost, fixed O&M, RO variable O&M, analysis years, and discount rate. Unknown values should remain `null`; they are not silently replaced.
+
+Because this first version annualizes operation, the CSV must cover a complete calendar year (Jan 1 00:00 through Dec 31 23:00, with 8760 rows or 8784 in a leap year). A shorter profile is rejected when the cost fields are complete. The current cost objective also rejects RO backup-power mode because backup-generation costs are not yet represented.
+
+The objective is annualized RO/chiller capital cost using the capital-recovery factor, plus fixed O&M, RO variable O&M based on simulated annual water production, and electricity cost for flexible-load renewable electricity use. The electricity price should be interpreted as the site's marginal/opportunity cost for that energy; using zero means no energy opportunity cost is assigned. All cost values must use the configured currency.
+
+Important omissions remain: equipment replacement schedules, taxes, financing, emissions, backup fuel/generation, demand charges, unmet-service penalties, and uncertainty in prices or annual operating conditions. The supplied year is assumed representative of each analysis year. Thus this is a transparent first-pass annualized cost objective, **not** a bankable techno-economic assessment or a validated cost-optimal design. Inspect the per-candidate `cost_breakdown` in the JSON report.
 
 ## Run an equipment sensitivity check
 
@@ -69,6 +75,6 @@ The validator rejects non-finite/negative cost values, invalid equipment bounds,
 ## Planned extensions
 
 1. Add source metadata per individual parameter (including a URI/date and confidence range).
-2. Implement lifecycle-cost calculations with a transparent boundary and tests.
-3. Add sensitivity/scenario analysis for uncertain equipment and economic values.
+2. Extend cost boundary to replacements, backup generation, unmet-service penalties, and uncertainty.
+3. Add sensitivity/scenario analysis for uncertain economic values.
 4. Add a graphical form after the configuration contract stabilizes.
