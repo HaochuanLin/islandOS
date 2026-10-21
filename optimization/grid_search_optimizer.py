@@ -118,7 +118,7 @@ def recommend(archive: list[dict]) -> dict:
     eligible = [
         row for row in archive
         if row.get("feasible") is True
-        and row.get("feasibility_audit", {}).get("eligible_for_pareto", True) is True
+        and row.get("feasibility_audit", {}).get("eligible_for_pareto") is True
     ]
     if not eligible:
         raise ValueError("No feasible candidate is available for recommendation")
