@@ -1,9 +1,9 @@
 """Receding-horizon dispatch prototype for IslandOS.
 
 At each hour, evaluate the two load priorities over a finite forecast horizon,
-execute only the first hour against realized surplus, carry inventories forward,
-and replan. Inputs are synthetic. RO minimum-run commitment is not modeled in
-this prototype; use it to test the rolling decision loop, not plant feasibility.
+execute only the first hour against realized surplus, carry inventories and RO
+minimum-run commitment forward, and replan. Inputs are synthetic. This models
+a simple run commitment, not plant interlocks or full operational feasibility.
 """
 from __future__ import annotations
 
@@ -39,7 +39,10 @@ def _make_ice_with_inventory(cold_kwh_th: float) -> IceStorageLoad:
     return IceStorageLoad(replace(base, initial_storage_kwh_th=cold_kwh_th))
 
 
-def _run_horizon(power, water_demand, cooling_demand, water_inventory, cold_inventory, priority):
+def _run_horizon(
+    power, water_demand, cooling_demand, water_inventory, cold_inventory,
+    priority, ro_run_hours_remaining=0,
+):
     ro = _make_ro_with_inventory(water_inventory)
     ice = _make_ice_with_inventory(cold_inventory)
     requests = (
@@ -47,7 +50,10 @@ def _run_horizon(power, water_demand, cooling_demand, water_inventory, cold_inve
         if priority == "ro_first"
         else [(ice, cooling_demand), (ro, water_demand)]
     )
-    return dispatch_flexible_loads(power, requests)
+    return dispatch_flexible_loads(
+        power, requests,
+        initial_ro_run_hours_remaining=ro_run_hours_remaining,
+    )
 
 
 def _score(result, water_demand, cooling_demand) -> float:
@@ -62,10 +68,13 @@ def _score(result, water_demand, cooling_demand) -> float:
     return 0.45 * water_unmet / water_total + 0.45 * cooling_unmet / cooling_total + 0.10 * surplus_ratio
 
 
-def _execute_one(actual_power, water_demand, cooling_demand, water_inventory, cold_inventory, priority):
+def _execute_one(
+    actual_power, water_demand, cooling_demand, water_inventory, cold_inventory,
+    priority, ro_run_hours_remaining=0,
+):
     result = _run_horizon(
         [actual_power], [water_demand], [cooling_demand],
-        water_inventory, cold_inventory, priority,
+        water_inventory, cold_inventory, priority, ro_run_hours_remaining,
     )
     ro = result.loads.get("ro_desalination")
     ice = result.loads.get("ice_cold_storage")
@@ -77,6 +86,7 @@ def _execute_one(actual_power, water_demand, cooling_demand, water_inventory, co
         "renewable_used": float(result.renewable_power_used_kw.sum()),
         "remaining_surplus": float(result.remaining_power_kw.sum()),
         "constraint_violations": int(sum(np.sum(x.constraint_violation) for x in result.loads.values())),
+        "ro_run_hours_remaining": int(ro.run_hours_remaining) if ro else ro_run_hours_remaining,
     }
 
 
@@ -93,6 +103,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
 
     water_inventory = make_ro().config.initial_water_m3
     cold_inventory = make_ice().config.initial_storage_kwh_th
+    ro_run_hours_remaining = 0
     totals = {"water_unmet_m3": 0.0, "cooling_unmet_kwh_th": 0.0,
               "renewable_flexible_load_kwh": 0.0, "remaining_surplus_kwh": 0.0,
               "constraint_violation_hours": 0}
@@ -106,6 +117,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                 predicted = _run_horizon(
                     forecast[t:end], water_demand[t:end], cooling_demand[t:end],
                     water_inventory, cold_inventory, priority,
+                    ro_run_hours_remaining,
                 )
                 candidates.append((_score(predicted, water_demand[t:end], cooling_demand[t:end]), priority))
             chosen = min(candidates, key=lambda item: (item[0], item[1]))[1]
@@ -116,6 +128,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                     predicted = _run_horizon(
                         actual[t:end], water_demand[t:end], cooling_demand[t:end],
                         water_inventory, cold_inventory, priority,
+                        ro_run_hours_remaining,
                     )
                     candidates.append((_score(predicted, water_demand[t:end], cooling_demand[t:end]), priority))
                 chosen = min(candidates, key=lambda item: (item[0], item[1]))[1]
@@ -126,10 +139,11 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
 
         step = _execute_one(
             actual[t], water_demand[t], cooling_demand[t],
-            water_inventory, cold_inventory, chosen,
+            water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
         )
         water_inventory = step["water_inventory"]
         cold_inventory = step["cold_inventory"]
+        ro_run_hours_remaining = step["ro_run_hours_remaining"]
         totals["water_unmet_m3"] += step["water_unmet"]
         totals["cooling_unmet_kwh_th"] += step["cooling_unmet"]
         totals["renewable_flexible_load_kwh"] += step["renewable_used"]
@@ -224,7 +238,7 @@ def main():
             "interpretation": "Finite-horizon policy selection; only first-hour priority is executed before replanning. Lower normalized score is better.",
             "limitations": [
                 "Synthetic profiles only; no trained forecast model.",
-                "RO minimum-run commitment is not modeled in this rolling prototype.",
+                "RO minimum-run commitment is carried between hourly replans, but plant interlocks and startup/ramp dynamics are not modeled.",
                 "Perfect-information policy is a hindsight reference, not deployable.",
                 "Weights are illustrative and should be sensitivity-tested before decision use.",
             ],
