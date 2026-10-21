@@ -135,6 +135,21 @@ To run the regression suite:
 python -m unittest discover -s tests -v
 ```
 
+### End-to-end forecast-to-dispatch benchmark
+
+Run the fixed 168-hour synthetic benchmark from input CSV through forecast metrics and dispatch-policy comparisons:
+
+```bash
+python experiments/generate_synthetic_dispatch_benchmark.py --check
+python experiments/evaluate_forecast_dispatch.py \
+  data/examples/synthetic_dispatch_benchmark.csv \
+  --output build/forecast-dispatch-benchmark/results.json
+```
+
+The input fixture and deterministic generator are committed under `data/examples/` and `experiments/`. The report compares the supplied forecast against persistence and evaluates rolling dispatch, fixed RO-first / ice-first policies, and a perfect-information hindsight reference. GitHub Actions runs the same check and uploads `islandos-forecast-dispatch-benchmark`.
+
+**Interpretation boundary:** this is an integration and regression benchmark using synthetic data. Its score weights are illustrative; the hindsight policy is not deployable; demands are treated as known; and the model does not represent full island-grid physics. The benchmark can show that the pipeline runs reproducibly, but it cannot prove real-island performance or that rolling dispatch is universally better. See [the benchmark protocol](docs/END_TO_END_BENCHMARK.md) and [the input provenance note](data/examples/README.md).
+
 ## The optimization loop (prototype)
 
 ```mermaid
