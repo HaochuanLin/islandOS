@@ -127,6 +127,10 @@ def validate_config(config: dict[str, Any]) -> list[str]:
         elif len(set(values)) != len(values):
             errors.append(f"search_space.{key} must contain unique values")
 
+    currency = economics.get("currency")
+    if not isinstance(currency, str) or not currency.strip():
+        errors.append("economics.currency must be a non-empty currency label")
+
     for key in (
         "electricity_price_per_kwh", "ro_capex", "ro_fixed_om_per_year",
         "ro_variable_om_per_m3", "chiller_capex", "chiller_fixed_om_per_year",
