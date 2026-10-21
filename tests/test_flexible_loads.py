@@ -49,8 +49,10 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
             [100, 20], [0, 0],
             forecast_available_power_kw=[[100, 100], [20, 20]],
         )
-        self.assertEqual(result.active[1], 1)
-        self.assertEqual(result.constraint_violation[1], 1)
+        self.assertEqual(result.active.tolist(), [1, 0])
+        self.assertEqual(result.constraint_violation.tolist(), [0, 1])
+        self.assertEqual(result.power_used_kw.tolist(), [100.0, 0.0])
+        self.assertEqual(result.resource_produced.tolist(), [50.0, 0.0])
         self.assertEqual(
             result.operating_state.tolist(),
             ["RUNNING", "COMMITMENT_POWER_SHORTFALL"],
@@ -83,9 +85,26 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
         )
         # The unit is still committed, but the missing renewable power is
         # surfaced as a violation rather than silently cancelling the run.
-        self.assertEqual(result.active.tolist(), [1])
+        self.assertEqual(result.active.tolist(), [0])
         self.assertEqual(result.constraint_violation.tolist(), [1])
+        self.assertEqual(result.power_used_kw.tolist(), [0.0])
+        self.assertEqual(result.resource_produced.tolist(), [0.0])
+        self.assertEqual(
+            result.operating_state.tolist(), ["COMMITMENT_POWER_SHORTFALL"]
+        )
         self.assertEqual(result.run_hours_remaining, 0)
+
+    def test_ro_rejects_invalid_forecast_windows(self):
+        ro = ROWaterLoad(ROConfig(min_run_hours=2, allow_backup_power=False))
+        invalid_windows = [
+            [[100, float("nan")]],
+            [[100, -1]],
+            [[[100], [100]]],
+        ]
+        for forecast in invalid_windows:
+            with self.subTest(forecast=forecast):
+                with self.assertRaisesRegex(ValueError, "forecast_available_power_kw"):
+                    ro.simulate([100], [0], forecast_available_power_kw=forecast)
 
     def test_ro_rejects_invalid_initial_run_commitment(self):
         ro = ROWaterLoad(ROConfig(min_run_hours=2))
