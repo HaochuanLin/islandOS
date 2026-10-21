@@ -176,7 +176,15 @@ python experiments/forecasting_baselines.py \\
   --output data/processed/forecast_baselines.csv
 ```
 
-The forecasting script compares persistence with a 24-hour seasonal-naive baseline using chronological holdout and multiple chronological test windows. It reports MAE, RMSE and bias with output metadata. This evaluates a **weather parameter**, not a trained AI model or an island energy forecast. It does not generate missing PV/wind output or demand data.
+The first script compares persistence with a 24-hour seasonal-naive baseline using chronological holdout and multiple chronological test windows. It reports MAE, RMSE and bias with output metadata. To add a small trained model, run:
+
+```bash
+python experiments/train_weather_forecaster.py \
+  data/processed/forecast_baselines.csv \
+  --output data/processed/trained_weather_forecast.csv
+```
+
+The trained model is ordinary least-squares regression using cyclical timestamp features and 1-, 3-, and 24-hour lags. It fits only on the chronological history partition and compares its holdout MAE/RMSE/bias against both simple baselines. The first 24 rows are omitted again because the exported baseline CSV begins after its own 24-hour warm-up. Positive `mae_skill_vs_best_baseline` means lower holdout MAE than the best simple baseline; a negative value means it performed worse. This is a **trained weather-parameter prototype**, not an island energy forecast or evidence of operational benefit. It does not generate missing PV/wind output or demand data.
 
 ## Implementation status
 
@@ -190,7 +198,8 @@ The forecasting script compares persistence with a 24-hour seasonal-naive baseli
 | NASA POWER importer + provenance | **Implemented** | Environmental data only; not island generation or demand |
 | CSV quality gate and feature preparation | **Implemented** | Structural checks and lag features; no automatic imputation |
 | Persistence / seasonal-naive evaluation | **Implemented baseline** | Chronological evaluation of a weather parameter |
-| Integrated, trained forecast-and-dispatch AI | **Not yet implemented** | Requires validated targets, leakage-safe forecasts and end-to-end evaluation |
+| Trained weather-parameter regression | **Experimental** | Least-squares model, lag/time features and chronological holdout; not connected to dispatch |
+| Integrated, trained forecast-and-dispatch AI | **Not yet implemented** | Requires validated renewable/load targets, forecast-aware dispatch integration and end-to-end evaluation |
 | Site economics, lifecycle emissions and field validation | **Not available** | Requires real data, engineering assumptions and external validation |
 
 ## Metrics that matter
