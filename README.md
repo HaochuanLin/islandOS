@@ -205,3 +205,10 @@ python optimization/grid_search_optimizer.py --scenario steady_surplus --json
 The search varies the order of RO and cold storage and four RO start thresholds. Each candidate is evaluated by the same shared-budget simulator. The code filters infeasible candidates, constructs a non-dominated archive for water shortage, unmet cooling, and remaining renewable surplus, then selects its recommendation from that exact archive using disclosed normalized weights.
 
 This is an **exhaustive grid search over a small policy space**, not machine learning, NSGA-II, or a global optimum over all hourly schedules. It is a first connected optimization baseline. The objectives and weights are illustrative; changing service priorities may change the recommendation. All current scenarios remain synthetic.
+
+
+## Latest engineering update: physical-balance regression checks
+
+The RO plug-in now refuses to initiate a new minimum-run cycle when fewer than the required run hours remain in the simulation horizon. Configuration validation also requires a finite RO start ratio in [0, 1] and finite positive rated power / specific energy. Regression tests check per-step freshwater inventory conservation, cold-storage inventory conservation, demand served plus unmet demand, storage bounds, and the late-horizon start edge case.
+
+These checks strengthen internal consistency; they do not establish that the simplified models accurately represent a real desalination plant or industrial cold store.
