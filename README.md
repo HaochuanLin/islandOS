@@ -88,7 +88,8 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 | Run the original 24-hour demo | `python island_microgrid_ro_sim.py` | Synthetic wind/PV/load, rule-based RO dispatch, freshwater inventory, plot output |
 | Compare flexible-load policies | `python experiments/compare_dispatch_policies.py` | RO-only, cold-storage-only, and two priority orders across synthetic scenarios |
 | Generate a visual experiment report + physical audit | `python experiments/generate_dispatch_report.py --output-dir build/dispatch-report` | SVG chart, CSV/JSON results, Markdown summary, and hourly `audit_report.json` |
-| Inspect candidate trade-offs | `python optimization/grid_search_optimizer.py` | Small exhaustive policy search, feasibility filtering, Pareto archive, weighted recommendation |\n| Run NSGA-II multi-objective search | `python optimization/nsga2_dispatch_optimizer.py` | Evolutionary search over RO/ice policy parameters; audited Pareto trade-offs across three synthetic objectives |
+| Inspect candidate trade-offs | `python optimization/grid_search_optimizer.py` | Small exhaustive policy search, feasibility filtering, Pareto archive, weighted recommendation |
+| Run NSGA-II multi-objective search | `python optimization/nsga2_dispatch_optimizer.py` | Evolutionary search over RO/ice policy parameters; audited Pareto trade-offs across three synthetic objectives |
 | Test forecast-error sensitivity | `python experiments/forecast_error_robustness.py` | How perturbed surplus forecasts affect policy selection |
 | Run the rolling-horizon prototype | `python experiments/rolling_horizon_dispatch.py` | Re-plan over a short window and compare against fixed-priority baselines |
 | Run equipment-parameter sensitivity | `python experiments/parameter_sensitivity.py path/to/site_hourly.csv --output build/parameter-sensitivity.json` | Compare Pareto outcomes under low/high changes to RO energy intensity, chiller COP, and storage capacities |
@@ -146,7 +147,9 @@ flowchart LR
     F --> G["Choose using disclosed weights"]
 ```
 
-The grid-search baseline exhaustively searches a small policy space (two priority orders × four RO minimum-run durations). The separate NSGA-II prototype evolves candidates across priority, RO minimum-run duration, RO start threshold, RO rated power, and chiller rated power. The site-data workflow can optionally add annualized lifecycle cost as a fourth objective when the required cost inputs and complete annual data are available. Neither optimizer covers every possible hourly setpoint, and results remain conditional on simplified physics and supplied inputs.\n\n### Benchmark NSGA-II against exact search
+The grid-search baseline exhaustively searches a small policy space (two priority orders × four RO minimum-run durations). The separate NSGA-II prototype evolves candidates across priority, RO minimum-run duration, RO start threshold, RO rated power, and chiller rated power. The site-data workflow can optionally add annualized lifecycle cost as a fourth objective when the required cost inputs and complete annual data are available. Neither optimizer covers every possible hourly setpoint, and results remain conditional on simplified physics and supplied inputs.
+
+### Benchmark NSGA-II against exact search
 
 For the finite configured policy space, compare evolutionary search with an exhaustive Pareto reference:
 
@@ -164,7 +167,29 @@ The optional fourth objective, `annualized_lifecycle_cost_per_year`, activates o
 
 This is a multi-objective evolutionary-search prototype, **not a trained AI model** and not optimization of arbitrary hourly controls. Costs are not needed for the three-objective Pareto front; if complete cost inputs are supplied to the site-data workflow, cost becomes a fourth objective. Results are conditional on the simplified simulator and supplied data, not validated real-island performance.
 
-### Bring your own site data\n\nNo real-island dataset is required to develop the interface. Copy [`data/templates/site_hourly_input_template.csv`](data/templates/site_hourly_input_template.csv), add one row per hour, and provide data in the documented units. The input columns are:\n\n- `timestamp`: ISO-8601 timestamp with timezone, such as `2026-01-01T00:00:00Z`\n- `wind_kw`, `pv_kw`: average wind and solar power during the hour, in kW\n- `critical_load_kw`: average essential electricity demand during the hour, in kW\n- `water_demand_m3`: freshwater demand during that hourly interval, in m³\n- `cooling_demand_kw_th`: cooling demand during the hour, in kW thermal\n\nRun the end-to-end input pipeline:\n\n```bash\npython experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \\\n  --source-type measured \\\n  --output-dir build/site-optimization\n```\n\nUse `--source-type public`, `synthetic`, or `forecast` when appropriate. The runner checks required columns, finite non-negative values, timezone-aware timestamps, strict hourly spacing, and duplicate/out-of-order records. It does not impute, interpolate, or silently repair missing data. It calculates available surplus as `max(wind_kw + pv_kw - critical_load_kw, 0)`.\n\nOutputs: `nsga2_results.json` (input-quality report, data summary, algorithm settings, Pareto solutions and limitations) and `pareto_front.csv` (one row per candidate policy and its objective values). The default behavior stops if essential electricity demand is unmet in any hour. `--allow-critical-shortfall` permits exploratory execution but only reports that deficit; it does **not** optimize backup power or essential-service reliability.\n\n**Important:** the cost objective is a first-pass annualized estimate, not a bankable techno-economic assessment. It requires a full calendar-year input and complete economic fields, and currently omits replacements, taxes, financing, backup-generation costs, emissions, demand charges, and unmet-service penalties. Battery dispatch, forecast uncertainty, and plant safety constraints are not integrated. The model reports candidate trade-offs—not a guaranteed operating schedule. Keep raw data provenance and units with the submitted CSV.
+### Bring your own site data
+
+No real-island dataset is required to develop the interface. Copy [`data/templates/site_hourly_input_template.csv`](data/templates/site_hourly_input_template.csv), add one row per hour, and provide data in the documented units. The input columns are:
+
+- `timestamp`: ISO-8601 timestamp with timezone, such as `2026-01-01T00:00:00Z`
+- `wind_kw`, `pv_kw`: average wind and solar power during the hour, in kW
+- `critical_load_kw`: average essential electricity demand during the hour, in kW
+- `water_demand_m3`: freshwater demand during that hourly interval, in m³
+- `cooling_demand_kw_th`: cooling demand during the hour, in kW thermal
+
+Run the end-to-end input pipeline:
+
+```bash
+python experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \
+  --source-type measured \
+  --output-dir build/site-optimization
+```
+
+Use `--source-type public`, `synthetic`, or `forecast` when appropriate. The runner checks required columns, finite non-negative values, timezone-aware timestamps, strict hourly spacing, and duplicate/out-of-order records. It does not impute, interpolate, or silently repair missing data. It calculates available surplus as `max(wind_kw + pv_kw - critical_load_kw, 0)`.
+
+Outputs: `nsga2_results.json` (input-quality report, data summary, algorithm settings, Pareto solutions and limitations) and `pareto_front.csv` (one row per candidate policy and its objective values). The default behavior stops if essential electricity demand is unmet in any hour. `--allow-critical-shortfall` permits exploratory execution but only reports that deficit; it does **not** optimize backup power or essential-service reliability.
+
+**Important:** the cost objective is a first-pass annualized estimate, not a bankable techno-economic assessment. It requires a full calendar-year input and complete economic fields, and currently omits replacements, taxes, financing, backup-generation costs, emissions, demand charges, and unmet-service penalties. Battery dispatch, forecast uncertainty, and plant safety constraints are not integrated. The model reports candidate trade-offs—not a guaranteed operating schedule. Keep raw data provenance and units with the submitted CSV.
 
 ## Forecast-to-dispatch evaluation
 
