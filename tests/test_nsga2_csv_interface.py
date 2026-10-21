@@ -55,6 +55,41 @@ class TestNSGA2CSVInterface(unittest.TestCase):
                 self.assertIn("water_unmet_m3", reader.fieldnames)
                 self.assertGreaterEqual(len(list(reader)), 1)
 
+    def test_runner_records_user_supplied_parameter_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "site.csv"
+            config_path = root / "parameters.json"
+            output = root / "out"
+            self._write_csv(source, self._rows())
+            config_path.write_text(__import__("json").dumps({
+                "metadata": {"name": "user-entered-site-config"},
+                "equipment": {"ro": {"specific_energy_kwh_m3": 4.2}},
+                "search_space": {
+                    "priority": ["ro_first"],
+                    "ro_min_run_hours": [1],
+                    "ro_start_ratio": [0.8],
+                    "ro_rated_power_kw": [300.0],
+                    "ice_rated_power_kw": [50.0]
+                }
+            }), encoding="utf-8")
+            result = run_from_csv(
+                source, output, source_type="measured",
+                population_size=4, generations=1, seed=7,
+                config_path=config_path,
+            )
+            self.assertEqual(
+                result["parameter_configuration"]["metadata"]["name"],
+                "user-entered-site-config",
+            )
+            self.assertEqual(
+                result["parameter_configuration"]["equipment"]["ro"]["specific_energy_kwh_m3"],
+                4.2,
+            )
+            self.assertFalse(
+                result["parameter_configuration"]["economics_completeness"]["cost_objective_implemented"]
+            )
+
     def test_critical_shortfall_fails_closed_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
