@@ -90,5 +90,43 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(run_experiment(), run_experiment())
 
 
+    def test_repeated_ro_power_shortfalls_rearm_lockout_without_overallocating_power(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        scenario = Scenario(
+            name="repeated_ro_power_shortfalls",
+            available_surplus_kw=(400.0, 0.0, 400.0, 0.0, 400.0, 400.0),
+            water_demand_m3_per_hour=(0.0,) * 6,
+            cooling_demand_kw_th=(0.0,) * 6,
+        )
+        result = simulate_rolling(scenario, (400.0,) * 6, "ro_first")
+        audit = result["hourly_audit"]
+
+        self.assertEqual(
+            [row["ro_operating_state"] for row in audit],
+            [
+                "RUNNING",
+                "COMMITMENT_POWER_SHORTFALL",
+                "RECOVERY_LOCKOUT",
+                "COMMITMENT_POWER_SHORTFALL",
+                "RECOVERY_LOCKOUT",
+                "RUNNING",
+            ],
+        )
+        self.assertEqual(
+            [row["ro_fault_lockout_hours_remaining"] for row in audit],
+            [0, 1, 0, 1, 0, 0],
+        )
+        self.assertEqual(result["constraint_violation_hour_indices"], [1, 3])
+
+        # RO plus ice may never draw more renewable power than was available.
+        for row in audit:
+            with self.subTest(hour=row["hour_index"]):
+                self.assertLessEqual(
+                    row["ro_power_kw"] + row["ice_power_kw"],
+                    row["actual_surplus_kw"] + 1e-7,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
