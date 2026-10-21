@@ -202,7 +202,7 @@ python optimization/grid_search_optimizer.py
 python optimization/grid_search_optimizer.py --scenario steady_surplus --json
 ~~~
 
-The search varies the order of RO and cold storage and four RO start thresholds. Each candidate is evaluated by the same shared-budget simulator. The code filters infeasible candidates, constructs a non-dominated archive for water shortage, unmet cooling, and remaining renewable surplus, then selects its recommendation from that exact archive using disclosed normalized weights.
+The search varies the order of RO and cold storage and four RO minimum-run durations (1–4 hours). Each candidate is evaluated by the same shared-budget simulator. The code filters infeasible candidates, constructs a non-dominated archive for water shortage, unmet cooling, and remaining renewable surplus, then selects its recommendation from that exact archive using disclosed normalized weights.
 
 This is an **exhaustive grid search over a small policy space**, not machine learning, NSGA-II, or a global optimum over all hourly schedules. It is a first connected optimization baseline. The objectives and weights are illustrative; changing service priorities may change the recommendation. All current scenarios remain synthetic.
 
