@@ -102,3 +102,16 @@ The experimental module `optimization/grid_search_optimizer.py` connects candida
 - **Archive:** candidates are retained if no other feasible evaluated candidate is at least as good in all three objectives and strictly better in one.
 - **Recommendation:** a disclosed weighted normalized score selects one candidate from the same archive; the selected ID is checked by tests to belong to that archive.
 - **Limitations:** the search space is small and manually parameterized. This is grid search, not AI/ML or a guarantee of a globally optimal schedule. The scenario profiles are synthetic, and the weights encode a policy choice rather than an objective truth.
+
+
+## 13. Physical accounting and horizon-boundary checks
+
+The RO plug-in refuses to start a new minimum-run cycle if the simulation has fewer than the required run hours remaining. This prevents the model from initiating a cycle that it knowingly cannot complete inside the simulated horizon. A cycle that was already running before the horizon boundary is still a modelling edge case for future rolling-horizon work.
+
+Automated tests now assert stepwise accounting identities:
+- RO water inventory at the next step equals current inventory plus production minus spill and water delivered.
+- Cold-storage inventory at the next step equals current thermal inventory plus cooling produced minus cooling served and spill.
+- Served demand plus unmet demand equals the requested demand for each time step.
+- Inventories remain within configured bounds.
+
+These are accounting invariants, not field validation. They test whether the code conserves its modelled quantities, not whether the chosen process assumptions match a real installation.
