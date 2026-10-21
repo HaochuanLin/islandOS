@@ -36,6 +36,15 @@ class TestIslandOSConfig(unittest.TestCase):
         self.assertEqual(result["effective_search_space"]["ro_start_ratio"], [0.6])
         self.assertTrue(result["inactive_parameters"])
 
+    def test_misspelled_parameter_is_rejected_instead_of_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "typo.json"
+            path.write_text(json.dumps({
+                "equipment": {"ro": {"specific_energy_kwh_m3_typo": 9.9}}
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Unknown configuration key"):
+                load_config(path)
+
     def test_duplicate_search_values_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "duplicates.json"
