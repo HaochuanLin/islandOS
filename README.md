@@ -88,7 +88,7 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 | Run the original 24-hour demo | `python island_microgrid_ro_sim.py` | Synthetic wind/PV/load, rule-based RO dispatch, freshwater inventory, plot output |
 | Compare flexible-load policies | `python experiments/compare_dispatch_policies.py` | RO-only, cold-storage-only, and two priority orders across synthetic scenarios |
 | Generate a visual experiment report + physical audit | `python experiments/generate_dispatch_report.py --output-dir build/dispatch-report` | SVG chart, CSV/JSON results, Markdown summary, and hourly `audit_report.json` |
-| Inspect candidate trade-offs | `python optimization/grid_search_optimizer.py` | Small exhaustive policy search, feasibility filtering, Pareto archive, weighted recommendation |
+| Inspect candidate trade-offs | `python optimization/grid_search_optimizer.py` | Small exhaustive policy search, feasibility filtering, Pareto archive, weighted recommendation |\n| Run NSGA-II multi-objective search | `python optimization/nsga2_dispatch_optimizer.py` | Evolutionary search over RO/ice policy parameters; audited Pareto trade-offs across three synthetic objectives |
 | Test forecast-error sensitivity | `python experiments/forecast_error_robustness.py` | How perturbed surplus forecasts affect policy selection |
 | Run the rolling-horizon prototype | `python experiments/rolling_horizon_dispatch.py` | Re-plan over a short window and compare against fixed-priority baselines |
 
@@ -145,7 +145,7 @@ flowchart LR
     F --> G["Choose using disclosed weights"]
 ```
 
-The current optimizer exhaustively searches a **small discrete policy space**: two priority orders × four RO minimum-run durations. The recommendation is selected from the same evaluated Pareto archive. This is a connected, reproducible optimization baseline—not machine learning, NSGA-II, or a global optimum over every possible hourly schedule.
+The current optimizer exhaustively searches a **small discrete policy space**: two priority orders × four RO minimum-run durations. The recommendation is selected from the same evaluated Pareto archive. This is a connected, reproducible optimization baseline—not machine learning, NSGA-II, or a global optimum over every possible hourly schedule.\n\n### Experimental NSGA-II optimizer\n\nRun `python optimization/nsga2_dispatch_optimizer.py --json` to evolve candidate policies with NSGA-II (non-dominated sorting, crowding distance, and tournament selection). The finite decision space varies priority order, RO minimum-run duration, RO start threshold, RO rated power, and chiller rated power. It minimizes unmet water demand, unmet cooling demand, and remaining renewable surplus while filtering candidates through the independent dispatch audit. The default run is deterministic (`--seed 20261021`) and reports how many unique candidates were evaluated.\n\nThis is a genuine multi-objective evolutionary-search prototype, but **not a trained AI model** and not optimization of arbitrary hourly controls. All current scenarios are synthetic; weights/costs are not needed to show the Pareto front, but choosing one final policy still requires stakeholder preferences and potentially a separate decision rule. It is not yet connected to rolling-horizon dispatch or validated against real island data.
 
 ## Weather data and forecast baselines
 
