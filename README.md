@@ -91,6 +91,7 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 | Inspect candidate trade-offs | `python optimization/grid_search_optimizer.py` | Small exhaustive policy search, feasibility filtering, Pareto archive, weighted recommendation |\n| Run NSGA-II multi-objective search | `python optimization/nsga2_dispatch_optimizer.py` | Evolutionary search over RO/ice policy parameters; audited Pareto trade-offs across three synthetic objectives |
 | Test forecast-error sensitivity | `python experiments/forecast_error_robustness.py` | How perturbed surplus forecasts affect policy selection |
 | Run the rolling-horizon prototype | `python experiments/rolling_horizon_dispatch.py` | Re-plan over a short window and compare against fixed-priority baselines |
+| Run equipment-parameter sensitivity | `python experiments/parameter_sensitivity.py path/to/site_hourly.csv --output build/parameter-sensitivity.json` | Compare Pareto outcomes under low/high changes to RO energy intensity, chiller COP, and storage capacities |
 
 The rolling-horizon prototype carries the RO minimum-run commitment between hourly replans and reports a violation if a committed hour lacks enough renewable power. This remains a simplified commitment model: it does not model plant interlocks, startup/ramp dynamics, or site-specific operating limits.
 | Audit objective weights | `python experiments/weight_sensitivity_audit.py` | Re-score the same synthetic outcomes under alternative illustrative weights |
@@ -251,6 +252,7 @@ Reducing surplus is not automatically a win if water or cooling demand goes unme
 | `dispatch_engine.py` | Shared-budget priority dispatcher |
 | `optimization/grid_search_optimizer.py` | Candidate search and Pareto-based recommendation |
 | `experiments/` | Reproducible synthetic policy and forecast experiments |
+| `experiments/parameter_sensitivity.py` | One-factor-at-a-time equipment-assumption sensitivity experiment |
 | `data_quality.py` | Strict CSV time-series validation |
 | `data_sources/` | NASA POWER import and environmental feature preparation |
 | `tests/` | Unit and regression tests |
