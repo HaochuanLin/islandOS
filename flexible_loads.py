@@ -176,7 +176,10 @@ class ROWaterLoad:
                 else:
                     operating_state[t] = "RUNNING"
                 produced[t] = power[t] * dt_hours / c.specific_energy_kwh_m3
-                active[t] = 1
+                # active means energized / consuming power, not merely carrying
+                # a minimum-run commitment. The latter is represented by
+                # operating_state and the run-hours counter.
+                active[t] = int(power[t] > 0)
                 if run_remaining == 0:
                     run_remaining = c.min_run_hours
                 run_remaining -= 1
