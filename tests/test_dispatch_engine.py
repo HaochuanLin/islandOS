@@ -5,7 +5,8 @@ import numpy as np
 
 from dispatch_engine import dispatch_flexible_loads
 from flexible_loads import (
-    IceStorageConfig, IceStorageLoad, ROConfig, ROWaterLoad,
+    IceStorageConfig, IceStorageLoad, LoadSimulationResult,
+    ROConfig, ROWaterLoad,
 )
 
 
@@ -71,6 +72,46 @@ class TestSharedBudgetDispatch(unittest.TestCase):
         self.assertTrue(np.allclose(result.renewable_power_used_kw, [60, 60]))
         self.assertTrue(np.allclose(result.remaining_power_kw, [0, 0]))
         self.assertTrue(np.allclose(result.backup_power_kw, [40, 40]))
+
+    def test_plugin_inventory_conservation_violation_is_rejected(self):
+        class BrokenLoad:
+            name = "broken_inventory"
+
+            def simulate(self, available_power_kw, demand, dt_hours=1.0):
+                return LoadSimulationResult(
+                    power_used_kw=np.array([0.0]),
+                    backup_power_kw=np.array([0.0]),
+                    constraint_violation=np.array([0]),
+                    resource_produced=np.array([0.0]),
+                    demand_served=np.array([0.0]),
+                    unmet_demand=np.array([0.0]),
+                    spill=np.array([0.0]),
+                    active=np.array([0]),
+                    inventory=np.array([0.0, 1.0]),
+                )
+
+        with self.assertRaisesRegex(RuntimeError, "inventory conservation"):
+            dispatch_flexible_loads([0], [(BrokenLoad(), [0])])
+
+    def test_plugin_demand_balance_violation_is_rejected(self):
+        class BrokenLoad:
+            name = "broken_demand"
+
+            def simulate(self, available_power_kw, demand, dt_hours=1.0):
+                return LoadSimulationResult(
+                    power_used_kw=np.array([0.0]),
+                    backup_power_kw=np.array([0.0]),
+                    constraint_violation=np.array([0]),
+                    resource_produced=np.array([0.0]),
+                    demand_served=np.array([0.0]),
+                    unmet_demand=np.array([0.0]),
+                    spill=np.array([0.0]),
+                    active=np.array([0]),
+                    inventory=np.array([0.0, 0.0]),
+                )
+
+        with self.assertRaisesRegex(RuntimeError, "demand served"):
+            dispatch_flexible_loads([0], [(BrokenLoad(), [1])])
 
     def test_duplicate_names_rejected(self):
         with self.assertRaisesRegex(ValueError, "Duplicate load name"):
