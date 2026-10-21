@@ -87,6 +87,7 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 |---|---|---|
 | Run the original 24-hour demo | `python island_microgrid_ro_sim.py` | Synthetic wind/PV/load, rule-based RO dispatch, freshwater inventory, plot output |
 | Compare flexible-load policies | `python experiments/compare_dispatch_policies.py` | RO-only, cold-storage-only, and two priority orders across synthetic scenarios |
+| Generate a visual experiment report | `python experiments/generate_dispatch_report.py --output-dir build/dispatch-report` | SVG chart, CSV/JSON results, and a Markdown report from the tested simulator |
 | Inspect candidate trade-offs | `python optimization/grid_search_optimizer.py` | Small exhaustive policy search, feasibility filtering, Pareto archive, weighted recommendation |
 | Test forecast-error sensitivity | `python experiments/forecast_error_robustness.py` | How perturbed surplus forecasts affect policy selection |
 | Run the rolling-horizon prototype | `python experiments/rolling_horizon_dispatch.py` | Re-plan over a short window and compare against fixed-priority baselines |
@@ -112,7 +113,19 @@ pip install -r requirements.txt
 python island_microgrid_ro_sim.py
 ```
 
-The original demo uses synthetic inputs and writes a plot named `island_microgrid_ro.png`. To run the regression suite:
+The original demo uses synthetic inputs and writes a plot named `island_microgrid_ro.png`.
+
+### Reproducible dispatch report
+
+The report generator reruns the same 3 synthetic scenarios × 4 dispatch policies used by the comparison experiment. It produces:
+
+- `REPORT.md` — compact results table and interpretation limits
+- `dispatch_comparison.svg` — grouped charts for remaining surplus, unmet water demand, and unmet cooling demand
+- `results.csv` and `results.json` — machine-readable outputs
+
+The GitHub Actions workflow also generates and uploads these files as the `islandos-dispatch-report` artifact (retained for 30 days). Open [the latest workflow run](https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml) and download the artifact after a successful run. These results are synthetic and must not be presented as field measurements.
+
+To run the regression suite:
 
 ```bash
 python -m unittest discover -s tests -v
