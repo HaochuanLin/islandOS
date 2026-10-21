@@ -195,9 +195,14 @@ def economics_completeness(config: dict[str, Any]) -> dict[str, Any]:
     )
     economics = config["economics"]
     missing = [key for key in required if economics.get(key) is None]
+    complete = not missing
     return {
-        "complete_for_current_declared_fields": not missing,
+        "complete_for_current_declared_fields": complete,
         "missing_fields": missing,
-        "cost_objective_implemented": False,
-        "note": "Completing fields does not activate lifecycle-cost optimization; the current optimizer does not calculate costs.",
+        "cost_objective_implemented": complete,
+        "note": (
+            "The annualized lifecycle-cost objective is enabled only for a complete annual input profile."
+            if complete else
+            "Lifecycle-cost optimization is disabled until all required economic inputs are supplied."
+        ),
     }
