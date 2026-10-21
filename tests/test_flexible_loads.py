@@ -51,6 +51,10 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
         )
         self.assertEqual(result.active[1], 1)
         self.assertEqual(result.constraint_violation[1], 1)
+        self.assertEqual(
+            result.operating_state.tolist(),
+            ["RUNNING", "COMMITMENT_POWER_SHORTFALL"],
+        )
 
         backed = ROWaterLoad(ROConfig(
             rated_power_kw=100, specific_energy_kwh_m3=2,
@@ -61,6 +65,10 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
         backed_result = backed.simulate([100, 60], [0, 0])
         self.assertEqual(backed_result.power_used_kw[1], 100)
         self.assertAlmostEqual(backed_result.backup_power_kw[1], 40)
+        self.assertEqual(
+            backed_result.operating_state.tolist(),
+            ["RUNNING", "RUNNING_WITH_BACKUP"],
+        )
         self.assertEqual(int(backed_result.constraint_violation.sum()), 0)
 
     def test_ro_initial_run_commitment_is_carried_into_next_call(self):
