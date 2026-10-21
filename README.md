@@ -4,7 +4,7 @@
 
 IslandOS explores how software intelligence can coordinate renewable generation, essential electricity demand, and flexible resource production on isolated islands. Its core idea is to turn otherwise-curtailed renewable electricity into useful local resources—starting with freshwater and potentially extending to cooling, fuel, public services, and deferrable computing.
 
-**Current status: early-stage, simulation-only MVP.** The implemented prototype simulates renewable curtailment, rule-based reverse-osmosis (RO) desalination dispatch, and freshwater reservoir dynamics using synthetic data. Forecasting, AI-driven planning, multi-objective optimization, and additional load modules are development goals—not capabilities claimed as already implemented.
+**Current status: early-stage, simulation-only MVP.** The original demo simulates renewable curtailment, rule-based reverse-osmosis (RO) desalination dispatch, and freshwater reservoir dynamics using synthetic data. The development branch also contains experimental RO/cold-storage plug-ins and a shared-budget dispatcher. Forecasting, AI-driven planning, and multi-objective optimization are not yet implemented.
 
 ## Why IslandOS?
 
@@ -24,79 +24,84 @@ The project aims to **reduce avoidable renewable curtailment and explore alterna
 4. **Simulate** the resulting energy and resource flows.
 5. **Evaluate** candidate schedules against transparent baselines and measurable metrics.
 
-The long-term vision is a configurable software “energy brain” that can adapt to different islands through data adapters, load modules, and site-specific constraints.
+## The first MVP: water–energy co-simulation
 
-## 1 + N architecture
-
-### The “1”: simulation and decision core
-
-The planned core architecture contains:
-
-- **Data layer:** renewable generation, base load, water demand, weather forecasts, and optional site metadata.
-- **Forecasting layer:** baseline forecasts first, with machine-learning models evaluated only when data and validation support them.
-- **Planning layer:** rule-based baselines and optimization algorithms that compare feasible schedules.
-- **Simulation layer:** time-step energy balance, flexible-load operation, resource inventories, and constraint checks.
-- **Evaluation layer:** cost, renewable curtailment, unmet essential demand, resource shortages, equipment cycling, and other explicitly modelled metrics.
-- **Explanation layer:** show why a load was selected, which constraints were active, and how candidate schedules differ.
-
-### The first MVP: water–energy co-simulation (implemented)
-
-The current Python prototype:
-
-- Generates 24-hour synthetic wind, solar PV, base-load, and water-demand time series.
-- Estimates potential surplus as max(0, wind + PV - base_load).
-- Dispatches an RO desalination plant as a flexible load using a rule-based heuristic.
-- Models a minimum continuous RO run duration.
-- Tracks freshwater production and a simplified upland-reservoir water balance.
-- Plots renewable output, curtailment, RO operation, and reservoir level.
+The original Python prototype generates 24-hour synthetic wind, solar PV, base-load, and water-demand series; estimates potential surplus as max(0, wind + PV - base_load); dispatches a rule-based RO plant; enforces a simplified minimum continuous run duration; tracks freshwater production and reservoir inventory; and plots the results.
 
 **Important physical distinction:** stored freshwater is used for water supply. It is not converted back into electricity. Producing water during surplus periods shifts electricity consumption in time; it does not make the reservoir an electrical battery.
 
-### “N”: pluggable flexible-load modules (planned)
+## Pluggable flexible loads
 
-| Module | Potential use of flexible electricity | Status |
+| Module | Potential use | Status on development branch |
 |---|---|---|
-| RO desalination | Produce freshwater and build a water buffer | Implemented as a simplified simulation |
-| Ice making / cold storage | Support fisheries, food preservation, and cooling demand | Planned |
-| Green hydrogen | Convert electricity to hydrogen when technically and economically feasible | Planned |
-| Municipal services | Shift eligible wastewater treatment or waste-handling loads | Planned |
+| RO desalination | Produce freshwater and build a water buffer | Experimental plug-in; legacy demo remains separate |
+| Ice making / cold storage | Support fisheries, food preservation, and cooling demand | Simplified experimental plug-in |
+| Green hydrogen | Produce hydrogen where equipment, safety, storage, and offtake are credible | Planned |
+| Municipal services | Shift eligible wastewater or waste-handling loads | Planned |
 | Deferrable computing | Run interruptible compute jobs during suitable surplus windows | Planned |
 
-These are candidate extensions, not interchangeable loads. Each module must specify its power limits, conversion efficiency, operating windows, ramping or minimum-run constraints, storage capacity, demand or offtake, and safety requirements. Hydrogen production requires appropriate equipment, storage, safety controls, and a credible use case; it should not be enabled merely because electricity is available.
+These are candidate extensions, not interchangeable loads. Each module needs explicit power limits, conversion efficiency, operating windows, equipment constraints, storage capacity, demand, and safety requirements.
+
+## Shared-budget dispatcher (experimental)
+
+The development branch adds dispatch_engine.py, a transparent priority-based dispatcher. It gives each load only the renewable surplus left by higher-priority loads, reports backup power separately, and checks this conservation identity:
+
+~~~text
+initial available surplus = renewable power allocated + remaining surplus
+~~~
+
+Example:
+
+~~~python
+from dispatch_engine import dispatch_flexible_loads
+from flexible_loads import IceStorageLoad, ROWaterLoad, ROConfig
+
+ro = ROWaterLoad(ROConfig(allow_backup_power=False))
+ice = IceStorageLoad()
+
+result = dispatch_flexible_loads(
+    available_power_kw=[500, 350, 600],
+    requests=[
+        (ro, [10, 10, 10]),  # earlier entries have higher priority
+        (ice, [0, 100, 100]),
+    ],
+)
+print(result.remaining_power_kw)
+print(result.loads.keys())
+~~~
+
+The order in requests is an explicit priority policy, not an optimized schedule. The dispatcher allocates flexible loads against renewable surplus only; it does not model a complete island electrical network, battery, or generator dispatch. RO look-ahead is derived from the supplied future series after higher-priority loads are scheduled, so this remains a perfect-foresight simulation rather than an operational forecast.
 
 ## AI and optimization roadmap
 
-IslandOS is intended to become AI-enabled through measurable forecasting and decision-making—not by adding a chatbot or labelling a fixed rule as AI.
+IslandOS is intended to become AI-enabled through measurable forecasting and decision-making—not by labelling a fixed rule as AI.
 
-1. **Reliable simulation foundation:** validate energy and water balances; make equipment constraints explicit; test edge cases.
-2. **Forecasting baseline:** compare simple persistence or statistical forecasts against held-out synthetic or real time-series data. Report forecast errors and disclose data limitations.
-3. **Rolling-horizon planning:** plan over a future window, execute only the near-term decision, then re-plan when observations or forecasts update.
-4. **Multi-objective optimization:** evaluate methods such as NSGA-II or multi-objective simulated annealing for trade-offs among operating cost, reliability, curtailment, and modelled battery degradation.
-5. **Load plug-ins:** implement and test one additional module, preferably ice making/cold storage, before expanding to more complex pathways.
-6. **Scenario evaluation:** compare the rule-based baseline and optimized strategies across multiple weather, demand, and forecast-error scenarios.
+1. **Reliable simulation:** validate energy and water balances and equipment constraints.
+2. **Forecasting baseline:** compare simple forecasts against held-out data and report errors.
+3. **Rolling-horizon planning:** plan over a future window, execute the near-term decision, then re-plan.
+4. **Multi-objective optimization:** evaluate NSGA-II or multi-objective simulated annealing for trade-offs among cost, reliability, curtailment, and any defensible battery degradation model.
+5. **Scenario evaluation:** compare rule-based and optimized strategies across weather, demand, and forecast-error scenarios.
 
-No optimization method is assumed to guarantee a globally optimal schedule or the complete true Pareto front. Candidate schedules must be checked against the same simulator and constraints. A final recommendation should be selected from the evaluated feasible candidate set, with its decision criteria made explicit.
+No algorithm is assumed to guarantee a global optimum or the complete true Pareto front. Every candidate schedule must be checked by the same simulator, and any final recommendation must come from the evaluated feasible set using an explicit decision rule.
 
-## Evaluation: prove improvement against a baseline
+## Evaluation metrics
 
-The project should report metrics only when their definitions and model assumptions are explicit.
-
-| Metric | What it helps evaluate |
+| Metric | Purpose |
 |---|---|
-| Renewable curtailment (kWh) | How much potential renewable energy remains unused |
-| Essential load not served (kWh) | Whether essential electricity demand is unmet |
-| Flexible-load energy (kWh) | How much electricity is allocated to each module |
-| Freshwater produced / unmet water demand (m³) | Water-service performance |
-| Operating cost | Economic performance, once cost inputs are defined |
-| Battery degradation proxy | Storage impact, only if a defensible degradation model is implemented |
-| Constraint violations | Whether equipment and service constraints are respected |
-| Forecast error | Whether forecasts improve on an appropriate baseline |
+| Renewable curtailment (kWh) | Measure unused renewable energy |
+| Essential load not served (kWh) | Check electricity-service reliability |
+| Flexible-load energy (kWh) | Track electricity allocated to each module |
+| Freshwater produced / unmet water demand (m³) | Measure water-service performance |
+| Operating cost | Include only after defining cost inputs |
+| Battery degradation proxy | Include only with a defensible model |
+| Constraint violations | Verify equipment and service constraints |
+| Forecast error | Test whether forecasts improve on a baseline |
 
-A lower curtailment number alone does not prove a better system. A schedule must also preserve essential services, satisfy resource needs, obey equipment limits, and account for the cost and consequences of running each flexible load.
+Lower curtailment alone does not prove a better system if essential service, resource delivery, or equipment constraints worsen.
 
-## Demo results and assumptions
+## Demo assumptions
 
-The existing demo uses synthetic data and simplified assumptions. The figures are illustrative model outputs, not measurements from a real island and not evidence of field performance.
+The existing demo uses synthetic data and simplified assumptions. Results are illustrative model outputs, not measurements from a real island.
 
 - RO rated power: 400 kW
 - RO specific energy consumption: 3.5 kWh/m³
@@ -105,108 +110,70 @@ The existing demo uses synthetic data and simplified assumptions. The figures ar
 - Initial reservoir storage: 800 m³
 - Simulation horizon: 24 hours
 
-The current model does **not** yet quantify lifecycle cost, emissions reductions, battery replacement avoided, or real-world resilience improvements.
+The project does not yet quantify lifecycle cost, emissions reductions, avoided battery replacement, or real-world resilience improvements.
 
 ## Quick start
 
 ~~~bash
 git clone https://github.com/HaochuanLin/islandOS.git
 cd islandOS
-
 python -m venv .venv
 # Windows:
 .venv\\Scripts\\activate
 # macOS / Linux:
 source .venv/bin/activate
-
 pip install -r requirements.txt
 python island_microgrid_ro_sim.py
 ~~~
 
-The script runs the 24-hour synthetic demo and saves island_microgrid_ro.png.
+The script runs the original 24-hour synthetic demo and saves island_microgrid_ro.png.
 
-To use the existing simulator from Python:
+Run all regression tests, including the plug-in and shared-budget tests:
 
-~~~python
-import island_microgrid_ro_sim as m
-
-params = m.Params(allow_backup_power=False, min_run_hours=2)
-wind, pv, load, water_demand = m.load_data(24)
-result = m.simulate(wind, pv, load, water_demand, params)
-
-runs, constraints_ok = m.check_min_run(
-    result["ro_on"], params.min_run_hours
-)
-print("RO run segments:", runs)
-print("Minimum-run constraint satisfied:", constraints_ok)
+~~~bash
+python -m unittest discover -s tests -v
 ~~~
-
-To use custom time series, pass equally sized arrays for wind, PV, base load (kW), and water demand (m³/h).
 
 ## Repository status
 
 | Capability | Status |
 |---|---|
 | Synthetic hourly wind / PV / load inputs | Implemented |
-| Rule-based RO dispatch | Implemented |
+| Rule-based RO dispatch in original demo | Implemented |
 | Simplified reservoir water balance | Implemented |
-| Constraint checking for RO minimum run | Basic check implemented; edge cases need further testing |
+| RO and cold-storage plug-in prototypes | Experimental |
+| Shared renewable-surplus budget dispatcher | Experimental; priority-based |
+| Regression tests and GitHub Actions workflow | Implemented for selected invariants |
 | Real weather / terrain / load data adapters | Planned |
-| Forecasting model | Planned |
-| Rolling-horizon AI planning | Planned |
+| Forecasting and rolling-horizon AI planning | Planned |
 | Multi-objective Pareto search | Planned |
-| Ice, hydrogen, municipal, and compute modules | Planned |
+| Hydrogen, municipal, and compute modules | Planned |
 | Field deployment and measured validation | Not available |
 
 ## Limitations and responsible claims
 
-- The current data generator is synthetic; no real island dataset or field deployment is included.
-- The RO start rule uses future values from the generated time series to evaluate its start window. This is a perfect-foresight simplification, not a deployable forecast.
-- The current RO model is simplified and does not fully model membrane flushing, fouling, variable-load behaviour, or membrane ageing.
-- Reservoir dynamics omit several site-specific factors, including pumping energy, water quality, leakage, and evaporation.
-- The current prototype does not include a complete grid, diesel-generator, or battery dispatch model.
-- Cost, emissions, battery-life extension, and social impact have not yet been quantified.
-- Additional load modules, standardised APIs, and hosted services are not implemented.
+- The data generator is synthetic; no real island dataset or field deployment is included.
+- The original RO start rule uses future values from the generated series. This is a perfect-foresight simplification, not a deployable forecast.
+- The experimental dispatcher is sequential and priority-based; it does not optimize priorities or jointly optimize all load decisions.
+- The plug-in RO model is not numerically identical to the legacy simulator and is not a validated plant model.
+- The cold-storage model omits thermal leakage, temperature-dependent COP, compressor cycling, and site-specific refrigeration constraints.
+- RO membrane flushing, fouling, variable-load behaviour, and ageing are not fully modelled.
+- Reservoir dynamics omit site-specific factors including pumping energy, water quality, leakage, and evaporation.
+- A complete grid, diesel-generator, and battery dispatch model is not implemented.
+- Cost, emissions, battery-life extension, and social impact have not been quantified.
 
-Impact statements in this repository describe project goals and hypotheses to test, not verified outcomes. Real deployment would require site-specific engineering, data validation, safety review, and operational oversight.
+Impact statements describe project goals and hypotheses to test, not verified outcomes. Real deployment would require site-specific engineering, data validation, safety review, and operational oversight.
 
 ## Contributing and development
 
-See docs/AI_ARCHITECTURE.md for the proposed module boundaries, optimization workflow, and staged implementation plan. New features should include tests, explicit assumptions, and baseline comparisons.
+See docs/AI_ARCHITECTURE.md for module boundaries, the optimization workflow, and staged implementation. New features should include tests, explicit assumptions, and baseline comparisons.
 
 ## License
 
 Released under the MIT License. See LICENSE for details.
 
+## Latest engineering update: shared-budget dispatch
 
-## Latest engineering update: RO startup feasibility and regression tests
+The development branch now includes dispatch_engine.py, which runs the experimental RO and cold-storage plug-ins in a caller-defined priority order. Each load sees only the residual renewable surplus after previous loads have been dispatched. The dispatcher verifies that allocated renewable power plus remaining surplus equals the initial available surplus, and it accounts for backup power separately.
 
-The development branch includes a correction to the **no-backup-power** RO startup rule. Previously, a start window could pass a mean-curtailment threshold even when one hour in the minimum-run window had less than the RO rated power; that could force an early stop and violate the minimum-run constraint. In no-backup mode, a start is now permitted only when every hour in the proposed minimum-run window has at least the rated power available as curtailment. Backup-enabled mode retains the mean-based startup heuristic because backup power can cover shortfalls.
-
-Regression tests were added for:
-- avoiding infeasible no-backup startup windows;
-- respecting minimum-run segments in feasible no-backup cases;
-- accounting for backup energy during forced-run shortfalls;
-- refusing to start when the minimum run cannot fit within the simulation horizon;
-- reservoir storage bounds and overflow accounting; and
-- mismatched input-array lengths.
-
-A GitHub Actions workflow runs the unit-test suite on pushes to `main` and `draft/**`, and on pull requests. The GitHub Actions run for commit `18419e17b57e26201205e0c56fbe8ac0141d5616` completed successfully, including the regression suite. This correction improves a specific dispatch edge case; passing tests do not validate the full physical model or establish field performance.
-
-
-## Second engineering milestone: pluggable flexible loads
-
-The branch now contains an experimental common API in `flexible_loads.py` and two implementations:
-
-- `ROWaterLoad`: a lightweight RO/reservoir plug-in that reports water production, served and unmet demand, inventory, backup power, and runtime constraint violations. In no-backup mode, starting a multi-hour run requires an explicit forecast window that covers every minimum-run hour. Forecast errors are surfaced rather than silently treated as feasible.
-- `IceStorageLoad`: a simplified chiller and cold-storage model that uses available surplus power to build a thermal inventory and serves later cooling demand from that inventory. Thermal storage provides cooling service; it does not generate electricity.
-
-Both implementations return a shared `LoadSimulationResult` structure and are covered by tests in `tests/test_flexible_loads.py`.
-
-Run all regression tests with:
-
-~~~bash
-python -m unittest discover -s tests -v
-~~~
-
-**Integration status:** this is an initial plug-in interface, not yet the dispatch engine used by the legacy `island_microgrid_ro_sim.py` demo. The RO plug-in is a deliberately compact parallel model, so its results should not be assumed identical to the legacy simulator. The cold-storage model omits thermal leakage, temperature-dependent COP, compressor cycling, and site-specific refrigeration constraints. Automated tests have been added, and the GitHub Actions run for commit `18419e17b57e26201205e0c56fbe8ac0141d5616` completed successfully. Passing tests are a software check, not field validation.
+Regression tests in tests/test_dispatch_engine.py cover priority effects, power-budget conservation, separate backup accounting, duplicate module names, and invalid inputs. This is not an optimizer or field validation.
