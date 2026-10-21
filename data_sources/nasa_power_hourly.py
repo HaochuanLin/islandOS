@@ -8,24 +8,31 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from datetime import datetime, timezone
+import math
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 API_URL = "https://power.larc.nasa.gov/api/temporal/hourly/point"
 PARAMETERS = ("ALLSKY_SFC_SW_DWN", "T2M", "WS10M")
+# NASA POWER commonly uses -999 as a fill value. Convert it to an explicit
+# blank in CSV and record counts in the metadata; never reinterpret it as zero.
+FILL_VALUES = {-999, -999.0}
 
 
 def build_request_url(latitude: float, longitude: float, start: str, end: str) -> str:
-    if not -90 <= latitude <= 90:
-        raise ValueError("latitude must be between -90 and 90")
-    if not -180 <= longitude <= 180:
-        raise ValueError("longitude must be between -180 and 180")
+    if not math.isfinite(latitude) or not -90 <= latitude <= 90:
+        raise ValueError("latitude must be finite and between -90 and 90")
+    if not math.isfinite(longitude) or not -180 <= longitude <= 180:
+        raise ValueError("longitude must be finite and between -180 and 180")
     for label, value in (("start", start), ("end", end)):
         if len(value) != 8 or not value.isdigit():
             raise ValueError(f"{label} must use YYYYMMDD")
-        datetime.strptime(value, "%Y%m%d")
+        try:
+            datetime.strptime(value, "%Y%m%d")
+        except ValueError as exc:
+            raise ValueError(f"{label} must be a valid date in YYYYMMDD format") from exc
     if start > end:
         raise ValueError("start must be on or before end")
     query = urlencode({
@@ -55,28 +62,52 @@ def parse_response(payload: dict) -> tuple[list[dict], dict]:
     missing = [name for name in PARAMETERS if name not in params]
     if missing:
         raise ValueError(f"NASA POWER response missing parameters: {', '.join(missing)}")
-    time_keys = set(params[PARAMETERS[0]])
-    if not time_keys:
-        raise ValueError("NASA POWER response contains no hourly records")
-    if any(set(params[name]) != time_keys for name in PARAMETERS):
-        raise ValueError("NASA POWER parameter time keys do not align")
+    try:
+        time_keys = set(params[PARAMETERS[0]])
+        if not time_keys:
+            raise ValueError("NASA POWER response contains no hourly records")
+        if any(set(params[name]) != time_keys for name in PARAMETERS):
+            raise ValueError("NASA POWER parameter time keys do not align")
+    except TypeError as exc:
+        raise ValueError("NASA POWER parameter data must be timestamp-to-value mappings") from exc
 
-    rows = []
-    for key in sorted(time_keys):
+    parsed_times = {}
+    for key in time_keys:
         try:
             stamp = datetime.strptime(key, "%Y%m%d%H").replace(tzinfo=timezone.utc)
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise ValueError(f"Unexpected NASA POWER timestamp: {key}") from exc
+        if stamp.strftime("%Y%m%d%H") != key:
+            raise ValueError(f"Unexpected NASA POWER timestamp: {key}")
+        parsed_times[key] = stamp
+
+    ordered_keys = sorted(time_keys)
+    for previous_key, current_key in zip(ordered_keys, ordered_keys[1:]):
+        if parsed_times[current_key] - parsed_times[previous_key] != timedelta(hours=1):
+            raise ValueError(
+                f"NASA POWER hourly series has a gap or duplicate around {previous_key}, {current_key}"
+            )
+
+    rows = []
+    fill_counts = {name: 0 for name in PARAMETERS}
+    for key in ordered_keys:
+        stamp = parsed_times[key]
         row = {"timestamp_utc": stamp.isoformat().replace("+00:00", "Z")}
         for name in PARAMETERS:
             value = params[name][key]
-            if value is None:
+            if value is None or (isinstance(value, (int, float)) and not isinstance(value, bool)
+                                 and value in FILL_VALUES):
                 row[name] = ""
+                fill_counts[name] += 1
             elif isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(f"Non-numeric value for {name} at {key}")
+            elif not math.isfinite(value):
+                raise ValueError(f"Non-finite value for {name} at {key}")
             else:
                 row[name] = value
         rows.append(row)
+    metadata["fill_value_counts"] = fill_counts
+    metadata["fill_value_policy"] = "Null and -999 fill values are blanked, counted, and never replaced with zero."
     return rows, metadata
 
 
@@ -111,6 +142,7 @@ def download_hourly(latitude: float, longitude: float, start: str, end: str,
             "No critical load, freshwater demand, or cooling demand is provided by this importer.",
             "Confirm parameter units from NASA POWER response metadata before any conversion.",
             "Gridded/reanalysis data are not equivalent to on-site sensor measurements.",
+            "Null and -999 fill values are recorded as blank, not imputed or treated as zero.",
         ],
     }
     metadata_path = csv_path.with_suffix(csv_path.suffix + ".metadata.json")
