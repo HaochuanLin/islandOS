@@ -303,3 +303,18 @@ python data_sources/nasa_power_hourly.py \
 The coordinates and dates above are an example only; replace them with a study site and period. See the [NASA POWER hourly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/hourly/).
 
 **Important boundary:** this import supplies environmental covariates, not measured wind/PV generation or island demand. It does not manufacture missing load/water/cooling data, convert units, or claim site-level accuracy. Check parameter units in the response metadata before conversion. The output uses a distinct schema and is not the canonical six-column operational dataset accepted by `data_quality.py`; additional validated load/resource data and an explicit alignment/feature-engineering step are required before simulation.
+
+
+## Environmental feature preparation (not yet a forecasting model)
+
+After downloading NASA POWER data, create a reproducible feature matrix:
+
+~~~bash
+python data_sources/prepare_environmental_features.py \
+  data/raw/nasa_power_hourly.csv \
+  --output data/processed/nasa_environmental_features.csv
+~~~
+
+The feature builder requires the raw CSV's provenance sidecar and source-reported units. It validates timestamp ordering/hourly continuity and rejects missing or non-finite values instead of imputing them. It creates cyclic hour/day-of-year features and 1-, 3-, and 24-hour lags for the three environmental variables. The first 24 rows are omitted as lag warm-up, and the output gets its own metadata sidecar.
+
+This is a tested preprocessing layer, not an AI model: it does not train a forecaster, generate labels, infer actual renewable power, or produce dispatch-ready load data. Current-hour covariates are included for exploratory analysis; a real prospective forecast must only use weather information available at decision time, such as archived forecasts or lagged observations, to avoid look-ahead leakage. Do not pass this feature CSV to the six-column operational validator or simulator as if it were actual generation and demand.
