@@ -76,29 +76,33 @@ def evaluate_candidate(scenario: Scenario, candidate: Candidate) -> dict:
         "cooling_unmet_kwh_th": metrics["cooling_unmet_kwh_th"],
         "remaining_surplus_kwh": metrics["remaining_surplus_kwh"],
     }
-    # Re-audit aggregate power accounting independently before accepting a candidate.
+    # Re-audit aggregate power and each load's physical bookkeeping.
+    demand_by_name = {
+        "ro_desalination": np.asarray(scenario.water_demand_m3_per_hour, dtype=float),
+        "ice_cold_storage": np.asarray(scenario.cooling_demand_kw_th, dtype=float),
+    }
     metrics["feasibility_audit"] = audit_dispatch_result(
-        result, metrics["constraint_violation_hours"]
+        result, requests, demand_by_name, dt_hours=1.0
     )
     metrics["feasible"] = metrics["feasibility_audit"]["eligible_for_pareto"]
     return metrics
 
 
 
-def audit_dispatch_result(result, constraint_violation_hours: int) -> dict:
-    """Independently re-check aggregate power accounting before optimizer selection.
+def audit_dispatch_result(result, requests, demand_by_name: dict[str, np.ndarray], dt_hours: float = 1.0) -> dict:
+    """Independently audit aggregate power, load balances, and configured bounds.
 
-    This audit complements the dispatcher's fail-fast checks; it does not certify
-    equipment safety, forecast accuracy, or field feasibility.
+    This is a simulator consistency check, not certification of plant safety,
+    forecast accuracy, or field feasibility.
     """
+    errors: list[str] = []
+    arrays: dict[str, np.ndarray] = {}
     fields = (
         "initial_available_power_kw",
         "remaining_power_kw",
         "renewable_power_used_kw",
         "backup_power_kw",
     )
-    arrays = {}
-    errors = []
     for field in fields:
         try:
             values = np.asarray(getattr(result, field), dtype=float)
@@ -120,27 +124,99 @@ def audit_dispatch_result(result, constraint_violation_hours: int) -> dict:
             available = arrays["initial_available_power_kw"]
             remaining = arrays["remaining_power_kw"]
             renewable = arrays["renewable_power_used_kw"]
-            backup = arrays["backup_power_kw"]
             if not np.allclose(available, renewable + remaining, atol=1e-7, rtol=0):
                 errors.append("shared_power_balance_failed")
             if np.any(renewable > available + 1e-7):
                 errors.append("renewable_power_exceeds_available")
             if np.any(remaining > available + 1e-7):
                 errors.append("remaining_power_exceeds_available")
-            if np.any(backup < -1e-8):
-                errors.append("negative_backup_power")
 
-    hard_checks_passed = not errors
-    component_constraints_passed = constraint_violation_hours == 0
+    component_constraints_passed = True
+    for load, demand in requests:
+        name = load.name
+        if name not in getattr(result, "loads", {}):
+            errors.append(f"missing_load_result_{name}")
+            component_constraints_passed = False
+            continue
+        load_result = result.loads[name]
+        try:
+            demand_series = np.asarray(demand_by_name[name], dtype=float)
+            demand_series = np.asarray(demand_series, dtype=float)
+            inventory = np.asarray(load_result.inventory, dtype=float)
+            series = {
+                field: np.asarray(getattr(load_result, field), dtype=float)
+                for field in (
+                    "power_used_kw", "backup_power_kw", "constraint_violation",
+                    "resource_produced", "demand_served", "unmet_demand", "spill",
+                )
+            }
+        except (KeyError, AttributeError, TypeError, ValueError):
+            errors.append(f"invalid_load_audit_data_{name}")
+            component_constraints_passed = False
+            continue
+
+        n = len(demand_series)
+        if (demand_series.ndim != 1 or not np.all(np.isfinite(demand_series))
+                or any(v.shape != (n,) or not np.all(np.isfinite(v)) for v in series.values())
+                or inventory.shape != (n + 1,) or not np.all(np.isfinite(inventory))):
+            errors.append(f"invalid_load_series_shape_or_values_{name}")
+            component_constraints_passed = False
+            continue
+        if any(np.any(v < -1e-8) for v in series.values()) or np.any(inventory < -1e-8):
+            errors.append(f"negative_load_value_{name}")
+            component_constraints_passed = False
+        if not np.allclose(
+            series["demand_served"] + series["unmet_demand"],
+            demand_series * dt_hours, atol=1e-7, rtol=1e-9
+        ):
+            errors.append(f"demand_balance_failed_{name}")
+            component_constraints_passed = False
+        if not np.allclose(
+            inventory[1:],
+            inventory[:-1] + series["resource_produced"] - series["spill"] - series["demand_served"],
+            atol=1e-7, rtol=1e-9
+        ):
+            errors.append(f"inventory_balance_failed_{name}")
+            component_constraints_passed = False
+        if np.any(series["backup_power_kw"] - series["power_used_kw"] > 1e-7):
+            errors.append(f"backup_exceeds_total_power_{name}")
+            component_constraints_passed = False
+
+        config = getattr(load, "config", None)
+        if config is not None:
+            if hasattr(config, "rated_power_kw") and np.any(
+                series["power_used_kw"] > config.rated_power_kw + 1e-7
+            ):
+                errors.append(f"rated_power_exceeded_{name}")
+                component_constraints_passed = False
+            if hasattr(config, "reservoir_capacity_m3"):
+                if (np.any(inventory < config.dead_storage_m3 - 1e-7)
+                        or np.any(inventory > config.reservoir_capacity_m3 + 1e-7)):
+                    errors.append(f"water_inventory_bounds_failed_{name}")
+                    component_constraints_passed = False
+            if hasattr(config, "storage_capacity_kwh_th"):
+                if np.any(inventory > config.storage_capacity_kwh_th + 1e-7):
+                    errors.append(f"thermal_inventory_capacity_failed_{name}")
+                    component_constraints_passed = False
+        if np.any(series["constraint_violation"] > 0):
+            errors.append(f"reported_component_constraint_violation_{name}")
+            component_constraints_passed = False
+
+    hard_errors = [e for e in errors if e in {
+        "shared_power_balance_failed", "renewable_power_exceeds_available",
+        "remaining_power_exceeds_available", "power_series_length_mismatch",
+    } or e.startswith(("missing_or_invalid_", "invalid_shape_or_nonfinite_", "negative_"))]
+    hard_checks_passed = not hard_errors
+    eligible = hard_checks_passed and component_constraints_passed and not errors
     return {
         "dispatch_completed": True,
         "hard_dispatch_checks_passed": hard_checks_passed,
         "component_constraints_passed": component_constraints_passed,
-        "eligible_for_pareto": hard_checks_passed and component_constraints_passed,
+        "eligible_for_pareto": eligible,
         "audit_errors": errors,
         "scope": (
-            "independent aggregate power accounting and reported component constraint "
-            "flags only; not field or safety validation"
+            "independent aggregate power, per-load demand/inventory balance, reported "
+            "constraint flags, and configured rated-power/inventory bounds; not field or safety validation"
         ),
     }
 
