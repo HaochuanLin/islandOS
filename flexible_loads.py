@@ -85,6 +85,15 @@ class ROWaterLoad:
             raise ValueError("available_power_kw and demand must have equal lengths")
         if forecast_available_power_kw is not None and len(forecast_available_power_kw) != len(available):
             raise ValueError("forecast_available_power_kw must have one forecast window per time step")
+        if forecast_available_power_kw is not None:
+            # Validate every forecast window at the input boundary. In particular,
+            # do not let NaN/negative forecast values silently become a failed start.
+            for t, window_values in enumerate(forecast_available_power_kw):
+                window = np.asarray(window_values, dtype=float)
+                if window.ndim != 1 or not np.all(np.isfinite(window)) or np.any(window < 0):
+                    raise ValueError(
+                        f"forecast_available_power_kw[{t}] must be a finite, non-negative 1D series"
+                    )
 
         c = self.config
         numeric_config = (
@@ -157,10 +166,12 @@ class ROWaterLoad:
                         "RUNNING_WITH_BACKUP" if backup[t] > 1e-9 else "RUNNING"
                     )
                 elif power[t] < c.rated_power_kw:
-                    # The run commitment remains active, but the required power
-                    # is unavailable. Label this separately from a feasible run;
-                    # partial output is only an accounting approximation.
+                    # No backup: this is not a feasible operating point. Do not
+                    # claim partial desalination production under the simplified
+                    # rated-power-only model; preserve the commitment state but
+                    # report zero production and an explicit constraint violation.
                     violations[t] = 1
+                    power[t] = 0.0
                     operating_state[t] = "COMMITMENT_POWER_SHORTFALL"
                 else:
                     operating_state[t] = "RUNNING"
