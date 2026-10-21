@@ -51,6 +51,27 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(result["hourly_audit"][1]["ro_run_hours_remaining"], 0)
         self.assertEqual(result["constraint_violation_hours"], 1)
 
+    def test_ro_recovery_lockout_is_carried_across_hourly_replans(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        scenario = Scenario(
+            name="power_recovers_after_ro_shortfall",
+            available_surplus_kw=(400.0, 0.0, 400.0, 400.0, 400.0),
+            water_demand_m3_per_hour=(0.0, 0.0, 0.0, 0.0, 0.0),
+            cooling_demand_kw_th=(0.0, 0.0, 0.0, 0.0, 0.0),
+        )
+        result = simulate_rolling(scenario, (400.0,) * 5, "ro_first")
+        states = [row["ro_operating_state"] for row in result["hourly_audit"]]
+        self.assertEqual(states[0], "RUNNING")
+        self.assertEqual(states[1], "COMMITMENT_POWER_SHORTFALL")
+        self.assertEqual(states[2], "RECOVERY_LOCKOUT")
+        self.assertEqual(states[3:], ["RUNNING", "RUNNING"])
+        self.assertEqual(
+            [row["ro_fault_lockout_hours_remaining"] for row in result["hourly_audit"]],
+            [0, 1, 0, 0, 0],
+        )
+        self.assertEqual(result["constraint_violation_hour_indices"], [1])
+
     def test_experiment_covers_scenario_error_and_policy_combinations(self):
         rows = run_experiment()
         self.assertEqual(len(rows), 48)
