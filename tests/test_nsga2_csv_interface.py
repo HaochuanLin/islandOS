@@ -90,6 +90,31 @@ class TestNSGA2CSVInterface(unittest.TestCase):
                 result["parameter_configuration"]["economics_completeness"]["cost_objective_implemented"]
             )
 
+    def test_complete_cost_config_rejects_partial_year_csv(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "partial-year.csv"
+            config_path = root / "economics.json"
+            self._write_csv(source, self._rows())
+            config_path.write_text(json.dumps({
+                "economics": {
+                    "electricity_price_per_kwh": 0.12,
+                    "ro_capex": 100000.0,
+                    "ro_fixed_om_per_year": 2000.0,
+                    "ro_variable_om_per_m3": 0.3,
+                    "chiller_capex": 40000.0,
+                    "chiller_fixed_om_per_year": 1000.0,
+                    "analysis_years": 20,
+                    "discount_rate": 0.05
+                }
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "complete calendar-year CSV"):
+                run_from_csv(
+                    source, root / "out", source_type="measured",
+                    population_size=4, generations=1, config_path=config_path,
+                )
+
     def test_critical_shortfall_fails_closed_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
