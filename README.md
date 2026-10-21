@@ -177,3 +177,17 @@ Released under the MIT License. See LICENSE for details.
 The development branch now includes dispatch_engine.py, which runs the experimental RO and cold-storage plug-ins in a caller-defined priority order. Each load sees only the residual renewable surplus after previous loads have been dispatched. The dispatcher verifies that allocated renewable power plus remaining surplus equals the initial available surplus, and it accounts for backup power separately.
 
 Regression tests in tests/test_dispatch_engine.py cover priority effects, power-budget conservation, separate backup accounting, duplicate module names, and invalid inputs. This is not an optimizer or field validation.
+
+
+## Latest engineering update: reproducible policy comparison
+
+Run the synthetic baseline experiment from the repository root:
+
+~~~bash
+python experiments/compare_dispatch_policies.py
+python experiments/compare_dispatch_policies.py --json
+~~~
+
+The experiment compares RO-only, cold-storage-only, RO-first, and cold-storage-first dispatch across three fixed synthetic surplus profiles. It reports flexible-load renewable energy, remaining surplus, backup energy, water production/shortage, cooling served/shortage, and modelled constraint-violation hours. Automated tests check aligned inputs, all policy/scenario combinations, non-negative metrics, and deterministic repeatability.
+
+**Interpretation limit:** these profiles are illustrative, not measured island data. The experiment does not establish that either priority order is universally best, and it does not yet compare against a mathematically optimized schedule or a full grid/battery/generator model.
