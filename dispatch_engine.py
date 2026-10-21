@@ -11,7 +11,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from flexible_loads import FlexibleLoad, LoadSimulationResult, ROWaterLoad
+from flexible_loads import FlexibleLoad, IceStorageLoad, LoadSimulationResult, ROWaterLoad
 
 
 @dataclass
