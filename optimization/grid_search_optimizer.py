@@ -76,21 +76,73 @@ def evaluate_candidate(scenario: Scenario, candidate: Candidate) -> dict:
         "cooling_unmet_kwh_th": metrics["cooling_unmet_kwh_th"],
         "remaining_surplus_kwh": metrics["remaining_surplus_kwh"],
     }
-    # The dispatcher raises on malformed series, demand/inventory balance
-    # failures, out-of-bounds inventories, and shared-power overdraw. A returned
-    # run passed those hard checks; component constraint flags still disqualify it.
-    hard_dispatch_checks_passed = True
-    component_constraints_passed = metrics["constraint_violation_hours"] == 0
-    metrics["feasibility_audit"] = {
-        "dispatch_completed": True,
-        "hard_dispatch_checks_passed": hard_dispatch_checks_passed,
-        "component_constraints_passed": component_constraints_passed,
-        "eligible_for_pareto": hard_dispatch_checks_passed and component_constraints_passed,
-        "scope": "simulator accounting and configured bounds only; not field or safety validation",
-    }
+    # Re-audit aggregate power accounting independently before accepting a candidate.
+    metrics["feasibility_audit"] = audit_dispatch_result(
+        result, metrics["constraint_violation_hours"]
+    )
     metrics["feasible"] = metrics["feasibility_audit"]["eligible_for_pareto"]
     return metrics
 
+
+
+def audit_dispatch_result(result, constraint_violation_hours: int) -> dict:
+    """Independently re-check aggregate power accounting before optimizer selection.
+
+    This audit complements the dispatcher's fail-fast checks; it does not certify
+    equipment safety, forecast accuracy, or field feasibility.
+    """
+    fields = (
+        "initial_available_power_kw",
+        "remaining_power_kw",
+        "renewable_power_used_kw",
+        "backup_power_kw",
+    )
+    arrays = {}
+    errors = []
+    for field in fields:
+        try:
+            values = np.asarray(getattr(result, field), dtype=float)
+        except (AttributeError, TypeError, ValueError):
+            errors.append(f"missing_or_invalid_{field}")
+            continue
+        if values.ndim != 1 or not np.all(np.isfinite(values)):
+            errors.append(f"invalid_shape_or_nonfinite_{field}")
+            continue
+        if np.any(values < -1e-8):
+            errors.append(f"negative_{field}")
+        arrays[field] = values
+
+    if len(arrays) == len(fields):
+        lengths = {len(values) for values in arrays.values()}
+        if len(lengths) != 1:
+            errors.append("power_series_length_mismatch")
+        else:
+            available = arrays["initial_available_power_kw"]
+            remaining = arrays["remaining_power_kw"]
+            renewable = arrays["renewable_power_used_kw"]
+            backup = arrays["backup_power_kw"]
+            if not np.allclose(available, renewable + remaining, atol=1e-7, rtol=0):
+                errors.append("shared_power_balance_failed")
+            if np.any(renewable > available + 1e-7):
+                errors.append("renewable_power_exceeds_available")
+            if np.any(remaining > available + 1e-7):
+                errors.append("remaining_power_exceeds_available")
+            if np.any(backup < -1e-8):
+                errors.append("negative_backup_power")
+
+    hard_checks_passed = not errors
+    component_constraints_passed = constraint_violation_hours == 0
+    return {
+        "dispatch_completed": True,
+        "hard_dispatch_checks_passed": hard_checks_passed,
+        "component_constraints_passed": component_constraints_passed,
+        "eligible_for_pareto": hard_checks_passed and component_constraints_passed,
+        "audit_errors": errors,
+        "scope": (
+            "independent aggregate power accounting and reported component constraint "
+            "flags only; not field or safety validation"
+        ),
+    }
 
 def dominates(a: dict, b: dict) -> bool:
     """Return True when a is no worse in every objective and better in one."""
