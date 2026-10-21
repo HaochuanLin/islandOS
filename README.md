@@ -254,3 +254,6 @@ python experiments/rolling_horizon_dispatch.py --json
 At each hour, the prototype scores the two load priority orders over a three-hour forecast window, executes only the first-hour decision against realized surplus, carries freshwater and cold-storage inventories forward, and replans. It compares this rolling policy with fixed priority orders and a perfect-information hindsight reference across synthetic forecast-error cases.
 
 Limitations: synthetic profiles only; no trained forecasting model; RO minimum-run commitment is not modeled in this prototype; the perfect-information reference is not deployable. This is an experimental closed-loop control scaffold, not a site-ready controller.
+
+
+The rolling-horizon experiment now prints a case-level normalized score comparison between the rolling policy and both fixed priority policies. Lower scores are better; negative `rolling_minus_best_fixed` means the rolling policy scored better than the best fixed policy in that specific synthetic case. The weights (water unmet 0.45, cooling unmet 0.45, remaining surplus 0.10) are illustrative, not validated stakeholder preferences. Do not generalize one case to all islands.
