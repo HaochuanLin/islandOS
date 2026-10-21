@@ -39,7 +39,7 @@ class ForecastDispatchWindowsTests(unittest.TestCase):
         result = evaluate_windows(self.input, window_hours=8)
         self.assertEqual(result["window_count"], 3)
         self.assertEqual(result["evaluated_window_count"], 3)
-        self.assertEqual(result["total_aligned_evaluation_hours"], 14)
+        self.assertEqual(result["total_aligned_evaluation_hours"], 17)
         self.assertEqual([w["input_rows"] for w in result["windows"]], [8, 8, 4])
         self.assertEqual([w["aligned_evaluation_hours"] for w in result["windows"]], [7, 7, 3])
         self.assertIsNotNone(result["aggregate_metrics"]["mae_skill_vs_persistence"])
