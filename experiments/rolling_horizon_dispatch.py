@@ -91,6 +91,11 @@ def _execute_one(
         "renewable_used": float(result.renewable_power_used_kw.sum()),
         "remaining_surplus": float(result.remaining_power_kw.sum()),
         "constraint_violations": int(sum(np.sum(x.constraint_violation) for x in result.loads.values())),
+        "ro_active": bool(ro is not None and ro.active[0]),
+        "ro_power_kw": float(ro.power_used_kw[0]) if ro else 0.0,
+        "ro_constraint_violation": int(ro.constraint_violation[0]) if ro else 0,
+        "ice_active": bool(ice is not None and ice.active[0]),
+        "ice_power_kw": float(ice.power_used_kw[0]) if ice else 0.0,
         "ro_run_hours_remaining": int(ro.run_hours_remaining) if ro else ro_run_hours_remaining,
     }
 
@@ -113,6 +118,8 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
               "renewable_flexible_load_kwh": 0.0, "remaining_surplus_kwh": 0.0,
               "constraint_violation_hours": 0}
     decisions = []
+    hourly_audit = []
+    violation_steps = []
 
     for t in range(len(actual)):
         end = min(len(actual), t + HORIZON_HOURS)
@@ -171,6 +178,21 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
         totals["remaining_surplus_kwh"] += step["remaining_surplus"]
         totals["constraint_violation_hours"] += step["constraint_violations"]
         decisions.append(chosen)
+        hourly_audit.append({
+            "hour_index": t,
+            "actual_surplus_kw": float(actual[t]),
+            "forecast_surplus_kw": float(forecast[t]),
+            "priority": chosen,
+            "ro_active": step["ro_active"],
+            "ro_power_kw": round(step["ro_power_kw"], 6),
+            "ro_constraint_violation": step["ro_constraint_violation"],
+            "ro_run_hours_remaining": step["ro_run_hours_remaining"],
+            "water_inventory_m3": round(water_inventory, 6),
+            "cold_inventory_kwh_th": round(cold_inventory, 6),
+            "total_constraint_violations": step["constraint_violations"],
+        })
+        if step["constraint_violations"]:
+            violation_steps.append(t)
 
     return {
         "policy": policy,
@@ -178,6 +200,8 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
         "final_water_inventory_m3": round(water_inventory, 3),
         "final_cold_inventory_kwh_th": round(cold_inventory, 3),
         "hourly_priority_decisions": decisions,
+        "hourly_audit": hourly_audit,
+        "constraint_violation_hour_indices": violation_steps,
     }
 
 
