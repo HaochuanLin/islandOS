@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from data_quality import SOURCE_TYPES, validate_csv
+from islandos_config import economics_completeness, load_config
 from experiments.compare_dispatch_policies import Scenario
 from optimization.nsga2_dispatch_optimizer import optimize_scenario
 
@@ -47,7 +48,9 @@ def run_from_csv(
     seed: int = 20261021,
     mutation_rate: float = 0.2,
     allow_critical_shortfall: bool = False,
+    config_path: str | Path | None = None,
 ) -> dict:
+    config = load_config(config_path)
     input_path = Path(input_csv)
     output_path = Path(output_dir)
     quality = validate_csv(input_path, source_type=source_type, expected_interval_minutes=60)
@@ -85,6 +88,7 @@ def run_from_csv(
         generations=generations,
         seed=seed,
         mutation_rate=mutation_rate,
+        config=config,
     )
     output_path.mkdir(parents=True, exist_ok=True)
     input_summary = {
@@ -118,6 +122,15 @@ def run_from_csv(
         "workflow": "user CSV -> strict validation -> net surplus calculation -> NSGA-II -> Pareto output",
         "input_summary": input_summary,
         "data_quality_report": quality,
+        "parameter_configuration": {
+            "metadata": config.get("metadata", {}),
+            "equipment": config["equipment"],
+            "search_space": config["search_space"],
+            "economics": config["economics"],
+            "economics_completeness": economics_completeness(config),
+            "source_policy": config.get("parameter_sources", {}),
+            "note": "Configuration values are assumptions unless supported by documented sources. Economic inputs are recorded but not used by the current objective functions.",
+        },
         "optimization": result,
         "interpretation": {
             "pareto_front": "Trade-off candidates; no single candidate is universally best.",
@@ -166,6 +179,7 @@ def main() -> None:
     parser.add_argument("--generations", type=int, default=30)
     parser.add_argument("--seed", type=int, default=20261021)
     parser.add_argument("--mutation-rate", type=float, default=0.2)
+    parser.add_argument("--config", help="JSON equipment/search/economic parameter configuration")
     parser.add_argument(
         "--allow-critical-shortfall", action="store_true",
         help="Allow exploratory optimization despite critical-load deficits; deficits are reported, not optimized.",
@@ -175,7 +189,7 @@ def main() -> None:
         report = run_from_csv(
             args.input_csv, args.output_dir, args.source_type,
             args.population_size, args.generations, args.seed,
-            args.mutation_rate, args.allow_critical_shortfall,
+            args.mutation_rate, args.allow_critical_shortfall, args.config,
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
