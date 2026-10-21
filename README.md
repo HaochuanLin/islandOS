@@ -191,7 +191,7 @@ Regression tests were added for:
 - reservoir storage bounds and overflow accounting; and
 - mismatched input-array lengths.
 
-A GitHub Actions workflow runs the unit-test suite on pushes to `main` and `draft/**`, and on pull requests. The tests are committed, but results should be treated as **pending until the workflow has actually completed successfully**. This correction improves a specific dispatch edge case; it does not validate the full physical model or establish field performance.
+A GitHub Actions workflow runs the unit-test suite on pushes to `main` and `draft/**`, and on pull requests. The GitHub Actions run for commit `18419e17b57e26201205e0c56fbe8ac0141d5616` completed successfully, including the regression suite. This correction improves a specific dispatch edge case; passing tests do not validate the full physical model or establish field performance.
 
 
 ## Second engineering milestone: pluggable flexible loads
@@ -209,4 +209,4 @@ Run all regression tests with:
 python -m unittest discover -s tests -v
 ~~~
 
-**Integration status:** this is an initial plug-in interface, not yet the dispatch engine used by the legacy `island_microgrid_ro_sim.py` demo. The RO plug-in is a deliberately compact parallel model, so its results should not be assumed identical to the legacy simulator. The cold-storage model omits thermal leakage, temperature-dependent COP, compressor cycling, and site-specific refrigeration constraints. Automated tests have been added; CI results still need to be checked after the workflow run completes.
+**Integration status:** this is an initial plug-in interface, not yet the dispatch engine used by the legacy `island_microgrid_ro_sim.py` demo. The RO plug-in is a deliberately compact parallel model, so its results should not be assumed identical to the legacy simulator. The cold-storage model omits thermal leakage, temperature-dependent COP, compressor cycling, and site-specific refrigeration constraints. Automated tests have been added, and the GitHub Actions run for commit `18419e17b57e26201205e0c56fbe8ac0141d5616` completed successfully. Passing tests are a software check, not field validation.
