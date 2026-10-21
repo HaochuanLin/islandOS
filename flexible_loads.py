@@ -17,6 +17,8 @@ import numpy as np
 class LoadSimulationResult:
     """Standardized output shape shared by flexible-load modules."""
     power_used_kw: np.ndarray
+    backup_power_kw: np.ndarray
+    constraint_violation: np.ndarray
     resource_produced: np.ndarray
     demand_served: np.ndarray
     unmet_demand: np.ndarray
@@ -98,6 +100,8 @@ class ROWaterLoad:
         unmet = np.zeros(n)
         spill = np.zeros(n)
         active = np.zeros(n, dtype=int)
+        backup = np.zeros(n)
+        violations = np.zeros(n, dtype=int)
         inventory = np.zeros(n + 1)
         inventory[0] = c.initial_water_m3
         run_remaining = 0
@@ -126,8 +130,13 @@ class ROWaterLoad:
             if on:
                 power[t] = min(available[t], c.rated_power_kw)
                 if c.allow_backup_power:
-                    # Record actual electrical demand, including the backed-up shortfall.
+                    # Total plant demand is rated power; report backup separately.
+                    backup[t] = max(0.0, c.rated_power_kw - available[t])
                     power[t] = c.rated_power_kw
+                elif power[t] < c.rated_power_kw:
+                    # A forecast error can make a previously feasible run infeasible.
+                    # Surface this instead of silently claiming constraint compliance.
+                    violations[t] = 1
                 produced[t] = power[t] * dt_hours / c.specific_energy_kwh_m3
                 active[t] = 1
                 if run_remaining == 0:
@@ -146,7 +155,7 @@ class ROWaterLoad:
             unmet[t] = demand_volume - served[t]
             inventory[t + 1] = volume - served[t]
 
-        return LoadSimulationResult(power, produced, served, unmet, spill, active, inventory)
+        return LoadSimulationResult(power, backup, violations, produced, served, unmet, spill, active, inventory)
 
 
 @dataclass
@@ -199,6 +208,8 @@ class IceStorageLoad:
         unmet = np.zeros(n)
         spill = np.zeros(n)
         active = np.zeros(n, dtype=int)
+        backup = np.zeros(n)
+        violations = np.zeros(n, dtype=int)
         inventory = np.zeros(n + 1)
         inventory[0] = c.initial_storage_kwh_th
 
@@ -214,7 +225,7 @@ class IceStorageLoad:
             unmet[t] = demand_energy - served[t]
             inventory[t + 1] = thermal_available - served[t]
 
-        return LoadSimulationResult(power, produced, served, unmet, spill, active, inventory)
+        return LoadSimulationResult(power, backup, violations, produced, served, unmet, spill, active, inventory)
 
 
 def _validate_series(values: Sequence[float], name: str) -> np.ndarray:
