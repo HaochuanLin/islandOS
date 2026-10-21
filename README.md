@@ -226,3 +226,17 @@ python experiments/forecast_error_robustness.py --json
 It evaluates three synthetic surplus profiles under four relative forecast-error patterns: perfect, +20% overforecast, -20% underforecast, and alternating +/-20%. The optimizer selects a candidate using the perturbed profile; that candidate and a fixed-priority baseline are then evaluated against the original profile. A perfect-information result is included as a hindsight reference, not an achievable online policy.
 
 **Important limitation:** the current dispatcher is reactive to the per-step available-power series. This experiment tests how forecast perturbations change policy selection; it does not simulate a fixed hourly schedule committed from a forecast, nor does it validate a trained forecasting model. All data are synthetic.
+
+
+## Forecast-error robustness experiment (synthetic)
+
+Run the deterministic policy-selection sensitivity experiment:
+
+~~~bash
+python experiments/forecast_error_robustness.py
+python experiments/forecast_error_robustness.py --json
+~~~
+
+It evaluates three synthetic surplus profiles under four relative forecast-error patterns: perfect, +20% overforecast, -20% underforecast, and alternating +/-20%. The optimizer selects a candidate using the perturbed profile; that candidate and a fixed-priority baseline are then evaluated against the original profile. A perfect-information result is included as a hindsight reference, not an achievable online policy.
+
+**Important limitation:** the current dispatcher is reactive to the per-step available-power series. This experiment tests how forecast perturbations change policy selection; it does not simulate a fixed hourly schedule committed from a forecast, nor does it validate a trained forecasting model. All data are synthetic.
