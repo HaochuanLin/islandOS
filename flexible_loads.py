@@ -27,6 +27,7 @@ class LoadSimulationResult:
     inventory: np.ndarray  # length T + 1
     run_hours_remaining: int = 0  # RO commitment state carried to the next call
     operating_state: np.ndarray | None = None  # optional per-step equipment-state labels
+    fault_lockout_hours_remaining: int = 0  # RO restart lockout carried to the next call
 
 
 @runtime_checkable
@@ -54,6 +55,7 @@ class ROConfig:
     min_run_hours: int = 2
     start_ratio: float = 0.8
     allow_backup_power: bool = True
+    fault_recovery_lockout_hours: int = 1
 
 
 class ROWaterLoad:
@@ -77,6 +79,7 @@ class ROWaterLoad:
         dt_hours: float = 1.0,
         forecast_available_power_kw: Sequence[Sequence[float]] | None = None,
         initial_run_hours_remaining: int = 0,
+        initial_fault_lockout_hours_remaining: int = 0,
     ) -> LoadSimulationResult:
         available = _validate_series(available_power_kw, "available_power_kw")
         water_demand = _validate_series(demand, "demand")
@@ -113,6 +116,15 @@ class ROWaterLoad:
             raise ValueError(
                 "initial_run_hours_remaining must be an integer within [0, min_run_hours]"
             )
+        if (not isinstance(c.fault_recovery_lockout_hours, int)
+                or c.fault_recovery_lockout_hours < 0):
+            raise ValueError("fault_recovery_lockout_hours must be an integer >= 0")
+        if (not isinstance(initial_fault_lockout_hours_remaining, int)
+                or initial_fault_lockout_hours_remaining < 0
+                or initial_fault_lockout_hours_remaining > c.fault_recovery_lockout_hours):
+            raise ValueError(
+                "initial_fault_lockout_hours_remaining must be within the configured lockout range"
+            )
         if not (0 <= c.dead_storage_m3 <= c.initial_water_m3 <= c.reservoir_capacity_m3):
             raise ValueError("Require 0 <= dead storage <= initial water <= reservoir capacity")
         if not np.isfinite(c.start_ratio) or not (0 <= c.start_ratio <= 1):
@@ -131,11 +143,15 @@ class ROWaterLoad:
         inventory = np.zeros(n + 1)
         inventory[0] = c.initial_water_m3
         run_remaining = initial_run_hours_remaining
+        fault_lockout_remaining = initial_fault_lockout_hours_remaining
 
         for t in range(n):
             full = inventory[t] >= c.reservoir_capacity_m3 - 1e-9
+            in_fault_lockout = fault_lockout_remaining > 0
             on = False
-            if run_remaining > 0:
+            if in_fault_lockout:
+                fault_lockout_remaining -= 1
+            elif run_remaining > 0:
                 on = True
             elif not full and (n - t) >= c.min_run_hours:
                 # Do not initiate a minimum-run cycle that cannot finish within
@@ -166,12 +182,11 @@ class ROWaterLoad:
                         "RUNNING_WITH_BACKUP" if backup[t] > 1e-9 else "RUNNING"
                     )
                 elif power[t] < c.rated_power_kw:
-                    # No backup: this is not a feasible operating point. Do not
-                    # claim partial desalination production under the simplified
-                    # rated-power-only model; preserve the commitment state but
-                    # report zero production and an explicit constraint violation.
+                    # No backup: fail closed, raise a violation, and require an
+                    # explicit lockout interval before another start is allowed.
                     violations[t] = 1
                     power[t] = 0.0
+                    fault_lockout_remaining = c.fault_recovery_lockout_hours
                     operating_state[t] = "COMMITMENT_POWER_SHORTFALL"
                 else:
                     operating_state[t] = "RUNNING"
@@ -184,7 +199,7 @@ class ROWaterLoad:
                     run_remaining = c.min_run_hours
                 run_remaining -= 1
             else:
-                operating_state[t] = "OFF"
+                operating_state[t] = "RECOVERY_LOCKOUT" if in_fault_lockout else "OFF"
                 run_remaining = 0
 
             volume = inventory[t] + produced[t]
@@ -201,6 +216,7 @@ class ROWaterLoad:
             power, backup, violations, produced, served, unmet, spill, active,
             inventory, run_hours_remaining=run_remaining,
             operating_state=operating_state,
+            fault_lockout_hours_remaining=fault_lockout_remaining,
         )
 
 
