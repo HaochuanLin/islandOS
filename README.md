@@ -191,3 +191,17 @@ python experiments/compare_dispatch_policies.py --json
 The experiment compares RO-only, cold-storage-only, RO-first, and cold-storage-first dispatch across three fixed synthetic surplus profiles. It reports flexible-load renewable energy, remaining surplus, backup energy, water production/shortage, cooling served/shortage, and modelled constraint-violation hours. Automated tests check aligned inputs, all policy/scenario combinations, non-negative metrics, and deterministic repeatability.
 
 **Interpretation limit:** these profiles are illustrative, not measured island data. The experiment does not establish that either priority order is universally best, and it does not yet compare against a mathematically optimized schedule or a full grid/battery/generator model.
+
+
+## Latest engineering update: connected grid-search optimizer
+
+Run a small, reproducible search over eight candidates:
+
+~~~bash
+python optimization/grid_search_optimizer.py
+python optimization/grid_search_optimizer.py --scenario steady_surplus --json
+~~~
+
+The search varies the order of RO and cold storage and four RO start thresholds. Each candidate is evaluated by the same shared-budget simulator. The code filters infeasible candidates, constructs a non-dominated archive for water shortage, unmet cooling, and remaining renewable surplus, then selects its recommendation from that exact archive using disclosed normalized weights.
+
+This is an **exhaustive grid search over a small policy space**, not machine learning, NSGA-II, or a global optimum over all hourly schedules. It is a first connected optimization baseline. The objectives and weights are illustrative; changing service priorities may change the recommendation. All current scenarios remain synthetic.
