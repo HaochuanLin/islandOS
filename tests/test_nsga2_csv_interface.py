@@ -27,7 +27,7 @@ class TestNSGA2CSVInterface(unittest.TestCase):
         for i in range(count):
             rows.append({
                 "timestamp": (start + timedelta(hours=i)).isoformat().replace("+00:00", "Z"),
-                "wind_kw": 350 if i % 2 == 0 else 0,
+                "wind_kw": 350,
                 "pv_kw": 200 if i in (2, 3, 5) else 0,
                 "critical_load_kw": 600 if critical_shortfall and i == 1 else 100,
                 "water_demand_m3": 20,
