@@ -194,6 +194,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
             "ro_active": step["ro_active"],
             "ro_operating_state": step["ro_operating_state"],
             "ro_power_kw": round(step["ro_power_kw"], 6),
+            "ice_power_kw": round(step["ice_power_kw"], 6),
             "ro_constraint_violation": step["ro_constraint_violation"],
             "ro_run_hours_remaining": step["ro_run_hours_remaining"],
             "ro_fault_lockout_hours_remaining": step["ro_fault_lockout_hours_remaining"],
