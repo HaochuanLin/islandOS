@@ -347,7 +347,7 @@ def optimize_scenario(scenario: Scenario) -> dict:
         "data_status": "synthetic illustrative scenario; not field measurements",
         "search_method": "exhaustive grid search over 8 priority/RO-threshold candidates",
         "candidate_count": len(evaluated),
-        "feasible_candidate_count": sum(row["feasible"] for row in evaluated),
+        "feasible_candidate_count": sum(_eligible_candidate(row) for row in evaluated),
         "pareto_candidate_count": len(archive),
         "objective_directions": {
             "water_unmet_m3": "minimize",
