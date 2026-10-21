@@ -97,9 +97,14 @@ def evaluate_genome(scenario: Scenario, genome: tuple, config: dict | None = Non
                 "Lifecycle-cost objective requires a complete 8760-hour or 8784-hour year; "
                 "short horizons cannot be annualized honestly."
             )
-        hours = float(len(scenario.available_surplus_kw))
+        if ro_cfg["allow_backup_power"]:
+            raise ValueError(
+                "Lifecycle-cost objective currently excludes backup-generation costs; "
+                "disable backup power or add a documented backup cost model first."
+            )
         energy_kwh = sum(
-            float(np.sum(load.power_used_kw)) for load in result.loads.values()
+            float(np.sum(load.power_used_kw - load.backup_power_kw))
+            for load in result.loads.values()
         )
         water_produced_m3 = float(np.sum(result.loads["ro_desalination"].resource_produced))
         rate = float(economics["discount_rate"])
