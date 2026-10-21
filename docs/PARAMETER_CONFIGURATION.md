@@ -18,7 +18,7 @@ python experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \
   --output-dir build/site-optimization
 ```
 
-The example JSON intentionally labels its values as illustrative assumptions. The RO specific energy, reservoir state/capacity, chiller COP/storage, and NSGA-II decision ranges can be edited. Values in `search_space` are candidate values the optimizer may try, not necessarily the actual installed equipment rating. For example, narrow the RO rated-power search to ratings supported by vendor data or the planned equipment.
+The example JSON intentionally labels its values as illustrative assumptions. The site-data optimizer loads this JSON and uses its equipment values; its demo helper functions and the low-level dataclass fallback defaults are separate entry points. Do not assume every command automatically loads this file. The RO specific energy, reservoir state/capacity, chiller COP/storage, and NSGA-II decision ranges can be edited. Values in `search_space` are candidate values the optimizer may try, not necessarily the actual installed equipment rating. For example, narrow the RO rated-power search to ratings supported by vendor data or the planned equipment.
 
 ## Configuration sections
 
@@ -48,7 +48,7 @@ The optimizer now adds `annualized_lifecycle_cost_per_year` as a fourth Pareto o
 
 Because this first version annualizes operation, the CSV must cover a complete calendar year (Jan 1 00:00 through Dec 31 23:00, with 8760 rows or 8784 in a leap year). A shorter profile is rejected when the cost fields are complete. The current cost objective also rejects RO backup-power mode because backup-generation costs are not yet represented.
 
-The objective is annualized RO/chiller capital cost using the capital-recovery factor, plus fixed O&M, RO variable O&M based on simulated annual water production, and electricity cost for flexible-load renewable electricity use. The electricity price should be interpreted as the site's marginal/opportunity cost for that energy; using zero means no energy opportunity cost is assigned. All cost values must use the configured currency.
+The objective is annualized RO/chiller capital cost using the capital-recovery factor, plus fixed O&M, RO variable O&M based on simulated annual water production, and electricity cost for flexible-load renewable electricity use. It is enabled only when all declared economic fields are present, the supplied hourly CSV is a complete calendar year, and backup power is disabled. The electricity price should be interpreted as the site's marginal/opportunity cost for that energy; using zero means no energy opportunity cost is assigned. All cost values must use the configured currency.
 
 Important omissions remain: equipment replacement schedules, taxes, financing, emissions, backup fuel/generation, demand charges, unmet-service penalties, and uncertainty in prices or annual operating conditions. The supplied year is assumed representative of each analysis year. Thus this is a transparent first-pass annualized cost objective, **not** a bankable techno-economic assessment or a validated cost-optimal design. Inspect the per-candidate `cost_breakdown` in the JSON report.
 
