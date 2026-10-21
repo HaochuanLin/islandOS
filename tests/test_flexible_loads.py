@@ -149,6 +149,26 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "start_ratio"):
             ro.simulate([500], [0])
 
+    def test_non_finite_ro_configuration_is_rejected(self):
+        for config in (
+            ROConfig(reservoir_capacity_m3=float("inf")),
+            ROConfig(initial_water_m3=float("nan")),
+            ROConfig(dead_storage_m3=float("inf")),
+        ):
+            with self.subTest(config=config):
+                with self.assertRaisesRegex(ValueError, "configuration values must be finite"):
+                    ROWaterLoad(config).simulate([0], [0])
+
+    def test_non_finite_ice_configuration_is_rejected(self):
+        for config in (
+            IceStorageConfig(coefficient_of_performance=float("nan")),
+            IceStorageConfig(storage_capacity_kwh_th=float("inf")),
+            IceStorageConfig(initial_storage_kwh_th=float("nan")),
+        ):
+            with self.subTest(config=config):
+                with self.assertRaisesRegex(ValueError, "configuration values must be finite"):
+                    IceStorageLoad(config).simulate([0], [0])
+
     def test_invalid_input_is_rejected(self):
         ice = IceStorageLoad()
         with self.assertRaises(ValueError):
