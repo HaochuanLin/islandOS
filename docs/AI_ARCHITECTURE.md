@@ -156,3 +156,13 @@ This is a structural gate, not a complete scientific data-governance system. Sou
 The adapter intentionally does not transform irradiance or wind speed into generated electricity: that requires explicit PV/wind-system parameters and validated conversion models. Nor does it supply critical electrical demand, water demand, or cooling demand. Environmental covariates are kept separate from the operational dataset until an explicit, tested alignment and feature-engineering layer exists.
 
 The NASA POWER service documentation notes that its hourly time standards include UTC and Local Solar Time, and that the data are gridded/model- and satellite-derived products rather than equivalent to measurements at a particular island site. See the official [hourly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/hourly/) and [data FAQ](https://power.larc.nasa.gov/docs/faqs/data/). Unit conversions must be driven by the returned parameter metadata, not assumptions.
+
+
+
+## 19. Environmental feature-preparation layer
+
+`data_sources/prepare_environmental_features.py` converts the raw NASA POWER CSV into an auditable model-feature table while keeping source provenance separate. It requires the sidecar, checks that the three requested source parameters have reported units, verifies ordered continuous hourly timestamps, and rejects missing, non-numeric, or non-finite values without imputation.
+
+Features include cyclic hour and day-of-year encodings, current environmental covariates, and 1-, 3-, and 24-hour lags. The first 24 observations are omitted because the longest lag is unavailable. A metadata sidecar records units, row counts, feature columns, warm-up omission, and limitations.
+
+This is feature engineering only; it is not a trained forecasting model and does not create operational dispatch inputs. Current-hour covariates can leak future information if used to predict a target that would not be known at that hour. A deployment-grade forecast must define the target and forecast origin, and use only observations or weather forecasts available at that decision time. The six-column operational dataset still requires separately sourced or explicitly synthetic renewable generation and demand.
