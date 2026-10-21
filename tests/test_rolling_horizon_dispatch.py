@@ -95,11 +95,11 @@ class TestRollingHorizonDispatch(unittest.TestCase):
 
         scenario = Scenario(
             name="repeated_ro_power_shortfalls",
-            available_surplus_kw=(400.0, 0.0, 400.0, 0.0, 400.0, 400.0),
-            water_demand_m3_per_hour=(0.0,) * 6,
-            cooling_demand_kw_th=(0.0,) * 6,
+            available_surplus_kw=(400.0, 0.0, 400.0, 0.0, 400.0, 400.0, 400.0),
+            water_demand_m3_per_hour=(0.0,) * 7,
+            cooling_demand_kw_th=(0.0,) * 7,
         )
-        result = simulate_rolling(scenario, (400.0,) * 6, "ro_first")
+        result = simulate_rolling(scenario, (400.0,) * 7, "ro_first")
         audit = result["hourly_audit"]
 
         self.assertEqual(
@@ -111,11 +111,12 @@ class TestRollingHorizonDispatch(unittest.TestCase):
                 "COMMITMENT_POWER_SHORTFALL",
                 "RECOVERY_LOCKOUT",
                 "RUNNING",
+                "RUNNING",
             ],
         )
         self.assertEqual(
             [row["ro_fault_lockout_hours_remaining"] for row in audit],
-            [0, 1, 0, 1, 0, 0],
+            [0, 1, 0, 1, 0, 0, 0],
         )
         self.assertEqual(result["constraint_violation_hour_indices"], [1, 3])
 
