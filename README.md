@@ -35,8 +35,8 @@ The repository now contains a runnable synthetic demo, experimental flexible-loa
 | ❄️ **Cooling** | Simplified ice-making / cold-storage load prototype |
 | 🌦️ **Data** | NASA POWER hourly environmental-data importer and strict CSV quality gate |
 | 📈 **Forecast evaluation** | Persistence and 24-hour seasonal-naive baselines with chronological holdout and multi-window evaluation |
-| 🧪 **Experiments** | Policy comparisons, grid search, forecast-error sensitivity, rolling-horizon prototype, objective-weight audit |
-| ✅ **Verification** | Unit and regression tests plus GitHub Actions |
+| 🧪 **Experiments** | Policy comparisons, forecast-to-dispatch evaluation, fixed synthetic end-to-end benchmark, grid search, sensitivity audits |
+| ✅ **Verification** | Unit/regression tests, deterministic fixture check, and GitHub Actions artifacts |
 
 > **Honest status:** some components are implemented as prototypes, not integrated into one validated end-to-end controller. Forecast baselines predict a NASA POWER weather parameter—not island PV output, wind generation, or electricity demand. See the [capability matrix](#implementation-status) and [limitations](#limitations).
 
