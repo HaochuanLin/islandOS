@@ -38,11 +38,67 @@ def _metric_summary(actual: list[float], predicted: list[float]) -> dict:
     }
 
 
+def _rolling_origin_summary(values: list[float], folds: int = 4,
+                           initial_history_fraction: float = 0.50) -> dict:
+    """Evaluate baselines across contiguous, expanding-history test windows."""
+    if folds < 2:
+        raise ValueError("rolling folds must be at least 2")
+    if not 0.30 <= initial_history_fraction <= 0.80:
+        raise ValueError("initial_history_fraction must be between 0.30 and 0.80")
+    eligible = list(range(SEASONAL_LAG_HOURS, len(values)))
+    initial_history = int(len(eligible) * initial_history_fraction)
+    remaining = eligible[initial_history:]
+    if initial_history < 1 or len(remaining) < folds:
+        raise ValueError("Not enough eligible rows for requested rolling-origin folds")
+
+    # Balanced contiguous windows; no target timestamp appears in more than one fold.
+    fold_sizes = [len(remaining) // folds] * folds
+    for i in range(len(remaining) % folds):
+        fold_sizes[i] += 1
+    summaries = []
+    cursor = 0
+    all_test_indices = []
+    for fold_number, size in enumerate(fold_sizes, start=1):
+        indices = remaining[cursor:cursor + size]
+        cursor += size
+        all_test_indices.extend(indices)
+        actual = [values[i] for i in indices]
+        summaries.append({
+            "fold": fold_number,
+            "test_rows": len(indices),
+            "first_target_index": indices[0],
+            "last_target_index": indices[-1],
+            "persistence": _metric_summary(actual, [values[i - 1] for i in indices]),
+            "seasonal_naive_24h": _metric_summary(
+                actual, [values[i - SEASONAL_LAG_HOURS] for i in indices]
+            ),
+        })
+    overall_actual = [values[i] for i in all_test_indices]
+    return {
+        "method": "expanding-history, contiguous chronological test windows",
+        "initial_history_rows": initial_history,
+        "fold_count": folds,
+        "evaluated_rows": len(all_test_indices),
+        "folds": summaries,
+        "aggregate_metrics": {
+            "persistence": _metric_summary(
+                overall_actual, [values[i - 1] for i in all_test_indices]
+            ),
+            "seasonal_naive_24h": _metric_summary(
+                overall_actual, [values[i - SEASONAL_LAG_HOURS] for i in all_test_indices]
+            ),
+        },
+    }
+
+
 def evaluate_baselines(input_csv: str | Path, output_csv: str | Path,
                        target: str = DEFAULT_TARGET,
-                       test_fraction: float = 0.30) -> dict:
+                       test_fraction: float = 0.30,
+                       rolling_folds: int = 4) -> dict:
     if not 0.05 <= test_fraction <= 0.50:
         raise ValueError("test_fraction must be between 0.05 and 0.50")
+    if rolling_folds < 2:
+        raise ValueError("rolling_folds must be at least 2")
     input_path = Path(input_csv)
     sidecar_path = input_path.with_suffix(input_path.suffix + ".metadata.json")
     if not sidecar_path.exists():
@@ -140,6 +196,7 @@ def evaluate_baselines(input_csv: str | Path, output_csv: str | Path,
             "persistence": _metric_summary(persistence_actual, persistence_pred),
             "seasonal_naive_24h": _metric_summary(seasonal_actual, seasonal_pred),
         },
+        "rolling_origin_evaluation": _rolling_origin_summary(values, folds=rolling_folds),
         "limitations": [
             "This predicts a NASA POWER weather parameter, not PV/wind electrical output or island demand.",
             "The chronological holdout is a simple single split, not rolling-origin cross-validation.",
@@ -160,9 +217,12 @@ def main() -> None:
     parser.add_argument("--output", default="data/processed/forecast_baselines.csv")
     parser.add_argument("--target", default=DEFAULT_TARGET)
     parser.add_argument("--test-fraction", type=float, default=0.30)
+    parser.add_argument("--rolling-folds", type=int, default=4,
+                        help="number of contiguous rolling-origin test windows (minimum 2)")
     args = parser.parse_args()
     try:
-        result = evaluate_baselines(args.input_csv, args.output, args.target, args.test_fraction)
+        result = evaluate_baselines(args.input_csv, args.output, args.target,
+                                    args.test_fraction, args.rolling_folds)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, indent=2))
