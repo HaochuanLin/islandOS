@@ -95,7 +95,7 @@ A milestone is ready to describe as implemented when code exists, automated test
 
 The experimental module `optimization/grid_search_optimizer.py` connects candidate generation, the shared-budget simulator, Pareto filtering, and recommendation selection in one pipeline.
 
-- **Search space:** eight candidates formed by two load priority orders and four RO start thresholds.
+- **Search space:** eight candidates formed by two load priority orders and four RO minimum-run durations.
 - **Evaluation:** every candidate uses `dispatch_flexible_loads` and the same scenario input.
 - **Objectives:** minimize unmet water demand, unmet cooling demand, and remaining surplus. This objective set is illustrative; lower remaining surplus is not inherently better if it comes at an unacceptable resource or operating cost.
 - **Feasibility:** candidates with modelled constraint-violation hours are excluded from the archive.
