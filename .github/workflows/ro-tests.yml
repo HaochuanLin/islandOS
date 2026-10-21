@@ -29,6 +29,28 @@ jobs:
           python experiments/benchmark_nsga2_vs_exhaustive.py
           --population-size 12 --generations 5 --seed 20261021
           --output build/pareto-benchmark/results.json
+      - name: Summarize Pareto benchmark metrics
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          results = json.loads(Path("build/pareto-benchmark/results.json").read_text(encoding="utf-8"))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("# NSGA-II vs exact Pareto benchmark\\n\\n")
+              summary.write("Synthetic scenarios only; this measures search coverage, not physical-model accuracy.\\n\\n")
+              summary.write("| Scenario | Search space | Exact front | NSGA-II front | Recall | Precision | NSGA-II evaluated |\\n")
+              summary.write("|---|---:|---:|---:|---:|---:|---:|\\n")
+              for result in results:
+                  comparison = result["comparison"]
+                  summary.write(
+                      f"| {result['scenario']} | {result['decision_space_size']} | "
+                      f"{result['exact']['pareto_front_count']} | {result['nsga2']['pareto_front_count']} | "
+                      f"{comparison['exact_front_recall']:.1%} | {comparison['nsga2_front_precision']:.1%} | "
+                      f"{result['nsga2']['unique_candidates_evaluated']} |\\n"
+                  )
+          PY
       - name: Upload Pareto benchmark
         uses: actions/upload-artifact@v4
         with:
