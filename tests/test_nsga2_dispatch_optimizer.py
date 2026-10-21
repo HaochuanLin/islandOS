@@ -67,6 +67,34 @@ class TestNSGA2DispatchOptimizer(unittest.TestCase):
         )
         self.assertIn("water_unmet_m3", result["objectives"])
 
+    def test_nsga2_runs_with_four_objectives_when_costs_are_complete(self):
+        config = load_config()
+        config["economics"].update({
+            "electricity_price_per_kwh": 0.12,
+            "ro_capex": 100000.0,
+            "ro_fixed_om_per_year": 2000.0,
+            "ro_variable_om_per_m3": 0.3,
+            "chiller_capex": 40000.0,
+            "chiller_fixed_om_per_year": 1000.0,
+            "analysis_years": 20,
+            "discount_rate": 0.05,
+        })
+        scenario = Scenario(
+            name="synthetic-full-year-optimizer-test",
+            available_surplus_kw=tuple([500.0] * 8760),
+            water_demand_m3_per_hour=tuple([1.0] * 8760),
+            cooling_demand_kw_th=tuple([1.0] * 8760),
+        )
+        result = optimize_scenario(
+            scenario, population_size=4, generations=1, seed=9, config=config
+        )
+        self.assertTrue(result["cost_objective_enabled"])
+        self.assertIn("annualized_lifecycle_cost_per_year", result["objective_directions"])
+        self.assertTrue(result["pareto_front"])
+        for candidate in result["pareto_front"]:
+            self.assertIn("annualized_lifecycle_cost_per_year", candidate["objectives"])
+            self.assertIsNotNone(candidate["cost_breakdown"])
+
     def test_complete_cost_inputs_reject_short_horizon(self):
         config = load_config()
         config["economics"].update({
