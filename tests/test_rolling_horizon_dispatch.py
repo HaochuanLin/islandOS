@@ -41,6 +41,10 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(len(result["hourly_audit"]), 3)
         self.assertEqual(result["hourly_audit"][0]["ro_active"], True)
         self.assertEqual(result["hourly_audit"][1]["ro_active"], True)
+        self.assertEqual(
+            result["hourly_audit"][1]["ro_operating_state"],
+            "COMMITMENT_POWER_SHORTFALL",
+        )
         self.assertEqual(result["hourly_audit"][1]["actual_surplus_kw"], 0.0)
         self.assertEqual(result["hourly_audit"][1]["ro_power_kw"], 0.0)
         self.assertEqual(result["hourly_audit"][1]["ro_constraint_violation"], 1)
