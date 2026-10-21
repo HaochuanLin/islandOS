@@ -126,7 +126,7 @@ The report generator reruns the same 3 synthetic scenarios × 4 dispatch policie
 - `dispatch_comparison.svg` — grouped charts for remaining surplus, unmet water demand, and unmet cooling demand
 - `results.csv` and `results.json` — machine-readable outputs
 
-The GitHub Actions workflow runs regression tests, generates the reports, and uploads the files as the `islandos-dispatch-report` artifact (retained for 30 days). The audit verifies internal accounting and configured bounds only; it is not proof of plant safety, site-specific feasibility, or model accuracy. Open [the latest workflow run](https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml) and download the artifact after a successful run. These results are synthetic and must not be presented as field measurements.
+The GitHub Actions workflow runs regression tests, generates the reports, and uploads the files as the `islandos-dispatch-report` artifact (retained for 30 days). It also runs a fixed-seed NSGA-II-versus-exhaustive Pareto benchmark and uploads `islandos-pareto-benchmark` (also retained for 30 days). The audit verifies internal accounting and configured bounds only; it is not proof of plant safety, site-specific feasibility, or model accuracy. Open [the latest workflow run](https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml) and download the artifact after a successful run. These results are synthetic and must not be presented as field measurements.
 
 To run the regression suite:
 
