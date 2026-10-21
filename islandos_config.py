@@ -50,7 +50,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "chiller_fixed_om_per_year": None,
         "analysis_years": None,
         "discount_rate": None,
-        "source_notes": "Cost fields are intentionally blank. The current optimizer does not calculate lifecycle cost.",
+        "source_notes": "Unknown values remain null. The optimizer enables annualized_lifecycle_cost_per_year only when every required cost input is supplied, the CSV covers a complete calendar year, and backup power is disabled. This is a first-pass estimate, not a bankable techno-economic assessment.",
     },
     "parameter_sources": {
         "default_policy": "Each parameter must be identified as measured, vendor-sourced, public, assumed, or unknown before site-specific claims are made.",
