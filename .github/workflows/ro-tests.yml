@@ -24,6 +24,18 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Generate reproducible dispatch report
         run: python experiments/generate_dispatch_report.py --output-dir build/dispatch-report
+      - name: Evaluate fixed synthetic forecast-to-dispatch benchmark
+        run: >-
+          python experiments/evaluate_forecast_dispatch.py
+          data/examples/synthetic_dispatch_benchmark.csv
+          --output build/forecast-dispatch-benchmark/results.json
+      - name: Upload forecast-dispatch benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-forecast-dispatch-benchmark
+          path: build/forecast-dispatch-benchmark/results.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Benchmark NSGA-II against exact Pareto fronts
         run: >-
           python experiments/benchmark_nsga2_vs_exhaustive.py
