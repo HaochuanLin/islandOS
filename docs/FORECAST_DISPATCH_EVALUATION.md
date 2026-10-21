@@ -61,6 +61,33 @@ location or season. The aligned dispatch comparison is a controlled window
 comparison, not a continuation of the full-horizon run. If the input has only
 one row, the persistence comparison is reported as unavailable.
 
+## Chronological multi-window evaluation
+
+For longer traces, run the multi-window wrapper:
+
+```bash
+python experiments/evaluate_forecast_dispatch_windows.py path/to/paired_hourly.csv \
+  --window-hours 168 \
+  --output build/forecast-dispatch-windows.json
+```
+
+The wrapper partitions rows into non-overlapping chronological windows (168
+hours by default), evaluates each window independently, and reports each
+window's forecast errors, persistence skill, policy scores, and rolling-dispatch
+score difference. Each window needs at least two rows; a final one-row tail is
+skipped and reported. The first row of every window is excluded from its
+persistence-aligned comparison, so the number of aligned hours is lower than
+the input row count.
+
+Forecast MAE/RMSE aggregates are weighted by aligned hours. The dispatch-score
+difference summary gives each window equal weight and counts how often each
+forecast yields the lower rolling-dispatch score. These are different
+aggregation choices, so inspect per-window results as well as the aggregate.
+Each window starts with the simulator's default inventory state; water and
+thermal storage are not carried from one window to the next. The experiment
+does not establish performance on real island data unless the input has
+documented, suitable provenance.
+
 ## Interpretation boundaries
 
 - The input file's provenance and whether it represents measured, public, or
