@@ -166,3 +166,12 @@ The NASA POWER service documentation notes that its hourly time standards includ
 Features include cyclic hour and day-of-year encodings, current environmental covariates, and 1-, 3-, and 24-hour lags. The first 24 observations are omitted because the longest lag is unavailable. A metadata sidecar records units, row counts, feature columns, warm-up omission, and limitations.
 
 This is feature engineering only; it is not a trained forecasting model and does not create operational dispatch inputs. Current-hour covariates can leak future information if used to predict a target that would not be known at that hour. A deployment-grade forecast must define the target and forecast origin, and use only observations or weather forecasts available at that decision time. The six-column operational dataset still requires separately sourced or explicitly synthetic renewable generation and demand.
+
+
+## 20. Weather-parameter forecast baseline evaluation
+
+`experiments/forecasting_baselines.py` establishes a reproducible first forecasting evaluation on the raw NASA POWER hourly series. The default target is `ALLSKY_SFC_SW_DWN`; the two baselines are persistence (previous hour) and seasonal-naive (24 hours earlier), evaluated for a one-hour-ahead target. The script validates timezone-aware, continuous hourly observations and requires source-reported target units in the NASA metadata sidecar.
+
+The split is chronological: the final configured fraction (30% by default) of eligible target rows is held out. The output includes actual values and both baseline predictions, and a sidecar reports test MAE, RMSE, signed bias, target units, row counts, and the test time range. The baselines only use observations earlier than each target timestamp.
+
+This is a **weather-parameter forecasting proxy**, not a trained model or a renewable-generation forecast. It does not create PV/wind electrical output, island demand, or dispatch recommendations. A single chronological split is weaker than rolling-origin validation and may be unrepresentative of other seasons or locations. A credible next stage needs a defined operational forecast origin, site-relevant target data, multiple chronological evaluation windows, and comparison against these baselines before introducing a more complex model.
