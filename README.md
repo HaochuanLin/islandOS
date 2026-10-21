@@ -175,7 +175,17 @@ python experiments/evaluate_forecast_dispatch.py path/to/paired_hourly.csv \
   --output build/forecast-dispatch-evaluation.json
 ```
 
-The CSV schema, units, timestamp requirements, metrics, interpretation rules, and limitations are documented in [the forecast-to-dispatch guide](docs/FORECAST_DISPATCH_EVALUATION.md). Inputs must provide timestamp-aligned actual surplus and forecast surplus in kW, water demand in m³ per hour, and cooling demand in kW thermal. The evaluator rejects missing values, negative values, timezone-naive timestamps, and hourly gaps instead of silently repairing them.
+The CSV schema, units, timestamp requirements, metrics, interpretation rules, and limitations are documented in [the forecast-to-dispatch guide](docs/FORECAST_DISPATCH_EVALUATION.md).
+
+For longer traces, evaluate independent chronological windows and inspect whether results are consistent across periods:
+
+```bash
+python experiments/evaluate_forecast_dispatch_windows.py path/to/paired_hourly.csv \
+  --window-hours 168 \
+  --output build/forecast-dispatch-windows.json
+```
+
+This reports per-window metrics and aggregate persistence skill. Windows reset storage to the same default initial state, so this is a repeated-window robustness check, not a continuous island simulation. Inputs must provide timestamp-aligned actual surplus and forecast surplus in kW, water demand in m³ per hour, and cooling demand in kW thermal. The evaluator rejects missing values, negative values, timezone-naive timestamps, and hourly gaps instead of silently repairing them.
 
 The report includes forecast MAE/RMSE/bias, unmet water and cooling demand, remaining surplus, constraint violations, and the score difference against the best fixed-priority policy. When at least two rows are available, it also compares the supplied forecast against a one-step persistence baseline on the same aligned time window, and reruns dispatch for both forecasts with identical realized surplus, demands, and initial inventories. Positive forecast skill means lower MAE/RMSE than persistence; the dispatch score difference is case-specific, not proof of general superiority. The perfect-information policy is only a hindsight reference. Label input provenance accurately; synthetic or unverified data are not field evidence.
 
