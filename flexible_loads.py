@@ -26,6 +26,7 @@ class LoadSimulationResult:
     active: np.ndarray
     inventory: np.ndarray  # length T + 1
     run_hours_remaining: int = 0  # RO commitment state carried to the next call
+    operating_state: np.ndarray | None = None  # optional per-step equipment-state labels
 
 
 @runtime_checkable
@@ -117,6 +118,7 @@ class ROWaterLoad:
         active = np.zeros(n, dtype=int)
         backup = np.zeros(n)
         violations = np.zeros(n, dtype=int)
+        operating_state = np.full(n, "OFF", dtype=object)
         inventory = np.zeros(n + 1)
         inventory[0] = c.initial_water_m3
         run_remaining = initial_run_hours_remaining
@@ -151,16 +153,24 @@ class ROWaterLoad:
                     # Total plant demand is rated power; report backup separately.
                     backup[t] = max(0.0, c.rated_power_kw - available[t])
                     power[t] = c.rated_power_kw
+                    operating_state[t] = (
+                        "RUNNING_WITH_BACKUP" if backup[t] > 1e-9 else "RUNNING"
+                    )
                 elif power[t] < c.rated_power_kw:
-                    # A forecast error can make a previously feasible run infeasible.
-                    # Surface this instead of silently claiming constraint compliance.
+                    # The run commitment remains active, but the required power
+                    # is unavailable. Label this separately from a feasible run;
+                    # partial output is only an accounting approximation.
                     violations[t] = 1
+                    operating_state[t] = "COMMITMENT_POWER_SHORTFALL"
+                else:
+                    operating_state[t] = "RUNNING"
                 produced[t] = power[t] * dt_hours / c.specific_energy_kwh_m3
                 active[t] = 1
                 if run_remaining == 0:
                     run_remaining = c.min_run_hours
                 run_remaining -= 1
             else:
+                operating_state[t] = "OFF"
                 run_remaining = 0
 
             volume = inventory[t] + produced[t]
@@ -176,6 +186,7 @@ class ROWaterLoad:
         return LoadSimulationResult(
             power, backup, violations, produced, served, unmet, spill, active,
             inventory, run_hours_remaining=run_remaining,
+            operating_state=operating_state,
         )
 
 
