@@ -13,7 +13,7 @@ class TestGridSearchOptimizer(unittest.TestCase):
         self.assertEqual(len(rows), 8)
         self.assertEqual(len({row.candidate_id for row in rows}), 8)
         self.assertEqual({row.priority for row in rows}, {"ro_first", "ice_first"})
-        self.assertEqual({row.ro_start_ratio for row in rows}, {0.50, 0.65, 0.80, 0.95})
+        self.assertEqual({row.ro_min_run_hours for row in rows}, {1, 2, 3, 4})
 
     def test_dominance_requires_no_worse_and_one_strict_improvement(self):
         a = {"objectives": {
