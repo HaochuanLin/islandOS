@@ -54,6 +54,15 @@ class TestIslandOSConfig(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unique values"):
                 load_config(path)
 
+    def test_empty_cost_currency_label_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad-currency.json"
+            path.write_text(json.dumps({
+                "economics": {"currency": " "}
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "currency label"):
+                load_config(path)
+
     def test_invalid_analysis_horizon_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "bad-years.json"
