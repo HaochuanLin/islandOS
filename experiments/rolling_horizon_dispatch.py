@@ -170,29 +170,75 @@ def run_experiment() -> list[dict]:
     return rows
 
 
+
+def summarize_experiment(rows=None):
+    """Compare rolling policy with fixed policies using one normalized score."""
+    if rows is None:
+        rows = run_experiment()
+    scenarios = {scenario.name: scenario for scenario in build_scenarios()}
+    grouped = {}
+    for row in rows:
+        key = (row["scenario"], row["forecast_error_profile"])
+        grouped.setdefault(key, {})[row["result"]["policy"]] = row["result"]
+
+    summaries = []
+    for (scenario_name, error_name), policies in sorted(grouped.items()):
+        scenario = scenarios[scenario_name]
+        water_total = max(float(sum(scenario.water_demand_m3_per_hour)), 1e-9)
+        cooling_total = max(float(sum(scenario.cooling_demand_kw_th)), 1e-9)
+        power_total = max(float(sum(scenario.available_surplus_kw)), 1e-9)
+
+        def score(result):
+            return (0.45 * result["water_unmet_m3"] / water_total
+                    + 0.45 * result["cooling_unmet_kwh_th"] / cooling_total
+                    + 0.10 * result["remaining_surplus_kwh"] / power_total)
+
+        rolling_score = score(policies["rolling"])
+        fixed_scores = {name: score(policies[name]) for name in ("ro_first", "ice_first")}
+        best_fixed_name = min(fixed_scores, key=lambda name: (fixed_scores[name], name))
+        best_fixed_score = fixed_scores[best_fixed_name]
+        summaries.append({
+            "scenario": scenario_name,
+            "forecast_error_profile": error_name,
+            "rolling_score": round(rolling_score, 6),
+            "ro_first_score": round(fixed_scores["ro_first"], 6),
+            "ice_first_score": round(fixed_scores["ice_first"], 6),
+            "best_fixed_policy": best_fixed_name,
+            "best_fixed_score": round(best_fixed_score, 6),
+            "rolling_minus_best_fixed": round(rolling_score - best_fixed_score, 6),
+            "perfect_information_score": round(score(policies["perfect_information"]), 6),
+            "interpretation": "case-specific comparison; no universal winner assumed",
+        })
+    return summaries
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     rows = run_experiment()
+    summaries = summarize_experiment(rows)
     if args.json:
         print(json.dumps({
             "case_count": len(rows),
-            "interpretation": "Finite-horizon policy selection; only first-hour action is executed before replanning.",
+            "summary_case_count": len(summaries),
+            "interpretation": "Finite-horizon policy selection; only first-hour priority is executed before replanning. Lower normalized score is better.",
             "limitations": [
                 "Synthetic profiles only; no trained forecast model.",
                 "RO minimum-run commitment is not modeled in this rolling prototype.",
                 "Perfect-information policy is a hindsight reference, not deployable.",
+                "Weights are illustrative and should be sensitivity-tested before decision use.",
             ],
+            "summary": summaries,
             "rows": rows,
         }, indent=2))
     else:
         print("Synthetic rolling-horizon prototype — not field validated")
-        print("scenario | forecast | policy | water unmet | cooling unmet | remaining surplus")
-        for row in rows:
-            r = row["result"]
-            print(f"{row['scenario']} | {row['forecast_error_profile']} | {r['policy']} | "
-                  f"{r['water_unmet_m3']} | {r['cooling_unmet_kwh_th']} | {r['remaining_surplus_kwh']}")
+        print("Negative delta means rolling scored better than the best fixed priority.")
+        print("scenario | forecast | rolling score | best fixed | fixed score | rolling - fixed")
+        for row in summaries:
+            print(f"{row['scenario']} | {row['forecast_error_profile']} | {row['rolling_score']:.4f} | "
+                  f"{row['best_fixed_policy']} | {row['best_fixed_score']:.4f} | "
+                  f"{row['rolling_minus_best_fixed']:+.4f}")
 
 
 if __name__ == "__main__":
