@@ -186,6 +186,21 @@ python experiments/train_weather_forecaster.py \
 
 The trained model is ordinary least-squares regression using cyclical timestamp features and 1-, 3-, and 24-hour lags. It fits only on the chronological history partition and compares its holdout MAE/RMSE/bias against both simple baselines. The first 24 rows are omitted again because the exported baseline CSV begins after its own 24-hour warm-up. Positive `mae_skill_vs_best_baseline` means lower holdout MAE than the best simple baseline; a negative value means it performed worse. This is a **trained weather-parameter prototype**, not an island energy forecast or evidence of operational benefit. It does not generate missing PV/wind output or demand data.
 
+## Editable equipment and economic parameters
+
+Copy [`config/site_parameters.example.json`](config/site_parameters.example.json) and pass it to the site-data runner:
+
+```bash
+python experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \
+  --config config/site_parameters.example.json \
+  --source-type measured \
+  --output-dir build/site-optimization
+```
+
+The JSON configuration controls RO specific energy and reservoir assumptions, chiller COP and thermal-storage assumptions, and the discrete NSGA-II search ranges. Unknown economic values (electricity price, capital cost, O&M, analysis horizon and discount rate) can remain `null`. The result JSON records the applied equipment/search configuration and lists missing economic fields.
+
+**Important limitation:** these cost fields are reserved inputs only. The current optimizer does not calculate lifecycle costs or use cost as an objective, so providing prices does not make the result cost-optimal. The example equipment values are illustrative defaults, not vendor data or measurements. Document the source, date and uncertainty of every real-site assumption. See [parameter configuration guide](docs/PARAMETER_CONFIGURATION.md).
+
 ## Implementation status
 
 | Capability | Status | What the status means |
