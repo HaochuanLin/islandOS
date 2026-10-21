@@ -25,6 +25,28 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(result["policy"], "rolling")
         self.assertEqual(len(result["hourly_priority_decisions"]), len(actual))
 
+    def test_underforecasted_committed_hour_is_locatable_in_hourly_audit(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        scenario = Scenario(
+            name="forecast_error_during_ro_commitment",
+            available_surplus_kw=(400.0, 0.0, 400.0),
+            water_demand_m3_per_hour=(0.0, 0.0, 0.0),
+            cooling_demand_kw_th=(0.0, 0.0, 0.0),
+        )
+        forecast = (400.0, 400.0, 400.0)
+        result = simulate_rolling(scenario, forecast, "ro_first")
+
+        self.assertEqual(result["constraint_violation_hour_indices"], [1])
+        self.assertEqual(len(result["hourly_audit"]), 3)
+        self.assertEqual(result["hourly_audit"][0]["ro_active"], True)
+        self.assertEqual(result["hourly_audit"][1]["ro_active"], True)
+        self.assertEqual(result["hourly_audit"][1]["actual_surplus_kw"], 0.0)
+        self.assertEqual(result["hourly_audit"][1]["ro_power_kw"], 0.0)
+        self.assertEqual(result["hourly_audit"][1]["ro_constraint_violation"], 1)
+        self.assertEqual(result["hourly_audit"][1]["ro_run_hours_remaining"], 0)
+        self.assertEqual(result["constraint_violation_hours"], 1)
+
     def test_experiment_covers_scenario_error_and_policy_combinations(self):
         rows = run_experiment()
         self.assertEqual(len(rows), 48)
