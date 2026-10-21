@@ -31,7 +31,7 @@ HORIZON_HOURS = 3
 
 def _make_ro_with_inventory(water_m3: float) -> ROWaterLoad:
     base = make_ro().config
-    return ROWaterLoad(replace(base, initial_water_m3=water_m3, min_run_hours=1))
+    return ROWaterLoad(replace(base, initial_water_m3=water_m3))
 
 
 def _make_ice_with_inventory(cold_kwh_th: float) -> IceStorageLoad:
@@ -70,11 +70,16 @@ def _score(result, water_demand, cooling_demand) -> float:
 
 def _execute_one(
     actual_power, water_demand, cooling_demand, water_inventory, cold_inventory,
-    priority, ro_run_hours_remaining=0,
+    priority, ro_run_hours_remaining=0, start_ro=False,
 ):
+    # A planned start commits the unit for its configured minimum run even
+    # though this call executes only one realized hour.
+    initial_commitment = ro_run_hours_remaining
+    if start_ro and initial_commitment == 0:
+        initial_commitment = make_ro().config.min_run_hours
     result = _run_horizon(
         [actual_power], [water_demand], [cooling_demand],
-        water_inventory, cold_inventory, priority, ro_run_hours_remaining,
+        water_inventory, cold_inventory, priority, initial_commitment,
     )
     ro = result.loads.get("ro_desalination")
     ice = result.loads.get("ice_cold_storage")
@@ -119,8 +124,13 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                     water_inventory, cold_inventory, priority,
                     ro_run_hours_remaining,
                 )
-                candidates.append((_score(predicted, water_demand[t:end], cooling_demand[t:end]), priority))
-            chosen = min(candidates, key=lambda item: (item[0], item[1]))[1]
+                candidates.append((
+                    _score(predicted, water_demand[t:end], cooling_demand[t:end]),
+                    priority, predicted,
+                ))
+            _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
+            ro_plan = chosen_plan.loads.get("ro_desalination")
+            start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
         elif policy in ("ro_first", "ice_first", "perfect_information"):
             if policy == "perfect_information":
                 candidates = []
@@ -130,16 +140,27 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                         water_inventory, cold_inventory, priority,
                         ro_run_hours_remaining,
                     )
-                    candidates.append((_score(predicted, water_demand[t:end], cooling_demand[t:end]), priority))
-                chosen = min(candidates, key=lambda item: (item[0], item[1]))[1]
+                    candidates.append((
+                        _score(predicted, water_demand[t:end], cooling_demand[t:end]),
+                        priority, predicted,
+                    ))
+                _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
+                ro_plan = chosen_plan.loads.get("ro_desalination")
+                start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
             else:
                 chosen = policy
+                plan = _run_horizon(
+                    forecast[t:end], water_demand[t:end], cooling_demand[t:end],
+                    water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
+                )
+                ro_plan = plan.loads.get("ro_desalination")
+                start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
         else:
             raise ValueError("policy must be rolling, ro_first, ice_first, or perfect_information")
 
         step = _execute_one(
             actual[t], water_demand[t], cooling_demand[t],
-            water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
+            water_inventory, cold_inventory, chosen, ro_run_hours_remaining, start_ro,
         )
         water_inventory = step["water_inventory"]
         cold_inventory = step["cold_inventory"]
