@@ -124,3 +124,10 @@ These are accounting invariants, not field validation. They test whether the cod
 For each case, the grid-search optimizer selects a policy candidate from the perturbed forecast profile. That selected candidate and a fixed RO-first, two-hour minimum-run baseline are evaluated on the original synthetic profile. The optimizer run on the original profile is shown as a perfect-information hindsight reference, not a deployable policy.
 
 This is a **policy-selection sensitivity test**, not a forecast-model evaluation. The dispatch engine receives the original per-step power when candidates are replayed, so it remains reactive rather than executing a locked schedule planned from the forecast. No learned forecasting model, real weather data, probabilistic calibration, or field data are included. A future version should introduce a rolling-horizon planner that commits actions before observing realized generation, then score forecast errors against that locked plan.
+
+
+## 15. Rolling-horizon prototype
+
+`experiments/rolling_horizon_dispatch.py` adds a first receding-horizon loop. At each hour it evaluates two priority orders over a three-hour forecast window, commits only the first-hour action against realized available surplus, carries freshwater and cold-storage inventories forward, and replans at the next step. It compares rolling decisions with fixed priority policies and a perfect-information hindsight reference under synthetic forecast-error profiles.
+
+This is a **prototype of the control loop**, not a validated plant controller. It deliberately sets RO minimum-run duration to one hour in this experiment so the current load interface can carry inventory state between single-step executions; startup persistence, ramping, minimum-down time, forecast uncertainty distributions, and safety interlocks remain unmodeled. Forecasts and demands are synthetic. The older policy-selection sensitivity experiment remains a separate, simpler analysis.
