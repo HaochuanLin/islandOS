@@ -313,8 +313,11 @@ def optimize_scenario(
         population = select_next_generation(population + offspring, population_size)
 
     final_front = non_dominated_sort(population)[0]
+    # Population slots can contain the same cached genome more than once.
+    # Return a set of distinct policies, not duplicate rows for one policy.
+    unique_front = {tuple(row["genome"]): row for row in final_front}
     pareto = sorted(
-        (row for row in final_front if row["feasible"]),
+        (row for row in unique_front.values() if row["feasible"]),
         key=lambda row: (row["objective_vector"], tuple(row["genome"])),
     )
     return {
