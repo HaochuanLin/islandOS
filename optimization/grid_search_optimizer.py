@@ -104,7 +104,7 @@ def dominates(a: dict, b: dict) -> bool:
 
 def pareto_archive(evaluated: list[dict]) -> list[dict]:
     """Filter infeasible candidates, then return non-dominated evaluated rows."""
-    feasible = [row for row in evaluated if row.get("feasible") is True and row.get("feasibility_audit", {}).get("eligible_for_pareto", True) is True]
+    feasible = [row for row in evaluated if row.get("feasible") is True and row.get("feasibility_audit", {}).get("eligible_for_pareto") is True]
     return [
         row for row in feasible
         if not any(other is not row and dominates(other, row) for other in feasible)
