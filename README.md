@@ -287,3 +287,19 @@ python data_quality.py path/to/data.csv --source-type measured --json
 The source label is required and must be one of `measured`, `public`, `synthetic`, or `forecast`. The validator checks required/duplicate headers, empty fields, numeric/finite/non-negative values, timezone-aware timestamps, duplicate or non-monotonic timestamps, and expected time-step spacing (60 minutes by default; configurable with `--interval-minutes`). It exits non-zero on invalid input and reports issues rather than silently cleaning data.
 
 Important: column names do not guarantee unit correctness. Users must confirm units and provenance from the source documentation. The validator does not perform unit conversion, imputation, interpolation, capacity plausibility checks, or leakage analysis; passing validation is a structural quality check, not proof that data are authentic or suitable for operational decisions.
+
+
+## Public environmental data: NASA POWER hourly importer
+
+NASA POWER publishes hourly solar and meteorological time series through its official API. IslandOS includes a small importer for three environmental parameters: `ALLSKY_SFC_SW_DWN`, `T2M`, and `WS10M`. The importer requests UTC timestamps and writes both a CSV and a sidecar JSON containing the request, location, download time, response metadata, and limitations.
+
+~~~bash
+python data_sources/nasa_power_hourly.py \
+  --latitude -35.2 --longitude -63.5 \
+  --start 20200101 --end 20200107 \
+  --output data/raw/nasa_power_hourly.csv
+~~~
+
+The coordinates and dates above are an example only; replace them with a study site and period. See the [NASA POWER hourly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/hourly/).
+
+**Important boundary:** this import supplies environmental covariates, not measured wind/PV generation or island demand. It does not manufacture missing load/water/cooling data, convert units, or claim site-level accuracy. Check parameter units in the response metadata before conversion. The output uses a distinct schema and is not the canonical six-column operational dataset accepted by `data_quality.py`; additional validated load/resource data and an explicit alignment/feature-engineering step are required before simulation.
