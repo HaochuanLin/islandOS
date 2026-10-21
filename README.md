@@ -240,3 +240,17 @@ python experiments/forecast_error_robustness.py --json
 It evaluates three synthetic surplus profiles under four relative forecast-error patterns: perfect, +20% overforecast, -20% underforecast, and alternating +/-20%. The optimizer selects a candidate using the perturbed profile; that candidate and a fixed-priority baseline are then evaluated against the original profile. A perfect-information result is included as a hindsight reference, not an achievable online policy.
 
 **Important limitation:** the current dispatcher is reactive to the per-step available-power series. This experiment tests how forecast perturbations change policy selection; it does not simulate a fixed hourly schedule committed from a forecast, nor does it validate a trained forecasting model. All data are synthetic.
+
+
+## Rolling-horizon dispatch prototype
+
+Run:
+
+~~~bash
+python experiments/rolling_horizon_dispatch.py
+python experiments/rolling_horizon_dispatch.py --json
+~~~
+
+At each hour, the prototype scores the two load priority orders over a three-hour forecast window, executes only the first-hour decision against realized surplus, carries freshwater and cold-storage inventories forward, and replans. It compares this rolling policy with fixed priority orders and a perfect-information hindsight reference across synthetic forecast-error cases.
+
+Limitations: synthetic profiles only; no trained forecasting model; RO minimum-run commitment is not modeled in this prototype; the perfect-information reference is not deployable. This is an experimental closed-loop control scaffold, not a site-ready controller.
