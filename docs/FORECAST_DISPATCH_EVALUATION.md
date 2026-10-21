@@ -10,11 +10,11 @@ Create a UTF-8 CSV with one row per hour and these columns:
 
 | Column | Unit | Meaning |
 |---|---|---|
-| \`timestamp_utc\` | ISO-8601 with timezone | Timestamp for the paired row |
-| \`actual_surplus_kw\` | kW | Realized renewable surplus during the hour |
-| \`forecast_surplus_kw\` | kW | Forecast surplus available to the controller for that hour |
-| \`water_demand_m3\` | m³ per hour | Freshwater demand in the interval |
-| \`cooling_demand_kw_th\` | kW thermal | Cooling demand in the interval |
+| `timestamp_utc` | ISO-8601 with timezone | Timestamp for the paired row |
+| `actual_surplus_kw` | kW | Realized renewable surplus during the hour |
+| `forecast_surplus_kw` | kW | Forecast surplus available to the controller for that hour |
+| `water_demand_m3` | m³ per hour | Freshwater demand in the interval |
+| `cooling_demand_kw_th` | kW thermal | Cooling demand in the interval |
 
 Rows must be strictly ordered, exactly one hour apart, and have finite,
 non-negative numeric values. The evaluator rejects gaps, missing values,
@@ -24,16 +24,16 @@ same unit.
 
 ## Run
 
-\`\`\`bash
+```bash
 python experiments/evaluate_forecast_dispatch.py path/to/paired_hourly.csv \\
   --output build/forecast-dispatch-evaluation.json
-\`\`\`
+```
 
 The JSON report includes forecast MAE/RMSE/bias and service outcomes for:
-- \`rolling\`: chooses priority using the supplied forecast and replans hourly;
-- \`ro_first\`: fixed RO-first priority, using the same forecast input;
-- \`ice_first\`: fixed cold-storage-first priority, using the same forecast input;
-- \`perfect_information\`: non-deployable hindsight reference using realized surplus.
+- `rolling`: chooses priority using the supplied forecast and replans hourly;
+- `ro_first`: fixed RO-first priority, using the same forecast input;
+- `ice_first`: fixed cold-storage-first priority, using the same forecast input;
+- `perfect_information`: non-deployable hindsight reference using realized surplus.
 
 The comparison score is illustrative: 45% normalized unmet water demand, 45%
 normalized unmet cooling demand, and 10% normalized remaining surplus. Lower is
