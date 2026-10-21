@@ -50,7 +50,7 @@ class ForecastingBaselineTests(unittest.TestCase):
         result = evaluate_baselines(self.input, self.output)
         self.assertGreater(result["history_rows_before_test"], 0)
         self.assertGreater(result["test_rows"], 0)
-        self.assertEqual(result["train_rows"] + result["test_rows"], self.n - 24)
+        self.assertEqual(result["history_rows_before_test"] + result["test_rows"], self.n - 24)
         self.assertEqual(result["forecast_horizon_hours"], 1)
         self.assertEqual(result["target_units"], "kW-hr/m^2")
         self.assertGreaterEqual(result["test_metrics"]["persistence"]["mae"], 0)
