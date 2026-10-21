@@ -91,6 +91,64 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
         self.assertTrue(np.all(result.inventory >= 0))
         self.assertTrue(np.all(result.inventory <= 300))
 
+    def test_ro_does_not_start_a_minimum_run_that_cannot_finish(self):
+        ro = ROWaterLoad(ROConfig(
+            rated_power_kw=100, specific_energy_kwh_m3=2,
+            initial_water_m3=500, dead_storage_m3=0,
+            reservoir_capacity_m3=1000, min_run_hours=2,
+            allow_backup_power=True, start_ratio=0.5,
+        ))
+        result = ro.simulate([0, 100, 100], [0, 0, 0])
+        # t=0 has no power; t=1 has exactly two hours remaining and may start.
+        self.assertEqual(result.active.tolist(), [0, 1, 1])
+        one_hour_left = ro.simulate([100], [0])
+        self.assertEqual(one_hour_left.active.tolist(), [0])
+        self.assertEqual(int(one_hour_left.constraint_violation.sum()), 0)
+
+    def test_ro_water_inventory_balance_each_step(self):
+        ro = ROWaterLoad(ROConfig(
+            rated_power_kw=100, specific_energy_kwh_m3=2,
+            initial_water_m3=50, dead_storage_m3=5,
+            reservoir_capacity_m3=60, min_run_hours=1,
+            allow_backup_power=True, start_ratio=0.5,
+        ))
+        result = ro.simulate([100, 100, 0], [10, 10, 10])
+        for t in range(3):
+            expected = (
+                result.inventory[t] + result.resource_produced[t]
+                - result.spill[t] - result.demand_served[t]
+            )
+            self.assertAlmostEqual(result.inventory[t + 1], expected)
+            self.assertAlmostEqual(
+                result.demand_served[t] + result.unmet_demand[t], 10
+            )
+        self.assertTrue(np.all(result.inventory <= 60 + 1e-9))
+        self.assertTrue(np.all(result.inventory >= 5 - 1e-9))
+
+    def test_ice_inventory_balance_each_step(self):
+        ice = IceStorageLoad(IceStorageConfig(
+            rated_power_kw=50, coefficient_of_performance=2,
+            storage_capacity_kwh_th=150, initial_storage_kwh_th=20,
+        ))
+        demand = [0, 30, 60, 10]
+        result = ice.simulate([50, 0, 50, 0], demand)
+        for t in range(len(demand)):
+            self.assertAlmostEqual(
+                result.inventory[t + 1],
+                result.inventory[t] + result.resource_produced[t]
+                - result.demand_served[t] - result.spill[t],
+            )
+            self.assertAlmostEqual(
+                result.demand_served[t] + result.unmet_demand[t], demand[t]
+            )
+        self.assertTrue(np.all(result.inventory >= -1e-9))
+        self.assertTrue(np.all(result.inventory <= 150 + 1e-9))
+
+    def test_invalid_ro_start_ratio_is_rejected(self):
+        ro = ROWaterLoad(ROConfig(start_ratio=1.1))
+        with self.assertRaisesRegex(ValueError, "start_ratio"):
+            ro.simulate([500], [0])
+
     def test_invalid_input_is_rejected(self):
         ice = IceStorageLoad()
         with self.assertRaises(ValueError):
