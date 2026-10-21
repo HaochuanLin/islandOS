@@ -24,6 +24,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Generate reproducible dispatch report
         run: python experiments/generate_dispatch_report.py --output-dir build/dispatch-report
+      - name: Verify synthetic benchmark fixture reproducibility
+        run: python experiments/generate_synthetic_dispatch_benchmark.py --check
       - name: Evaluate fixed synthetic forecast-to-dispatch benchmark
         run: >-
           python experiments/evaluate_forecast_dispatch.py
