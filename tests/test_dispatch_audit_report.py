@@ -31,14 +31,14 @@ class TestDispatchAuditReport(unittest.TestCase):
 
     def test_audit_report_is_machine_readable_and_discloses_synthetic_data(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            generate_report(temp_dir)
+            summary = generate_report(temp_dir)
             payload = json.loads(
                 (Path(temp_dir) / "audit_report.json").read_text(encoding="utf-8")
             )
         self.assertIn("synthetic", payload["data_status"])
         self.assertTrue(payload["checks"])
         self.assertTrue(payload["limitations"])
-        self.assertIn("audit_report.json", generate_report(temp_dir)["files"])
+        self.assertIn("audit_report.json", summary["files"])
 
 
 if __name__ == "__main__":
