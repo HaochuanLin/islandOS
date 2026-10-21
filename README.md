@@ -16,6 +16,14 @@ IslandOS explores a practical question: **when wind and solar exceed immediate e
 
 The repository now contains a runnable synthetic demo, experimental flexible-load models and dispatch tools, data-quality checks, a NASA POWER weather-data adapter, and forecast-baseline evaluation scripts. It is an **early-stage software prototype**: no field deployment or validated real-island performance is claimed.
 
+## Example visualization
+
+<p align="center">
+  <img src="assets/demo_en.png" alt="Illustrative output from the IslandOS simulation demo" width="900">
+</p>
+
+<p align="center"><em>Illustrative simulation output only; synthetic results are not field measurements or evidence of real-island performance.</em></p>
+
 ---
 
 ## At a glance
