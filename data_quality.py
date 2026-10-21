@@ -54,6 +54,9 @@ def validate_csv(path, source_type: str, expected_interval_minutes: int = 60) ->
         reader = csv.DictReader(handle)
         headers = reader.fieldnames or []
         missing_columns = [column for column in REQUIRED_COLUMNS if column not in headers]
+        duplicate_columns = sorted({column for column in headers if headers.count(column) > 1})
+        if duplicate_columns:
+            issues.append({"code": "duplicate_columns", "columns": duplicate_columns})
         if missing_columns:
             return {
                 "file": Path(path).name,
@@ -90,6 +93,9 @@ def validate_csv(path, source_type: str, expected_interval_minutes: int = 60) ->
                 values[column] = value
             if timestamp is not None:
                 parsed_rows.append((line_number, timestamp, values))
+
+    if row_count == 0:
+        issues.append({"code": "empty_dataset"})
 
     seen = {}
     previous = None
