@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from dispatch_engine import dispatch_flexible_loads
 from experiments.compare_dispatch_policies import Scenario, build_scenarios, make_ice, summarize
 from flexible_loads import IceStorageConfig, IceStorageLoad, ROConfig, ROWaterLoad
+from islandos_config import load_config
 from optimization.grid_search_optimizer import audit_dispatch_result
 
 # A mixed, finite decision space. The algorithm samples/evolves policies rather
@@ -46,24 +47,31 @@ def decode(genome: tuple) -> dict:
     }
 
 
-def random_genome(rng: random.Random) -> tuple:
-    return tuple(rng.choice(values) for values in GENE_VALUES)
+def random_genome(rng: random.Random, gene_values: tuple = GENE_VALUES) -> tuple:
+    return tuple(rng.choice(values) for values in gene_values)
 
 
-def evaluate_genome(scenario: Scenario, genome: tuple) -> dict:
+def evaluate_genome(scenario: Scenario, genome: tuple, config: dict | None = None) -> dict:
+    config = config or load_config()
     p = decode(genome)
+    ro_cfg = config["equipment"]["ro"]
+    ice_cfg = config["equipment"]["ice"]
     ro = ROWaterLoad(ROConfig(
         rated_power_kw=p["ro_rated_power_kw"],
-        specific_energy_kwh_m3=3.5,
-        reservoir_capacity_m3=500.0,
-        initial_water_m3=150.0,
-        dead_storage_m3=20.0,
+        specific_energy_kwh_m3=ro_cfg["specific_energy_kwh_m3"],
+        reservoir_capacity_m3=ro_cfg["reservoir_capacity_m3"],
+        initial_water_m3=ro_cfg["initial_water_m3"],
+        dead_storage_m3=ro_cfg["dead_storage_m3"],
         min_run_hours=p["ro_min_run_hours"],
         start_ratio=p["ro_start_ratio"],
-        allow_backup_power=False,
+        allow_backup_power=ro_cfg["allow_backup_power"],
     ))
-    ice = make_ice()
-    ice.config.rated_power_kw = p["ice_rated_power_kw"]
+    ice = IceStorageLoad(IceStorageConfig(
+        rated_power_kw=p["ice_rated_power_kw"],
+        coefficient_of_performance=ice_cfg["coefficient_of_performance"],
+        storage_capacity_kwh_th=ice_cfg["storage_capacity_kwh_th"],
+        initial_storage_kwh_th=ice_cfg["initial_storage_kwh_th"],
+    ))
     if p["priority"] == "ro_first":
         requests = [(ro, scenario.water_demand_m3_per_hour),
                     (ice, scenario.cooling_demand_kw_th)]
@@ -180,9 +188,12 @@ def tournament(population: list[dict], rng: random.Random) -> dict:
     return a if rng.random() < 0.5 else b
 
 
-def crossover_mutate(a: tuple, b: tuple, rng: random.Random, mutation_rate: float) -> tuple:
+def crossover_mutate(
+    a: tuple, b: tuple, rng: random.Random, mutation_rate: float,
+    gene_values: tuple = GENE_VALUES,
+) -> tuple:
     child = []
-    for i, values in enumerate(GENE_VALUES):
+    for i, values in enumerate(gene_values):
         gene = a[i] if rng.random() < 0.5 else b[i]
         if rng.random() < mutation_rate:
             gene = rng.choice(values)
@@ -193,6 +204,7 @@ def crossover_mutate(a: tuple, b: tuple, rng: random.Random, mutation_rate: floa
 def optimize_scenario(
     scenario: Scenario, population_size: int = 40, generations: int = 30,
     seed: int = 20261021, mutation_rate: float = 0.2,
+    config: dict | None = None,
 ) -> dict:
     if population_size < 4:
         raise ValueError("population_size must be >= 4")
@@ -200,22 +212,30 @@ def optimize_scenario(
         raise ValueError("generations must be >= 1")
     if not 0 <= mutation_rate <= 1:
         raise ValueError("mutation_rate must be within [0, 1]")
+    config = config or load_config()
+    search = config["search_space"]
+    gene_values = (
+        tuple(search["priority"]), tuple(search["ro_min_run_hours"]),
+        tuple(search["ro_start_ratio"]), tuple(search["ro_rated_power_kw"]),
+        tuple(search["ice_rated_power_kw"]),
+    )
     rng = random.Random(seed)
     cache: dict[tuple, dict] = {}
 
     def evaluate(genome: tuple) -> dict:
         if genome not in cache:
-            cache[genome] = evaluate_genome(scenario, genome)
+            cache[genome] = evaluate_genome(scenario, genome, config)
         return cache[genome]
 
-    population = [evaluate(random_genome(rng)) for _ in range(population_size)]
+    population = [evaluate(random_genome(rng, gene_values)) for _ in range(population_size)]
     for _ in range(generations):
         offspring = []
         while len(offspring) < population_size:
             parent_a = tournament(population, rng)
             parent_b = tournament(population, rng)
             genome = crossover_mutate(
-                tuple(parent_a["genome"]), tuple(parent_b["genome"]), rng, mutation_rate
+                tuple(parent_a["genome"]), tuple(parent_b["genome"]), rng,
+                mutation_rate, gene_values,
             )
             offspring.append(evaluate(genome))
         population = select_next_generation(population + offspring, population_size)
@@ -233,7 +253,8 @@ def optimize_scenario(
         "population_size": population_size,
         "generations": generations,
         "unique_candidates_evaluated": len(cache),
-        "decision_space_size": int(np.prod([len(v) for v in GENE_VALUES])),
+        "decision_space_size": int(np.prod([len(v) for v in gene_values])),
+        "parameter_config_name": config.get("metadata", {}).get("name", "unnamed"),
         "objective_directions": {key: "minimize" for key in OBJECTIVES},
         "feasible_candidate_count_evaluated": sum(row["feasible"] for row in cache.values()),
         "pareto_candidate_count": len(pareto),
@@ -254,11 +275,13 @@ def main() -> None:
     parser.add_argument("--generations", type=int, default=30)
     parser.add_argument("--seed", type=int, default=20261021)
     parser.add_argument("--mutation-rate", type=float, default=0.2)
+    parser.add_argument("--config", help="JSON parameter configuration; defaults are explicitly illustrative")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+    config = load_config(args.config)
     scenarios = [s for s in build_scenarios() if args.scenario is None or s.name == args.scenario]
     results = [optimize_scenario(
-        s, args.population_size, args.generations, args.seed, args.mutation_rate
+        s, args.population_size, args.generations, args.seed, args.mutation_rate, config
     ) for s in scenarios]
     if args.json:
         print(json.dumps(results, indent=2))
