@@ -28,9 +28,9 @@ class TestGridSearchOptimizer(unittest.TestCase):
 
     def test_archive_contains_only_feasible_non_dominated_rows(self):
         evaluated = [
-            {"candidate_id": "a", "feasible": True, "objectives": {
+            {"candidate_id": "a", "feasible": True, "feasibility_audit": {"eligible_for_pareto": True}, "objectives": {
                 "water_unmet_m3": 1, "cooling_unmet_kwh_th": 1, "remaining_surplus_kwh": 1}},
-            {"candidate_id": "b", "feasible": True, "objectives": {
+            {"candidate_id": "b", "feasible": True, "feasibility_audit": {"eligible_for_pareto": True}, "objectives": {
                 "water_unmet_m3": 2, "cooling_unmet_kwh_th": 2, "remaining_surplus_kwh": 2}},
             {"candidate_id": "c", "feasible": False, "objectives": {
                 "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}},
@@ -39,7 +39,7 @@ class TestGridSearchOptimizer(unittest.TestCase):
         self.assertEqual([row["candidate_id"] for row in archive], ["a"])
 
     def test_infeasible_candidate_cannot_be_recommended_even_if_passed_directly(self):
-        feasible = {"candidate_id": "valid", "feasible": True, "objectives": {
+        feasible = {"candidate_id": "valid", "feasible": True, "feasibility_audit": {"eligible_for_pareto": True}, "objectives": {
             "water_unmet_m3": 1, "cooling_unmet_kwh_th": 1, "remaining_surplus_kwh": 1}}
         invalid_but_attractive = {"candidate_id": "invalid", "feasible": False, "objectives": {
             "water_unmet_m3": 0, "cooling_unmet_kwh_th": 0, "remaining_surplus_kwh": 0}}
@@ -62,9 +62,9 @@ class TestGridSearchOptimizer(unittest.TestCase):
 
     def test_recommendation_must_come_from_archive(self):
         archive = [
-            {"candidate_id": "candidate-a", "feasible": True, "objectives": {
+            {"candidate_id": "candidate-a", "feasible": True, "feasibility_audit": {"eligible_for_pareto": True}, "objectives": {
                 "water_unmet_m3": 1, "cooling_unmet_kwh_th": 1, "remaining_surplus_kwh": 1}},
-            {"candidate_id": "candidate-b", "feasible": True, "objectives": {
+            {"candidate_id": "candidate-b", "feasible": True, "feasibility_audit": {"eligible_for_pareto": True}, "objectives": {
                 "water_unmet_m3": 0, "cooling_unmet_kwh_th": 2, "remaining_surplus_kwh": 2}},
         ]
         chosen = recommend(archive)
