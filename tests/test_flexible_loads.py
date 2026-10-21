@@ -63,6 +63,29 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
         self.assertAlmostEqual(backed_result.backup_power_kw[1], 40)
         self.assertEqual(int(backed_result.constraint_violation.sum()), 0)
 
+    def test_ro_initial_run_commitment_is_carried_into_next_call(self):
+        ro = ROWaterLoad(ROConfig(
+            rated_power_kw=100, specific_energy_kwh_m3=2,
+            initial_water_m3=500, dead_storage_m3=0,
+            reservoir_capacity_m3=1000, min_run_hours=2,
+            allow_backup_power=False,
+        ))
+        result = ro.simulate(
+            [0], [0], initial_run_hours_remaining=1,
+        )
+        # The unit is still committed, but the missing renewable power is
+        # surfaced as a violation rather than silently cancelling the run.
+        self.assertEqual(result.active.tolist(), [1])
+        self.assertEqual(result.constraint_violation.tolist(), [1])
+        self.assertEqual(result.run_hours_remaining, 0)
+
+    def test_ro_rejects_invalid_initial_run_commitment(self):
+        ro = ROWaterLoad(ROConfig(min_run_hours=2))
+        for invalid in (-1, 3, 1.5):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "initial_run_hours_remaining"):
+                    ro.simulate([0], [0], initial_run_hours_remaining=invalid)
+
     def test_ro_water_balance_tracks_unmet_demand_and_inventory(self):
         ro = ROWaterLoad(ROConfig(
             rated_power_kw=100, specific_energy_kwh_m3=1,
