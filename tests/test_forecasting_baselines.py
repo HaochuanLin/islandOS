@@ -48,7 +48,7 @@ class ForecastingBaselineTests(unittest.TestCase):
 
     def test_chronological_holdout_and_metrics(self):
         result = evaluate_baselines(self.input, self.output)
-        self.assertGreater(result["train_rows"], 0)
+        self.assertGreater(result["history_rows_before_test"], 0)
         self.assertGreater(result["test_rows"], 0)
         self.assertEqual(result["train_rows"] + result["test_rows"], self.n - 24)
         self.assertEqual(result["forecast_horizon_hours"], 1)
@@ -59,7 +59,7 @@ class ForecastingBaselineTests(unittest.TestCase):
         test_rows = [row for row in rows if row["split"] == "test"]
         self.assertEqual(test_rows[0]["timestamp_utc"], result["first_test_timestamp_utc"])
         first_test_index = next(i for i, row in enumerate(rows) if row["split"] == "test")
-        self.assertTrue(all(row["split"] == "train" for row in rows[:first_test_index]))
+        self.assertTrue(all(row["split"] == "history" for row in rows[:first_test_index]))
 
     def test_forecasts_only_use_past_values(self):
         evaluate_baselines(self.input, self.output)
