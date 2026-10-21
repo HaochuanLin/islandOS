@@ -54,6 +54,12 @@ class ForecastingBaselineTests(unittest.TestCase):
         self.assertEqual(result["forecast_horizon_hours"], 1)
         self.assertEqual(result["target_units"], "kW-hr/m^2")
         self.assertGreaterEqual(result["test_metrics"]["persistence"]["mae"], 0)
+        rolling = result["rolling_origin_evaluation"]
+        self.assertEqual(rolling["fold_count"], 4)
+        self.assertEqual(rolling["evaluated_rows"], 48)
+        self.assertEqual(sum(fold["test_rows"] for fold in rolling["folds"]), 48)
+        self.assertEqual(len(rolling["folds"]), 4)
+        self.assertGreaterEqual(rolling["aggregate_metrics"]["seasonal_naive_24h"]["rmse"], 0)
         with self.output.open(encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
         test_rows = [row for row in rows if row["split"] == "test"]
@@ -95,6 +101,8 @@ class ForecastingBaselineTests(unittest.TestCase):
         }}}), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "between 0.05 and 0.50"):
             evaluate_baselines(self.input, self.output, test_fraction=0.8)
+        with self.assertRaisesRegex(ValueError, "rolling_folds must be at least 2"):
+            evaluate_baselines(self.input, self.output, rolling_folds=1)
         self.write_rows(self.rows[:30])
         with self.assertRaisesRegex(ValueError, "at least 34"):
             evaluate_baselines(self.input, self.output)
