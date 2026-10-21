@@ -179,3 +179,12 @@ A milestone is ready to describe as implemented when:
 - assumptions and units are documented;
 - results are compared with a baseline;
 - limitations are stated alongside claims.
+
+
+## Implemented extension-point prototype (development branch)
+
+`flexible_loads.py` now defines a runtime-checkable `FlexibleLoad` protocol and a shared `LoadSimulationResult` output contract. The first implementations are `ROWaterLoad` and `IceStorageLoad`.
+
+The common result reports electrical demand, backup electricity, explicit runtime constraint violations, useful resource production, served/unmet demand, spill, active state, and inventory trajectory. Units of the resource inventory and demand depend on the module and are documented in each configuration/class: RO uses m³ of water; cold storage uses kWh of thermal energy.
+
+This API is an **experimental parallel path**. The original 24-hour demo still uses `island_microgrid_ro_sim.py`; unifying the legacy engine with plug-ins is a later integration task. The initial cold-storage model is intentionally simple and must not be presented as a validated refrigeration design.
