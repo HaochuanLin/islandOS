@@ -177,3 +177,18 @@ See docs/AI_ARCHITECTURE.md for the proposed module boundaries, optimization wor
 ## License
 
 Released under the MIT License. See LICENSE for details.
+
+
+## Latest engineering update: RO startup feasibility and regression tests
+
+The development branch includes a correction to the **no-backup-power** RO startup rule. Previously, a start window could pass a mean-curtailment threshold even when one hour in the minimum-run window had less than the RO rated power; that could force an early stop and violate the minimum-run constraint. In no-backup mode, a start is now permitted only when every hour in the proposed minimum-run window has at least the rated power available as curtailment. Backup-enabled mode retains the mean-based startup heuristic because backup power can cover shortfalls.
+
+Regression tests were added for:
+- avoiding infeasible no-backup startup windows;
+- respecting minimum-run segments in feasible no-backup cases;
+- accounting for backup energy during forced-run shortfalls;
+- refusing to start when the minimum run cannot fit within the simulation horizon;
+- reservoir storage bounds and overflow accounting; and
+- mismatched input-array lengths.
+
+A GitHub Actions workflow runs the unit-test suite on pushes to `main` and `draft/**`, and on pull requests. The tests are committed, but results should be treated as **pending until the workflow has actually completed successfully**. This correction improves a specific dispatch edge case; it does not validate the full physical model or establish field performance.
