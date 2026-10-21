@@ -214,9 +214,18 @@ def optimize_scenario(
         raise ValueError("mutation_rate must be within [0, 1]")
     config = config or load_config()
     search = config["search_space"]
+    # With backup disabled, ROWaterLoad does not consult start_ratio: in
+    # no-backup mode it requires rated power for every committed run hour.
+    # Collapse this inactive gene to one representative value so NSGA-II does
+    # not waste evaluations on phenotypically identical policies.
+    start_ratio_values = (
+        tuple(search["ro_start_ratio"])
+        if config["equipment"]["ro"]["allow_backup_power"]
+        else (search["ro_start_ratio"][0],)
+    )
     gene_values = (
         tuple(search["priority"]), tuple(search["ro_min_run_hours"]),
-        tuple(search["ro_start_ratio"]), tuple(search["ro_rated_power_kw"]),
+        start_ratio_values, tuple(search["ro_rated_power_kw"]),
         tuple(search["ice_rated_power_kw"]),
     )
     rng = random.Random(seed)
@@ -255,6 +264,17 @@ def optimize_scenario(
         "unique_candidates_evaluated": len(cache),
         "decision_space_size": int(np.prod([len(v) for v in gene_values])),
         "parameter_config_name": config.get("metadata", {}).get("name", "unnamed"),
+        "effective_search_space": {
+            "priority": list(gene_values[0]),
+            "ro_min_run_hours": list(gene_values[1]),
+            "ro_start_ratio": list(gene_values[2]),
+            "ro_rated_power_kw": list(gene_values[3]),
+            "ice_rated_power_kw": list(gene_values[4]),
+        },
+        "inactive_parameters": (
+            ["ro_start_ratio is collapsed to one value because backup power is disabled"]
+            if not config["equipment"]["ro"]["allow_backup_power"] else []
+        ),
         "objective_directions": {key: "minimize" for key in OBJECTIVES},
         "feasible_candidate_count_evaluated": sum(row["feasible"] for row in cache.values()),
         "pareto_candidate_count": len(pareto),
