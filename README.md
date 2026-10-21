@@ -368,3 +368,20 @@ python -m unittest discover -s tests -v
 The scenario writes annual-run CSV, percentile CSV, and a JSON report containing assumptions and limitations. It models assumed export-limitation events as an event-energy abstraction; it is **not** a grid power-flow model and uses no measured Nan'ao curtailment time series. Report all output as **“Scenario-based simulation assumption, not measured real-world data.”** The detailed protocol and equipment boundary are in [docs/NAN_AO_SCENARIO.md](docs/NAN_AO_SCENARIO.md).
 
 Equipment boundary: no publicly accessible official documentation reviewed by the team confirms an operable standby seawater RO unit on Nan'ao main island. The pilot assumes a modular 50 kW RO unit would be procured, installed and owned by the local water authority, subject to site verification, approval and budget. No savings, ROI, emissions or avoided outages are claimed.
+
+
+### Snapshot output (seed 20261021; 1,000 runs)
+
+The committed result snapshot is available at:
+- [JSON summary](outputs/nan_ao_summary_seed_20261021.json)
+- [Percentile CSV](outputs/nan_ao_percentiles_seed_20261021.csv)
+
+| Metric | Scenario result |
+|---|---:|
+| P5 annual water yield | 237.609 m³/year |
+| Median annual water yield | 442.734 m³/year |
+| Mean annual water yield | 447.814 m³/year |
+| P95 annual water yield | 693.160 m³/year |
+| P5–P95 usable RO energy | 0.950–2.773 MWh/year |
+
+These are scenario outputs from the explicit assumed event distributions, not measurements, a forecast, or a validated field-performance range. The model is not a grid power-flow simulation. The full 1,000-row run log is retained as a GitHub Actions artifact for the workflow run; regenerate it locally with the command above.
