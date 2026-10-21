@@ -49,12 +49,12 @@ class FlexibleLoad(Protocol):
 class ROConfig:
     rated_power_kw: float = 400.0
     specific_energy_kwh_m3: float = 3.5
-    reservoir_capacity_m3: float = 3000.0
-    initial_water_m3: float = 800.0
-    dead_storage_m3: float = 200.0
+    reservoir_capacity_m3: float = 500.0
+    initial_water_m3: float = 150.0
+    dead_storage_m3: float = 20.0
     min_run_hours: int = 2
     start_ratio: float = 0.8
-    allow_backup_power: bool = True
+    allow_backup_power: bool = False
     fault_recovery_lockout_hours: int = 1
 
 
@@ -225,8 +225,8 @@ class IceStorageConfig:
     """Simplified ice/cold-storage parameters."""
     rated_power_kw: float = 100.0
     coefficient_of_performance: float = 2.5
-    storage_capacity_kwh_th: float = 1200.0
-    initial_storage_kwh_th: float = 0.0
+    storage_capacity_kwh_th: float = 400.0
+    initial_storage_kwh_th: float = 100.0
 
 
 class IceStorageLoad:
