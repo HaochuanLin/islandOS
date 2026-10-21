@@ -146,7 +146,17 @@ flowchart LR
     F --> G["Choose using disclosed weights"]
 ```
 
-The grid-search baseline exhaustively searches a small policy space (two priority orders × four RO minimum-run durations). The separate NSGA-II prototype evolves candidates across priority, RO minimum-run duration, RO start threshold, RO rated power, and chiller rated power. The site-data workflow can optionally add annualized lifecycle cost as a fourth objective when the required cost inputs and complete annual data are available. Neither optimizer covers every possible hourly setpoint, and results remain conditional on simplified physics and supplied inputs.\n\n### Experimental NSGA-II optimizer
+The grid-search baseline exhaustively searches a small policy space (two priority orders × four RO minimum-run durations). The separate NSGA-II prototype evolves candidates across priority, RO minimum-run duration, RO start threshold, RO rated power, and chiller rated power. The site-data workflow can optionally add annualized lifecycle cost as a fourth objective when the required cost inputs and complete annual data are available. Neither optimizer covers every possible hourly setpoint, and results remain conditional on simplified physics and supplied inputs.\n\n### Benchmark NSGA-II against exact search
+
+For the finite configured policy space, compare evolutionary search with an exhaustive Pareto reference:
+
+```bash
+python experiments/benchmark_nsga2_vs_exhaustive.py --scenario typical_day --output build/pareto-benchmark.json
+```
+
+The benchmark reports exact-front recall and NSGA-II-front precision by candidate genome, along with evaluated candidate counts and the exact Pareto genomes. The exhaustive run is protected by a 100,000-candidate default safety limit (use the `--max-candidates` option to override). These metrics measure search coverage within the configured finite space only; they do not validate the simulator's physics or imply real-site performance. See [the Pareto benchmark guide](docs/PARETO_BENCHMARK.md).
+
+### Experimental NSGA-II optimizer
 
 Run `python optimization/nsga2_dispatch_optimizer.py --json` to evolve candidate policies with NSGA-II (non-dominated sorting, crowding distance, and tournament selection). It minimizes unmet water demand, unmet cooling demand, and remaining renewable surplus while filtering candidates through the independent dispatch audit. The default run is deterministic (`--seed 20261021`) and reports how many unique candidates were evaluated.
 
