@@ -128,6 +128,14 @@ def dispatch_flexible_loads(
             result = load.simulate(residual, demand_array, dt_hours=dt_hours)
 
         _audit_load_result(name, result, demand_array, dt_hours)
+        inventory = np.asarray(result.inventory, dtype=float)
+        if isinstance(load, ROWaterLoad):
+            if (np.any(inventory < load.config.dead_storage_m3 - 1e-7)
+                    or np.any(inventory > load.config.reservoir_capacity_m3 + 1e-7)):
+                raise RuntimeError(f"{name} water inventory exceeded configured bounds")
+        elif isinstance(load, IceStorageLoad):
+            if np.any(inventory > load.config.storage_capacity_kwh_th + 1e-7):
+                raise RuntimeError(f"{name} thermal inventory exceeded configured capacity")
         backup = np.asarray(result.backup_power_kw, dtype=float)
         total_power = np.asarray(result.power_used_kw, dtype=float)
         renewable_draw = total_power - backup
