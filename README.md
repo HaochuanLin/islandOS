@@ -257,3 +257,8 @@ Limitations: synthetic profiles only; no trained forecasting model; RO minimum-r
 
 
 The rolling-horizon experiment now prints a case-level normalized score comparison between the rolling policy and both fixed priority policies. Lower scores are better; negative `rolling_minus_best_fixed` means the rolling policy scored better than the best fixed policy in that specific synthetic case. The weights (water unmet 0.45, cooling unmet 0.45, remaining surplus 0.10) are illustrative, not validated stakeholder preferences. Do not generalize one case to all islands.
+
+
+## Objective-weight sensitivity audit
+
+Run `python experiments/weight_sensitivity_audit.py` or add `--json` for machine-readable output. The audit re-scores the same 12 synthetic scenario/error outcomes under five illustrative weight sets: balanced reliability, water priority, cooling priority, surplus priority, and equal objectives. It reports rolling-policy wins/ties/losses against the best of the two fixed priority policies, plus mean and range of score differences. This isolates sensitivity to scoring preferences; it does not validate the simulation physics or establish real stakeholder priorities.
