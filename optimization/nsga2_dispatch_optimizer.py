@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 from dispatch_engine import dispatch_flexible_loads
 from experiments.compare_dispatch_policies import Scenario, build_scenarios, make_ice, summarize
 from flexible_loads import IceStorageConfig, IceStorageLoad, ROConfig, ROWaterLoad
-from islandos_config import load_config
+from islandos_config import economics_completeness, load_config
 from optimization.grid_search_optimizer import audit_dispatch_result
 
 # A mixed, finite decision space. The algorithm samples/evolves policies rather
@@ -34,7 +34,8 @@ GENE_VALUES = (
     (250.0, 300.0, 350.0, 400.0),   # RO rated power, kW
     (50.0, 75.0, 100.0),            # chiller rated power, kW
 )
-OBJECTIVES = ("water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh")
+BASE_OBJECTIVES = ("water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh")
+COST_OBJECTIVE = "annualized_lifecycle_cost_per_year"
 
 
 def decode(genome: tuple) -> dict:
@@ -85,11 +86,61 @@ def evaluate_genome(scenario: Scenario, genome: tuple, config: dict | None = Non
         "ice_cold_storage": np.asarray(scenario.cooling_demand_kw_th, dtype=float),
     }
     audit = audit_dispatch_result(result, requests, demands, dt_hours=1.0)
-    objective_values = [float(metrics[k]) for k in OBJECTIVES]
+    objective_names = list(BASE_OBJECTIVES)
+    objective_values = [float(metrics[k]) for k in BASE_OBJECTIVES]
+    economics_status = economics_completeness(config)
+    cost_breakdown = None
+    if economics_status["complete_for_current_declared_fields"]:
+        economics = config["economics"]
+        if len(scenario.available_surplus_kw) not in (8760, 8784):
+            raise ValueError(
+                "Lifecycle-cost objective requires a complete 8760-hour or 8784-hour year; "
+                "short horizons cannot be annualized honestly."
+            )
+        hours = float(len(scenario.available_surplus_kw))
+        energy_kwh = sum(
+            float(np.sum(load.power_used_kw)) for load in result.loads.values()
+        )
+        water_produced_m3 = float(np.sum(result.loads["ro_desalination"].resource_produced))
+        rate = float(economics["discount_rate"])
+        years = int(economics["analysis_years"])
+        if rate == 0:
+            capital_recovery_factor = 1.0 / years
+        else:
+            growth = (1.0 + rate) ** years
+            capital_recovery_factor = rate * growth / (growth - 1.0)
+        annualized_capex = (
+            float(economics["ro_capex"]) + float(economics["chiller_capex"])
+        ) * capital_recovery_factor
+        annual_fixed_om = (
+            float(economics["ro_fixed_om_per_year"])
+            + float(economics["chiller_fixed_om_per_year"])
+        )
+        annual_variable_om = water_produced_m3 * float(economics["ro_variable_om_per_m3"])
+        annual_electricity_cost = energy_kwh * float(economics["electricity_price_per_kwh"])
+        annual_cost = annualized_capex + annual_fixed_om + annual_variable_om + annual_electricity_cost
+        cost_breakdown = {
+            "currency": economics["currency"],
+            "annualized_capex": annualized_capex,
+            "annual_fixed_om": annual_fixed_om,
+            "annual_ro_variable_om": annual_variable_om,
+            "annual_flexible_load_electricity_cost": annual_electricity_cost,
+            "annualized_lifecycle_cost_per_year": annual_cost,
+            "annual_energy_used_by_flexible_loads_kwh": energy_kwh,
+            "annual_water_produced_m3": water_produced_m3,
+            "capital_recovery_factor": capital_recovery_factor,
+            "analysis_years": years,
+            "discount_rate": rate,
+            "accounting_note": "Assumes the supplied complete calendar-year profile is representative of each analysis year; excludes replacement schedules, taxes, financing, emissions, backup power, and unmet-service penalties.",
+        }
+        objective_names.append(COST_OBJECTIVE)
+        objective_values.append(annual_cost)
     return {
         "genome": list(genome),
         "parameters": p,
-        "objectives": dict(zip(OBJECTIVES, objective_values)),
+        "objectives": dict(zip(objective_names, objective_values)),
+        "objective_names": objective_names,
+        "cost_breakdown": cost_breakdown,
         "objective_vector": objective_values,
         "feasible": audit["eligible_for_pareto"] is True,
         "feasibility_audit": audit,
@@ -140,7 +191,8 @@ def crowding_distance(front: list[dict]) -> dict[tuple, float]:
     distance = {tuple(row["genome"]): 0.0 for row in front}
     if len(front) <= 2:
         return {key: float("inf") for key in distance}
-    for objective_index in range(len(OBJECTIVES)):
+    objective_count = len(front[0].get("objective_names", BASE_OBJECTIVES))
+    for objective_index in range(objective_count):
         ordered = sorted(front, key=lambda row: row["objective_vector"][objective_index])
         distance[tuple(ordered[0]["genome"])] = float("inf")
         distance[tuple(ordered[-1]["genome"])] = float("inf")
@@ -213,6 +265,12 @@ def optimize_scenario(
     if not 0 <= mutation_rate <= 1:
         raise ValueError("mutation_rate must be within [0, 1]")
     config = config or load_config()
+    economics_status = economics_completeness(config)
+    if economics_status["complete_for_current_declared_fields"] and len(scenario.available_surplus_kw) not in (8760, 8784):
+        raise ValueError(
+            "Complete economic inputs activate lifecycle-cost optimization, which requires "
+            "a complete 8760-hour or 8784-hour annual scenario."
+        )
     search = config["search_space"]
     # With backup disabled, ROWaterLoad does not consult start_ratio: in
     # no-backup mode it requires rated power for every committed run hour.
@@ -275,14 +333,25 @@ def optimize_scenario(
             ["ro_start_ratio is collapsed to one value because backup power is disabled"]
             if not config["equipment"]["ro"]["allow_backup_power"] else []
         ),
-        "objective_directions": {key: "minimize" for key in OBJECTIVES},
+        "objective_directions": {
+            key: "minimize" for key in (
+                list(BASE_OBJECTIVES) + ([COST_OBJECTIVE] if economics_status["complete_for_current_declared_fields"] else [])
+            )
+        },
+        "cost_objective_enabled": economics_status["complete_for_current_declared_fields"],
+        "cost_objective_status": (
+            "enabled; see each candidate cost_breakdown"
+            if economics_status["complete_for_current_declared_fields"]
+            else "disabled because one or more required economic inputs are missing"
+        ),
         "feasible_candidate_count_evaluated": sum(row["feasible"] for row in cache.values()),
         "pareto_candidate_count": len(pareto),
         "pareto_front": pareto,
         "limitations": [
             "Optimizes a finite policy-parameter space, not arbitrary hourly setpoints.",
             "Synthetic profiles and simplified component physics only.",
-            "No site-calibrated costs, uncertainty, plant interlocks, or field validation.",
+            "Lifecycle cost is enabled only with complete cost inputs and a complete annual profile; omitted replacement schedules, taxes, financing, emissions, backup, and unmet-service penalties.",
+            "No plant interlocks or field validation.",
             "Pareto solutions expose trade-offs; they do not identify a universally best policy.",
         ],
     }
