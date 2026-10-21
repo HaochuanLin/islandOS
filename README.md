@@ -262,3 +262,28 @@ The rolling-horizon experiment now prints a case-level normalized score comparis
 ## Objective-weight sensitivity audit
 
 Run `python experiments/weight_sensitivity_audit.py` or add `--json` for machine-readable output. The audit re-scores the same 12 synthetic scenario/error outcomes under five illustrative weight sets: balanced reliability, water priority, cooling priority, surplus priority, and equal objectives. It reports rolling-policy wins/ties/losses against the best of the two fixed priority policies, plus mean and range of score differences. This isolates sensitivity to scoring preferences; it does not validate the simulation physics or establish real stakeholder priorities.
+
+
+## CSV time-series data quality gate
+
+IslandOS now includes a strict CSV validator for hourly inputs. It expects these columns and units:
+
+| Column | Unit |
+|---|---|
+| `timestamp` | ISO-8601 timestamp with timezone |
+| `wind_kw` | kW |
+| `pv_kw` | kW |
+| `critical_load_kw` | kW |
+| `water_demand_m3` | m³ per time step |
+| `cooling_demand_kw_th` | kW thermal |
+
+Run it before importing a dataset:
+
+~~~bash
+python data_quality.py path/to/data.csv --source-type public
+python data_quality.py path/to/data.csv --source-type measured --json
+~~~
+
+The source label is required and must be one of `measured`, `public`, `synthetic`, or `forecast`. The validator checks required/duplicate headers, empty fields, numeric/finite/non-negative values, timezone-aware timestamps, duplicate or non-monotonic timestamps, and expected time-step spacing (60 minutes by default; configurable with `--interval-minutes`). It exits non-zero on invalid input and reports issues rather than silently cleaning data.
+
+Important: column names do not guarantee unit correctness. Users must confirm units and provenance from the source documentation. The validator does not perform unit conversion, imputation, interpolation, capacity plausibility checks, or leakage analysis; passing validation is a structural quality check, not proof that data are authentic or suitable for operational decisions.
