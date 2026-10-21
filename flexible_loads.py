@@ -84,14 +84,15 @@ class ROWaterLoad:
             raise ValueError("forecast_available_power_kw must have one forecast window per time step")
 
         c = self.config
-        if c.rated_power_kw <= 0 or c.specific_energy_kwh_m3 <= 0:
-            raise ValueError("RO rated power and specific energy must be positive")
-        if c.min_run_hours < 1:
-            raise ValueError("min_run_hours must be >= 1")
+        if (not np.isfinite(c.rated_power_kw) or not np.isfinite(c.specific_energy_kwh_m3)
+                or c.rated_power_kw <= 0 or c.specific_energy_kwh_m3 <= 0):
+            raise ValueError("RO rated power and specific energy must be finite and positive")
+        if not isinstance(c.min_run_hours, int) or c.min_run_hours < 1:
+            raise ValueError("min_run_hours must be an integer >= 1")
         if not (0 <= c.dead_storage_m3 <= c.initial_water_m3 <= c.reservoir_capacity_m3):
             raise ValueError("Require 0 <= dead storage <= initial water <= reservoir capacity")
-        if c.start_ratio < 0:
-            raise ValueError("start_ratio must be non-negative")
+        if not np.isfinite(c.start_ratio) or not (0 <= c.start_ratio <= 1):
+            raise ValueError("start_ratio must be finite and within [0, 1]")
 
         n = len(available)
         power = np.zeros(n)
@@ -111,7 +112,10 @@ class ROWaterLoad:
             on = False
             if run_remaining > 0:
                 on = True
-            elif not full:
+            elif not full and (n - t) >= c.min_run_hours:
+                # Do not initiate a minimum-run cycle that cannot finish within
+                # this simulation horizon. An already-running cycle may still
+                # reach the horizon boundary; that is reported as a limitation.
                 if c.allow_backup_power:
                     on = available[t] >= c.start_ratio * c.rated_power_kw
                 elif c.min_run_hours == 1:
