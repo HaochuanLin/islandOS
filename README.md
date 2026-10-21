@@ -318,3 +318,17 @@ python data_sources/prepare_environmental_features.py \
 The feature builder requires the raw CSV's provenance sidecar and source-reported units. It validates timestamp ordering/hourly continuity and rejects missing or non-finite values instead of imputing them. It creates cyclic hour/day-of-year features and 1-, 3-, and 24-hour lags for the three environmental variables. The first 24 rows are omitted as lag warm-up, and the output gets its own metadata sidecar.
 
 This is a tested preprocessing layer, not an AI model: it does not train a forecaster, generate labels, infer actual renewable power, or produce dispatch-ready load data. Current-hour covariates are included for exploratory analysis; a real prospective forecast must only use weather information available at decision time, such as archived forecasts or lagged observations, to avoid look-ahead leakage. Do not pass this feature CSV to the six-column operational validator or simulator as if it were actual generation and demand.
+
+
+## One-hour-ahead weather forecasting baselines (prototype)
+
+After downloading a raw NASA POWER series and its metadata sidecar, run a leakage-aware baseline evaluation:
+
+~~~bash
+python experiments/forecasting_baselines.py data/raw/nasa_power_hourly.csv \
+  --output data/processed/forecast_baselines.csv
+~~~
+
+By default this predicts the next-hour `ALLSKY_SFC_SW_DWN` solar-radiation parameter using two transparent baselines: persistence (last observed value) and seasonal-naive (value 24 hours earlier). It reserves the final 30% of eligible timestamps as a chronological holdout and reports MAE, RMSE, and prediction bias. The prediction CSV and its JSON metrics/provenance sidecar are written separately from the feature table.
+
+**Scope boundary:** this is a real evaluation framework applied to a weather-parameter proxy, not a trained AI model and not a forecast of PV power, wind power, island demand, or dispatch performance. The result depends on location and date range; it does not establish that either baseline is operationally useful. A next milestone should use a defensible measured or validated generation target and rolling-origin evaluation before claiming an energy forecast.
