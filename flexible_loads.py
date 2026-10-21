@@ -25,6 +25,7 @@ class LoadSimulationResult:
     spill: np.ndarray
     active: np.ndarray
     inventory: np.ndarray  # length T + 1
+    run_hours_remaining: int = 0  # RO commitment state carried to the next call
 
 
 @runtime_checkable
@@ -74,6 +75,7 @@ class ROWaterLoad:
         demand: Sequence[float],
         dt_hours: float = 1.0,
         forecast_available_power_kw: Sequence[Sequence[float]] | None = None,
+        initial_run_hours_remaining: int = 0,
     ) -> LoadSimulationResult:
         available = _validate_series(available_power_kw, "available_power_kw")
         water_demand = _validate_series(demand, "demand")
@@ -95,6 +97,12 @@ class ROWaterLoad:
             raise ValueError("RO rated power and specific energy must be positive")
         if not isinstance(c.min_run_hours, int) or c.min_run_hours < 1:
             raise ValueError("min_run_hours must be an integer >= 1")
+        if (not isinstance(initial_run_hours_remaining, int)
+                or initial_run_hours_remaining < 0
+                or initial_run_hours_remaining > c.min_run_hours):
+            raise ValueError(
+                "initial_run_hours_remaining must be an integer within [0, min_run_hours]"
+            )
         if not (0 <= c.dead_storage_m3 <= c.initial_water_m3 <= c.reservoir_capacity_m3):
             raise ValueError("Require 0 <= dead storage <= initial water <= reservoir capacity")
         if not np.isfinite(c.start_ratio) or not (0 <= c.start_ratio <= 1):
@@ -111,7 +119,7 @@ class ROWaterLoad:
         violations = np.zeros(n, dtype=int)
         inventory = np.zeros(n + 1)
         inventory[0] = c.initial_water_m3
-        run_remaining = 0
+        run_remaining = initial_run_hours_remaining
 
         for t in range(n):
             full = inventory[t] >= c.reservoir_capacity_m3 - 1e-9
@@ -165,7 +173,10 @@ class ROWaterLoad:
             unmet[t] = demand_volume - served[t]
             inventory[t + 1] = volume - served[t]
 
-        return LoadSimulationResult(power, backup, violations, produced, served, unmet, spill, active, inventory)
+        return LoadSimulationResult(
+            power, backup, violations, produced, served, unmet, spill, active,
+            inventory, run_hours_remaining=run_remaining,
+        )
 
 
 @dataclass
