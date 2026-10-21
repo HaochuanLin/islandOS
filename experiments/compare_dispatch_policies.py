@@ -103,7 +103,8 @@ def summarize(policy: str, result, scenario: Scenario, dt_hours: float = 1.0) ->
     }
 
 
-def run_comparison() -> list[dict]:
+def run_comparison(audit_records: list[dict] | None = None) -> list[dict]:
+    """Run all synthetic policy cases and optionally collect hourly audit records."""
     rows: list[dict] = []
     for scenario in build_scenarios():
         available = scenario.available_surplus_kw
@@ -118,6 +119,8 @@ def run_comparison() -> list[dict]:
         for policy_name, requests in policies:
             result = dispatch_flexible_loads(available, requests)
             row = summarize(policy_name, result, scenario)
+            if audit_records is not None:
+                audit_records.extend(_audit_timestep_records(scenario, policy_name, result))
             if not np.allclose(
                 result.initial_available_power_kw,
                 result.renewable_power_used_kw + result.remaining_power_kw,
@@ -129,6 +132,85 @@ def run_comparison() -> list[dict]:
                 raise RuntimeError(f"Renewable budget exceeded for {scenario.name}/{policy_name}")
             rows.append(row)
     return rows
+
+
+def _audit_timestep_records(scenario: Scenario, policy: str, result) -> list[dict]:
+    """Create transparent, machine-readable per-hour accounting records."""
+    records: list[dict] = []
+    for t, available_kw in enumerate(result.initial_available_power_kw):
+        power_residual = float(
+            available_kw - result.renewable_power_used_kw[t] - result.remaining_power_kw[t]
+        )
+        load_audits: dict[str, dict] = {}
+        any_failure = abs(power_residual) > 1e-7
+        for name, load in result.loads.items():
+            inventory = np.asarray(load.inventory, dtype=float)
+            produced = float(load.resource_produced[t])
+            served = float(load.demand_served[t])
+            unmet = float(load.unmet_demand[t])
+            spill = float(load.spill[t])
+            inventory_residual = float(
+                inventory[t] + produced - spill - served - inventory[t + 1]
+            )
+            demand_residual = float(
+                served + unmet - (
+                    scenario.water_demand_m3_per_hour[t]
+                    if name == "ro_desalination"
+                    else scenario.cooling_demand_kw_th[t]
+                )
+            )
+            capacity_violation = False
+            if name == "ro_desalination":
+                cfg = make_ro().config
+                capacity_violation = bool(
+                    inventory[t + 1] < cfg.dead_storage_m3 - 1e-7
+                    or inventory[t + 1] > cfg.reservoir_capacity_m3 + 1e-7
+                )
+            elif name == "ice_cold_storage":
+                cfg = make_ice().config
+                capacity_violation = bool(
+                    inventory[t + 1] < -1e-7
+                    or inventory[t + 1] > cfg.storage_capacity_kwh_th + 1e-7
+                )
+            constraint_violation = int(load.constraint_violation[t])
+            load_failed = (
+                abs(inventory_residual) > 1e-7
+                or abs(demand_residual) > 1e-7
+                or capacity_violation
+                or constraint_violation > 0
+            )
+            any_failure = any_failure or load_failed
+            load_audits[name] = {
+                "power_used_kw": float(load.power_used_kw[t]),
+                "backup_power_kw": float(load.backup_power_kw[t]),
+                "renewable_power_kw": float(load.power_used_kw[t] - load.backup_power_kw[t]),
+                "inventory_before": float(inventory[t]),
+                "resource_produced": produced,
+                "demand_served": served,
+                "unmet_demand": unmet,
+                "spill": spill,
+                "inventory_after": float(inventory[t + 1]),
+                "inventory_balance_residual": inventory_residual,
+                "demand_balance_residual": demand_residual,
+                "capacity_violation": capacity_violation,
+                "constraint_violation": constraint_violation,
+                "active": int(load.active[t]),
+                "status": "fail" if load_failed else "pass",
+            }
+        records.append({
+            "scenario": scenario.name,
+            "policy": policy,
+            "timestep": t,
+            "time_step_hours": 1.0,
+            "available_renewable_power_kw": float(available_kw),
+            "renewable_power_used_kw": float(result.renewable_power_used_kw[t]),
+            "remaining_power_kw": float(result.remaining_power_kw[t]),
+            "backup_power_kw": float(result.backup_power_kw[t]),
+            "power_balance_residual_kw": power_residual,
+            "loads": load_audits,
+            "status": "fail" if any_failure else "pass",
+        })
+    return records
 
 
 def main() -> None:
