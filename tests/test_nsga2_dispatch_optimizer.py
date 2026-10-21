@@ -1,9 +1,10 @@
 """Tests for the experimental NSGA-II dispatch policy optimizer."""
 import unittest
 
-from experiments.compare_dispatch_policies import build_scenarios
+from experiments.compare_dispatch_policies import Scenario, build_scenarios
+from islandos_config import load_config
 from optimization.nsga2_dispatch_optimizer import (
-    dominates, non_dominated_sort, optimize_scenario,
+    dominates, evaluate_genome, non_dominated_sort, optimize_scenario,
 )
 
 
@@ -36,6 +37,52 @@ class TestNSGA2DispatchOptimizer(unittest.TestCase):
             self.assertEqual(set(row["objectives"]), {
                 "water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh"
             })
+
+    def test_complete_cost_inputs_add_annualized_cost_objective(self):
+        config = load_config()
+        economics = config["economics"]
+        economics.update({
+            "electricity_price_per_kwh": 0.12,
+            "ro_capex": 100000.0,
+            "ro_fixed_om_per_year": 2000.0,
+            "ro_variable_om_per_m3": 0.3,
+            "chiller_capex": 40000.0,
+            "chiller_fixed_om_per_year": 1000.0,
+            "analysis_years": 20,
+            "discount_rate": 0.05,
+        })
+        scenario = Scenario(
+            name="synthetic-full-year-test",
+            available_surplus_kw=tuple([500.0] * 8760),
+            water_demand_m3_per_hour=tuple([1.0] * 8760),
+            cooling_demand_kw_th=tuple([1.0] * 8760),
+        )
+        genome = ("ro_first", 1, 0.6, 300.0, 50.0)
+        result = evaluate_genome(scenario, genome, config)
+        self.assertIn("annualized_lifecycle_cost_per_year", result["objectives"])
+        self.assertTrue(result["cost_breakdown"]["annualized_lifecycle_cost_per_year"] > 0)
+        self.assertEqual(
+            result["objectives"]["annualized_lifecycle_cost_per_year"],
+            result["cost_breakdown"]["annualized_lifecycle_cost_per_year"],
+        )
+        self.assertIn("water_unmet_m3", result["objectives"])
+
+    def test_complete_cost_inputs_reject_short_horizon(self):
+        config = load_config()
+        config["economics"].update({
+            "electricity_price_per_kwh": 0.12,
+            "ro_capex": 100000.0,
+            "ro_fixed_om_per_year": 2000.0,
+            "ro_variable_om_per_m3": 0.3,
+            "chiller_capex": 40000.0,
+            "chiller_fixed_om_per_year": 1000.0,
+            "analysis_years": 20,
+            "discount_rate": 0.05,
+        })
+        with self.assertRaisesRegex(ValueError, "complete annual scenario"):
+            optimize_scenario(
+                build_scenarios()[0], population_size=4, generations=1, config=config
+            )
 
     def test_invalid_population_size_fails_clearly(self):
         with self.assertRaisesRegex(ValueError, "population_size"):
