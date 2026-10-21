@@ -76,7 +76,19 @@ def evaluate_candidate(scenario: Scenario, candidate: Candidate) -> dict:
         "cooling_unmet_kwh_th": metrics["cooling_unmet_kwh_th"],
         "remaining_surplus_kwh": metrics["remaining_surplus_kwh"],
     }
-    metrics["feasible"] = metrics["constraint_violation_hours"] == 0
+    # The dispatcher raises on malformed series, demand/inventory balance
+    # failures, out-of-bounds inventories, and shared-power overdraw. A returned
+    # run passed those hard checks; component constraint flags still disqualify it.
+    hard_dispatch_checks_passed = True
+    component_constraints_passed = metrics["constraint_violation_hours"] == 0
+    metrics["feasibility_audit"] = {
+        "dispatch_completed": True,
+        "hard_dispatch_checks_passed": hard_dispatch_checks_passed,
+        "component_constraints_passed": component_constraints_passed,
+        "eligible_for_pareto": hard_dispatch_checks_passed and component_constraints_passed,
+        "scope": "simulator accounting and configured bounds only; not field or safety validation",
+    }
+    metrics["feasible"] = metrics["feasibility_audit"]["eligible_for_pareto"]
     return metrics
 
 
@@ -92,7 +104,7 @@ def dominates(a: dict, b: dict) -> bool:
 
 def pareto_archive(evaluated: list[dict]) -> list[dict]:
     """Filter infeasible candidates, then return non-dominated evaluated rows."""
-    feasible = [row for row in evaluated if row["feasible"]]
+    feasible = [row for row in evaluated if row.get("feasible") is True and row.get("feasibility_audit", {}).get("eligible_for_pareto", True) is True]
     return [
         row for row in feasible
         if not any(other is not row and dominates(other, row) for other in feasible)
@@ -101,8 +113,16 @@ def pareto_archive(evaluated: list[dict]) -> list[dict]:
 
 def recommend(archive: list[dict]) -> dict:
     """Select an evaluated Pareto candidate with disclosed normalized weights."""
-    if not archive:
+    # Re-check eligibility here too: callers cannot accidentally recommend a
+    # candidate merely by passing an unfiltered list as the archive.
+    eligible = [
+        row for row in archive
+        if row.get("feasible") is True
+        and row.get("feasibility_audit", {}).get("eligible_for_pareto", True) is True
+    ]
+    if not eligible:
         raise ValueError("No feasible candidate is available for recommendation")
+    archive = eligible
     metric_keys = ("water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh")
     weights = {
         "water_unmet_m3": 0.40,
