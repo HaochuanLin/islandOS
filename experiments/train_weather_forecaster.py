@@ -72,9 +72,11 @@ def train_and_evaluate(input_csv: str | Path, output_csv: str | Path) -> dict:
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
-    if not rows:
-        raise ValueError("Input CSV contains no rows")
-
+    if len(rows) <= 24 + 8:
+        raise ValueError("Need enough rows after 24-hour lag warm-up and training minimum")
+    # The upstream CSV starts at original target t=24, so its first 24 rows
+    # lack the earlier lag values needed by this model. Drop them explicitly.
+    rows = rows[24:]
     timestamps = [row["timestamp_utc"] for row in rows]
     values = [float(row["actual"]) for row in rows]
     if not all(math.isfinite(v) for v in values):
