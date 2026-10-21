@@ -35,7 +35,7 @@ class Candidate:
 
 
 def candidates() -> list[Candidate]:
-    """Finite, explicit search space: two priorities x four RO thresholds."""
+    """Finite, explicit search space: two priorities x four RO minimum-run durations."""
     return [
         Candidate(
             candidate_id=f"{priority}_run{min_run}h",
