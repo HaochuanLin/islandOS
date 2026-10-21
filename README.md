@@ -192,3 +192,21 @@ Regression tests were added for:
 - mismatched input-array lengths.
 
 A GitHub Actions workflow runs the unit-test suite on pushes to `main` and `draft/**`, and on pull requests. The tests are committed, but results should be treated as **pending until the workflow has actually completed successfully**. This correction improves a specific dispatch edge case; it does not validate the full physical model or establish field performance.
+
+
+## Second engineering milestone: pluggable flexible loads
+
+The branch now contains an experimental common API in `flexible_loads.py` and two implementations:
+
+- `ROWaterLoad`: a lightweight RO/reservoir plug-in that reports water production, served and unmet demand, inventory, backup power, and runtime constraint violations. In no-backup mode, starting a multi-hour run requires an explicit forecast window that covers every minimum-run hour. Forecast errors are surfaced rather than silently treated as feasible.
+- `IceStorageLoad`: a simplified chiller and cold-storage model that uses available surplus power to build a thermal inventory and serves later cooling demand from that inventory. Thermal storage provides cooling service; it does not generate electricity.
+
+Both implementations return a shared `LoadSimulationResult` structure and are covered by tests in `tests/test_flexible_loads.py`.
+
+Run all regression tests with:
+
+~~~bash
+python -m unittest discover -s tests -v
+~~~
+
+**Integration status:** this is an initial plug-in interface, not yet the dispatch engine used by the legacy `island_microgrid_ro_sim.py` demo. The RO plug-in is a deliberately compact parallel model, so its results should not be assumed identical to the legacy simulator. The cold-storage model omits thermal leakage, temperature-dependent COP, compressor cycling, and site-specific refrigeration constraints. Automated tests have been added; CI results still need to be checked after the workflow run completes.
