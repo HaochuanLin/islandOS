@@ -124,6 +124,8 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             errors.append(f"search_space.{key} must be a non-empty list")
         elif any(not predicate(value) for value in values):
             errors.append(f"search_space.{key} contains an invalid value")
+        elif len(set(values)) != len(values):
+            errors.append(f"search_space.{key} must contain unique values")
 
     for key in (
         "electricity_price_per_kwh", "ro_capex", "ro_fixed_om_per_year",
@@ -134,6 +136,16 @@ def validate_config(config: dict[str, Any]) -> list[str]:
         if value is not None:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
                 errors.append(f"economics.{key} must be a finite non-negative number or null")
+    years = economics.get("analysis_years")
+    if years is not None and (
+        isinstance(years, bool) or not isinstance(years, int) or years < 1
+    ):
+        errors.append("economics.analysis_years must be a positive integer or null")
+    rate = economics.get("discount_rate")
+    if rate is not None and isinstance(rate, (int, float)) and not isinstance(rate, bool):
+        if math.isfinite(rate) and rate >= 1:
+            errors.append("economics.discount_rate must be < 1 or null")
+
     return errors
 
 
