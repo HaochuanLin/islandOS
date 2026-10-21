@@ -89,3 +89,16 @@ Report renewable curtailment, essential electricity not served, each load's elec
 ## 11. Definition of a credible milestone
 
 A milestone is ready to describe as implemented when code exists, automated tests cover its core constraints, commands reproduce results, units and assumptions are documented, results are compared against a baseline, and limitations accompany claims.
+
+
+## 12. Connected optimization prototype
+
+The experimental module `optimization/grid_search_optimizer.py` connects candidate generation, the shared-budget simulator, Pareto filtering, and recommendation selection in one pipeline.
+
+- **Search space:** eight candidates formed by two load priority orders and four RO start thresholds.
+- **Evaluation:** every candidate uses `dispatch_flexible_loads` and the same scenario input.
+- **Objectives:** minimize unmet water demand, unmet cooling demand, and remaining surplus. This objective set is illustrative; lower remaining surplus is not inherently better if it comes at an unacceptable resource or operating cost.
+- **Feasibility:** candidates with modelled constraint-violation hours are excluded from the archive.
+- **Archive:** candidates are retained if no other feasible evaluated candidate is at least as good in all three objectives and strictly better in one.
+- **Recommendation:** a disclosed weighted normalized score selects one candidate from the same archive; the selected ID is checked by tests to belong to that archive.
+- **Limitations:** the search space is small and manually parameterized. This is grid search, not AI/ML or a guarantee of a globally optimal schedule. The scenario profiles are synthetic, and the weights encode a policy choice rather than an objective truth.
