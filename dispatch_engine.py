@@ -24,6 +24,56 @@ class DispatchResult:
     loads: Mapping[str, LoadSimulationResult]
 
 
+def _audit_load_result(
+    name: str,
+    result: LoadSimulationResult,
+    demand: np.ndarray,
+    dt_hours: float,
+) -> None:
+    """Fail fast when a plug-in violates shared per-step physical balances."""
+    n = len(demand)
+    series_fields = (
+        "power_used_kw", "backup_power_kw", "constraint_violation",
+        "resource_produced", "demand_served", "unmet_demand", "spill", "active",
+    )
+    arrays: dict[str, np.ndarray] = {}
+    for field in series_fields:
+        try:
+            values = np.asarray(getattr(result, field), dtype=float)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError(f"{name} returned invalid {field}") from exc
+        if values.shape != (n,) or not np.all(np.isfinite(values)):
+            raise ValueError(f"{name}.{field} must be a finite series of length {n}")
+        if np.any(values < -1e-8):
+            raise ValueError(f"{name}.{field} must be non-negative")
+        arrays[field] = values
+
+    try:
+        inventory = np.asarray(result.inventory, dtype=float)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError(f"{name} returned invalid inventory") from exc
+    if inventory.shape != (n + 1,) or not np.all(np.isfinite(inventory)):
+        raise ValueError(f"{name}.inventory must be finite and have length {n + 1}")
+    if np.any(inventory < -1e-8):
+        raise ValueError(f"{name}.inventory must be non-negative")
+
+    if not np.allclose(
+        arrays["demand_served"] + arrays["unmet_demand"], demand * dt_hours,
+        atol=1e-7, rtol=1e-9,
+    ):
+        raise RuntimeError(f"{name} failed demand served + unmet-demand balance")
+
+    expected_inventory = (
+        inventory[:-1] + arrays["resource_produced"]
+        - arrays["spill"] - arrays["demand_served"]
+    )
+    if not np.allclose(inventory[1:], expected_inventory, atol=1e-7, rtol=1e-9):
+        raise RuntimeError(f"{name} failed per-step inventory conservation")
+
+    if np.any(arrays["backup_power_kw"] - arrays["power_used_kw"] > 1e-7):
+        raise ValueError(f"{name} backup power cannot exceed total power used")
+
+
 def dispatch_flexible_loads(
     available_power_kw: Sequence[float],
     requests: Sequence[tuple[FlexibleLoad, Sequence[float]]],
@@ -77,6 +127,7 @@ def dispatch_flexible_loads(
         else:
             result = load.simulate(residual, demand_array, dt_hours=dt_hours)
 
+        _audit_load_result(name, result, demand_array, dt_hours)
         backup = np.asarray(result.backup_power_kw, dtype=float)
         total_power = np.asarray(result.power_used_kw, dtype=float)
         renewable_draw = total_power - backup
