@@ -38,6 +38,7 @@ class TestNasaPowerImporter(unittest.TestCase):
         for args in [
             (91, 0, "20200101", "20200102"),
             (0, 181, "20200101", "20200102"),
+            (float("nan"), 0, "20200101", "20200102"),
             (0, 0, "20201301", "20200102"),
             (0, 0, "20200103", "20200102"),
         ]:
@@ -67,6 +68,34 @@ class TestNasaPowerImporter(unittest.TestCase):
         payload = sample_payload()
         payload["properties"]["parameter"]["T2M"]["2020010100"] = "unknown"
         with self.assertRaisesRegex(ValueError, "Non-numeric"):
+            parse_response(payload)
+        payload = sample_payload()
+        payload["properties"]["parameter"]["T2M"]["2020010100"] = float("inf")
+        with self.assertRaisesRegex(ValueError, "Non-finite"):
+            parse_response(payload)
+
+    def test_fill_values_are_blank_and_counted_not_zeroed(self):
+        payload = sample_payload()
+        payload["properties"]["parameter"]["WS10M"]["2020010101"] = -999.0
+        rows, metadata = parse_response(payload)
+        self.assertEqual(rows[1]["WS10M"], "")
+        self.assertEqual(metadata["fill_value_counts"]["WS10M"], 1)
+        self.assertIn("never replaced with zero", metadata["fill_value_policy"])
+
+    def test_rejects_hourly_gaps_and_invalid_timestamp_keys(self):
+        payload = sample_payload()
+        for name in PARAMETERS:
+            payload["properties"]["parameter"][name] = {
+                "2020010100": payload["properties"]["parameter"][name]["2020010100"],
+                "2020010102": payload["properties"]["parameter"][name]["2020010101"],
+            }
+        with self.assertRaisesRegex(ValueError, "gap or duplicate"):
+            parse_response(payload)
+        payload = sample_payload()
+        for name in PARAMETERS:
+            values = payload["properties"]["parameter"][name]
+            values["2020023000"] = values.pop("2020010101")
+        with self.assertRaisesRegex(ValueError, "Unexpected NASA POWER timestamp"):
             parse_response(payload)
 
 
