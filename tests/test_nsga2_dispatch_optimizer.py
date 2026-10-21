@@ -79,7 +79,7 @@ class TestNSGA2DispatchOptimizer(unittest.TestCase):
             "analysis_years": 20,
             "discount_rate": 0.05,
         })
-        with self.assertRaisesRegex(ValueError, "complete annual scenario"):
+        with self.assertRaisesRegex(ValueError, "complete 8760-hour or 8784-hour annual scenario"):
             optimize_scenario(
                 build_scenarios()[0], population_size=4, generations=1, config=config
             )
