@@ -54,6 +54,37 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             self.assertGreaterEqual(policy["cooling_unmet_kwh_th"], 0)
             self.assertGreaterEqual(policy["remaining_surplus_kwh"], 0)
         self.assertIn(result["comparison"]["best_fixed_policy"], {"ro_first", "ice_first"})
+        baseline = result["persistence_baseline_comparison"]
+        self.assertEqual(baseline["status"], "evaluated")
+        self.assertEqual(baseline["aligned_hours"], len(self.rows) - 1)
+        self.assertEqual(
+            baseline["forecast_metrics"]["persistence_baseline"]["evaluated_hours"],
+            len(self.rows) - 1,
+        )
+        self.assertEqual(
+            len(baseline["dispatch_comparison"]["supplied_forecast"]["policies"]["rolling"]["hourly_priority_decisions"]),
+            len(self.rows) - 1,
+        )
+        self.assertEqual(
+            len(baseline["dispatch_comparison"]["persistence_baseline"]["policies"]["rolling"]["hourly_priority_decisions"]),
+            len(self.rows) - 1,
+        )
+        self.assertAlmostEqual(
+            baseline["dispatch_comparison"]["rolling_score_difference_supplied_minus_persistence"],
+            baseline["dispatch_comparison"]["supplied_forecast"]["comparison"]["rolling_score"]
+            - baseline["dispatch_comparison"]["persistence_baseline"]["comparison"]["rolling_score"],
+        )
+
+    def test_single_row_reports_persistence_baseline_unavailable(self):
+        self.write_rows(self.rows[:1])
+        result = evaluate_forecast_dispatch(self.input)
+        self.assertEqual(
+            result["persistence_baseline_comparison"]["status"], "not_evaluated"
+        )
+        self.assertIn(
+            "At least two hourly rows",
+            result["persistence_baseline_comparison"]["reason"],
+        )
 
     def test_rejects_missing_columns_and_negative_values(self):
         self.input.write_text("timestamp_utc,actual_surplus_kw\n2026-01-01T00:00:00Z,0\n", encoding="utf-8")
