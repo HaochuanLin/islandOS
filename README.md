@@ -1,198 +1,179 @@
-# islandOS
+# islandOS — AI Island Energy Brain
 
-> **TL;DR:** islandOS is a Python simulation prototype (MVP) that uses curtailed wind and solar power on an isolated island to run an RO desalination plant and fill an upland reservoir. It aims to reduce reliance on chemical batteries by shifting water-production load into surplus hours. Stored freshwater is used only for water supply and is never converted back into electricity. Only this water-energy co-simulation is implemented. All results use synthetic demo data; there is no field deployment and no real measurement data.
+> **An AI-driven resource orchestration and simulation platform for isolated island microgrids.**
 
-**A software-only simulation platform for cross-resource orchestration on isolated island microgrids.**
+IslandOS explores how software intelligence can coordinate renewable generation, essential electricity demand, and flexible resource production on isolated islands. Its core idea is to turn otherwise-curtailed renewable electricity into useful local resources—starting with freshwater and potentially extending to cooling, fuel, public services, and deferrable computing.
 
-islandOS turns curtailed wind and solar power on an island into freshwater stored in an upland reservoir, using a reverse osmosis (RO) desalination plant as a flexible load. It is a **Python simulation prototype (MVP)** with **no field deployment, no hardware and no real-world measurement data**. All numbers shown here come from **synthetic demo data**.
+**Current status: early-stage, simulation-only MVP.** The implemented prototype simulates renewable curtailment, rule-based reverse-osmosis (RO) desalination dispatch, and freshwater reservoir dynamics using synthetic data. Forecasting, AI-driven planning, multi-objective optimization, and additional load modules are development goals—not capabilities claimed as already implemented.
 
-> **Status:** Early-stage simulation prototype. Only the water-energy co-simulation (the MVP core) is implemented. Everything else in this document is marked as *planned*.
+## Why IslandOS?
 
----
+Isolated and remote communities may face expensive imported fuel, limited freshwater infrastructure, variable renewable generation, and challenging marine operating conditions. When wind and solar generation exceed immediate electricity demand, some renewable energy may be curtailed.
 
-## Table of Contents
+IslandOS investigates a software-first approach: predict when flexible energy may be available, then schedule compatible loads to produce useful resources without compromising essential electricity supply or equipment constraints.
 
-1. [Overview](#overview)
-2. [Concept & Paradigm](#concept--paradigm)
-3. [1+N Architecture](#1n-architecture)
-4. [Simulation Demo](#simulation-demo)
-5. [Impact](#impact)
-6. [How to Run](#how-to-run)
-7. [Dependencies](#dependencies)
-8. [Limitations & Project Stage](#limitations--project-stage)
-9. [License](#license)
+The project aims to **reduce avoidable renewable curtailment and explore alternatives to relying exclusively on chemical batteries**. It does not assume that water, ice, hydrogen, or computing can replace batteries in every situation; each pathway must be evaluated against its own physical, economic, safety, and infrastructure constraints.
 
----
+## The IslandOS concept
 
-## Overview
+**IslandOS = Forecast + Plan + Orchestrate + Simulate + Evaluate**
 
-Isolated islands typically depend on diesel generators, imported freshwater and, increasingly, chemical batteries. In high-salt-fog marine environments, batteries face corrosion and end-of-life pollution concerns, while wind and solar output is often curtailed when it exceeds demand.
+1. **Forecast** renewable generation, essential demand, and resource needs over a rolling time horizon.
+2. **Plan** feasible schedules for flexible loads while respecting essential-service priorities and equipment constraints.
+3. **Orchestrate** when and how much electricity is allocated to each compatible load.
+4. **Simulate** the resulting energy and resource flows.
+5. **Evaluate** candidate schedules against transparent baselines and measurable metrics.
 
-**Mission:** decouple fluctuating wind/solar generation from island electricity demand by converting curtailed energy into storable, locally useful assets (freshwater first; cold energy, fuel and compute as future directions), reducing reliance on chemical storage and moving toward a zero-carbon circular island system.
+The long-term vision is a configurable software “energy brain” that can adapt to different islands through data adapters, load modules, and site-specific constraints.
 
-**What the MVP does today:**
+## 1 + N architecture
 
-- Reads hourly wind output, PV output and base load (currently generated as synthetic demo data).
-- Identifies curtailed energy: `curtail[t] = max(0, wind[t] + PV[t] - base_load[t])`.
-- Dispatches an RO desalination plant as a flexible load driven by that curtailed energy.
-- Enforces an industrial constraint on the RO plant: **once started, it must run for at least N consecutive hours** (default 2 h) to protect the membranes.
-- Accumulates freshwater in an upland reservoir: `V[t+1] = V[t] + water_produced[t] - water_demand[t]`, with capacity and minimum-storage limits.
-- Plots renewable output, curtailment, RO state and reservoir level over 24 hours.
+### The “1”: simulation and decision core
 
-## Concept & Paradigm
+The planned core architecture contains:
 
-The stored freshwater is used **only for water supply**. It is **not** converted back into electricity (no reverse generation or pumped-hydro-style return). The reservoir therefore does not store *electricity*; it shifts *when* electricity is consumed, by producing water during surplus hours so that less diesel-powered or imported water supply may be needed at other times.
+- **Data layer:** renewable generation, base load, water demand, weather forecasts, and optional site metadata.
+- **Forecasting layer:** baseline forecasts first, with machine-learning models evaluated only when data and validation support them.
+- **Planning layer:** rule-based baselines and optimization algorithms that compare feasible schedules.
+- **Simulation layer:** time-step energy balance, flexible-load operation, resource inventories, and constraint checks.
+- **Evaluation layer:** cost, renewable curtailment, unmet essential demand, resource shortages, equipment cycling, and other explicitly modelled metrics.
+- **Explanation layer:** show why a load was selected, which constraints were active, and how candidate schedules differ.
 
-Three paradigm shifts underlie the project:
+### The first MVP: water–energy co-simulation (implemented)
 
-| Paradigm | Idea |
-|---|---|
-| **Storage** | Use physical storage (an upland reservoir now; ice / cold storage as a future option) instead of lithium batteries, avoiding corrosion exposure and heavy-metal pollution. |
-| **Assets** | Asset-light: reuse idle or existing equipment (e.g. desalination units, tanks, reservoirs) rather than building large new infrastructure. |
-| **System** | Couple the electricity and water systems so that resources are co-optimised, instead of each competing independently for diesel energy. |
+The current Python prototype:
 
-> These are design principles of the project. The prototype demonstrates the water-energy coupling in simulation only; it does not yet quantify cost, emissions or battery displacement.
+- Generates 24-hour synthetic wind, solar PV, base-load, and water-demand time series.
+- Estimates potential surplus as max(0, wind + PV - base_load).
+- Dispatches an RO desalination plant as a flexible load using a rule-based heuristic.
+- Models a minimum continuous RO run duration.
+- Tracks freshwater production and a simplified upland-reservoir water balance.
+- Plots renewable output, curtailment, RO operation, and reservoir level.
 
-## 1+N Architecture
+**Important physical distinction:** stored freshwater is used for water supply. It is not converted back into electricity. Producing water during surplus periods shifts electricity consumption in time; it does not make the reservoir an electrical battery.
 
-**1 = the simulation and dispatch "brain"; N = pluggable resource modules.**
+### “N”: pluggable flexible-load modules (planned)
 
-### The "1": Simulation & dispatch core (implemented)
-
-A time-series simulation engine that ingests generation and load data, identifies curtailment, dispatches flexible load, and enforces equipment protection constraints (RO minimum continuous run time).
-
-### MVP core: water-energy co-simulation (implemented)
-
-Curtailed energy drives RO desalination; produced freshwater is stored in an upland reservoir for load shifting and water supply.
-
-### The "N": Extension slots (planned, NOT part of the MVP)
-
-| Slot | Concept | Status |
+| Module | Potential use of flexible electricity | Status |
 |---|---|---|
-| Green-hydrogen fishery cold chain | Use surplus power for hydrogen and/or cold-chain support for fisheries | Planned, not implemented |
-| Flexible municipal sanitation | Shift sanitation / waste-handling loads to surplus hours | Planned, not implemented |
-| Intermittent edge computing | Run deferrable compute workloads on surplus power | Planned, not implemented |
+| RO desalination | Produce freshwater and build a water buffer | Implemented as a simplified simulation |
+| Ice making / cold storage | Support fisheries, food preservation, and cooling demand | Planned |
+| Green hydrogen | Convert electricity to hydrogen when technically and economically feasible | Planned |
+| Municipal services | Shift eligible wastewater treatment or waste-handling loads | Planned |
+| Deferrable computing | Run interruptible compute jobs during suitable surplus windows | Planned |
 
-### Implementation status at a glance
+These are candidate extensions, not interchangeable loads. Each module must specify its power limits, conversion efficiency, operating windows, ramping or minimum-run constraints, storage capacity, demand or offtake, and safety requirements. Hydrogen production requires appropriate equipment, storage, safety controls, and a credible use case; it should not be enabled merely because electricity is available.
 
-| Capability | Status |
+## AI and optimization roadmap
+
+IslandOS is intended to become AI-enabled through measurable forecasting and decision-making—not by adding a chatbot or labelling a fixed rule as AI.
+
+1. **Reliable simulation foundation:** validate energy and water balances; make equipment constraints explicit; test edge cases.
+2. **Forecasting baseline:** compare simple persistence or statistical forecasts against held-out synthetic or real time-series data. Report forecast errors and disclose data limitations.
+3. **Rolling-horizon planning:** plan over a future window, execute only the near-term decision, then re-plan when observations or forecasts update.
+4. **Multi-objective optimization:** evaluate methods such as NSGA-II or multi-objective simulated annealing for trade-offs among operating cost, reliability, curtailment, and modelled battery degradation.
+5. **Load plug-ins:** implement and test one additional module, preferably ice making/cold storage, before expanding to more complex pathways.
+6. **Scenario evaluation:** compare the rule-based baseline and optimized strategies across multiple weather, demand, and forecast-error scenarios.
+
+No optimization method is assumed to guarantee a globally optimal schedule or the complete true Pareto front. Candidate schedules must be checked against the same simulator and constraints. A final recommendation should be selected from the evaluated feasible candidate set, with its decision criteria made explicit.
+
+## Evaluation: prove improvement against a baseline
+
+The project should report metrics only when their definitions and model assumptions are explicit.
+
+| Metric | What it helps evaluate |
 |---|---|
-| Hourly time-series simulation (wind, PV, load) | Implemented (synthetic data) |
-| Curtailment identification | Implemented |
-| RO dispatch with minimum continuous-run constraint | Implemented |
-| Upland reservoir water balance | Implemented |
-| Backup-power on/off switch (`allow_backup_power`) | Implemented |
-| 4-panel plot, Chinese / English labels (`use_english_labels`) | Implemented |
-| Import of real terrain / weather / load datasets | Planned (current code takes arrays; no terrain model) |
-| Ice / cold-storage module | Planned |
-| Standardised API / hosted service ("SaaS") | Planned vision, not implemented |
+| Renewable curtailment (kWh) | How much potential renewable energy remains unused |
+| Essential load not served (kWh) | Whether essential electricity demand is unmet |
+| Flexible-load energy (kWh) | How much electricity is allocated to each module |
+| Freshwater produced / unmet water demand (m³) | Water-service performance |
+| Operating cost | Economic performance, once cost inputs are defined |
+| Battery degradation proxy | Storage impact, only if a defensible degradation model is implemented |
+| Constraint violations | Whether equipment and service constraints are respected |
+| Forecast error | Whether forecasts improve on an appropriate baseline |
 
-## Simulation Demo
+A lower curtailment number alone does not prove a better system. A schedule must also preserve essential services, satisfy resource needs, obey equipment limits, and account for the cost and consequences of running each flexible load.
 
-All results below use **synthetic demo data** generated in `load_data()` (24 hours, 1-hour steps). They illustrate how the model behaves and are **not** predictions for any real island.
+## Demo results and assumptions
 
-![islandOS demo: renewable output, curtailment, RO state and reservoir level (synthetic demo data)](assets/demo_en.png)
+The existing demo uses synthetic data and simplified assumptions. The figures are illustrative model outputs, not measurements from a real island and not evidence of field performance.
 
-*Figure: 24-hour simulation on synthetic demo data (backup power allowed). Panels: wind + PV vs. base load; curtailment and the part absorbed by RO; RO on/off state; reservoir level.*
+- RO rated power: 400 kW
+- RO specific energy consumption: 3.5 kWh/m³
+- Minimum continuous run duration: 2 hours
+- Reservoir capacity: 3,000 m³
+- Initial reservoir storage: 800 m³
+- Simulation horizon: 24 hours
 
-**Default demo parameters (synthetic assumptions, not measured values):** RO rated power 400 kW, specific energy consumption 3.5 kWh/m³, minimum continuous run 2 h, reservoir capacity 3,000 m³ (initial 800 m³, minimum 200 m³).
+The current model does **not** yet quantify lifecycle cost, emissions reductions, battery replacement avoided, or real-world resilience improvements.
 
-| Metric (24 h, synthetic data) | Backup allowed | Backup forbidden |
-|---|---|---|
-| Total curtailed energy | 7,213.4 kWh | 7,213.4 kWh |
-| Curtailment absorbed by RO | 4,944.4 kWh (68.5%) | 3,200.0 kWh (44.4%) |
-| Backup energy needed by RO | 655.6 kWh | 0 kWh (disabled) |
-| RO run segments | 5 h, 9 h | 2 h, 6 h |
-| Freshwater produced | 1,600.0 m³ | 914.3 m³ |
-| Reservoir storage (start → end) | 800 → 2,188 m³ | 800 → 1,502 m³ |
-| Minimum-run constraint satisfied | Yes | Yes (for this demo case) |
+## Quick start
 
-**How RO dispatch works**
-
-- **Start:** a stopped RO plant starts if the mean curtailment over the next `min_run_hours` hours is at least `start_ratio` (default 0.8) of rated power, and the reservoir is not full.
-- **Forced run:** after starting, it keeps running until the minimum run time is reached.
-- **Keep running:** afterwards it continues while curtailment stays above a threshold (`keep_ratio` of rated power when backup is allowed; full rated power when backup is forbidden).
-- **Backup power switch (`allow_backup_power`):** if `True`, any shortfall during forced-run hours is booked as backup energy. If `False`, no backup is used and the plant is stopped immediately when curtailment cannot carry the rated power.
-
-> **Important caveat:** with backup forbidden, that emergency stop can end a run before the minimum run time. The mean-based start test does not exclude this, even with perfect foresight. In a quick check over 200 random synthetic seeds, 116 produced at least one such early stop, which the built-in `check_min_run()` reports as a constraint violation. The default demo case (seed 42) does not trigger it.
-
-## Impact
-
-The points below are the **intended** impact of the approach. The current prototype only demonstrates the underlying mechanism on synthetic data; it has **not** quantified economic, emissions or resilience benefits.
-
-- **Economic resilience (intended):** reduce island residents' dependence on diesel and purchased freshwater, and build a freshwater buffer that could help during typhoons and droughts.
-- **Ecology (intended):** raise renewable utilisation and reduce curtailment; avoid battery-related pollution by relying on physical rather than chemical storage.
-- **Replicability (design goal):** a software-only approach with low marginal cost per site and a planned standardised API, aimed at isolated islands worldwide. The API and any hosted service are not yet built.
-- **Demonstrated so far:** on synthetic data, the model shows curtailed energy being absorbed by RO (68.5% in the default case) and converted into stored freshwater.
-
-## How to Run
-
-```bash
-# 1. Clone the repository
+~~~bash
 git clone https://github.com/HaochuanLin/islandOS.git
 cd islandOS
 
-# 2. (Optional) create a virtual environment
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+# Windows:
+.venv\\Scripts\\activate
+# macOS / Linux:
+source .venv/bin/activate
 
-# 3. Install dependencies
 pip install -r requirements.txt
-
-# 4. Run the 24-hour synthetic demo
 python island_microgrid_ro_sim.py
-```
+~~~
 
-The script prints a summary to the console and saves `island_microgrid_ro.png`.
+The script runs the 24-hour synthetic demo and saves island_microgrid_ro.png.
 
-**Switches** (edit the constants in the `__main__` block of `island_microgrid_ro_sim.py`):
+To use the existing simulator from Python:
 
-| Switch | Default | Effect |
-|---|---|---|
-| `ALLOW_BACKUP_POWER` | `True` | `False` forbids backup power; RO stops when curtailment is insufficient |
-| `USE_ENGLISH_LABELS` | `False` | `True` draws all figure text in English |
-
-**Use as a library:**
-
-```python
+~~~python
 import island_microgrid_ro_sim as m
 
-p = m.Params(allow_backup_power=False, min_run_hours=2)
-wind, pv, load, water_demand = m.load_data(24)   # replace with your own hourly arrays
-res = m.simulate(wind, pv, load, water_demand, p)
-runs, ok = m.check_min_run(res["ro_on"], p.min_run_hours)
-m.plot(wind, pv, load, res, p, use_english_labels=True)
-```
+params = m.Params(allow_backup_power=False, min_run_hours=2)
+wind, pv, load, water_demand = m.load_data(24)
+result = m.simulate(wind, pv, load, water_demand, params)
 
-To use your own data, pass equal-length arrays: `wind`, `pv`, `load` (kW) and `water_demand` (m³/h).
+runs, constraints_ok = m.check_min_run(
+    result["ro_on"], params.min_run_hours
+)
+print("RO run segments:", runs)
+print("Minimum-run constraint satisfied:", constraints_ok)
+~~~
 
-## Dependencies
+To use custom time series, pass equally sized arrays for wind, PV, base load (kW), and water demand (m³/h).
 
-- Python 3.8 or newer
-- `numpy >= 1.21`
-- `matplotlib >= 3.5`
+## Repository status
 
-Install with `pip install -r requirements.txt`. For Chinese figure labels (the default), a CJK-capable font such as SimHei, Microsoft YaHei, PingFang SC or Noto Sans CJK must be installed; use `USE_ENGLISH_LABELS = True` otherwise.
+| Capability | Status |
+|---|---|
+| Synthetic hourly wind / PV / load inputs | Implemented |
+| Rule-based RO dispatch | Implemented |
+| Simplified reservoir water balance | Implemented |
+| Constraint checking for RO minimum run | Basic check implemented; edge cases need further testing |
+| Real weather / terrain / load data adapters | Planned |
+| Forecasting model | Planned |
+| Rolling-horizon AI planning | Planned |
+| Multi-objective Pareto search | Planned |
+| Ice, hydrogen, municipal, and compute modules | Planned |
+| Field deployment and measured validation | Not available |
 
-## Limitations & Project Stage
+## Limitations and responsible claims
 
-**Stage:** simulation-only MVP. No field engineering, pilot site, hardware or real measurements exist.
+- The current data generator is synthetic; no real island dataset or field deployment is included.
+- The RO start rule uses future values from the generated time series to evaluate its start window. This is a perfect-foresight simplification, not a deployable forecast.
+- The current RO model is simplified and does not fully model membrane flushing, fouling, variable-load behaviour, or membrane ageing.
+- Reservoir dynamics omit several site-specific factors, including pumping energy, water quality, leakage, and evaporation.
+- The current prototype does not include a complete grid, diesel-generator, or battery dispatch model.
+- Cost, emissions, battery-life extension, and social impact have not yet been quantified.
+- Additional load modules, standardised APIs, and hosted services are not implemented.
 
-**Known limitations of the current prototype**
+Impact statements in this repository describe project goals and hypotheses to test, not verified outcomes. Real deployment would require site-specific engineering, data validation, safety review, and operational oversight.
 
-- **Synthetic data only.** Wind, PV, load and water demand are generated by simple formulas; results are illustrative.
-- **Perfect foresight.** The RO start decision reads the actual future curtailment of the next `min_run_hours` hours. Real deployment would need weather, renewable-output and load forecasts, and forecast errors would affect results; the prototype is therefore optimistic.
-- **No post-shutdown RO flushing.** Real RO plants usually flush membranes after shutdown (extra energy, water and time). This is not modelled.
-- **Simplified RO model.** Fixed rated power and flow when on; no variable-load operation, minimum load ratio, recovery rate, fouling or membrane ageing.
-- **Simplified reservoir.** A single lumped water balance with fixed area; no evaporation, leakage, pumping head or water quality.
-- **Simplified grid.** Backup power is a generic energy shortfall term; diesel generators, batteries, network constraints and dispatch economics are not modelled.
-- **Short horizon.** The demo covers 24 hours; seasonal behaviour and long-term statistics are not studied.
-- **No terrain or weather import yet.** The current code takes ready-made time-series arrays.
-- **No cost, emissions or resilience quantification** yet, so the impact statements above are intentions, not results.
-- **N extension modules, ice/cold storage, the standardised API and the SaaS model are not implemented.**
+## Contributing and development
 
-**Planned next steps (not committed):** real-data import (weather, load, terrain), forecast-error scenarios, variable-load RO, ice/cold-storage module, and the first N extension slot.
+See docs/AI_ARCHITECTURE.md for the proposed module boundaries, optimization workflow, and staged implementation plan. New features should include tests, explicit assumptions, and baseline comparisons.
 
 ## License
 
-Released under the **MIT License**. See the `LICENSE` file for details.
+Released under the MIT License. See LICENSE for details.
