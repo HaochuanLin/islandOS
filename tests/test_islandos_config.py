@@ -26,6 +26,34 @@ class TestIslandOSConfig(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "initial_water_m3"):
                 load_config(path)
 
+    def test_inactive_start_ratio_is_removed_from_default_search(self):
+        config = load_config()
+        result = optimize_scenario(
+            build_scenarios()[0], population_size=4, generations=1, seed=3,
+            config=config,
+        )
+        self.assertEqual(result["decision_space_size"], 96)
+        self.assertEqual(result["effective_search_space"]["ro_start_ratio"], [0.6])
+        self.assertTrue(result["inactive_parameters"])
+
+    def test_duplicate_search_values_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "duplicates.json"
+            path.write_text(json.dumps({
+                "search_space": {"ro_rated_power_kw": [300.0, 300.0]}
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unique values"):
+                load_config(path)
+
+    def test_invalid_analysis_horizon_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad-years.json"
+            path.write_text(json.dumps({
+                "economics": {"analysis_years": 20.5}
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "positive integer"):
+                load_config(path)
+
     def test_custom_search_space_is_used_by_optimizer(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "custom.json"
