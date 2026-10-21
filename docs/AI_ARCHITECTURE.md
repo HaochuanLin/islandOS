@@ -115,3 +115,12 @@ Automated tests now assert stepwise accounting identities:
 - Inventories remain within configured bounds.
 
 These are accounting invariants, not field validation. They test whether the code conserves its modelled quantities, not whether the chosen process assumptions match a real installation.
+
+
+## 14. Forecast-error policy-selection sensitivity
+
+`experiments/forecast_error_robustness.py` tests 12 deterministic cases: three synthetic surplus scenarios crossed with four forecast-error profiles (perfect, +20%, -20%, and alternating +/-20%).
+
+For each case, the grid-search optimizer selects a policy candidate from the perturbed forecast profile. That selected candidate and a fixed RO-first, two-hour minimum-run baseline are evaluated on the original synthetic profile. The optimizer run on the original profile is shown as a perfect-information hindsight reference, not a deployable policy.
+
+This is a **policy-selection sensitivity test**, not a forecast-model evaluation. The dispatch engine receives the original per-step power when candidates are replayed, so it remains reactive rather than executing a locked schedule planned from the forecast. No learned forecasting model, real weather data, probabilistic calibration, or field data are included. A future version should introduce a rolling-horizon planner that commits actions before observing realized generation, then score forecast errors against that locked plan.
