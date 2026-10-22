@@ -143,6 +143,58 @@ def run_sensitivity_analysis() -> list[dict]:
     return rows
 
 
+
+def calculate_capital_cost_screen(
+    annual_water_output_m3: float,
+    capex_low_rmb: float = 1_600_000.0,
+    capex_high_rmb: float = 3_300_000.0,
+    equipment_life_years: float = 10.0,
+) -> dict:
+    """Return an illustrative capital-only cost screen, not ROI or payback.
+
+    Costs and lifetime are user-supplied screening assumptions. The calculation
+    excludes O&M, site/civil works, outfall, replacements, financing and downtime.
+    """
+    values = {
+        "annual_water_output_m3": annual_water_output_m3,
+        "capex_low_rmb": capex_low_rmb,
+        "capex_high_rmb": capex_high_rmb,
+        "equipment_life_years": equipment_life_years,
+    }
+    if any(not math.isfinite(value) for value in values.values()):
+        raise ValueError("all financial screen inputs must be finite")
+    if annual_water_output_m3 <= 0:
+        raise ValueError("annual_water_output_m3 must be > 0")
+    if capex_low_rmb <= 0 or capex_high_rmb < capex_low_rmb:
+        raise ValueError("CAPEX must be positive and capex_high_rmb >= capex_low_rmb")
+    if equipment_life_years <= 0:
+        raise ValueError("equipment_life_years must be > 0")
+
+    return {
+        "status": "illustrative capital-only screen; not ROI, payback, tariff, or investment advice",
+        "annual_water_output_m3": round(annual_water_output_m3, 3),
+        "capex_low_rmb": round(capex_low_rmb, 2),
+        "capex_high_rmb": round(capex_high_rmb, 2),
+        "equipment_life_years_assumed": equipment_life_years,
+        "capital_only_cost_rmb_per_m3_low": round(
+            capex_low_rmb / equipment_life_years / annual_water_output_m3, 2
+        ),
+        "capital_only_cost_rmb_per_m3_high": round(
+            capex_high_rmb / equipment_life_years / annual_water_output_m3, 2
+        ),
+        "excludes": [
+            "site preparation and civil works",
+            "marine intake/outfall and environmental approvals",
+            "electricity, consumables, staffing and routine maintenance",
+            "membrane replacement, financing, discounting and downtime",
+        ],
+        "interpretation": (
+            "Uses a synthetic scenario output and unverified draft CAPEX assumptions. "
+            "It does not establish positive ROI, payback, actual water yield, or local feasibility."
+        ),
+    }
+
+
 def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     rows, summary = run_simulation(runs, seed)
@@ -152,6 +204,12 @@ def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
         writer.writerows(rows)
     (output_dir / "nan_ao_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    financial_screen = calculate_capital_cost_screen(
+        summary["scenario_water_produced_m3_per_year"]["p50_median"]
+    )
+    (output_dir / "nan_ao_financial_screen.json").write_text(
+        json.dumps(financial_screen, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     sensitivity_rows = run_sensitivity_analysis()
     with (output_dir / "nan_ao_sensitivity.csv").open("w", newline="", encoding="utf-8") as f:

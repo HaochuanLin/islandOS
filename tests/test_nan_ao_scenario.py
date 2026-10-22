@@ -48,12 +48,36 @@ class NanAoScenarioTests(unittest.TestCase):
         self.assertLess(high_sec["scenario_water_m3_per_year"], baseline["scenario_water_m3_per_year"])
         self.assertIn("not a probability", baseline["interpretation"])
 
+    def test_capital_cost_screen_is_transparent_and_validated(self):
+        screen = nan_ao_scenario.calculate_capital_cost_screen(
+            annual_water_output_m3=442.734
+        )
+        self.assertAlmostEqual(
+            screen["capital_only_cost_rmb_per_m3_low"],
+            1600000 / 10 / 442.734,
+            places=2,
+        )
+        self.assertAlmostEqual(
+            screen["capital_only_cost_rmb_per_m3_high"],
+            3300000 / 10 / 442.734,
+            places=2,
+        )
+        self.assertIn("not ROI", screen["status"])
+        with self.assertRaises(ValueError):
+            nan_ao_scenario.calculate_capital_cost_screen(annual_water_output_m3=0)
+        with self.assertRaises(ValueError):
+            nan_ao_scenario.calculate_capital_cost_screen(
+                annual_water_output_m3=100, capex_low_rmb=3_000_000,
+                capex_high_rmb=2_000_000,
+            )
+
     def test_writer_creates_auditable_outputs_including_sensitivity(self):
         with tempfile.TemporaryDirectory() as tmp:
             nan_ao_scenario.write_outputs(Path(tmp), runs=5, seed=7)
             self.assertTrue((Path(tmp) / "nan_ao_annual_runs.csv").exists())
             self.assertTrue((Path(tmp) / "nan_ao_percentiles.csv").exists())
             self.assertTrue((Path(tmp) / "nan_ao_summary.json").exists())
+            self.assertTrue((Path(tmp) / "nan_ao_financial_screen.json").exists())
             sensitivity_path = Path(tmp) / "nan_ao_sensitivity.csv"
             self.assertTrue(sensitivity_path.exists())
             with sensitivity_path.open(encoding="utf-8", newline="") as handle:
