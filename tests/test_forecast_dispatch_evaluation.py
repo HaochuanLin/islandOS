@@ -54,6 +54,20 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             self.assertGreaterEqual(policy["cooling_unmet_kwh_th"], 0)
             self.assertGreaterEqual(policy["remaining_surplus_kwh"], 0)
         self.assertIn(result["comparison"]["best_fixed_policy"], {"ro_first", "ice_first"})
+        self.assertIn("fewest constraint-violation hours first", result["comparison"]["comparison_priority"])
+        fixed_names = ("ro_first", "ice_first")
+        expected_fixed = min(
+            fixed_names,
+            key=lambda name: (
+                result["policy_comparison"][name]["constraint_violation_hours"],
+                result["policy_comparison"][name]["normalized_score"],
+                name,
+            ),
+        )
+        self.assertEqual(result["comparison"]["best_fixed_policy"], expected_fixed)
+        for policy in result["policy_comparison"].values():
+            expected_status = "feasible" if policy["constraint_violation_hours"] == 0 else "infeasible"
+            self.assertEqual(policy["feasibility_status"], expected_status)
         baseline = result["persistence_baseline_comparison"]
         self.assertEqual(baseline["status"], "evaluated")
         self.assertEqual(baseline["aligned_hours"], len(self.rows) - 1)
