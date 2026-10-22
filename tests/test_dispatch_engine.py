@@ -127,6 +127,22 @@ class TestSharedBudgetDispatch(unittest.TestCase):
         with self.assertRaises(ValueError):
             dispatch_flexible_loads([100, -1], [])
 
+    def test_empty_series_rejected(self):
+        with self.assertRaisesRegex(ValueError, "at least one time step"):
+            dispatch_flexible_loads([], [])
+
+    def test_non_numeric_and_boolean_series_rejected(self):
+        for values in (["100"], [True], [object()]):
+            with self.subTest(values=values):
+                with self.assertRaisesRegex(ValueError, "numeric values"):
+                    dispatch_flexible_loads(values, [])
+
+    def test_invalid_time_step_rejected(self):
+        for dt_hours in (0, -1, float("nan"), float("inf"), "1", True):
+            with self.subTest(dt_hours=dt_hours):
+                with self.assertRaisesRegex(ValueError, "dt_hours"):
+                    dispatch_flexible_loads([100], [], dt_hours=dt_hours)
+
 
 if __name__ == "__main__":
     unittest.main()
