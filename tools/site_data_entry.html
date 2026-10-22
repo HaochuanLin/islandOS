@@ -145,7 +145,6 @@ document.getElementById("add24").onclick=()=>{for(let i=0;i<24;i++)addRow();stat
 document.getElementById("validate").onclick=validate;
 document.getElementById("exportCsv").onclick=()=>{
  if(!validate())return;
- const data=allRows().map(r=>({...r,timestamp:r.timestamp+tz()+":00".replace(/:00$/,"")}));
  // datetime-local has minute precision; append seconds before timezone offset.
  const normalized=allRows().map(r=>({...r,timestamp:r.timestamp.length===16?r.timestamp+":00"+tz():r.timestamp+tz()}));
  const name=safeName(document.getElementById("site").value);
