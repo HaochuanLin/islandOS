@@ -68,6 +68,16 @@ def _score(result, water_demand, cooling_demand) -> float:
     surplus_ratio = float(np.sum(result.remaining_power_kw)) / total_available
     return 0.45 * water_unmet / water_total + 0.45 * cooling_unmet / cooling_total + 0.10 * surplus_ratio
 
+def _constraint_violation_hours(result) -> int:
+    """Count distinct timesteps with at least one component constraint violation."""
+    flags = [
+        np.asarray(load.constraint_violation, dtype=int) > 0
+        for load in result.loads.values()
+    ]
+    if not flags:
+        return 0
+    return int(np.count_nonzero(np.logical_or.reduce(flags)))
+
 
 def _execute_one(
     actual_power, water_demand, cooling_demand, water_inventory, cold_inventory,
@@ -137,10 +147,13 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                     ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                 )
                 candidates.append((
+                    _constraint_violation_hours(predicted),
                     _score(predicted, water_demand[t:end], cooling_demand[t:end]),
                     priority, predicted,
                 ))
-            _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
+            _, _, chosen, chosen_plan = min(
+                candidates, key=lambda item: (item[0], item[1], item[2])
+            )
             ro_plan = chosen_plan.loads.get("ro_desalination")
             start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
         elif policy in ("ro_first", "ice_first", "perfect_information"):
@@ -153,10 +166,13 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                         ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
+                        _constraint_violation_hours(predicted),
                         _score(predicted, water_demand[t:end], cooling_demand[t:end]),
                         priority, predicted,
                     ))
-                _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
+                _, _, chosen, chosen_plan = min(
+                    candidates, key=lambda item: (item[0], item[1], item[2])
+                )
                 ro_plan = chosen_plan.loads.get("ro_desalination")
                 start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
             else:
