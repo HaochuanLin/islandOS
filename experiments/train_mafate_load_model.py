@@ -56,8 +56,14 @@ def _load_series(path: str | Path, target: str) -> tuple[list[datetime], list[fl
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
 
-    if len(rows) < 240:
-        raise ValueError("Need at least 240 hourly rows for lag features and chronological evaluation")
+    # A week-lag feature requires 168 prior observations. The number of rows
+    # needed for a valid chronological train/test split is larger and depends on
+    # train_fraction, missing values, and the minimum sample counts checked below.
+    if len(rows) <= WEEK_LAG_HOURS:
+        raise ValueError(
+            "Need at least 169 hourly rows to construct week-lag features; "
+            "a valid chronological train/test evaluation requires substantially more."
+        )
 
     timestamps: list[datetime] = []
     values: list[float | None] = []
