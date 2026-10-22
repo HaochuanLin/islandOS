@@ -323,7 +323,7 @@ def optimize_dispatch(
         "feasible_count": len(summaries),
         "unique_feasible_count": len(candidates),
         "distinct_objective_vectors": len(set(candidate[3] for candidate in candidates)),
-        "evaluations": int(getattr(getattr(algorithm, "evaluator", None), "n_eval", 0) or 0),
+        "evaluations": int(evaluation_counter["count"]),
         "population_size": int(population_size),
         "generations": int(generations),
         "pcross": 0.9,
