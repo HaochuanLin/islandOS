@@ -106,6 +106,11 @@ def load_paired_series(input_csv: str | Path) -> tuple[list[str], Scenario, list
     return timestamps, scenario, forecast
 
 
+def has_forecast_water_demand_column(input_csv: str | Path) -> bool:
+    with Path(input_csv).open("r", encoding="utf-8-sig", newline="") as handle:
+        return "forecast_water_demand_m3" in (csv.DictReader(handle).fieldnames or [])
+
+
 def load_forecast_water_demand(input_csv: str | Path, actual_demand: list[float]) -> list[float]:
     """Load optional water-demand forecasts; fall back to realized demand for legacy inputs."""
     input_path = Path(input_csv)
@@ -129,6 +134,16 @@ def _forecast_metrics(actual: list[float], forecast: list[float]) -> dict:
         "mae_kw": sum(abs(error) for error in errors) / len(errors),
         "rmse_kw": math.sqrt(sum(error * error for error in errors) / len(errors)),
         "bias_forecast_minus_actual_kw": sum(errors) / len(errors),
+        "evaluated_hours": len(errors),
+    }
+
+
+def _water_forecast_metrics(actual: list[float], forecast: list[float]) -> dict:
+    errors = [predicted - observed for observed, predicted in zip(actual, forecast)]
+    return {
+        "mae_m3_per_hour": sum(abs(error) for error in errors) / len(errors),
+        "rmse_m3_per_hour": math.sqrt(sum(error * error for error in errors) / len(errors)),
+        "bias_forecast_minus_actual_m3_per_hour": sum(errors) / len(errors),
         "evaluated_hours": len(errors),
     }
 
@@ -249,10 +264,10 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
         },
         "forecast_metrics": _forecast_metrics(actual, forecast),
         "water_demand_input": {
-            "forecast_column_used": "forecast_water_demand_m3" if forecast_water != list(scenario.water_demand_m3_per_hour) else "actual_demand_fallback",
+            "forecast_column_used": "forecast_water_demand_m3" if has_forecast_water_demand_column(input_csv) else "actual_demand_fallback",
             "actual_demand_is_used_for_execution": True,
             "forecast_demand_is_used_for_planning": True,
-            "forecast_demand_metrics": _forecast_metrics(
+            "forecast_demand_metrics": _water_forecast_metrics(
                 list(scenario.water_demand_m3_per_hour), forecast_water
             ),
         },
