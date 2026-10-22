@@ -32,10 +32,13 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
 
     def write_rows(self, rows):
         with self.input.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=[
+            fieldnames = [
                 "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
                 "water_demand_m3", "cooling_demand_kw_th",
-            ])
+            ]
+            if rows and "forecast_water_demand_m3" in rows[0]:
+                fieldnames.append("forecast_water_demand_m3")
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
 
@@ -74,6 +77,30 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             baseline["dispatch_comparison"]["supplied_forecast"]["comparison"]["rolling_score"]
             - baseline["dispatch_comparison"]["persistence_baseline"]["comparison"]["rolling_score"],
         )
+
+    def test_forecast_water_demand_is_used_for_planning_not_actuals(self):
+        rows = [dict(row, forecast_water_demand_m3=28 + i) for i, row in enumerate(self.rows)]
+        self.write_rows(rows)
+        result = evaluate_forecast_dispatch(self.input)
+        self.assertEqual(
+            result["water_demand_input"]["forecast_column_used"],
+            "forecast_water_demand_m3",
+        )
+        self.assertEqual(
+            result["water_demand_input"]["forecast_demand_metrics"]["mae_m3_per_hour"],
+            11.5,
+        )
+        audit = result["policy_comparison"]["rolling"]["hourly_audit"]
+        self.assertEqual(audit[0]["actual_water_demand_m3"], 20.0)
+        self.assertEqual(audit[0]["forecast_water_demand_m3"], 28.0)
+        self.assertEqual(audit[0]["planning_water_demand_m3"], 28.0)
+
+    def test_rejects_invalid_optional_water_demand_forecast(self):
+        rows = [dict(row, forecast_water_demand_m3=28) for row in self.rows]
+        rows[2]["forecast_water_demand_m3"] = "-1"
+        self.write_rows(rows)
+        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+            evaluate_forecast_dispatch(self.input)
 
     def test_offset_timestamps_are_normalized_to_utc(self):
         offset_rows = [dict(row) for row in self.rows]

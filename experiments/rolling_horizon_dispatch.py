@@ -104,12 +104,25 @@ def _execute_one(
     }
 
 
-def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rolling") -> dict:
-    """Simulate one-hour commits with state carried between replanning steps."""
+def simulate_rolling(
+    scenario: Scenario,
+    forecast_surplus,
+    policy: str = "rolling",
+    forecast_water_demand_m3_per_hour=None,
+) -> dict:
+    """Simulate one-hour commits using forecast inputs for planning and realized inputs for execution."""
     actual = np.asarray(scenario.available_surplus_kw, dtype=float)
     forecast = np.asarray(forecast_surplus, dtype=float)
     water_demand = np.asarray(scenario.water_demand_m3_per_hour, dtype=float)
+    planning_water_demand = (
+        water_demand.copy() if forecast_water_demand_m3_per_hour is None
+        else np.asarray(forecast_water_demand_m3_per_hour, dtype=float)
+    )
     cooling_demand = np.asarray(scenario.cooling_demand_kw_th, dtype=float)
+    if planning_water_demand.shape != water_demand.shape:
+        raise ValueError("forecast_water_demand_m3_per_hour must match the scenario horizon")
+    if not np.all(np.isfinite(planning_water_demand)) or np.any(planning_water_demand < 0):
+        raise ValueError("forecast water demand must be finite and non-negative")
     if forecast.shape != actual.shape:
         raise ValueError("forecast_surplus must match the scenario horizon")
     if not np.all(np.isfinite(forecast)) or np.any(forecast < 0):
@@ -132,12 +145,12 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
             candidates = []
             for priority in ("ro_first", "ice_first"):
                 predicted = _run_horizon(
-                    forecast[t:end], water_demand[t:end], cooling_demand[t:end],
+                    forecast[t:end], planning_water_demand[t:end], cooling_demand[t:end],
                     water_inventory, cold_inventory, priority,
                     ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                 )
                 candidates.append((
-                    _score(predicted, water_demand[t:end], cooling_demand[t:end]),
+                    _score(predicted, planning_water_demand[t:end], cooling_demand[t:end]),
                     priority, predicted,
                 ))
             _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -148,12 +161,12 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
                 candidates = []
                 for priority in ("ro_first", "ice_first"):
                     predicted = _run_horizon(
-                        actual[t:end], water_demand[t:end], cooling_demand[t:end],
+                        actual[t:end], planning_water_demand[t:end], cooling_demand[t:end],
                         water_inventory, cold_inventory, priority,
                         ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
-                        _score(predicted, water_demand[t:end], cooling_demand[t:end]),
+                        _score(predicted, planning_water_demand[t:end], cooling_demand[t:end]),
                         priority, predicted,
                     ))
                 _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -190,6 +203,9 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
             "hour_index": t,
             "actual_surplus_kw": float(actual[t]),
             "forecast_surplus_kw": float(forecast[t]),
+            "actual_water_demand_m3": float(water_demand[t]),
+            "forecast_water_demand_m3": float(planning_water_demand[t]),
+            "planning_water_demand_m3": float(planning_water_demand[t]),
             "priority": chosen,
             "ro_active": step["ro_active"],
             "ro_operating_state": step["ro_operating_state"],

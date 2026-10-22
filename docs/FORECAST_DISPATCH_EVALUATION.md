@@ -13,7 +13,8 @@ Create a UTF-8 CSV with one row per hour and these columns:
 | `timestamp_utc` | ISO-8601 with timezone | Timestamp for the paired row |
 | `actual_surplus_kw` | kW | Realized renewable surplus during the hour |
 | `forecast_surplus_kw` | kW | Forecast surplus available to the controller for that hour |
-| `water_demand_m3` | m³ per hour | Freshwater demand in the interval |
+| `water_demand_m3` | m³ per hour | Realized freshwater demand in the interval, used for execution and outcome accounting |
+| `forecast_water_demand_m3` | m³ per hour | Optional forecast demand available to the controller for planning; if omitted, the evaluator falls back to realized demand for backward compatibility |
 | `cooling_demand_kw_th` | kW thermal | Cooling demand in the interval |
 
 Rows must be strictly ordered, exactly one hour apart, and have finite,
@@ -96,6 +97,6 @@ documented, suitable provenance.
 - The weather-parameter regression in IslandOS is not automatically a PV/wind
   or island-surplus forecast. A valid power forecast requires suitable paired
   generation and critical-load data.
-- Water/cooling demands are treated as known in the evaluation.
+- Cooling demand is treated as known in the evaluation. Actual water demand is kept separate from forecast water demand when the optional forecast column is supplied.
 - The simulator omits plant interlocks, startup/ramp dynamics, and site-specific
   safety limits. This is research software, not a field controller.
