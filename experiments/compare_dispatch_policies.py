@@ -87,6 +87,14 @@ def summarize(policy: str, result, scenario: Scenario, dt_hours: float = 1.0) ->
     water_unmet = float(np.sum(ro.unmet_demand)) if ro else float(sum(scenario.water_demand_m3_per_hour) * dt_hours)
     cooling_served = float(np.sum(ice.demand_served)) if ice else 0.0
     cooling_unmet = float(np.sum(ice.unmet_demand)) if ice else float(sum(scenario.cooling_demand_kw_th) * dt_hours)
+    # End-of-horizon inventories matter: two policies can serve the same demand
+    # while leaving very different amounts of water or stored cooling for later.
+    # Use null when a resource was not part of that policy, rather than implying
+    # that an unmodeled asset had zero inventory.
+    water_inventory_initial = float(ro.inventory[0]) if ro else None
+    water_inventory_final = float(ro.inventory[-1]) if ro else None
+    cooling_storage_initial = float(ice.inventory[0]) if ice else None
+    cooling_storage_final = float(ice.inventory[-1]) if ice else None
     return {
         "scenario": scenario.name,
         "policy": policy,
@@ -95,8 +103,12 @@ def summarize(policy: str, result, scenario: Scenario, dt_hours: float = 1.0) ->
         "backup_energy_kwh": round(float(np.sum(result.backup_power_kw) * dt_hours), 3),
         "water_produced_m3": round(water_produced, 3),
         "water_unmet_m3": round(water_unmet, 3),
+        "water_inventory_initial_m3": round(water_inventory_initial, 3) if water_inventory_initial is not None else None,
+        "water_inventory_final_m3": round(water_inventory_final, 3) if water_inventory_final is not None else None,
         "cooling_served_kwh_th": round(cooling_served, 3),
         "cooling_unmet_kwh_th": round(cooling_unmet, 3),
+        "cooling_storage_initial_kwh_th": round(cooling_storage_initial, 3) if cooling_storage_initial is not None else None,
+        "cooling_storage_final_kwh_th": round(cooling_storage_final, 3) if cooling_storage_final is not None else None,
         "constraint_violation_hours": int(sum(
             np.sum(load.constraint_violation) for load in result.loads.values()
         )),
