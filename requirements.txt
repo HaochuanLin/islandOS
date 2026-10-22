@@ -1,4 +1,4 @@
 # islandOS MVP simulation prototype
-# Python >= 3.10 is required (PEP 604 union type syntax); CI uses Python 3.11
+# Python 3.10+ is recommended; CI is tested on Python 3.11. Older versions are not covered.
 numpy>=1.21
 matplotlib>=3.5
