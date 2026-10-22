@@ -63,5 +63,35 @@ class MafateLoadModelTests(unittest.TestCase):
                 train_and_evaluate(source, root / "report.json", "house_1_load_kw")
 
 
+    def test_reports_true_lag_requirement_for_too_short_series(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "short.csv"
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp_local", "house_1_load_kw"])
+                writer.writeheader()
+                start = datetime(2020, 5, 1)
+                for i in range(168):
+                    writer.writerow({
+                        "timestamp_local": (start + timedelta(hours=i)).isoformat(),
+                        "house_1_load_kw": 1.0,
+                    })
+            with self.assertRaisesRegex(ValueError, "at least 169 hourly rows"):
+                train_and_evaluate(source, Path(tmp) / "report.json", "house_1_load_kw")
+
+    def test_240_rows_are_not_misrepresented_as_sufficient_for_default_split(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "short_for_split.csv"
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp_local", "house_1_load_kw"])
+                writer.writeheader()
+                start = datetime(2020, 5, 1)
+                for i in range(240):
+                    writer.writerow({
+                        "timestamp_local": (start + timedelta(hours=i)).isoformat(),
+                        "house_1_load_kw": 1.0,
+                    })
+            with self.assertRaisesRegex(ValueError, "Not enough complete training samples"):
+                train_and_evaluate(source, Path(tmp) / "report.json", "house_1_load_kw")
+
 if __name__ == "__main__":
     unittest.main()
