@@ -135,17 +135,47 @@ def _evaluate_policies(scenario: Scenario, forecast: list[float]) -> dict:
         policies[policy] = {
             **result,
             "normalized_score": round(_score(result, scenario), 8),
+            "feasibility_status": (
+                "feasible" if result["constraint_violation_hours"] == 0 else "infeasible"
+            ),
         }
-    fixed = {name: policies[name]["normalized_score"] for name in ("ro_first", "ice_first")}
-    best_fixed = min(fixed, key=lambda name: (fixed[name], name))
+    fixed_names = ("ro_first", "ice_first")
+    fixed_by_score = min(
+        fixed_names,
+        key=lambda name: (policies[name]["normalized_score"], name),
+    )
+    # Hard constraint violations take precedence over the illustrative service score.
+    best_fixed = min(
+        fixed_names,
+        key=lambda name: (
+            policies[name]["constraint_violation_hours"],
+            policies[name]["normalized_score"],
+            name,
+        ),
+    )
     rolling_score = policies["rolling"]["normalized_score"]
+    fixed_score = policies[best_fixed]["normalized_score"]
+    rolling_violations = policies["rolling"]["constraint_violation_hours"]
+    fixed_violations = policies[best_fixed]["constraint_violation_hours"]
     return {
         "policies": policies,
         "comparison": {
+            "comparison_priority": "fewest constraint-violation hours first; normalized service score breaks ties",
             "best_fixed_policy": best_fixed,
-            "best_fixed_score": fixed[best_fixed],
+            "best_fixed_score": fixed_score,
+            "best_fixed_policy_by_score_only": fixed_by_score,
+            "best_fixed_score_by_score_only": policies[fixed_by_score]["normalized_score"],
             "rolling_score": rolling_score,
-            "rolling_minus_best_fixed": round(rolling_score - fixed[best_fixed], 8),
+            "rolling_minus_best_fixed": round(rolling_score - fixed_score, 8),
+            "rolling_constraint_violation_hours": rolling_violations,
+            "best_fixed_constraint_violation_hours": fixed_violations,
+            "constraint_violation_hours_difference": rolling_violations - fixed_violations,
+            "rolling_feasible": rolling_violations == 0,
+            "best_fixed_feasible": fixed_violations == 0,
+            "interpretation": (
+                "Feasibility is compared before the illustrative score. Score differences are secondary "
+                "when the policies have different violation counts; inspect raw service outcomes too."
+            ),
         },
     }
 
