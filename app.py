@@ -72,6 +72,17 @@ water_deficit = float(result["deficit"].sum())
 backup_energy = float(result["ro_backup"].sum())
 segments, min_run_ok = check_min_run(result["ro_on"], params.min_run_hours)
 
+# Fair same-trace baseline: no flexible RO load, same water demand and initial inventory.
+baseline_inventory = float(initial)
+baseline_water_deficit = 0.0
+for hourly_demand in water_demand:
+    next_inventory = baseline_inventory - float(hourly_demand)
+    if next_inventory < dead_storage:
+        baseline_water_deficit += dead_storage - next_inventory
+        next_inventory = float(dead_storage)
+    baseline_inventory = next_inventory
+
+
 st.caption("Scenario identity: seed={}, wind × {:.2f}, solar × {:.2f}, essential load × {:.2f}".format(
     int(seed), wind_scale, pv_scale, load_scale
 ))
@@ -89,7 +100,52 @@ elif int(result["emergency_stop"].sum()) > 0:
 else:
     st.success("The simplified minimum-run check passed for this 24-hour trace. This does not validate real plant interlocks.")
 
-tab1, tab2, tab3 = st.tabs(["System balance", "RO & water", "Model audit"])
+tab0, tab1, tab2, tab3 = st.tabs(["Policy comparison", "System balance", "RO & water", "Model audit"])
+
+with tab0:
+    st.markdown("### Same input trace: no flexible RO versus RO dispatch")
+    st.write(
+        "Both cases use the exact same synthetic wind, solar, essential-load and water-demand series. "
+        "The baseline has no RO production; the dispatch case uses the simplified RO policy shown below."
+    )
+    comparison = {
+        "Metric": [
+            "Renewable surplus absorbed by RO (kWh)",
+            "Modeled water produced (m³)",
+            "Unmet water demand indicator (m³)",
+            "Backup energy used (kWh)",
+            "Minimum-run check",
+        ],
+        "No flexible RO": [
+            0.0,
+            0.0,
+            round(baseline_water_deficit, 3),
+            0.0,
+            "Not applicable",
+        ],
+        "RO dispatch": [
+            round(used_surplus, 3),
+            round(water_produced, 3),
+            round(water_deficit, 3),
+            round(backup_energy, 3),
+            "Pass" if min_run_ok else "Violation",
+        ],
+    }
+    st.table(comparison)
+    if water_deficit < baseline_water_deficit:
+        st.info(
+            f"Under these synthetic assumptions, the RO case has {baseline_water_deficit - water_deficit:.1f} m³ "
+            "less unmet-demand indicator than the no-RO baseline. This is a model result, not a real-site claim."
+        )
+    else:
+        st.warning(
+            "Under these assumptions, the RO case does not reduce the unmet-demand indicator versus the baseline. "
+            "Do not hide this outcome; inspect the operating trace and constraints."
+        )
+    st.caption(
+        "Comparison note: this is a descriptive same-trace comparison, not a claim of algorithmic optimality. "
+        "The current dispatch is a heuristic with perfect look-ahead over the generated trace."
+    )
 
 with tab1:
     st.markdown("### Renewable supply versus essential load")
