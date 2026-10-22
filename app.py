@@ -249,6 +249,7 @@ elif page == "Strategy simulator":
                 "summary": summary,
                 "source": source_label,
             }
+            st.session_state.pop("islandos_optimizer_result", None)
         except Exception as exc:
             st.error(f"Could not run the comparison: {exc}")
             st.stop()
