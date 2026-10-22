@@ -74,6 +74,13 @@ class SiteReadinessTests(unittest.TestCase):
                     run_site_scenario(readiness, "not-read.csv", Path(tmp) / "out", max_telemetry_age_minutes=60)
                 optimizer.assert_not_called()
 
+    def test_staff_form_exposes_telemetry_capex_and_fail_closed_controls(self):
+        form = Path(__file__).resolve().parents[1] / "tools" / "site_readiness_form.html"
+        html = form.read_text(encoding="utf-8")
+        for phrase in ("reservoir_level_m3", "ro_plant_rmb", "annual_om_rmb", "下载 JSON", "过期", "不等于现场验证"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, html)
+
     def test_bad_values_block(self):
         self.payload["telemetry"]["pv_kw"] = float("nan")
         report = evaluate_readiness(self.payload, now=self.now)
