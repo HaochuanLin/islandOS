@@ -71,8 +71,9 @@ class PhilippinesDibImporterTests(unittest.TestCase):
             output = root / "out"
             make_workbook(workbook, missing_average=True)
 
-            import_workbook(workbook, output)
+            manifest = import_workbook(workbook, output)
 
+            self.assertEqual(manifest["missing_average_load_records"], 1)
             with (output / "monthly_power_demand.csv").open(encoding="utf-8", newline="") as handle:
                 row = next(csv.DictReader(handle))
             self.assertEqual(row["maximum_load_mw"], "0.25")
