@@ -30,11 +30,11 @@ The command writes:
 | `monthly_ghi.csv` | Monthly global-horizontal-irradiance values, preserving the workbook's unit label verbatim |
 | `monthly_wind_speed.csv` | Monthly wind-speed values at 10 m elevation |
 | `diesel_assets.csv` | Generator/rental unit labels, dependable capacity and accumulated operating hours |
-| `manifest.json` | Row counts, source sheets, caveats and suggested use |
+| `manifest.json` | Row counts, missing-average count, source sheets, caveats and suggested use |
 
 The importer validates required worksheets, grid IDs, numeric values, non-negative
 loads/resources/capacities, monthly minimum/average/maximum ordering, and cross-sheet
-grid alignment. It fails loudly instead of silently fabricating missing values.
+grid alignment. Missing average-load cells are preserved as blank and counted in the manifest; the importer fails loudly instead of silently fabricating missing values.
 
 ## Important interpretation limits
 

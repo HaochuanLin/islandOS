@@ -119,19 +119,23 @@ def import_workbook(input_path: str | Path, output_dir: str | Path) -> dict[str,
                 values = [ws.cell(row, start + offset).value for offset in range(3)]
                 if all(value is None for value in values):
                     continue
-                maximum, minimum, average = [
-                    _numeric(value, label, row)
-                    for value, label in zip(values, ("Maximum Load", "Minimum Load", "Average Load"))
-                ]
-                if min(maximum, minimum, average) < 0:
+                maximum = _numeric(values[0], "Maximum Load", row)
+                minimum = _numeric(values[1], "Minimum Load", row)
+                average = None if values[2] is None else _numeric(values[2], "Average Load", row)
+                if minimum < 0 or maximum < 0 or (average is not None and average < 0):
                     raise ValueError(f"Negative load for grid {grid_id}, month {month}")
                 tolerance = max(1e-9, abs(maximum) * 1e-9)
-                if minimum > average + tolerance or average > maximum + tolerance:
+                if minimum > maximum + tolerance:
+                    raise ValueError(f"Expected minimum <= maximum for grid {grid_id}, month {month}")
+                if average is not None and (
+                    minimum > average + tolerance or average > maximum + tolerance
+                ):
                     raise ValueError(f"Expected minimum <= average <= maximum for grid {grid_id}, month {month}")
                 demand_rows.append({
                     "grid_number": grid_id, "grid_name": name, "month": month,
                     "maximum_load_mw": maximum, "minimum_load_mw": minimum,
-                    "average_load_mw": average, "temporal_resolution": "monthly_summary",
+                    "average_load_mw": "" if average is None else average,
+                    "temporal_resolution": "monthly_summary",
                 })
         if demand_ids != site_ids:
             raise ValueError("Grid IDs in monthly demand do not match the screened grid registry")
@@ -225,6 +229,7 @@ def import_workbook(input_path: str | Path, output_dir: str | Path) -> dict[str,
             "status": "imported",
             "source_workbook": source.name,
             "site_count": len(sites),
+            "missing_average_load_records": sum(1 for row in demand_rows if row["average_load_mw"] == ""),
             "row_counts": {
                 "sites.csv": len(sites), "monthly_power_demand.csv": len(demand_rows),
                 "monthly_ghi.csv": len(ghi_rows), "monthly_wind_speed.csv": len(wind_rows),

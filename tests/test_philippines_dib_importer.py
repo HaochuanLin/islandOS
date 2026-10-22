@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from experiments.import_philippines_dib_workbook import import_workbook
 
 
-def make_workbook(path: Path) -> None:
+def make_workbook(path: Path, missing_average: bool = False) -> None:
     wb = Workbook()
     ws = wb.active
     ws.title = "02 - Screened Mini-grids"
@@ -20,7 +20,7 @@ def make_workbook(path: Path) -> None:
     ws.append(["Grid Number", "Grid Name", "Maximum Load [MW]", "Minimum Load [MW]",
                "January 2022 Load [MW]", None, None])
     ws.append([None, None, None, None, "Maximum", "Minimum", "Average"])
-    ws.append([1, "Test Island", 0.3, 0.1, 0.25, 0.12, 0.2])
+    ws.append([1, "Test Island", 0.3, 0.1, 0.25, 0.12, None if missing_average else 0.2])
 
     for name, unit in (("05 - Monthly GHI", "kW/m2"),
                        ("06 - Monthly Wind Speed", "m/s")):
@@ -63,6 +63,22 @@ class PhilippinesDibImporterTests(unittest.TestCase):
             self.assertTrue(any("not hourly observations" in note for note in manifest["data_limitations"]))
             self.assertTrue((output / "diesel_assets.csv").is_file())
             self.assertTrue((output / "manifest.json").is_file())
+
+    def test_preserves_missing_monthly_average_instead_of_fabricating_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workbook = root / "missing-average.xlsx"
+            output = root / "out"
+            make_workbook(workbook, missing_average=True)
+
+            manifest = import_workbook(workbook, output)
+
+            self.assertEqual(manifest["missing_average_load_records"], 1)
+            with (output / "monthly_power_demand.csv").open(encoding="utf-8", newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertEqual(row["maximum_load_mw"], "0.25")
+            self.assertEqual(row["minimum_load_mw"], "0.12")
+            self.assertEqual(row["average_load_mw"], "")
 
     def test_rejects_workbook_with_missing_required_sheets(self):
         with tempfile.TemporaryDirectory() as tmp:
