@@ -23,6 +23,7 @@ from experiments.compare_energy_water_strategies import (
     compare_strategies,
     load_site_steps,
 )
+from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
@@ -143,6 +144,21 @@ if page == "Overview":
     c1.metric("Strategy policies", "5", help="Baseline plus four RO operating policies")
     c2.metric("Input format", "Hourly CSV", help="Timestamped, aligned site time series")
     c3.metric("Output", "CSV + charts", help="Summary metrics and timestep-level audit")
+    st.subheader("What is implemented now vs. the next optimization layer")
+    existing_col, future_col = st.columns(2)
+    with existing_col:
+        st.markdown(
+            "**Existing — heuristic fixed dispatch strategies**\n\n"
+            "Implemented: five transparent if-else policies (no_ro_baseline, surplus_only, "
+            "off_peak_only, hybrid_surplus_then_off_peak, emergency_backup), with "
+            "water/energy metrics, hourly audit and CSV export."
+        )
+    with future_col:
+        st.markdown(
+            "**AI Optimizer — NSGA-II multi-objective Pareto search**\n\n"
+            "The optimizer searches candidate hourly RO schedules and retains non-dominated "
+            "feasible solutions. It is a model-based search, not machine learning trained on field data."
+        )
     st.subheader("What this prototype helps you compare")
     left, right = st.columns(2)
     with left:
@@ -294,6 +310,93 @@ elif page == "Strategy simulator":
                 mime="text/csv",
                 use_container_width=True,
             )
+        st.divider()
+        st.subheader("AI Optimizer (Next Version) — NSGA-II Pareto search")
+        st.markdown(
+            "The optimizer searches hourly RO on/off schedules. The source rule is renewable-surplus "
+            "power first, then available off-peak grid power. **Hard feasibility requirements:** "
+            "total unmet water demand = 0 and minimum run-time violations = 0. Among feasible schedules, "
+            "NSGA-II minimizes grid electricity cost and maximizes renewable-surplus energy used by RO."
+        )
+        st.caption("This is a model-based optimization module using the selected input series; it is not a trained ML model or real-time controller.")
+        p1, p2 = st.columns(2)
+        with p1:
+            pop_size = st.number_input("NSGA-II population size", min_value=20, max_value=200, value=64, step=8)
+        with p2:
+            generations = st.number_input("NSGA-II generations", min_value=10, max_value=200, value=80, step=10)
+        if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Searching candidate schedules and filtering for zero unmet demand..."):
+                    pareto_summaries, pareto_details, optimizer_meta = optimize_dispatch(
+                        steps, config, population_size=int(pop_size), generations=int(generations), seed=42
+                    )
+                st.session_state["islandos_optimizer_result"] = {
+                    "summary": pareto_summaries, "detail": pareto_details,
+                    "meta": optimizer_meta, "source": source_label,
+                }
+            except Exception as exc:
+                st.error(f"NSGA-II optimization failed: {exc}")
+        optimizer_result = st.session_state.get("islandos_optimizer_result")
+        if optimizer_result:
+            meta = optimizer_result["meta"]
+            st.caption(f"Optimizer data provenance: **{optimizer_result['source']}**")
+            st.write(meta.get("message", ""))
+            st.write(
+                f"Evaluations: {meta.get('evaluations', 0)} · "
+                f"Feasible non-dominated schedules retained: {meta.get('feasible_count', 0)}"
+            )
+            pareto_rows = optimizer_result["summary"]
+            if pareto_rows:
+                pareto_df = pd.DataFrame(pareto_rows)
+                baseline_df = summaries.copy()
+                baseline_df["series_type"] = "Existing fixed strategy"
+                pareto_df["series_type"] = "NSGA-II Pareto candidate"
+                plot_df = pd.concat([
+                    baseline_df[["strategy", "grid_energy_cost", "surplus_energy_to_ro_kwh", "series_type"]],
+                    pareto_df[["strategy", "grid_energy_cost", "surplus_energy_to_ro_kwh", "series_type"]],
+                ], ignore_index=True)
+                st.subheader("Pareto trade-off: grid cost vs. renewable-surplus energy used")
+                st.scatter_chart(
+                    plot_df, x="grid_energy_cost", y="surplus_energy_to_ro_kwh",
+                    color="series_type", size=100,
+                    x_label="Grid electricity cost (model units)",
+                    y_label="Renewable-surplus energy used by RO (kWh)",
+                    height=440,
+                )
+                st.caption("All five existing fixed strategies and feasible NSGA-II candidates are shown together. Fixed strategies are references and may be infeasible.")
+                st.dataframe(pareto_df[[
+                    "strategy", "ro_run_hours", "water_produced_m3", "water_served_m3",
+                    "unmet_water_demand_m3", "grid_energy_cost", "surplus_energy_to_ro_kwh",
+                    "grid_energy_to_ro_kwh", "water_spill_m3",
+                ]], use_container_width=True, hide_index=True)
+                st.subheader("Automatic quantitative comparison: hybrid vs. fixed alternatives")
+                hybrid = summaries.loc[summaries["strategy"] == "hybrid_surplus_then_off_peak"].iloc[0]
+                def _delta_text(metric_label, metric_key, reference):
+                    base_value = float(reference[metric_key])
+                    hybrid_value = float(hybrid[metric_key])
+                    difference = hybrid_value - base_value
+                    if abs(base_value) > 1e-12:
+                        pct_text = f" ({difference / abs(base_value) * 100:+.1f}%)"
+                    else:
+                        pct_text = " (percentage change undefined because reference is zero)"
+                    return f"- {metric_label}: {hybrid_value:.2f} vs {base_value:.2f}; change {difference:+.2f}{pct_text}"
+                for reference_name in ("surplus_only", "off_peak_only"):
+                    reference = summaries.loc[summaries["strategy"] == reference_name].iloc[0]
+                    st.markdown(f"**Hybrid vs. {reference_name}**")
+                    st.markdown("\n".join([
+                        _delta_text("RO run time (h)", "ro_run_hours", reference),
+                        _delta_text("Water produced (m³)", "water_produced_m3", reference),
+                        _delta_text("Grid electricity cost", "grid_energy_cost", reference),
+                    ]))
+                st.download_button(
+                    "Download NSGA-II Pareto solutions",
+                    dataframe_csv(pareto_rows),
+                    file_name="islandos_nsga2_pareto_solutions.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            else:
+                st.warning("No feasible schedule with exactly zero unmet demand was found in this search budget. No Pareto result is reported as feasible. Try more generations/population or review the input and model assumptions.")
         st.markdown(
             '<div class="note"><b>Interpretation:</b> results depend on input quality and '
             'simplified model assumptions. Validate timestamp intervals, essential-load priority, '
