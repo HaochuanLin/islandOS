@@ -146,11 +146,16 @@ def evaluate_water_demand(
     actual = [demand[i] for i in test_indices]
     persistence = [demand[i - 1] for i in test_indices]
     seasonal = [demand[i - SEASONAL_LAG_HOURS] for i in test_indices]
+    # Errors are forecast minus actual, so subtract the training-only mean error
+    # to correct systematic over- or under-prediction without looking at the test.
+    bias_corrected_seasonal = [
+        max(0.0, forecast - residual_mean) for forecast in seasonal
+    ]
 
     def interval_coverage(z_value: float) -> dict:
         covered = 0
         widths = []
-        for observed, forecast in zip(actual, seasonal):
+        for observed, forecast in zip(actual, bias_corrected_seasonal):
             lower = max(0.0, forecast - z_value * residual_sigma)
             upper = max(lower, forecast + z_value * residual_sigma)
             covered += int(lower <= observed <= upper)
@@ -159,20 +164,25 @@ def evaluate_water_demand(
             "nominal_coverage": 0.90 if z_value == Z_90 else 0.95,
             "empirical_coverage": covered / len(actual),
             "mean_interval_width_m3_per_hour": sum(widths) / len(widths),
-            "interval_method": "Gaussian residual approximation, lower bound clipped at zero",
+            "interval_method": "training-bias-corrected Gaussian residual approximation, lower bound clipped at zero",
         }
 
     predictions = []
     for i in test_indices:
+        base_forecast = demand[i - SEASONAL_LAG_HOURS]
+        corrected_forecast = max(0.0, base_forecast - residual_mean)
         predictions.append({
             "timestamp": timestamps[i].isoformat(),
             "actual_water_demand_m3": demand[i],
             "persistence_forecast_m3": demand[i - 1],
-            "seasonal_naive_24h_forecast_m3": demand[i - SEASONAL_LAG_HOURS],
-            "seasonal_90pct_lower_m3": max(
-                0.0, demand[i - SEASONAL_LAG_HOURS] - Z_90 * residual_sigma
+            "seasonal_naive_24h_forecast_m3": base_forecast,
+            "seasonal_bias_corrected_forecast_m3": corrected_forecast,
+            "seasonal_bias_corrected_90pct_lower_m3": max(
+                0.0, corrected_forecast - Z_90 * residual_sigma
             ),
-            "seasonal_90pct_upper_m3": demand[i - SEASONAL_LAG_HOURS] + Z_90 * residual_sigma,
+            "seasonal_bias_corrected_90pct_upper_m3": max(
+                0.0, corrected_forecast + Z_90 * residual_sigma
+            ),
         })
 
     report = {
@@ -191,9 +201,16 @@ def evaluate_water_demand(
             "persistence": "Use the previous hour's measured demand.",
             "seasonal_naive_24h": "Use demand measured 24 hours before the target.",
         },
+        "training_error_calibration": {
+            "error_definition": "forecast minus actual",
+            "seasonal_bias_m3_per_hour": residual_mean,
+            "correction_rule": "seasonal forecast minus training-only mean forecast error, clipped at zero",
+            "fit_rows_end_before_test_window": split,
+        },
         "test_metrics": {
             "persistence": _metrics(actual, persistence),
             "seasonal_naive_24h": _metrics(actual, seasonal),
+            "seasonal_bias_corrected": _metrics(actual, bias_corrected_seasonal),
         },
         "distribution_diagnostics": {
             "observed_demand_test_window": _normality_diagnostic(actual),
