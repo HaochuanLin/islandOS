@@ -153,7 +153,11 @@ def _simulate_strategy(
         "water_served_m3": 0.0,
         "unmet_water_demand_m3": 0.0,
         "water_spill_m3": 0.0,
+        "renewable_surplus_available_kwh": sum(
+            s.renewable_surplus_kw * config.dt_hours for s in steps
+        ),
         "surplus_energy_to_ro_kwh": 0.0,
+        "renewable_surplus_unused_kwh": 0.0,
         "grid_energy_to_ro_kwh": 0.0,
         "backup_energy_to_ro_kwh": 0.0,
         "grid_energy_cost": 0.0,
@@ -222,6 +226,10 @@ def _simulate_strategy(
             "water_spill_m3": round(spill, 6),
             "remaining_water_inventory_m3": round(inventory, 6),
             "grid_price_per_kwh": step.grid_price_per_kwh,
+            "renewable_surplus_available_kw": step.renewable_surplus_kw,
+            "renewable_surplus_unused_kw": round(max(
+                0.0, step.renewable_surplus_kw - (power_kw if source == "surplus" else 0.0)
+            ), 6),
             "direct_diesel_displacement_potential_kw": step.diesel_displacement_potential_kw,
         })
     totals.update({
@@ -229,7 +237,14 @@ def _simulate_strategy(
         "water_served_m3": round(served_total, 6),
         "unmet_water_demand_m3": round(unmet_total, 6),
         "water_spill_m3": round(spill_total, 6),
+        "renewable_surplus_available_kwh": round(sum(
+            s.renewable_surplus_kw * config.dt_hours for s in steps
+        ), 6),
         "surplus_energy_to_ro_kwh": round(surplus_energy, 6),
+        "renewable_surplus_unused_kwh": round(max(
+            0.0,
+            sum(s.renewable_surplus_kw * config.dt_hours for s in steps) - surplus_energy
+        ), 6),
         "grid_energy_to_ro_kwh": round(grid_energy, 6),
         "backup_energy_to_ro_kwh": round(backup_energy, 6),
         "grid_energy_cost": round(grid_cost, 6),
