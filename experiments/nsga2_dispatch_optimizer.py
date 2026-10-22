@@ -88,7 +88,7 @@ def _evaluate_schedule(bits: np.ndarray, steps: list[SiteStep], config: Config):
         "ro_run_hours": round(run_hours, 6),
         "water_produced_m3": round(produced_total, 6),
         "water_served_m3": round(served_total, 6),
-        "unmet_water_demand_m3": round(unmet_total, 9),
+        "unmet_water_demand_m3": float(unmet_total),
         "water_spill_m3": round(spill_total, 6),
         "surplus_energy_to_ro_kwh": round(surplus_energy, 6),
         "grid_energy_to_ro_kwh": round(grid_energy, 6),
