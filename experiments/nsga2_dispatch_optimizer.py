@@ -214,6 +214,8 @@ def optimize_dispatch(
     n_var = len(steps)
     pmut = 1.0 / n_var
 
+    evaluation_counter = {"count": 0}
+
     class DispatchProblem(Problem):
         def __init__(self):
             # F: grid cost and RO starts. G <= 0 is feasible in pymoo.
@@ -221,6 +223,7 @@ def optimize_dispatch(
             super().__init__(n_var=n_var, n_obj=2, n_ieq_constr=3, xl=0, xu=3, vtype=int)
 
         def _evaluate(self, X, out, *args, **kwargs):
+            evaluation_counter["count"] += len(X)
             objectives, constraints = [], []
             for chromosome in X:
                 summary, _ = _evaluate_schedule(chromosome, steps, config)
@@ -265,7 +268,7 @@ def optimize_dispatch(
         return [], [], {
             "feasible_count": 0,
             "unique_feasible_count": 0,
-            "evaluations": int(getattr(getattr(algorithm, "evaluator", None), "n_eval", 0) or 0),
+            "evaluations": int(evaluation_counter["count"]),
             "population_size": int(population_size),
             "generations": int(generations),
             "pcross": 0.9,
