@@ -156,7 +156,7 @@ def optimize_dispatch(
     seen: set[tuple[int, ...]] = set()
     for bits in X:
         summary, detail = _evaluate_schedule(bits, steps, config)
-        if summary["unmet_water_demand_m3"] > 1e-8 or summary["minimum_run_constraint_violations"] != 0:
+        if summary["unmet_water_demand_m3"] != 0.0 or summary["minimum_run_constraint_violations"] != 0:
             continue
         key = tuple(int(v) for v in bits)
         if key in seen:
