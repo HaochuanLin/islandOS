@@ -65,6 +65,40 @@ class TestWaterDemandForecast(unittest.TestCase):
             self.assertIn("empirical_coverage", report["seasonal_prediction_intervals"]["nominal_90pct"])
             self.assertIn("Gaussian", report["seasonal_prediction_intervals"]["nominal_90pct"]["interval_method"])
 
+    def test_rolling_origin_backtest_does_not_look_ahead(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = Path(directory) / "original.csv"
+            altered = Path(directory) / "altered.csv"
+            output = Path(directory) / "report.json"
+            self._write_series(original, count=160)
+            with original.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            for i in range(126, len(rows)):
+                rows[i]["water_demand_m3"] = str(float(rows[i]["water_demand_m3"]) + 1000.0)
+            with altered.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "water_demand_m3"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            first = evaluate_water_demand(original, output)
+            second = evaluate_water_demand(altered, output)
+            # Test index 95 is the sixth held-out row; changing only later
+            # observations must not change its forecast or calibration count.
+            first_row = first["test_predictions"][5]
+            second_row = second["test_predictions"][5]
+            self.assertEqual(
+                first_row["rolling_origin_bias_corrected_forecast_m3"],
+                second_row["rolling_origin_bias_corrected_forecast_m3"],
+            )
+            self.assertEqual(
+                first_row["rolling_origin_calibration_error_count"],
+                second_row["rolling_origin_calibration_error_count"],
+            )
+            backtest = first["rolling_origin_backtest"]
+            self.assertEqual(backtest["test_rows"], first["test_rows"])
+            self.assertIn("rolling_origin_bias_corrected_seasonal", backtest["metrics"])
+            self.assertIn("strictly less than", backtest["leakage_guard"])
+
     def test_rejects_negative_demand(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "demand.csv"

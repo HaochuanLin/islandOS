@@ -168,15 +168,37 @@ def evaluate_water_demand(
         }
 
     predictions = []
+    rolling_origin_actual = []
+    rolling_origin_persistence = []
+    rolling_origin_seasonal = []
+    rolling_origin_bias_corrected = []
     for i in test_indices:
         base_forecast = demand[i - SEASONAL_LAG_HOURS]
         corrected_forecast = max(0.0, base_forecast - residual_mean)
+
+        # At each test timestamp, recalibrate using only seasonal errors whose
+        # target timestamps are strictly earlier than this forecast target.
+        past_errors = [
+            demand[j - SEASONAL_LAG_HOURS] - demand[j]
+            for j in range(SEASONAL_LAG_HOURS, i)
+        ]
+        if len(past_errors) < 8:
+            raise ValueError("Not enough past errors for rolling-origin calibration")
+        past_bias = sum(past_errors) / len(past_errors)
+        rolling_corrected = max(0.0, base_forecast - past_bias)
+
+        rolling_origin_actual.append(demand[i])
+        rolling_origin_persistence.append(demand[i - 1])
+        rolling_origin_seasonal.append(base_forecast)
+        rolling_origin_bias_corrected.append(rolling_corrected)
         predictions.append({
             "timestamp": timestamps[i].isoformat(),
             "actual_water_demand_m3": demand[i],
             "persistence_forecast_m3": demand[i - 1],
             "seasonal_naive_24h_forecast_m3": base_forecast,
             "seasonal_bias_corrected_forecast_m3": corrected_forecast,
+            "rolling_origin_bias_corrected_forecast_m3": rolling_corrected,
+            "rolling_origin_calibration_error_count": len(past_errors),
             "seasonal_bias_corrected_90pct_lower_m3": max(
                 0.0, corrected_forecast - Z_90 * residual_sigma
             ),
@@ -184,6 +206,19 @@ def evaluate_water_demand(
                 0.0, corrected_forecast + Z_90 * residual_sigma
             ),
         })
+
+    rolling_origin_backtest = {
+        "method": "expanding-window one-step-ahead backtest; each target uses only earlier observed demand and earlier seasonal errors",
+        "test_rows": len(test_indices),
+        "metrics": {
+            "persistence": _metrics(rolling_origin_actual, rolling_origin_persistence),
+            "seasonal_naive_24h": _metrics(rolling_origin_actual, rolling_origin_seasonal),
+            "rolling_origin_bias_corrected_seasonal": _metrics(
+                rolling_origin_actual, rolling_origin_bias_corrected
+            ),
+        },
+        "leakage_guard": "For target index t, bias calibration uses seasonal forecast errors with target indices strictly less than t.",
+    }
 
     report = {
         "status": "baseline_evaluated",
@@ -212,6 +247,7 @@ def evaluate_water_demand(
             "seasonal_naive_24h": _metrics(actual, seasonal),
             "seasonal_bias_corrected": _metrics(actual, bias_corrected_seasonal),
         },
+        "rolling_origin_backtest": rolling_origin_backtest,
         "distribution_diagnostics": {
             "observed_demand_test_window": _normality_diagnostic(actual),
             "seasonal_forecast_errors_on_training_history": _normality_diagnostic(
