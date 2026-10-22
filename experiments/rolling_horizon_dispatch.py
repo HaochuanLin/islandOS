@@ -121,7 +121,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
     ro_fault_lockout_hours_remaining = 0
     totals = {"water_unmet_m3": 0.0, "cooling_unmet_kwh_th": 0.0,
               "renewable_flexible_load_kwh": 0.0, "remaining_surplus_kwh": 0.0,
-              "constraint_violation_hours": 0}
+              "constraint_violation_hours": 0, "constraint_violation_count": 0}
     decisions = []
     hourly_audit = []
     violation_steps = []
@@ -184,7 +184,8 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
         totals["cooling_unmet_kwh_th"] += step["cooling_unmet"]
         totals["renewable_flexible_load_kwh"] += step["renewable_used"]
         totals["remaining_surplus_kwh"] += step["remaining_surplus"]
-        totals["constraint_violation_hours"] += step["constraint_violations"]
+        totals["constraint_violation_hours"] += int(step["constraint_violations"] > 0)
+        totals["constraint_violation_count"] += step["constraint_violations"]
         decisions.append(chosen)
         hourly_audit.append({
             "hour_index": t,
