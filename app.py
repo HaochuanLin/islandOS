@@ -360,6 +360,11 @@ elif page == "Strategy simulator":
                 f"Evaluations: {meta.get('evaluations', 0)} · "
                 f"Feasible non-dominated schedules retained: {meta.get('feasible_count', 0)}"
             )
+            st.caption(
+                f"Objectives: {meta.get('objective_count', 4)} · "
+                f"Unique feasible chromosomes: {meta.get('unique_feasible_count', 0)} · "
+                f"Distinct objective vectors: {meta.get('distinct_objective_vectors', 0)}"
+            )
             pareto_rows = optimizer_result["summary"]
             if pareto_rows:
                 pareto_df = pd.DataFrame(pareto_rows)
@@ -382,7 +387,8 @@ elif page == "Strategy simulator":
                 st.dataframe(pareto_df[[
                     "strategy", "ro_run_hours", "water_produced_m3", "water_served_m3",
                     "unmet_water_demand_m3", "grid_energy_cost", "surplus_energy_to_ro_kwh",
-                    "grid_energy_to_ro_kwh", "water_spill_m3",
+                    "grid_energy_to_ro_kwh", "grid_peak_power_kw", "ro_switch_on_count",
+                    "water_spill_m3", "ending_water_inventory_m3",
                 ]], use_container_width=True, hide_index=True)
                 st.subheader("Automatic quantitative comparison: hybrid vs. fixed alternatives")
                 hybrid = summaries.loc[summaries["strategy"] == "hybrid_surplus_then_off_peak"].iloc[0]
