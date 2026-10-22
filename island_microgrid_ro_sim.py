@@ -145,15 +145,15 @@ def simulate(wind, pv, load, water_demand, p: Params):
     # Normalize validated numeric parameters once. Dataclass type hints are not
     # runtime checks, so reject strings/booleans instead of letting them fail
     # later with opaque NumPy/Python TypeErrors.
-    ro_power_kw = finite_numeric_parameter("ro_power_kw", ro_power_kw)
-    ro_sec_kwh_m3 = finite_numeric_parameter("ro_sec_kwh_m3", ro_sec_kwh_m3)
-    res_capacity_m3 = finite_numeric_parameter("res_capacity_m3", res_capacity_m3)
-    res_area_m2 = finite_numeric_parameter("res_area_m2", res_area_m2)
-    res_min_m3 = finite_numeric_parameter("res_min_m3", res_min_m3)
-    res_init_m3 = finite_numeric_parameter("res_init_m3", res_init_m3)
-    res_base_level_m = finite_numeric_parameter("res_base_level_m", res_base_level_m)
-    start_ratio = finite_numeric_parameter("start_ratio", start_ratio)
-    keep_ratio = finite_numeric_parameter("keep_ratio", keep_ratio)
+    ro_power_kw = finite_numeric_parameter("ro_power_kw", p.ro_power_kw)
+    ro_sec_kwh_m3 = finite_numeric_parameter("ro_sec_kwh_m3", p.ro_sec_kwh_m3)
+    res_capacity_m3 = finite_numeric_parameter("res_capacity_m3", p.res_capacity_m3)
+    res_area_m2 = finite_numeric_parameter("res_area_m2", p.res_area_m2)
+    res_min_m3 = finite_numeric_parameter("res_min_m3", p.res_min_m3)
+    res_init_m3 = finite_numeric_parameter("res_init_m3", p.res_init_m3)
+    res_base_level_m = finite_numeric_parameter("res_base_level_m", p.res_base_level_m)
+    start_ratio = finite_numeric_parameter("start_ratio", p.start_ratio)
+    keep_ratio = finite_numeric_parameter("keep_ratio", p.keep_ratio)
 
     if ro_power_kw <= 0:
         raise ValueError("ro_power_kw must be greater than zero")
