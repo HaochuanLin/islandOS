@@ -93,8 +93,13 @@ def dispatch_flexible_loads(
     renewable draw fits its residual budget, preventing double allocation.
     """
     available = _series(available_power_kw, "available_power_kw")
-    if not np.isfinite(dt_hours) or dt_hours <= 0:
-        raise ValueError("dt_hours must be finite and > 0")
+    if (
+        isinstance(dt_hours, (bool, np.bool_))
+        or not isinstance(dt_hours, (int, float, np.integer, np.floating))
+        or not np.isfinite(dt_hours)
+        or dt_hours <= 0
+    ):
+        raise ValueError("dt_hours must be a finite numeric value > 0")
 
     residual = available.copy()
     total_renewable = np.zeros_like(available)
@@ -172,9 +177,20 @@ def dispatch_flexible_loads(
 
 
 def _series(values: Sequence[float], name: str) -> np.ndarray:
-    arr = np.asarray(values, dtype=float)
-    if arr.ndim != 1:
+    """Validate a non-empty one-dimensional numeric series without coercion surprises."""
+    try:
+        raw = np.asarray(values)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a one-dimensional numeric series") from exc
+    if raw.ndim != 1:
         raise ValueError(f"{name} must be a one-dimensional series")
+    if raw.size == 0:
+        raise ValueError(f"{name} must contain at least one time step")
+    # Reject strings, booleans, and object arrays rather than silently converting
+    # values such as "12" or True into physical power/demand values.
+    if raw.dtype.kind not in "iuf":
+        raise ValueError(f"{name} must contain numeric values (not strings or booleans)")
+    arr = raw.astype(float, copy=False)
     if not np.all(np.isfinite(arr)) or np.any(arr < 0):
         raise ValueError(f"{name} must contain only finite, non-negative values")
     return arr
