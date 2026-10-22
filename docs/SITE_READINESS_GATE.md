@@ -20,6 +20,18 @@ python site_readiness.py path/to/site_readiness.json --mode economic --json
 - Exit code `0`: the requested input-completeness gate passed. Exit code `2`: blocked. A blocked result lists missing or invalid fields.
 - Set `--max-telemetry-age-minutes` to a site-approved freshness threshold. Do not loosen it just to make a scenario pass.
 
+### Enforce the gate before optimization
+
+Use the wrapper when running a site-specific CSV optimization:
+
+```bash
+python experiments/run_site_scenario.py path/to/site_readiness.json path/to/site_hourly.csv \\
+  --source-type measured \\
+  --output-dir build/site-optimization
+```
+
+The wrapper first checks the readiness snapshot, then the optimizer independently validates every hourly CSV row. If the readiness gate is blocked, optimization is not called. The readiness snapshot is a separate file from the hourly CSV; both must represent the same site and relevant period. This wrapper runs an **offline optimization**, not live equipment control. The separate `--mode economic` command checks that CAPEX/O&M inputs are complete, but it does not automatically transfer those values into the optimizer's cost configuration.
+
 ## Input ownership
 
 | Input | Expected source | Gate behavior |
