@@ -380,24 +380,25 @@ elif page == "Strategy simulator":
                         if is_on and (i == 0 or not on[i - 1])
                     )
                 baseline_df["ro_switch_on_count"] = baseline_df["strategy"].map(heuristic_switches).fillna(0)
+                baseline_df["optimizer_cost_score"] = baseline_df["grid_energy_cost"]
                 baseline_df["series_type"] = "Existing fixed strategy"
                 pareto_df["series_type"] = "NSGA-II Pareto candidate"
                 plot_df = pd.concat([
-                    baseline_df[["strategy", "grid_energy_cost", "ro_switch_on_count", "series_type"]],
-                    pareto_df[["strategy", "grid_energy_cost", "ro_switch_on_count", "series_type"]],
+                    baseline_df[["strategy", "optimizer_cost_score", "ro_switch_on_count", "series_type"]],
+                    pareto_df[["strategy", "optimizer_cost_score", "ro_switch_on_count", "series_type"]],
                 ], ignore_index=True)
                 st.subheader("Pareto trade-off: grid cost vs. RO start count")
                 st.scatter_chart(
-                    plot_df, x="grid_energy_cost", y="ro_switch_on_count",
+                    plot_df, x="optimizer_cost_score", y="ro_switch_on_count",
                     color="series_type",
-                    x_label="Grid electricity cost (model units; soft preference included in optimizer score)",
+                    x_label="Optimizer cost score (grid cost with tiny surplus-use preference)",
                     y_label="RO switch-on count",
                     height=440,
                 )
                 st.caption("All five existing fixed strategies and feasible NSGA-II candidates are shown together. Fixed strategies are references and may be infeasible.")
                 st.dataframe(pareto_df[[
                     "strategy", "ro_run_hours", "water_produced_m3", "water_served_m3",
-                    "unmet_water_demand_m3", "grid_energy_cost", "surplus_energy_to_ro_kwh",
+                    "unmet_water_demand_m3", "grid_energy_cost", "optimizer_cost_score", "surplus_energy_to_ro_kwh",
                     "grid_energy_to_ro_kwh", "grid_peak_power_kw", "ro_switch_on_count",
                     "water_spill_m3", "ending_water_inventory_m3",
                 ]], use_container_width=True, hide_index=True)
