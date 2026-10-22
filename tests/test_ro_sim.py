@@ -61,14 +61,18 @@ class TestROSimulation(unittest.TestCase):
         result = run_case([200, 200], params=p)
         self.assertEqual(int(result["ro_on"].sum()), 0)
 
-    def test_reservoir_stays_within_physical_bounds_and_accounts_for_spill(self):
+    def test_dispatch_avoids_overflow_and_preserves_reservoir_bounds(self):
         p = Params(ro_power_kw=100, ro_sec_kwh_m3=1, min_run_hours=1,
                    start_ratio=0.1, allow_backup_power=True,
                    res_capacity_m3=120, res_init_m3=110, res_min_m3=20)
+        # Starting the RO plant would add 100 m3 with no demand, exceeding capacity.
+        # The look-ahead dispatch should therefore leave the plant off.
         result = run_case([100, 100], demand=[0, 0], params=p)
+        self.assertEqual(int(result["ro_on"].sum()), 0)
         self.assertTrue(np.all(result["V"] <= p.res_capacity_m3))
         self.assertTrue(np.all(result["V"] >= p.res_min_m3))
-        self.assertGreater(result["spill"].sum(), 0)
+        self.assertEqual(float(result["spill"].sum()), 0.0)
+        np.testing.assert_allclose(result["V"], [110.0, 110.0, 110.0])
 
     def test_input_length_mismatch_fails_clearly(self):
         p = Params()
