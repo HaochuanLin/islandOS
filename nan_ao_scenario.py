@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import itertools
 import json
 import math
 import random
@@ -110,6 +111,38 @@ def run_simulation(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> tuple[
     return rows, summary
 
 
+def run_sensitivity_analysis() -> list[dict]:
+    """Return a deterministic one-factor-at-a-time grid of scenario assumptions.
+
+    These representative combinations are a sensitivity screen, not a probability
+    distribution, calibrated forecast, or substitute for measured curtailment data.
+    """
+    event_counts = (4, 8, 12)
+    event_durations_h = (4.0, 8.0, 12.0)
+    surplus_power_kw_values = (10.0, 25.0, 40.0)
+    availability_values = (0.85, 0.925, 1.0)
+    sec_values = (3.5, 4.0, 5.0)
+
+    rows: list[dict] = []
+    for events, duration_h, surplus_kw, availability, sec in itertools.product(
+        event_counts, event_durations_h, surplus_power_kw_values,
+        availability_values, sec_values,
+    ):
+        usable_power_kw = min(surplus_kw, ASSUMPTIONS["ro_rated_power_kw"])
+        annual_energy_kwh = events * duration_h * usable_power_kw * availability
+        rows.append({
+            "assumed_events_per_year": events,
+            "representative_event_duration_h": duration_h,
+            "available_surplus_power_kw": surplus_kw,
+            "ro_availability_fraction": availability,
+            "specific_energy_kwh_per_m3": sec,
+            "scenario_usable_energy_kwh_per_year": round(annual_energy_kwh, 3),
+            "scenario_water_m3_per_year": round(annual_energy_kwh / sec, 3),
+            "interpretation": "deterministic sensitivity combination; not a probability or field prediction",
+        })
+    return rows
+
+
 def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     rows, summary = run_simulation(runs, seed)
@@ -120,6 +153,11 @@ def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
     (output_dir / "nan_ao_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    sensitivity_rows = run_sensitivity_analysis()
+    with (output_dir / "nan_ao_sensitivity.csv").open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(sensitivity_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(sensitivity_rows)
     with (output_dir / "nan_ao_percentiles.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["metric", "p05", "p50_median", "p95", "mean", "unit"])
         writer.writeheader()
