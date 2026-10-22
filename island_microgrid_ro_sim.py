@@ -131,26 +131,49 @@ def simulate(wind, pv, load, water_demand, p: Params):
     if len(lengths) != 1:
         raise ValueError("wind, pv, load, and water_demand must have equal lengths")
 
-    positive_params = {
-        "ro_power_kw": p.ro_power_kw,
-        "ro_sec_kwh_m3": p.ro_sec_kwh_m3,
-        "res_capacity_m3": p.res_capacity_m3,
-        "res_area_m2": p.res_area_m2,
-    }
-    for name, value in positive_params.items():
-        if not np.isfinite(value) or value <= 0:
-            raise ValueError(f"{name} must be finite and greater than zero")
+    def finite_numeric_parameter(name, value):
+        if isinstance(value, (bool, np.bool_, str, bytes)):
+            raise ValueError(f"{name} must be a finite numeric value")
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(f"{name} must be a finite numeric value") from exc
+        if not np.isfinite(number):
+            raise ValueError(f"{name} must be finite")
+        return number
+
+    # Normalize validated numeric parameters once. Dataclass type hints are not
+    # runtime checks, so reject strings/booleans instead of letting them fail
+    # later with opaque NumPy/Python TypeErrors.
+    ro_power_kw = finite_numeric_parameter("ro_power_kw", ro_power_kw)
+    ro_sec_kwh_m3 = finite_numeric_parameter("ro_sec_kwh_m3", ro_sec_kwh_m3)
+    res_capacity_m3 = finite_numeric_parameter("res_capacity_m3", res_capacity_m3)
+    res_area_m2 = finite_numeric_parameter("res_area_m2", res_area_m2)
+    res_min_m3 = finite_numeric_parameter("res_min_m3", res_min_m3)
+    res_init_m3 = finite_numeric_parameter("res_init_m3", res_init_m3)
+    res_base_level_m = finite_numeric_parameter("res_base_level_m", res_base_level_m)
+    start_ratio = finite_numeric_parameter("start_ratio", start_ratio)
+    keep_ratio = finite_numeric_parameter("keep_ratio", keep_ratio)
+
+    if ro_power_kw <= 0:
+        raise ValueError("ro_power_kw must be greater than zero")
+    if ro_sec_kwh_m3 <= 0:
+        raise ValueError("ro_sec_kwh_m3 must be greater than zero")
+    if res_capacity_m3 <= 0:
+        raise ValueError("res_capacity_m3 must be greater than zero")
+    if res_area_m2 <= 0:
+        raise ValueError("res_area_m2 must be greater than zero")
     if isinstance(p.min_run_hours, bool) or not isinstance(p.min_run_hours, (int, np.integer)) or p.min_run_hours < 1:
         raise ValueError("min_run_hours must be a positive integer")
-    for name, value in (("start_ratio", p.start_ratio), ("keep_ratio", p.keep_ratio)):
-        if not np.isfinite(value) or not 0 <= value <= 1:
+    for name, value in (("start_ratio", start_ratio), ("keep_ratio", keep_ratio)):
+        if not 0 <= value <= 1:
             raise ValueError(f"{name} must be between zero and one")
-    if not np.isfinite(p.res_min_m3) or p.res_min_m3 < 0:
-        raise ValueError("res_min_m3 must be finite and nonnegative")
-    if not np.isfinite(p.res_init_m3) or not p.res_min_m3 <= p.res_init_m3 <= p.res_capacity_m3:
+    if res_min_m3 < 0:
+        raise ValueError("res_min_m3 must be nonnegative")
+    if not res_min_m3 <= res_init_m3 <= res_capacity_m3:
         raise ValueError("res_init_m3 must be between res_min_m3 and res_capacity_m3")
-    if not np.isfinite(p.res_base_level_m):
-        raise ValueError("res_base_level_m must be finite")
+    if not isinstance(p.allow_backup_power, (bool, np.bool_)):
+        raise ValueError("allow_backup_power must be a boolean")
 
     wind = arrays["wind"]
     pv = arrays["pv"]
@@ -167,7 +190,7 @@ def simulate(wind, pv, load, water_demand, p: Params):
     deficit = np.zeros(T)       # unmet water demand (m3)
     emergency_stop = np.zeros(T, dtype=int)  # 1 where the safety fallback stopped RO before min_run was reached
     V = np.zeros(T + 1)         # reservoir storage; V[t] is the storage at the start of hour t
-    V[0] = p.res_init_m3
+    V[0] = res_init_m3
 
     run_len = 0                 # consecutive hours the RO plant has been running
 
@@ -179,12 +202,12 @@ def simulate(wind, pv, load, water_demand, p: Params):
         configured dead-storage and capacity bounds.
         """
         projected = float(V[start])
-        production = p.ro_power_kw / p.ro_sec_kwh_m3
+        production = ro_power_kw / ro_sec_kwh_m3
         for hour in range(start, start + hours):
             projected = projected + production - water_demand[hour]
-            if projected > p.res_capacity_m3 + 1e-9:
+            if projected > res_capacity_m3 + 1e-9:
                 return False
-            projected = max(projected, p.res_min_m3)
+            projected = max(projected, res_min_m3)
         return True
 
     for t in range(T):
@@ -194,9 +217,9 @@ def simulate(wind, pv, load, water_demand, p: Params):
             on = True                                   # minimum-run commitment takes priority
         elif run_len >= p.min_run_hours:
             if p.allow_backup_power:
-                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and has_water_room
+                on = (curtail[t] >= keep_ratio * ro_power_kw) and has_water_room
             else:                                       # no backup: curtailment must carry the full rated power
-                on = (curtail[t] >= p.ro_power_kw) and has_water_room
+                on = (curtail[t] >= ro_power_kw) and has_water_room
         else:                                           # currently stopped: look ahead to decide whether to start
             can_finish_in_horizon = (t + p.min_run_hours) <= T
             if can_finish_in_horizon and water_room_for_run(t, p.min_run_hours):
@@ -204,12 +227,12 @@ def simulate(wind, pv, load, water_demand, p: Params):
                 if p.allow_backup_power:
                     # Backup can cover weak hours, so the mean-based threshold is a
                     # dispatch heuristic rather than a guarantee of renewable-only operation.
-                    on = window.mean() >= p.start_ratio * p.ro_power_kw
+                    on = window.mean() >= start_ratio * ro_power_kw
                 else:
                     # Without backup, every hour of the minimum run must have enough
                     # curtailed power. A mean check can accept a window with one weak
                     # hour and force an impossible minimum-run violation.
-                    on = bool(np.all(window >= p.ro_power_kw))
+                    on = bool(np.all(window >= ro_power_kw))
             else:
                 on = False
 
@@ -218,7 +241,7 @@ def simulate(wind, pv, load, water_demand, p: Params):
         # the perfect-foresight baseline it is NOT guaranteed to stay inactive, because the
         # start test above uses the window mean, so a single weak hour inside an accepted
         # window triggers it. check_min_run() will flag such violations.
-        if on and (not p.allow_backup_power) and curtail[t] < p.ro_power_kw:
+        if on and (not p.allow_backup_power) and curtail[t] < ro_power_kw:
             on = False
             if 0 < run_len < p.min_run_hours:
                 emergency_stop[t] = 1
@@ -227,22 +250,22 @@ def simulate(wind, pv, load, water_demand, p: Params):
         ro_on[t] = int(on)
 
         if on:
-            ro_use[t] = min(curtail[t], p.ro_power_kw)
+            ro_use[t] = min(curtail[t], ro_power_kw)
             if p.allow_backup_power:
-                ro_backup[t] = p.ro_power_kw - ro_use[t]
-            water_prod[t] = p.ro_power_kw / p.ro_sec_kwh_m3   # rated flow in m3/h
+                ro_backup[t] = ro_power_kw - ro_use[t]
+            water_prod[t] = ro_power_kw / ro_sec_kwh_m3   # rated flow in m3/h
 
         # Constraint 2: dynamic reservoir storage accumulation
         v = V[t] + water_prod[t] - water_demand[t]
-        if v > p.res_capacity_m3:
-            spill[t] = v - p.res_capacity_m3
-            v = p.res_capacity_m3
-        if v < p.res_min_m3:
-            deficit[t] = p.res_min_m3 - v
-            v = p.res_min_m3
+        if v > res_capacity_m3:
+            spill[t] = v - res_capacity_m3
+            v = res_capacity_m3
+        if v < res_min_m3:
+            deficit[t] = res_min_m3 - v
+            v = res_min_m3
         V[t + 1] = v
 
-    level = p.res_base_level_m + V / p.res_area_m2
+    level = res_base_level_m + V / res_area_m2
     return dict(curtail=curtail, ro_on=ro_on, ro_use=ro_use, ro_backup=ro_backup,
                 water_prod=water_prod, spill=spill, deficit=deficit, V=V, level=level,
                 emergency_stop=emergency_stop)
