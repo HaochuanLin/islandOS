@@ -74,6 +74,10 @@ def test_returned_solutions_are_unique_feasible_and_non_dominated():
     assert all(row["minimum_run_constraint_violations"] == 0 for row in summaries)
     assert all(row["water_spill_m3"] == 0.0 for row in summaries)
     assert meta["objective_count"] == 2
+    # With no early termination, pymoo evaluates the initial population and each
+    # generation's offspring population. Keep the live metric contract explicit.
+    assert meta["evaluations"] == 120 * 60
+    assert all(-1e-6 <= row["ending_water_inventory_m3"] <= sample_config().tank_capacity_m3 + 1e-6 for row in summaries)
     assert len({row["strategy"] for row in summaries}) == len(summaries)
     assert len(details) == len(summaries) * len(sample_steps())
 
