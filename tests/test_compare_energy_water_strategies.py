@@ -1,0 +1,131 @@
+"""Regression tests for the generic energy-to-water strategy comparison."""
+import csv
+import tempfile
+import unittest
+from pathlib import Path
+
+from experiments.compare_energy_water_strategies import (
+    Config,
+    SiteStep,
+    compare_strategies,
+    load_site_steps,
+)
+
+
+def step(ts, surplus=0, diesel=0, price=0.2, off_peak=False,
+         grid=True, water_demand=0, backup=0):
+    return SiteStep(
+        timestamp=ts,
+        renewable_surplus_kw=surplus,
+        diesel_displacement_potential_kw=diesel,
+        grid_price_per_kwh=price,
+        off_peak=off_peak,
+        grid_available=grid,
+        water_demand_m3=water_demand,
+        backup_available_kw=backup,
+    )
+
+
+class EnergyWaterStrategyComparisonTests(unittest.TestCase):
+    def setUp(self):
+        self.config = Config(
+            ro_rated_power_kw=10,
+            specific_energy_kwh_m3=5,
+            tank_capacity_m3=20,
+            initial_water_m3=0,
+            min_run_hours=2,
+            dt_hours=1,
+            diesel_cost_per_kwh=0.6,
+        )
+
+    def test_surplus_strategy_uses_only_surplus_and_produces_expected_water(self):
+        steps = [
+            step("2026-01-01T00:00", surplus=10, diesel=3, water_demand=1),
+            step("2026-01-01T01:00", surplus=10, diesel=2, water_demand=1),
+        ]
+        detail, summaries = compare_strategies(steps, self.config)
+        surplus = next(row for row in summaries if row["strategy"] == "surplus_only")
+        self.assertEqual(surplus["surplus_energy_to_ro_kwh"], 20)
+        self.assertEqual(surplus["grid_energy_to_ro_kwh"], 0)
+        self.assertEqual(surplus["backup_energy_to_ro_kwh"], 0)
+        self.assertEqual(surplus["water_produced_m3"], 4)
+        self.assertEqual(surplus["direct_diesel_displacement_potential_kwh"], 5)
+        rows = [r for r in detail if r["strategy"] == "surplus_only"]
+        self.assertEqual([r["ro_source"] for r in rows], ["surplus", "surplus"])
+
+    def test_off_peak_strategy_requires_grid_and_off_peak(self):
+        steps = [
+            step("2026-01-01T00:00", price=0.1, off_peak=True, grid=True),
+            step("2026-01-01T01:00", price=0.1, off_peak=True, grid=True),
+            step("2026-01-01T02:00", price=0.4, off_peak=False, grid=True),
+        ]
+        detail, summaries = compare_strategies(steps, self.config)
+        off_peak = next(row for row in summaries if row["strategy"] == "off_peak_only")
+        self.assertEqual(off_peak["grid_energy_to_ro_kwh"], 20)
+        self.assertAlmostEqual(off_peak["grid_energy_cost"], 2.0)
+        rows = [r for r in detail if r["strategy"] == "off_peak_only"]
+        self.assertEqual([r["ro_source"] for r in rows], ["grid", "grid", "off"])
+
+    def test_hybrid_prefers_surplus_then_uses_off_peak_grid(self):
+        steps = [
+            step("2026-01-01T00:00", surplus=10, off_peak=False, grid=True),
+            step("2026-01-01T01:00", surplus=0, off_peak=True, grid=True, price=0.1),
+        ]
+        detail, summaries = compare_strategies(steps, self.config)
+        hybrid = next(row for row in summaries if row["strategy"] == "hybrid_surplus_then_off_peak")
+        self.assertEqual(hybrid["surplus_energy_to_ro_kwh"], 10)
+        self.assertEqual(hybrid["grid_energy_to_ro_kwh"], 10)
+        rows = [r for r in detail if r["strategy"] == "hybrid_surplus_then_off_peak"]
+        self.assertEqual([r["ro_source"] for r in rows], ["surplus", "grid"])
+
+    def test_minimum_run_window_blocks_short_surplus_event(self):
+        steps = [
+            step("2026-01-01T00:00", surplus=10),
+            step("2026-01-01T01:00", surplus=0),
+        ]
+        _, summaries = compare_strategies(steps, self.config)
+        surplus = next(row for row in summaries if row["strategy"] == "surplus_only")
+        self.assertEqual(surplus["ro_run_hours"], 0)
+        self.assertEqual(surplus["water_produced_m3"], 0)
+
+    def test_emergency_backup_energy_cost_is_separate(self):
+        steps = [
+            step("2026-01-01T00:00", backup=10),
+            step("2026-01-01T01:00", backup=10),
+        ]
+        _, summaries = compare_strategies(steps, self.config)
+        backup = next(row for row in summaries if row["strategy"] == "emergency_backup")
+        self.assertEqual(backup["backup_energy_to_ro_kwh"], 20)
+        self.assertAlmostEqual(backup["backup_energy_cost_estimate"], 12.0)
+        self.assertEqual(backup["grid_energy_to_ro_kwh"], 0)
+
+    def test_baseline_does_not_run_ro_but_still_reports_water_shortfall(self):
+        steps = [step("2026-01-01T00:00", water_demand=2)]
+        _, summaries = compare_strategies(steps, self.config)
+        baseline = next(row for row in summaries if row["strategy"] == "no_ro_baseline")
+        self.assertEqual(baseline["water_produced_m3"], 0)
+        self.assertEqual(baseline["unmet_water_demand_m3"], 2)
+
+    def test_csv_loader_rejects_missing_columns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.csv"
+            path.write_text("timestamp,renewable_surplus_kw\n2026-01-01T00:00,1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "missing required columns"):
+                load_site_steps(path)
+
+    def test_csv_loader_rejects_negative_physical_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.csv"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow([
+                    "timestamp", "renewable_surplus_kw", "diesel_displacement_potential_kw",
+                    "grid_price_per_kwh", "off_peak", "grid_available", "water_demand_m3",
+                ])
+                writer.writerow(["2026-01-01T00:00", "-1", "0", "0.1", "1", "1", "0"])
+            with self.assertRaisesRegex(ValueError, "renewable_surplus_kw"):
+                load_site_steps(path)
+
+
+if __name__ == "__main__":
+    unittest.main()
