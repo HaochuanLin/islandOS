@@ -327,9 +327,23 @@ elif page == "Strategy simulator":
             generations = st.number_input("NSGA-II generations", min_value=10, max_value=200, value=80, step=10)
         if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
             try:
+                # Streamlit reruns the script on every button click. Rebuild the
+                # inputs here instead of relying on local variables created by the
+                # earlier "Run strategy comparison" click.
+                optimizer_steps = parse_uploaded_csv(raw)
+                optimizer_config = Config(
+                    ro_rated_power_kw=float(ro_kw),
+                    specific_energy_kwh_m3=float(sec),
+                    tank_capacity_m3=float(tank),
+                    initial_water_m3=float(initial),
+                    min_run_hours=int(min_run),
+                    dt_hours=float(dt),
+                    diesel_cost_per_kwh=float(diesel_cost) if diesel_cost > 0 else None,
+                )
                 with st.spinner("Searching candidate schedules and filtering for zero unmet demand..."):
                     pareto_summaries, pareto_details, optimizer_meta = optimize_dispatch(
-                        steps, config, population_size=int(pop_size), generations=int(generations), seed=42
+                        optimizer_steps, optimizer_config,
+                        population_size=int(pop_size), generations=int(generations), seed=42
                     )
                 st.session_state["islandos_optimizer_result"] = {
                     "summary": pareto_summaries, "detail": pareto_details,
