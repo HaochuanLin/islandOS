@@ -87,11 +87,22 @@ def _execute_one(
     # though this call executes only one realized hour.
     initial_commitment = ro_run_hours_remaining
     ro_start_deferred_for_power = False
+    ro_available_power_after_priority_kw = float(actual_power)
+    if priority == "ice_first":
+        # Estimate the power the higher-priority ice load will actually consume
+        # before deciding whether a new RO commitment is feasible.
+        ice_probe = _make_ice_with_inventory(cold_inventory).simulate(
+            [actual_power], [cooling_demand]
+        )
+        ro_available_power_after_priority_kw = max(
+            0.0, float(actual_power) - float(ice_probe.power_used_kw[0])
+        )
     if start_ro and initial_commitment == 0:
         ro_config = make_ro().config
-        # The current hour's measured/realized surplus is known at execution.
-        # Do not begin a new minimum-run commitment if rated power is not available.
-        if actual_power >= ro_config.rated_power_kw:
+        # The current hour's realized surplus and priority-load allocation are
+        # known at execution. Do not start a minimum-run commitment without
+        # enough power remaining for the RO unit itself.
+        if ro_available_power_after_priority_kw >= ro_config.rated_power_kw:
             initial_commitment = ro_config.min_run_hours
         else:
             ro_start_deferred_for_power = True
@@ -111,6 +122,7 @@ def _execute_one(
         "remaining_surplus": float(result.remaining_power_kw.sum()),
         "constraint_violations": int(sum(np.sum(x.constraint_violation) for x in result.loads.values())),
         "ro_start_deferred_for_power": ro_start_deferred_for_power,
+        "ro_available_power_after_priority_kw": ro_available_power_after_priority_kw,
         "ro_active": bool(ro is not None and ro.active[0]),
         "ro_operating_state": str(ro.operating_state[0]) if ro is not None and ro.operating_state is not None else "OFF",
         "ro_power_kw": float(ro.power_used_kw[0]) if ro else 0.0,
@@ -217,6 +229,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
             "forecast_surplus_kw": float(forecast[t]),
             "priority": chosen,
             "ro_start_deferred_for_power": step["ro_start_deferred_for_power"],
+            "ro_available_power_after_priority_kw": round(step["ro_available_power_after_priority_kw"], 6),
             "ro_active": step["ro_active"],
             "ro_operating_state": step["ro_operating_state"],
             "ro_power_kw": round(step["ro_power_kw"], 6),
