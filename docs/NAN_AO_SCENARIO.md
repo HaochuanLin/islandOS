@@ -12,7 +12,7 @@ The command writes:
 - `nan_ao_annual_runs.csv`: one row per simulated scenario year;
 - `nan_ao_percentiles.csv`: P5, median, P95 and mean scenario yield;
 - `nan_ao_summary.json`: assumptions, summary and limitations;
-- `nan_ao_sensitivity.csv`: a deterministic grid of 243 combinations covering event count, representative event duration, available surplus power, RO availability, and specific energy consumption.
+- `nan_ao_sensitivity.csv`: a deterministic grid of 243 combinations covering event count, representative event duration, available surplus power, RO availability, and specific energy consumption.\n- `nan_ao_financial_screen.json`: a capital-only cost-per-m³ screen using the simulated median output and explicit draft CAPEX assumptions.
 
 Only the Python standard library is required. Repeating the same command with the same Python version, run count and seed is deterministic.
 
@@ -42,3 +42,10 @@ The scenario does not prove site feasibility or water quality, and does not esti
 ## Next evidence needed
 
 Replace the placeholder distributions with documented hourly export-limit/curtailment records, renewable output and essential load; confirm candidate installation site, seawater intake/outfall, water-quality requirements, permissions, equipment quotations and operating responsibility. Then rerun the model and update external pitch materials only from that reviewed result.
+
+
+## Illustrative capital-cost screen
+
+The output JSON annualises the draft RMB 1.6–3.3 million hardware estimate over an explicitly assumed 10-year equipment life, then divides by the simulated median annual output. It is intentionally labelled **capital-only, not ROI or payback**. The screen excludes site/civil works, marine intake/outfall, environmental approvals, electricity, consumables, staffing, maintenance, membrane replacement, financing and downtime. Inputs are not supplier quotations, and the water output is not field-validated. Do not use this output as a price recommendation or investment case.
+
+Before procurement, replace the draft capital range with comparable supplier quotes, cost the complete site and lifecycle scope, verify actual usable curtailed power and emergency demand, and identify a funded asset-owner operating model.
