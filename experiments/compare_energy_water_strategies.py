@@ -129,8 +129,13 @@ def _source_for_step(step: SiteStep, strategy: str, rated_kw: float) -> str | No
     return None
 
 
+def _minimum_run_steps(config: Config) -> int:
+    """Convert the equipment minimum run duration into input time steps."""
+    return math.ceil(config.min_run_hours / config.dt_hours)
+
+
 def _can_start(steps: list[SiteStep], index: int, strategy: str, config: Config) -> bool:
-    end = index + config.min_run_hours
+    end = index + _minimum_run_steps(config)
     if end > len(steps):
         return False
     if all(_source_for_step(steps[j], strategy, config.ro_rated_power_kw) is not None
@@ -184,7 +189,7 @@ def _simulate_strategy(
             elif inventory < config.tank_capacity_m3 and _can_start(steps, i, strategy, config):
                 source = _source_for_step(step, strategy, config.ro_rated_power_kw)
                 if source is not None:
-                    remaining_run = config.min_run_hours
+                    remaining_run = _minimum_run_steps(config)
         power_kw = config.ro_rated_power_kw if source else 0.0
         energy_kwh = power_kw * config.dt_hours
         produced = energy_kwh / config.specific_energy_kwh_m3
