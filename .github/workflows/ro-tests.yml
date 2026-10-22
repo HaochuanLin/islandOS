@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "draft/**"
+      - core-product-hardening
   pull_request:
   workflow_dispatch:
 
