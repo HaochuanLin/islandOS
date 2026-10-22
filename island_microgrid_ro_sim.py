@@ -9,6 +9,9 @@ Workflow
      once started, it must run continuously for at least `min_run_hours`.
   3. Reservoir storage is accumulated dynamically:
      V[t+1] = V[t] + water produced - island water demand (clipped to capacity / minimum).
+     Dispatch avoids starting/continuing a discretionary run if its known demand
+     trace predicts reservoir overflow; a minimum-run commitment already in progress
+     takes priority and can still spill water in exceptional cases.
   4. A four-panel figure is produced: renewable output and load, curtailment,
      RO operating state, reservoir level.
 
@@ -167,19 +170,36 @@ def simulate(wind, pv, load, water_demand, p: Params):
     V[0] = p.res_init_m3
 
     run_len = 0                 # consecutive hours the RO plant has been running
+
+    def water_room_for_run(start, hours):
+        """Check whether a proposed run can avoid reservoir overflow.
+
+        This uses the known demand trace (perfect foresight). Demand is applied in
+        the same hourly balance as production; inventory is kept within the
+        configured dead-storage and capacity bounds.
+        """
+        projected = float(V[start])
+        production = p.ro_power_kw / p.ro_sec_kwh_m3
+        for hour in range(start, start + hours):
+            projected = projected + production - water_demand[hour]
+            if projected > p.res_capacity_m3 + 1e-9:
+                return False
+            projected = max(projected, p.res_min_m3)
+        return True
+
     for t in range(T):
-        full = V[t] >= p.res_capacity_m3 - 1e-9
+        has_water_room = water_room_for_run(t, 1)
 
         if run_len > 0 and run_len < p.min_run_hours:
-            on = True                                   # constraint 1: min run time not reached yet, keep running
+            on = True                                   # minimum-run commitment takes priority
         elif run_len >= p.min_run_hours:
             if p.allow_backup_power:
-                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and not full
+                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and has_water_room
             else:                                       # no backup: curtailment must carry the full rated power
-                on = (curtail[t] >= p.ro_power_kw) and not full
+                on = (curtail[t] >= p.ro_power_kw) and has_water_room
         else:                                           # currently stopped: look ahead to decide whether to start
             can_finish_in_horizon = (t + p.min_run_hours) <= T
-            if can_finish_in_horizon and not full:
+            if can_finish_in_horizon and water_room_for_run(t, p.min_run_hours):
                 window = curtail[t:t + p.min_run_hours]
                 if p.allow_backup_power:
                     # Backup can cover weak hours, so the mean-based threshold is a
