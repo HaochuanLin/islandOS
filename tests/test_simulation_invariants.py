@@ -77,6 +77,69 @@ class SimulationInvariantTests(unittest.TestCase):
                 res_capacity_m3=100.0, res_init_m3=101.0, res_min_m3=10.0
             ))
 
+    def test_no_backup_dispatch_never_runs_below_rated_power(self):
+        p = Params(
+            ro_power_kw=300.0,
+            ro_sec_kwh_m3=3.0,
+            min_run_hours=2,
+            allow_backup_power=False,
+            res_capacity_m3=1000.0,
+            res_init_m3=100.0,
+            res_min_m3=0.0,
+        )
+        result = simulate(
+            [500.0, 500.0, 100.0, 500.0, 500.0],
+            [0.0] * 5,
+            [0.0] * 5,
+            [0.0] * 5,
+            p,
+        )
+        self.assertTrue(np.all(result["ro_on"][result["curtail"] < p.ro_power_kw] == 0))
+        segments, ok = check_min_run(result["ro_on"], p.min_run_hours)
+        self.assertEqual(segments, [2, 2])
+        self.assertTrue(ok)
+        self.assertEqual(float(result["ro_backup"].sum()), 0.0)
+
+    def test_dispatch_avoids_discretionary_overflow(self):
+        p = Params(
+            ro_power_kw=300.0,
+            ro_sec_kwh_m3=3.0,
+            min_run_hours=2,
+            allow_backup_power=True,
+            res_capacity_m3=100.0,
+            res_init_m3=90.0,
+            res_min_m3=0.0,
+        )
+        result = simulate(
+            [1000.0, 1000.0, 1000.0],
+            [0.0] * 3,
+            [0.0] * 3,
+            [0.0] * 3,
+            p,
+        )
+        self.assertEqual(int(result["ro_on"].sum()), 0)
+        self.assertEqual(float(result["spill"].sum()), 0.0)
+
+    def test_full_reservoir_can_still_run_if_demand_creates_room(self):
+        p = Params(
+            ro_power_kw=300.0,
+            ro_sec_kwh_m3=3.0,
+            min_run_hours=2,
+            allow_backup_power=True,
+            res_capacity_m3=100.0,
+            res_init_m3=100.0,
+            res_min_m3=0.0,
+        )
+        result = simulate(
+            [500.0, 500.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [150.0, 150.0],
+            p,
+        )
+        self.assertEqual(result["ro_on"].tolist(), [1, 1])
+        self.assertEqual(float(result["spill"].sum()), 0.0)
+
     def test_minimum_run_checker_counts_horizon_truncation(self):
         segments, ok = check_min_run(np.array([0, 1, 1, 1, 0, 1]), 2)
         self.assertEqual(segments, [3, 1])
