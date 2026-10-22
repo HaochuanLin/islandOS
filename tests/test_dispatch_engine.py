@@ -123,6 +123,12 @@ class TestSharedBudgetDispatch(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must match"):
             dispatch_flexible_loads([100, 100], [(self._ice(), [0])])
 
+    def test_invalid_dt_hours_rejected(self):
+        for dt in (True, "1", float("nan"), float("inf"), 0, -1):
+            with self.subTest(dt=dt):
+                with self.assertRaises(ValueError):
+                    dispatch_flexible_loads([100], [], dt_hours=dt)
+
     def test_invalid_available_power_rejected(self):
         with self.assertRaises(ValueError):
             dispatch_flexible_loads([100, -1], [])
