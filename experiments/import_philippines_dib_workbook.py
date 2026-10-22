@@ -229,6 +229,7 @@ def import_workbook(input_path: str | Path, output_dir: str | Path) -> dict[str,
             "status": "imported",
             "source_workbook": source.name,
             "site_count": len(sites),
+            "missing_average_load_records": sum(1 for row in demand_rows if row["average_load_mw"] == ""),
             "row_counts": {
                 "sites.csv": len(sites), "monthly_power_demand.csv": len(demand_rows),
                 "monthly_ghi.csv": len(ghi_rows), "monthly_wind_speed.csv": len(wind_rows),
