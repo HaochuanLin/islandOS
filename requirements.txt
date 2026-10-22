@@ -2,3 +2,4 @@
 # Python >= 3.8 is required (dataclasses, type hints)
 numpy>=1.21
 matplotlib>=3.5
+openpyxl>=3.1
