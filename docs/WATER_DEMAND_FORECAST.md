@@ -4,6 +4,26 @@ This experiment adds a first, deliberately simple step toward data-driven
 water-demand prediction. It does **not** assume water demand is normally
 distributed and does not claim that the prototype is already learning online.
 
+## Try the end-to-end example
+
+A small, deterministic hourly dataset is included at
+`data/examples/synthetic_water_demand_demo.csv`. **Every value in this file
+is synthetic, not measured island or customer data.** It is only intended to
+show the input format and let the full workflow run without private data.
+
+Run from the repository root:
+
+```bash
+python experiments/water_demand_forecast.py \
+  data/examples/synthetic_water_demand_demo.csv \
+  --output build/water-demand-forecast/report.json
+```
+
+The JSON report contains holdout metrics, each held-out forecast, distribution
+diagnostics, and prediction-interval coverage. The CI workflow runs this same
+example and uploads the report as an artifact, so basic end-to-end operation
+is checked on every relevant push and pull request.
+
 ## Input
 
 Use a UTF-8 CSV with one row per hour:
@@ -17,20 +37,7 @@ Rows must be strictly ordered and continuous at one-hour intervals. Demand
 must be finite and non-negative. The script rejects missing hours and invalid
 values rather than silently filling or correcting them.
 
-Example:
-
-```csv
-timestamp,water_demand_m3
-2025-01-01T00:00:00+00:00,28.4
-2025-01-01T01:00:00+00:00,27.9
-```
-
-## Run
-
-```bash
-python experiments/water_demand_forecast.py path/to/hourly_water_demand.csv \
-  --output build/water-demand-forecast/report.json
-```
+## Evaluation
 
 The script holds out the final chronological segment and compares:
 - **Persistence:** next-hour demand equals the latest observation.
