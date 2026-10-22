@@ -39,6 +39,17 @@ class TestWaterDemandForecast(unittest.TestCase):
             self.assertEqual(first["history_rows"], 90)
             self.assertEqual(first["test_metrics"], second["test_metrics"])
             self.assertEqual(len(first["test_predictions"]), first["test_rows"])
+            self.assertIn("seasonal_bias_corrected", first["test_metrics"])
+            self.assertEqual(
+                first["training_error_calibration"]["fit_rows_end_before_test_window"],
+                first["history_rows"],
+            )
+            self.assertTrue(all(
+                row["seasonal_bias_corrected_forecast_m3"] >= 0
+                and row["seasonal_bias_corrected_90pct_lower_m3"] >= 0
+                and row["seasonal_bias_corrected_90pct_upper_m3"] >= row["seasonal_bias_corrected_90pct_lower_m3"]
+                for row in first["test_predictions"]
+            ))
             self.assertTrue(output.exists())
             self.assertEqual(json.loads(output.read_text())["status"], "baseline_evaluated")
 
