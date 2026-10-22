@@ -410,3 +410,19 @@ The committed result snapshot is available at:
 | P5–P95 usable RO energy | 0.950–2.773 MWh/year |
 
 These are scenario outputs from the explicit assumed event distributions, not measurements, a forecast, or a validated field-performance range. The model is not a grid power-flow simulation. The full 1,000-row run log is retained as a GitHub Actions artifact for the workflow run; regenerate it locally with the command above.
+
+
+## Interactive competition demo (synthetic 24-hour simulation)
+
+On the `nan-ao-scenario-pilot` branch, install the dependencies and launch the dashboard:
+
+```bash
+python -m pip install -r requirements.txt
+streamlit run app.py
+```
+
+The dashboard lets reviewers vary synthetic wind, solar and essential-load conditions, along with RO rated power, specific energy use, minimum run duration, reservoir capacity, and backup-power mode. It plots the resulting energy and water traces and surfaces minimum-run checks.
+
+**Important:** this is a user interface for the existing simplified 24-hour simulator, not a validated real-island digital twin. It uses generated example inputs and a perfect-look-ahead dispatch heuristic. It omits real grid power-flow constraints, forecast errors in the UI's base run, membrane flushing, water-quality approval, and site-specific plant interlocks. All results must be described as illustrative simulation outputs.
+
+See [the seven-day competition sprint plan](docs/COMPETITION_SPRINT.md) for the validation and submission checklist.
