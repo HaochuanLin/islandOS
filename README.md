@@ -190,6 +190,18 @@ This is a multi-objective evolutionary-search prototype, **not a trained AI mode
 
 **No real-island dataset is bundled or assumed.** If staff can provide measurements later, open [`tools/site_data_entry.html`](tools/site_data_entry.html) in a browser (it works as a local/offline form), enter the site and provenance details, add hourly rows or import an existing CSV, run the basic checks, then download the CSV and metadata JSON. The form does not upload data, invent missing values, or run dispatch. Keep the metadata JSON alongside the CSV.
 
+
+### Site readiness gate: live-like telemetry and manual CAPEX
+
+A separate [site-readiness guide](docs/SITE_READINESS_GATE.md) defines a fail-closed input gate before site-specific offline scenarios. It requires timestamped wind/PV output, critical load, current usable reservoir inventory, reservoir capacity, and RO equipment parameters. Stale telemetry, missing values, invalid numbers, or water inventory above usable capacity block the requested run. Copy [the readiness template](config/site_readiness.example.json) to a private local file and run:
+
+```bash
+python site_readiness.py path/to/site_readiness.json --mode dispatch --json
+python site_readiness.py path/to/site_readiness.json --mode economic --json
+```
+
+CAPEX and annual O&M are **staff-entered inputs**, not inferred by IslandOS; economic mode blocks until the required cost fields and a traceable source reference are present. Today the gate reads a staff-prepared JSON snapshot or sensor export: **no live sensor connection is implemented**, and passing the gate only means input completeness/basic plausibility checks passed. It never starts equipment or authorizes live control.
+
 The form exports the same schema as [`data/templates/site_hourly_input_template.csv`](data/templates/site_hourly_input_template.csv). Alternatively, edit that template directly. Add one row per interval and provide data in the documented units. The input columns are:
 
 - `timestamp`: ISO-8601 timestamp with timezone, such as `2026-01-01T00:00:00Z`
