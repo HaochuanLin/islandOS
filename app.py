@@ -358,7 +358,7 @@ elif page == "Strategy simulator":
                 st.subheader("Pareto trade-off: grid cost vs. renewable-surplus energy used")
                 st.scatter_chart(
                     plot_df, x="grid_energy_cost", y="surplus_energy_to_ro_kwh",
-                    color="series_type", size=100,
+                    color="series_type",
                     x_label="Grid electricity cost (model units)",
                     y_label="Renewable-surplus energy used by RO (kWh)",
                     height=440,
