@@ -323,9 +323,9 @@ elif page == "Strategy simulator":
         st.caption("This is a model-based optimization module using the selected input series; it is not a trained ML model or real-time controller.")
         p1, p2 = st.columns(2)
         with p1:
-            pop_size = st.number_input("NSGA-II population size", min_value=100, max_value=300, value=100, step=20)
+            pop_size = st.number_input("NSGA-II population size", min_value=120, max_value=300, value=120, step=20)
         with p2:
-            generations = st.number_input("NSGA-II generations", min_value=50, max_value=300, value=50, step=10)
+            generations = st.number_input("NSGA-II generations", min_value=60, max_value=300, value=60, step=10)
         if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
             try:
                 # Streamlit reruns the script on every button click. Rebuild the
@@ -384,21 +384,21 @@ elif page == "Strategy simulator":
                 baseline_df["series_type"] = "Existing fixed strategy"
                 pareto_df["series_type"] = "NSGA-II Pareto candidate"
                 plot_df = pd.concat([
-                    baseline_df[["strategy", "optimizer_cost_score", "ro_switch_on_count", "series_type"]],
-                    pareto_df[["strategy", "optimizer_cost_score", "ro_switch_on_count", "series_type"]],
+                    baseline_df[["strategy", "grid_energy_cost", "ro_switch_on_count", "series_type"]],
+                    pareto_df[["strategy", "grid_energy_cost", "ro_switch_on_count", "series_type"]],
                 ], ignore_index=True)
                 st.subheader("Pareto trade-off: grid cost vs. RO start count")
                 st.scatter_chart(
-                    plot_df, x="optimizer_cost_score", y="ro_switch_on_count",
+                    plot_df, x="grid_energy_cost", y="ro_switch_on_count",
                     color="series_type",
-                    x_label="Optimizer cost score (grid cost with tiny surplus-use preference)",
+                    x_label="Grid electricity cost",
                     y_label="RO switch-on count",
                     height=440,
                 )
                 st.caption("All five existing fixed strategies and feasible NSGA-II candidates are shown together. Fixed strategies are references and may be infeasible.")
                 st.dataframe(pareto_df[[
                     "strategy", "ro_run_hours", "water_produced_m3", "water_served_m3",
-                    "unmet_water_demand_m3", "grid_energy_cost", "optimizer_cost_score", "surplus_energy_to_ro_kwh",
+                    "unmet_water_demand_m3", "grid_energy_cost", "surplus_energy_to_ro_kwh",
                     "grid_energy_to_ro_kwh", "grid_peak_power_kw", "ro_switch_on_count",
                     "water_spill_m3", "ending_water_inventory_m3",
                 ]], use_container_width=True, hide_index=True)
