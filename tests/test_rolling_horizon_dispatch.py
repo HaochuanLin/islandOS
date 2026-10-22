@@ -90,7 +90,7 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(run_experiment(), run_experiment())
 
 
-    def test_repeated_ro_power_shortfalls_rearm_lockout_without_overallocating_power(self):
+    def test_new_ro_start_is_deferred_when_realized_power_is_short(self):
         from experiments.compare_dispatch_policies import Scenario
 
         scenario = Scenario(
@@ -111,7 +111,7 @@ class TestRollingHorizonDispatch(unittest.TestCase):
                 "OFF",
                 "RUNNING",
                 "RUNNING",
-                "RUNNING",
+                "OFF",
             ],
         )
         self.assertEqual(
