@@ -45,10 +45,32 @@ class TestDispatchComparisonExperiment(unittest.TestCase):
                     self.assertAlmostEqual(load["inventory_balance_residual"], 0.0, delta=1e-7)
                     self.assertAlmostEqual(load["demand_balance_residual"], 0.0, delta=1e-7)
                     self.assertFalse(load["capacity_violation"])
+    def test_summary_reports_final_inventories_for_included_assets(self):
+        rows = run_comparison()
+        for row in rows:
+            with self.subTest(scenario=row["scenario"], policy=row["policy"]):
+                if row["policy"] in {"ro_only", "ro_first", "ice_first"}:
+                    self.assertIsNotNone(row["water_inventory_initial_m3"])
+                    self.assertIsNotNone(row["water_inventory_final_m3"])
+                    self.assertGreaterEqual(row["water_inventory_final_m3"], 20.0)
+                    self.assertLessEqual(row["water_inventory_final_m3"], 500.0)
+                else:
+                    self.assertIsNone(row["water_inventory_initial_m3"])
+                    self.assertIsNone(row["water_inventory_final_m3"])
+
+                if row["policy"] in {"ice_only", "ro_first", "ice_first"}:
+                    self.assertIsNotNone(row["cooling_storage_initial_kwh_th"])
+                    self.assertIsNotNone(row["cooling_storage_final_kwh_th"])
+                    self.assertGreaterEqual(row["cooling_storage_final_kwh_th"], 0.0)
+                    self.assertLessEqual(row["cooling_storage_final_kwh_th"], 400.0)
+                else:
+                    self.assertIsNone(row["cooling_storage_initial_kwh_th"])
+                    self.assertIsNone(row["cooling_storage_final_kwh_th"])
+
     def test_metrics_are_non_negative(self):
         for row in run_comparison():
             for key, value in row.items():
-                if key not in {"scenario", "policy"}:
+                if key not in {"scenario", "policy"} and value is not None:
                     self.assertGreaterEqual(value, 0, msg=f"{row['scenario']}/{row['policy']} {key}")
 
 
