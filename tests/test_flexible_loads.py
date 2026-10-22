@@ -248,6 +248,35 @@ class TestFlexibleLoadPlugins(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "configuration values must be finite"):
                     IceStorageLoad(config).simulate([0], [0])
 
+    def test_config_rejects_strings_booleans_and_invalid_integer_types(self):
+        invalid_ro_configs = [
+            ROConfig(rated_power_kw="100"),
+            ROConfig(specific_energy_kwh_m3=True),
+            ROConfig(allow_backup_power=1),
+            ROConfig(min_run_hours=True),
+            ROConfig(fault_recovery_lockout_hours=True),
+        ]
+        for config in invalid_ro_configs:
+            with self.subTest(config=config):
+                with self.assertRaises(ValueError):
+                    ROWaterLoad(config).simulate([0], [0])
+
+        invalid_ice_configs = [
+            IceStorageConfig(rated_power_kw="100"),
+            IceStorageConfig(coefficient_of_performance=True),
+        ]
+        for config in invalid_ice_configs:
+            with self.subTest(config=config):
+                with self.assertRaises(ValueError):
+                    IceStorageLoad(config).simulate([0], [0])
+
+    def test_dt_hours_rejects_boolean_string_and_non_finite_values(self):
+        ice = IceStorageLoad()
+        for dt in (True, "1", float("nan"), float("inf"), 0, -1):
+            with self.subTest(dt=dt):
+                with self.assertRaises(ValueError):
+                    ice.simulate([0], [0], dt_hours=dt)
+
     def test_invalid_input_is_rejected(self):
         ice = IceStorageLoad()
         with self.assertRaises(ValueError):
