@@ -32,8 +32,8 @@ def sample_config():
 
 def test_evaluator_uses_genes_and_manual_schedules_change_metrics():
     steps, config = sample_steps(), sample_config()
-    renewable_schedule = np.array([0, 1, 0, 0, 0, 0, 0, 0])  # 6 kW in interval 0
-    grid_schedule = np.array([0, 0, 0, 1, 0, 0, 0, 0])       # 6 kW in interval 1
+    renewable_schedule = np.array([1, 0, 0, 0])  # index 1 => 6 kW in interval 0
+    grid_schedule = np.array([0, 1, 0, 0])       # index 1 => 6 kW in interval 1
     renewable, renewable_detail = _evaluate_schedule(renewable_schedule, steps, config)
     grid, grid_detail = _evaluate_schedule(grid_schedule, steps, config)
 
@@ -45,29 +45,29 @@ def test_evaluator_uses_genes_and_manual_schedules_change_metrics():
     assert renewable_detail[0]["ro_power_kw"] == 6.0
     assert grid_detail[1]["ro_source"] == "grid"
     assert grid_detail[1]["ro_power_kw"] == 6.0
-    assert _decode_power_levels(np.array([0, 0, 0, 1, 1, 0, 1, 1]), 4) == [0, 6, 8, 10]
+    assert _decode_power_levels(np.array([0, 1, 2, 3]), 4) == [0, 6, 8, 10]
     assert _objective_vector(renewable) != _objective_vector(grid)
 
 
 def test_zero_unmet_demand_and_tank_overflow_are_hard_constraints():
     steps, config = sample_steps(demand=0.0), sample_config()
-    summary, _ = _evaluate_schedule(np.array([0, 0, 0, 0, 0, 0, 0, 0]), steps, config)
+    summary, _ = _evaluate_schedule(np.array([0, 0, 0, 0]), steps, config)
     assert summary["unmet_water_demand_m3"] == 0.0
     assert summary["water_spill_m3"] == 0.0
 
     summary_with_demand, _ = _evaluate_schedule(
-        np.array([0, 0, 0, 0, 0, 0, 0, 0]), sample_steps(demand=1.0), config
+        np.array([0, 0, 0, 0]), sample_steps(demand=1.0), config
     )
     assert summary_with_demand["unmet_water_demand_m3"] > 0.0
 
     small_tank = Config(10.0, 4.0, 2.0, 0.0, min_run_hours=1, dt_hours=1.0)
-    spilling, _ = _evaluate_schedule(np.array([0, 1, 0, 1, 0, 0, 0, 0]), steps, small_tank)
+    spilling, _ = _evaluate_schedule(np.array([1, 1, 0, 0]), steps, small_tank)
     assert spilling["water_spill_m3"] > 0.0
 
 
 def test_returned_solutions_are_unique_feasible_and_non_dominated():
     summaries, details, meta = optimize_dispatch(
-        sample_steps(), sample_config(), population_size=100, generations=50, seed=19
+        sample_steps(), sample_config(), population_size=120, generations=60, seed=19
     )
     assert summaries, meta["message"]
     assert all(row["unmet_water_demand_m3"] == 0.0 for row in summaries)
@@ -94,5 +94,5 @@ def test_optimizer_is_reproducible_for_fixed_seed():
 
 def test_optimizer_rejects_search_budget_below_requested_minimum():
     import pytest
-    with pytest.raises(ValueError, match="population_size must be >= 100"):
-        optimize_dispatch(sample_steps(), sample_config(), population_size=99, generations=50)
+    with pytest.raises(ValueError, match="population_size must be >= 120"):
+        optimize_dispatch(sample_steps(), sample_config(), population_size=119, generations=60)
