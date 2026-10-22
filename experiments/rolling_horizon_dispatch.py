@@ -86,8 +86,15 @@ def _execute_one(
     # A planned start commits the unit for its configured minimum run even
     # though this call executes only one realized hour.
     initial_commitment = ro_run_hours_remaining
+    ro_start_deferred_for_power = False
     if start_ro and initial_commitment == 0:
-        initial_commitment = make_ro().config.min_run_hours
+        ro_config = make_ro().config
+        # The current hour's measured/realized surplus is known at execution.
+        # Do not begin a new minimum-run commitment if rated power is not available.
+        if actual_power >= ro_config.rated_power_kw:
+            initial_commitment = ro_config.min_run_hours
+        else:
+            ro_start_deferred_for_power = True
     result = _run_horizon(
         [actual_power], [water_demand], [cooling_demand],
         water_inventory, cold_inventory, priority, initial_commitment,
@@ -103,6 +110,7 @@ def _execute_one(
         "renewable_used": float(result.renewable_power_used_kw.sum()),
         "remaining_surplus": float(result.remaining_power_kw.sum()),
         "constraint_violations": int(sum(np.sum(x.constraint_violation) for x in result.loads.values())),
+        "ro_start_deferred_for_power": ro_start_deferred_for_power,
         "ro_active": bool(ro is not None and ro.active[0]),
         "ro_operating_state": str(ro.operating_state[0]) if ro is not None and ro.operating_state is not None else "OFF",
         "ro_power_kw": float(ro.power_used_kw[0]) if ro else 0.0,
@@ -208,6 +216,7 @@ def simulate_rolling(scenario: Scenario, forecast_surplus, policy: str = "rollin
             "actual_surplus_kw": float(actual[t]),
             "forecast_surplus_kw": float(forecast[t]),
             "priority": chosen,
+            "ro_start_deferred_for_power": step["ro_start_deferred_for_power"],
             "ro_active": step["ro_active"],
             "ro_operating_state": step["ro_operating_state"],
             "ro_power_kw": round(step["ro_power_kw"], 6),
