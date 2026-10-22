@@ -29,7 +29,7 @@ def render_csv() -> str:
         row["forecast_water_demand_m3"] = actual if previous_demand is None else previous_demand
         previous_demand = actual
     buffer = io.StringIO(newline="")
-    writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator="\\n")
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, lineterminator="\n")
     writer.writeheader()
     writer.writerows(rows)
     return buffer.getvalue()
