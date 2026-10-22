@@ -161,12 +161,12 @@ def simulate_rolling(
                 candidates = []
                 for priority in ("ro_first", "ice_first"):
                     predicted = _run_horizon(
-                        actual[t:end], water_demand[t:end], cooling_demand[t:end],
+                        actual[t:end], planning_water_demand[t:end], cooling_demand[t:end],
                         water_inventory, cold_inventory, priority,
                         ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
-                        _score(predicted, water_demand[t:end], cooling_demand[t:end]),
+                        _score(predicted, planning_water_demand[t:end], cooling_demand[t:end]),
                         priority, predicted,
                     ))
                 _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -205,6 +205,7 @@ def simulate_rolling(
             "forecast_surplus_kw": float(forecast[t]),
             "actual_water_demand_m3": float(water_demand[t]),
             "forecast_water_demand_m3": float(planning_water_demand[t]),
+            "planning_water_demand_m3": float(planning_water_demand[t]),
             "priority": chosen,
             "ro_active": step["ro_active"],
             "ro_operating_state": step["ro_operating_state"],
