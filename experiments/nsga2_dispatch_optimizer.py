@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.callback import Callback
 from pymoo.core.crossover import Crossover
 from pymoo.core.mutation import Mutation
 from pymoo.core.problem import Problem
@@ -232,6 +233,21 @@ def optimize_dispatch(
             out["F"] = np.asarray(objectives, dtype=float)
             out["G"] = np.asarray(constraints, dtype=float)
 
+    # Archive each generation: result.X contains only the final population.
+    class PopulationArchive(Callback):
+        def __init__(self):
+            super().__init__()
+            self.chromosomes: list[np.ndarray] = []
+
+        def notify(self, algorithm):
+            population = algorithm.pop
+            if population is not None and len(population):
+                self.chromosomes.extend(
+                    np.asarray(population.get("X"), dtype=int).copy()
+                )
+
+    archive = PopulationArchive()
+
     # NSGA-II: tournament selection is the algorithm's default selection.
     # Categorical integer genes use single-point crossover and per-gene mutation.
     algorithm = NSGA2(
@@ -243,7 +259,7 @@ def optimize_dispatch(
     )
     result = minimize(
         DispatchProblem(), algorithm, ("n_gen", int(generations)),
-        seed=int(seed), verbose=False, save_history=False,
+        seed=int(seed), verbose=False, save_history=False, callback=archive,
     )
     if result.X is None:
         return [], [], {
@@ -262,19 +278,23 @@ def optimize_dispatch(
     # explicitly filter the first non-dominated layer before CSV export.
     candidates: list[tuple[tuple[int, ...], dict, list[dict], tuple[float, ...]]] = []
     seen_genes: set[tuple[int, ...]] = set()
-    for raw_chromosome in np.atleast_2d(result.X):
+    # Include feasible candidates found in earlier generations, not only result.X.
+    raw_candidates = list(archive.chromosomes)
+    raw_candidates.extend(np.asarray(result.X, dtype=int) if result.X is not None else [])
+    for raw_chromosome in raw_candidates:
         chromosome = np.asarray(raw_chromosome, dtype=int).reshape(-1)
         key = tuple(int(v) for v in chromosome)
         if key in seen_genes:
             continue
         seen_genes.add(key)
         summary, detail = _evaluate_schedule(chromosome, steps, config)
+        tolerance = 1e-6
         if (
-            summary["unmet_water_demand_m3"] != 0.0
+            summary["unmet_water_demand_m3"] > tolerance
             or summary["minimum_run_constraint_violations"] != 0
-            or summary["water_spill_m3"] != 0.0
-            or summary["ending_water_inventory_m3"] < 0.0
-            or summary["ending_water_inventory_m3"] > config.tank_capacity_m3
+            or summary["water_spill_m3"] > tolerance
+            or summary["ending_water_inventory_m3"] < -tolerance
+            or summary["ending_water_inventory_m3"] > config.tank_capacity_m3 + tolerance
         ):
             continue
         candidates.append((key, summary, detail, _objective_vector(summary)))
@@ -284,11 +304,10 @@ def optimize_dispatch(
         candidate for candidate in candidates
         if not _is_dominated(candidate[3], objective_vectors)
     ]
-    # Export only unique objective points; do not duplicate equivalent solutions.
-    unique_front: dict[tuple[float, ...], tuple[tuple[int, ...], dict, list[dict], tuple[float, ...]]] = {}
-    for candidate in first_front:
-        unique_front.setdefault(candidate[3], candidate)
-    first_front = sorted(unique_front.values(), key=lambda candidate: candidate[3])
+    # Keep unique schedules, not merely unique objective vectors. Distinct
+    # schedules can have the same cost and switch count; collapsing by objectives
+    # can incorrectly leave only one candidate row.
+    first_front = sorted(first_front, key=lambda candidate: (candidate[3], candidate[0]))
 
     summaries: list[dict] = []
     schedules: list[dict] = []
@@ -308,11 +327,14 @@ def optimize_dispatch(
         "pmut": pmut,
         "gene_count": n_var,
         "objective_count": 2,
+        "archived_population_candidates": len(archive.chromosomes),
         "message": (
             "NSGA-II first front only: unique feasible schedules minimizing actual "
-            "grid cost and RO start count. Surplus energy and grid peak are output "
-            "metrics only; hard constraints require zero unmet demand, zero short-run "
-            "violations, zero tank spill, and tank inventory within bounds."
+            "grid cost and RO start count. Candidates are archived across generations; "
+            "distinct schedules are retained even when objective values match. "
+            "Surplus energy and grid peak are output metrics only; hard constraints "
+            "require zero unmet demand, zero short-run violations, zero tank spill, "
+            "and tank inventory within bounds (1e-6 numerical tolerance)."
         ),
     }
     return summaries, schedules, metadata
