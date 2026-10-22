@@ -1,10 +1,10 @@
 """NSGA-II dispatch search for the islandOS energy-water screening model.
 
-Each interval is encoded by two bits: off, 6, 8, or 10 kW.
-Objectives (minimized): a grid-cost score with a small renewable-surplus soft
-preference, and RO start count. Peak power is an observation-only metric.
-Feasibility requires zero unmet demand, zero minimum-run violations, and zero
-tank overflow. This is a model-based search, not a real equipment controller.
+One integer gene per simulation interval selects an RO power level:
+0=off, 1=6 kW, 2=8 kW, 3=10 kW.
+Objectives (minimized): actual grid electricity cost and RO switch-on count.
+Surplus renewable energy is an accounting metric only. Grid peak power is an
+observation-only output. This is a model-based search, not a live controller.
 """
 from __future__ import annotations
 
@@ -13,33 +13,74 @@ from typing import Any
 
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.crossover import Crossover
+from pymoo.core.mutation import Mutation
 from pymoo.core.problem import Problem
-from pymoo.operators.crossover.pntx import TwoPointCrossover
-from pymoo.operators.mutation.bitflip import BitflipMutation
-from pymoo.operators.sampling.rnd import BinaryRandomSampling
+from pymoo.core.sampling import Sampling
 from pymoo.optimize import minimize
 
 from experiments.compare_energy_water_strategies import Config, SiteStep, _validate_config
 
 
 POWER_LEVELS_KW = (0.0, 6.0, 8.0, 10.0)
-SURPLUS_SOFT_PREFERENCE_PER_KWH = 0.0001
 
 
 def _decode_power_levels(chromosome: np.ndarray, step_count: int) -> list[float]:
-    """Decode two bits per interval into off / 6 / 8 / 10 kW."""
+    """Decode one categorical gene per interval into off / 6 / 8 / 10 kW."""
     genes = np.asarray(chromosome, dtype=int).reshape(-1)
-    if len(genes) != 2 * step_count:
-        raise ValueError("Chromosome length must be twice the number of input time steps.")
-    return [
-        POWER_LEVELS_KW[2 * int(genes[2 * i]) + int(genes[2 * i + 1])]
-        for i in range(step_count)
-    ]
+    if len(genes) != step_count:
+        raise ValueError("Chromosome length must match the number of input time steps.")
+    if np.any(genes < 0) or np.any(genes >= len(POWER_LEVELS_KW)):
+        raise ValueError("Each gene must be a power-level index in [0, 3].")
+    return [POWER_LEVELS_KW[int(gene)] for gene in genes]
 
 
-def _evaluate_schedule(bits: np.ndarray, steps: list[SiteStep], config: Config):
-    """Simulate the encoded power-level chromosome and return metrics and audit."""
-    requested_power_levels = _decode_power_levels(bits, len(steps))
+class DiscreteRandomSampling(Sampling):
+    """Uniformly sample categorical power-level indices 0..3."""
+
+    def _do(self, problem, n_samples, **kwargs):
+        return np.random.randint(0, len(POWER_LEVELS_KW), size=(n_samples, problem.n_var))
+
+
+class SinglePointDiscreteCrossover(Crossover):
+    """Single-point crossover for integer categorical genes."""
+
+    def __init__(self, prob: float = 0.9):
+        super().__init__(2, 2, prob=prob)
+
+    def _do(self, problem, X, **kwargs):
+        # X shape: (n_parents, n_matings, n_var)
+        children = X.copy()
+        n_var = X.shape[2]
+        if n_var < 2:
+            return children
+        for mating in range(X.shape[1]):
+            point = np.random.randint(1, n_var)
+            children[0, mating, point:] = X[1, mating, point:]
+            children[1, mating, point:] = X[0, mating, point:]
+        return children
+
+
+class DiscreteLevelMutation(Mutation):
+    """Per-gene mutation with pmut=1/n_var; mutated genes select another level."""
+
+    def __init__(self, gene_mutation_probability: float):
+        super().__init__(prob=1.0)
+        self.gene_mutation_probability = gene_mutation_probability
+
+    def _do(self, problem, X, **kwargs):
+        mutated = X.copy().astype(int)
+        mask = np.random.random(mutated.shape) < self.gene_mutation_probability
+        for row, col in zip(*np.where(mask)):
+            current = int(mutated[row, col])
+            choices = [level for level in range(len(POWER_LEVELS_KW)) if level != current]
+            mutated[row, col] = np.random.choice(choices)
+        return mutated
+
+
+def _evaluate_schedule(chromosome: np.ndarray, steps: list[SiteStep], config: Config):
+    """Simulate the chromosome itself and return metrics and timestep audit."""
+    requested_power_levels = _decode_power_levels(chromosome, len(steps))
 
     inventory = config.initial_water_m3
     produced_total = served_total = unmet_total = spill_total = 0.0
@@ -63,8 +104,7 @@ def _evaluate_schedule(bits: np.ndarray, steps: list[SiteStep], config: Config):
                 source = "grid"
                 actual_power = requested_power
 
-        # A run that ends before min_steps is infeasible. Source unavailability
-        # also interrupts a requested run and is counted as a violation.
+        # A run ending before min_steps, including source interruption, is infeasible.
         if source is not None:
             run_length += 1
         else:
@@ -88,6 +128,7 @@ def _evaluate_schedule(bits: np.ndarray, steps: list[SiteStep], config: Config):
         elif source == "grid":
             grid_energy += energy
             grid_cost += energy * step.grid_price_per_kwh
+            # Observation only: intentionally excluded from _objective_vector.
             grid_peak_kw = max(grid_peak_kw, power)
 
         if source:
@@ -139,16 +180,11 @@ def _evaluate_schedule(bits: np.ndarray, steps: list[SiteStep], config: Config):
 
 
 def _objective_vector(summary: dict) -> tuple[float, float]:
-    """Minimize adjusted grid-cost score and starts; peak is not an objective.
-
-    Surplus use contributes only a tiny tie-breaker to the cost score, not a
-    separate objective. The unadjusted grid_energy_cost remains the reported metric.
-    """
-    adjusted_cost = (
-        float(summary["grid_energy_cost"])
-        - SURPLUS_SOFT_PREFERENCE_PER_KWH * float(summary["surplus_energy_to_ro_kwh"])
+    """The only two minimized objectives: actual grid cost and RO starts."""
+    return (
+        float(summary["grid_energy_cost"]),
+        float(summary["ro_switch_on_count"]),
     )
-    return (adjusted_cost, float(summary["ro_switch_on_count"]))
 
 
 def _is_dominated(candidate: tuple[float, ...], others: list[tuple[float, ...]]) -> bool:
@@ -164,28 +200,29 @@ def _is_dominated(candidate: tuple[float, ...], others: list[tuple[float, ...]])
 def optimize_dispatch(
     steps: list[SiteStep],
     config: Config,
-    population_size: int = 100,
-    generations: int = 50,
+    population_size: int = 120,
+    generations: int = 60,
     seed: int = 42,
 ) -> tuple[list[dict], list[dict], dict]:
-    """Return the explicitly filtered feasible non-dominated schedules and metadata."""
+    """Return unique, feasible first-front schedules and metadata."""
     _validate_config(config)
-    if len(steps) < 2:
-        raise ValueError("NSGA-II needs at least two input time steps.")
-    if population_size < 100 or generations < 50:
-        raise ValueError("population_size must be >= 100 and generations must be >= 50.")
-    n = len(steps)
-    n_var = 2 * n
+    if not steps:
+        raise ValueError("NSGA-II needs at least one input time step.")
+    if population_size < 120 or generations < 60:
+        raise ValueError("population_size must be >= 120 and generations must be >= 60.")
+    n_var = len(steps)
+    pmut = 1.0 / n_var
 
     class DispatchProblem(Problem):
         def __init__(self):
-            # Hard constraints: no unmet demand, no short run, no tank overflow.
-            super().__init__(n_var=n_var, n_obj=2, n_ieq_constr=3, xl=0, xu=1, vtype=bool)
+            # F: grid cost and RO starts. G <= 0 is feasible in pymoo.
+            # Constraints cover unmet demand, min-run violations, and tank spill.
+            super().__init__(n_var=n_var, n_obj=2, n_ieq_constr=3, xl=0, xu=3, vtype=int)
 
         def _evaluate(self, X, out, *args, **kwargs):
             objectives, constraints = [], []
-            for bits in X:
-                summary, _ = _evaluate_schedule(bits, steps, config)
+            for chromosome in X:
+                summary, _ = _evaluate_schedule(chromosome, steps, config)
                 objectives.append(_objective_vector(summary))
                 constraints.append([
                     summary["unmet_water_demand_m3"],
@@ -195,11 +232,13 @@ def optimize_dispatch(
             out["F"] = np.asarray(objectives, dtype=float)
             out["G"] = np.asarray(constraints, dtype=float)
 
+    # NSGA-II: tournament selection is the algorithm's default selection.
+    # Categorical integer genes use single-point crossover and per-gene mutation.
     algorithm = NSGA2(
         pop_size=int(population_size),
-        sampling=BinaryRandomSampling(),
-        crossover=TwoPointCrossover(),
-        mutation=BitflipMutation(prob=1.0 / n_var),
+        sampling=DiscreteRandomSampling(),
+        crossover=SinglePointDiscreteCrossover(prob=0.9),
+        mutation=DiscreteLevelMutation(gene_mutation_probability=pmut),
         eliminate_duplicates=True,
     )
     result = minimize(
@@ -211,44 +250,49 @@ def optimize_dispatch(
             "feasible_count": 0,
             "unique_feasible_count": 0,
             "evaluations": int(getattr(result, "n_eval", 0) or 0),
+            "population_size": int(population_size),
+            "generations": int(generations),
+            "pcross": 0.9,
+            "pmut": pmut,
             "objective_count": 2,
-            "message": "No feasible schedule found. Increase search budget or review whether the demand can be served without tank overflow.",
+            "message": "No feasible schedule found. Review demand, tank capacity, power availability, and minimum run duration.",
         }
 
-    # Recompute, enforce constraints, deduplicate chromosomes, and explicitly
-    # filter dominance across both optimization objectives before CSV export.
+    # Re-evaluate the returned population, reject infeasible schedules, and
+    # explicitly filter the first non-dominated layer before CSV export.
     candidates: list[tuple[tuple[int, ...], dict, list[dict], tuple[float, ...]]] = []
     seen_genes: set[tuple[int, ...]] = set()
-    for raw_bits in np.atleast_2d(result.X):
-        bits = np.asarray(raw_bits, dtype=int).reshape(-1)
-        key = tuple(int(v) for v in bits)
+    for raw_chromosome in np.atleast_2d(result.X):
+        chromosome = np.asarray(raw_chromosome, dtype=int).reshape(-1)
+        key = tuple(int(v) for v in chromosome)
         if key in seen_genes:
             continue
         seen_genes.add(key)
-        summary, detail = _evaluate_schedule(bits, steps, config)
+        summary, detail = _evaluate_schedule(chromosome, steps, config)
         if (
             summary["unmet_water_demand_m3"] != 0.0
             or summary["minimum_run_constraint_violations"] != 0
             or summary["water_spill_m3"] != 0.0
+            or summary["ending_water_inventory_m3"] < 0.0
+            or summary["ending_water_inventory_m3"] > config.tank_capacity_m3
         ):
             continue
         candidates.append((key, summary, detail, _objective_vector(summary)))
 
-    objective_vectors = [c[3] for c in candidates]
-    pareto = [c for c in candidates if not _is_dominated(c[3], objective_vectors)]
-    # Different time patterns can share the same two optimization metrics.
-    # Keep one representative per objective vector so the exported front does
-    # not contain overlapping duplicate points.
-    pareto_by_objective: dict[tuple[float, ...], tuple[tuple[int, ...], dict, list[dict], tuple[float, ...]]] = {}
-    for candidate in pareto:
-        pareto_by_objective.setdefault(candidate[3], candidate)
-    pareto = list(pareto_by_objective.values())
-    pareto.sort(key=lambda c: (c[3][0], c[3][1]))
+    objective_vectors = [candidate[3] for candidate in candidates]
+    first_front = [
+        candidate for candidate in candidates
+        if not _is_dominated(candidate[3], objective_vectors)
+    ]
+    # Export only unique objective points; do not duplicate equivalent solutions.
+    unique_front: dict[tuple[float, ...], tuple[tuple[int, ...], dict, list[dict], tuple[float, ...]]] = {}
+    for candidate in first_front:
+        unique_front.setdefault(candidate[3], candidate)
+    first_front = sorted(unique_front.values(), key=lambda candidate: candidate[3])
 
     summaries: list[dict] = []
     schedules: list[dict] = []
-    for _, summary, detail, objective in pareto:
-        summary["optimizer_cost_score"] = round(float(objective[0]), 6)
+    for _, summary, detail, _ in first_front:
         summary["strategy"] = f"nsga2_candidate_{len(summaries) + 1:02d}"
         summaries.append(summary)
         schedules.extend({**row, "strategy": summary["strategy"]} for row in detail)
@@ -256,17 +300,19 @@ def optimize_dispatch(
     metadata = {
         "feasible_count": len(summaries),
         "unique_feasible_count": len(candidates),
-        "distinct_objective_vectors": len(set(c[3] for c in candidates)),
+        "distinct_objective_vectors": len(set(candidate[3] for candidate in candidates)),
         "evaluations": int(getattr(result, "n_eval", 0) or 0),
         "population_size": int(population_size),
         "generations": int(generations),
-        "seed": int(seed),
+        "pcross": 0.9,
+        "pmut": pmut,
+        "gene_count": n_var,
         "objective_count": 2,
         "message": (
-            "Two-objective NSGA-II completed (soft surplus-use preference embedded "
-            "as a tiny grid-cost tie-breaker; peak power is observation-only). "
-            "Returned rows are unique, feasible non-dominated candidates under "
-            "zero unmet demand, zero minimum-run violations, and zero tank overflow."
+            "NSGA-II first front only: unique feasible schedules minimizing actual "
+            "grid cost and RO start count. Surplus energy and grid peak are output "
+            "metrics only; hard constraints require zero unmet demand, zero short-run "
+            "violations, zero tank spill, and tank inventory within bounds."
         ),
     }
     return summaries, schedules, metadata
