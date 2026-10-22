@@ -104,22 +104,33 @@ class ROWaterLoad:
             c.reservoir_capacity_m3, c.initial_water_m3,
             c.dead_storage_m3, c.start_ratio,
         )
+        if any(
+            isinstance(value, (bool, np.bool_))
+            or not isinstance(value, (int, float, np.integer, np.floating))
+            for value in numeric_config
+        ):
+            raise ValueError("RO configuration values must be finite numeric values")
         if not all(np.isfinite(value) for value in numeric_config):
             raise ValueError("RO configuration values must be finite")
+        if not isinstance(c.allow_backup_power, (bool, np.bool_)):
+            raise ValueError("allow_backup_power must be a boolean")
         if c.rated_power_kw <= 0 or c.specific_energy_kwh_m3 <= 0:
             raise ValueError("RO rated power and specific energy must be positive")
-        if not isinstance(c.min_run_hours, int) or c.min_run_hours < 1:
+        if isinstance(c.min_run_hours, (bool, np.bool_)) or not isinstance(c.min_run_hours, (int, np.integer)) or c.min_run_hours < 1:
             raise ValueError("min_run_hours must be an integer >= 1")
-        if (not isinstance(initial_run_hours_remaining, int)
+        if (isinstance(initial_run_hours_remaining, (bool, np.bool_))
+                or not isinstance(initial_run_hours_remaining, (int, np.integer))
                 or initial_run_hours_remaining < 0
                 or initial_run_hours_remaining > c.min_run_hours):
             raise ValueError(
                 "initial_run_hours_remaining must be an integer within [0, min_run_hours]"
             )
-        if (not isinstance(c.fault_recovery_lockout_hours, int)
+        if (isinstance(c.fault_recovery_lockout_hours, (bool, np.bool_))
+                or not isinstance(c.fault_recovery_lockout_hours, (int, np.integer))
                 or c.fault_recovery_lockout_hours < 0):
             raise ValueError("fault_recovery_lockout_hours must be an integer >= 0")
-        if (not isinstance(initial_fault_lockout_hours_remaining, int)
+        if (isinstance(initial_fault_lockout_hours_remaining, (bool, np.bool_))
+                or not isinstance(initial_fault_lockout_hours_remaining, (int, np.integer))
                 or initial_fault_lockout_hours_remaining < 0
                 or initial_fault_lockout_hours_remaining > c.fault_recovery_lockout_hours):
             raise ValueError(
@@ -260,6 +271,12 @@ class IceStorageLoad:
             c.rated_power_kw, c.coefficient_of_performance,
             c.storage_capacity_kwh_th, c.initial_storage_kwh_th,
         )
+        if any(
+            isinstance(value, (bool, np.bool_))
+            or not isinstance(value, (int, float, np.integer, np.floating))
+            for value in numeric_config
+        ):
+            raise ValueError("Ice-storage configuration values must be finite numeric values")
         if not all(np.isfinite(value) for value in numeric_config):
             raise ValueError("Ice-storage configuration values must be finite")
         if c.rated_power_kw <= 0 or c.coefficient_of_performance <= 0:
@@ -308,5 +325,10 @@ def _validate_series(values: Sequence[float], name: str) -> np.ndarray:
 
 
 def _validate_dt(dt_hours: float) -> None:
-    if not np.isfinite(dt_hours) or dt_hours <= 0:
-        raise ValueError("dt_hours must be finite and > 0")
+    if (
+        isinstance(dt_hours, (bool, np.bool_))
+        or not isinstance(dt_hours, (int, float, np.integer, np.floating))
+        or not np.isfinite(dt_hours)
+        or dt_hours <= 0
+    ):
+        raise ValueError("dt_hours must be a finite numeric value > 0")
