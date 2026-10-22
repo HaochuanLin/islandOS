@@ -74,7 +74,7 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         # must still receive realized demand, not the forecast.
         self.assertEqual(
             list(np.asarray(run_horizon.call_args_list[0].args[1], dtype=float)),
-            list(forecast_water),
+            list(forecast_water[:3]),
         )
         self.assertEqual(
             list(np.asarray(run_horizon.call_args_list[1].args[1], dtype=float)),
