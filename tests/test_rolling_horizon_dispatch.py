@@ -51,6 +51,25 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(result["hourly_audit"][1]["ro_run_hours_remaining"], 0)
         self.assertEqual(result["constraint_violation_hours"], 1)
 
+    def test_ice_first_start_guard_accounts_for_power_used_by_ice(self):
+        from experiments.rolling_horizon_dispatch import _execute_one
+
+        step = _execute_one(
+            actual_power=420.0,
+            water_demand=0.0,
+            cooling_demand=100.0,
+            water_inventory=150.0,
+            cold_inventory=100.0,
+            priority="ice_first",
+            ro_run_hours_remaining=0,
+            ro_fault_lockout_hours_remaining=0,
+            start_ro=True,
+        )
+        self.assertTrue(step["ro_start_deferred_for_power"])
+        self.assertLess(step["ro_available_power_after_priority_kw"], 400.0)
+        self.assertEqual(step["ro_power_kw"], 0.0)
+        self.assertEqual(step["constraint_violations"], 0)
+
     def test_ro_recovery_lockout_is_carried_across_hourly_replans(self):
         from experiments.compare_dispatch_policies import Scenario
 
