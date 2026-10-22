@@ -50,6 +50,13 @@ A policy with any constraint-violation hour is marked infeasible, even if its
 normalized score is lower. Violation hours count distinct hours with one or more
 flags, while violation count sums the flags.
 
+At execution, a new RO start is deferred when realized power remaining after
+higher-priority loads is below the RO rated power. The hourly audit records this
+decision and the remaining power estimate. This guard prevents avoidable new
+commitments under a known current-hour shortfall; it cannot guarantee that a
+future committed hour will have enough power, so violations in already-started
+cycles must still be reported.
+
 ## What constitutes success
 
 The software benchmark is considered technically successful when:
