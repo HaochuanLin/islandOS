@@ -34,7 +34,7 @@ The repository now contains a runnable synthetic demo, experimental flexible-loa
 | 💧 **Water** | Experimental reverse-osmosis (RO) and freshwater-inventory model |
 | ❄️ **Cooling** | Simplified ice-making / cold-storage load prototype |
 | 🌦️ **Data** | NASA POWER weather importer, Philippines DIB monthly workbook importer, and Mafate measured microgrid time-series importer |
-| 📈 **Forecast evaluation** | Persistence and 24-hour seasonal-naive baselines with chronological holdout and multi-window evaluation |
+| 📈 **Forecast evaluation** | Water-demand baselines and an optional trained Mafate household-load model with chronological evaluation |
 | 🧪 **Experiments** | Policy comparisons, forecast-to-dispatch evaluation, fixed synthetic end-to-end benchmark, grid search, sensitivity audits |
 | ✅ **Verification** | Unit/regression tests, deterministic fixture check, and GitHub Actions artifacts |
 
@@ -100,6 +100,7 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 | Download NASA POWER weather data | See [data workflow](#weather-data-and-forecast-baselines) | Saves hourly environmental parameters and provenance metadata |
 | Import Philippines DIB workbook | See [workbook import guide](docs/PHILIPPINES_DIB_IMPORT.md) | Normalizes 208-grid site, monthly load/resource, and diesel asset tables; preserves monthly resolution and records caveats |
 | Import measured Mafate microgrid data | See [Mafate import guide](docs/MAFATE_MICROGRID_DATA.md) | Normalizes real PV/battery, weather and three-household load measurements into hourly tables without filling gaps |
+| Train a measured-load forecast model | See [Mafate model guide](docs/MAFATE_LOAD_FORECAST.md) | Trains gradient boosting and compares it with persistence and daily/weekly seasonal baselines on a chronological holdout |
 | Run all regression tests | `python -m unittest discover -s tests -v` | Checks selected model invariants and edge cases |
 
 The rolling-horizon prototype carries the RO minimum-run commitment between hourly replans and reports a violation if a committed hour lacks enough renewable power. Its JSON result now includes `hourly_audit` (actual and forecast surplus, chosen priority, RO activity/power, remaining commitment, inventory states, and violation count) plus `constraint_violation_hour_indices` so forecast-error failures can be located rather than hidden in an aggregate. Each RO audit row labels `ro_operating_state` as `OFF`, `RUNNING`, `RUNNING_WITH_BACKUP`, `COMMITMENT_POWER_SHORTFALL`, or `RECOVERY_LOCKOUT`. A no-backup power shortfall records zero actual power use and zero production while raising a constraint violation; `ro_active` means energized, not merely committed. The default prototype then enforces one simulated hour of recovery lockout before another start and carries that counter across hourly replans. This is an explicit simplified restart policy, not a validated plant trip/restart controller: real interlocks, fault diagnosis, startup/ramp dynamics, and site-specific restart criteria remain out of scope.
