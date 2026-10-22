@@ -18,6 +18,19 @@ class TestIslandOSConfig(unittest.TestCase):
         self.assertFalse(economics["complete_for_current_declared_fields"])
         self.assertFalse(economics["cost_objective_implemented"])
 
+    def test_example_json_loads_and_matches_shared_defaults(self):
+        example = Path("config/site_parameters.example.json")
+        config = load_config(example)
+        self.assertEqual(validate_config(config), [])
+        defaults = load_config()
+        for section in ("equipment", "search_space"):
+            self.assertEqual(config[section], defaults[section])
+        self.assertIsNone(config["economics"]["electricity_price_per_kwh"])
+        self.assertEqual(
+            config["metadata"]["status"],
+            "illustrative_defaults_not_site_data",
+        )
+
     def test_low_level_load_defaults_match_shared_config(self):
         config = load_config()
         ro = ROConfig()
