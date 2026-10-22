@@ -106,10 +106,14 @@ The rolling-horizon prototype carries the RO minimum-run commitment between hour
 ```bash
 git clone https://github.com/HaochuanLin/islandOS.git
 cd islandOS
+
+Python **3.10 or newer** is required; CI currently tests on Python 3.11.
+
+```bash
 python -m venv .venv
 
 # Windows PowerShell
-.venv\\Scripts\\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 # macOS / Linux (use this instead of the Windows command)
 source .venv/bin/activate
@@ -235,9 +239,9 @@ The report includes forecast MAE/RMSE/bias, unmet water and cooling demand, rema
 IslandOS includes a NASA POWER hourly importer for `ALLSKY_SFC_SW_DWN`, `T2M`, and `WS10M`, with a provenance sidecar. Example:
 
 ```bash
-python data_sources/nasa_power_hourly.py \\
-  --latitude -35.2 --longitude -63.5 \\
-  --start 20200101 --end 20200107 \\
+python data_sources/nasa_power_hourly.py \
+  --latitude -35.2 --longitude -63.5 \
+  --start 20200101 --end 20200107 \
   --output data/raw/nasa_power_hourly.csv
 ```
 
@@ -246,16 +250,16 @@ The coordinates and dates above are examples only. Consult the [NASA POWER hourl
 Prepare environmental features:
 
 ```bash
-python data_sources/prepare_environmental_features.py \\
-  data/raw/nasa_power_hourly.csv \\
+python data_sources/prepare_environmental_features.py \
+  data/raw/nasa_power_hourly.csv \
   --output data/processed/nasa_environmental_features.csv
 ```
 
 Evaluate simple one-hour-ahead weather-parameter baselines:
 
 ```bash
-python experiments/forecasting_baselines.py \\
-  data/raw/nasa_power_hourly.csv \\
+python experiments/forecasting_baselines.py \
+  data/raw/nasa_power_hourly.csv \
   --output data/processed/forecast_baselines.csv
 ```
 
