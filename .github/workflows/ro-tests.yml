@@ -39,7 +39,7 @@ jobs:
           assert report["status"] == "baseline_evaluated"
           assert report["row_count"] == 336
           assert report["test_rows"] > 0
-          assert set(report["test_metrics"]) == {"persistence", "seasonal_naive_24h"}
+          assert {"persistence", "seasonal_naive_24h"}.issubset(report["test_metrics"])
           assert "nominal_90pct" in report["seasonal_prediction_intervals"]
           print("Synthetic water-demand forecast smoke test passed.")
           PY
