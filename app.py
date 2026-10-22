@@ -317,8 +317,8 @@ elif page == "Strategy simulator":
             "The optimizer selects RO power at each interval from off / 6 / 8 / 10 kW. "
             "The source rule is renewable-surplus power first, then available off-peak grid power. "
             "**Hard feasibility requirements:** unmet water demand = 0, minimum run-time violations = 0, "
-            "and tank overflow = 0. NSGA-II minimizes grid cost (with a tiny surplus-use soft preference "
-            "as a tie-breaker) and RO start count. Peak grid power remains observation-only, not an objective."
+            "and tank overflow = 0. NSGA-II minimizes actual grid electricity cost and RO start count. "
+            "Surplus energy is accounting-only and may be curtailed. Peak grid power remains observation-only."
         )
         st.caption("This is a model-based optimization module using the selected input series; it is not a trained ML model or real-time controller.")
         p1, p2 = st.columns(2)
@@ -380,7 +380,6 @@ elif page == "Strategy simulator":
                         if is_on and (i == 0 or not on[i - 1])
                     )
                 baseline_df["ro_switch_on_count"] = baseline_df["strategy"].map(heuristic_switches).fillna(0)
-                baseline_df["optimizer_cost_score"] = baseline_df["grid_energy_cost"]
                 baseline_df["series_type"] = "Existing fixed strategy"
                 pareto_df["series_type"] = "NSGA-II Pareto candidate"
                 plot_df = pd.concat([
