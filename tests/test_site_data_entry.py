@@ -31,7 +31,7 @@ class StaffDataEntryFormTests(unittest.TestCase):
     def test_documentation_describes_offline_and_non_operational_scope(self):
         guide = GUIDE.read_text(encoding="utf-8")
         self.assertIn("does not", guide)
-        self.assertIn("does not automatically", guide.lower())
+        self.assertIn("not automatically uploaded", guide.lower())
         self.assertIn("not a complete staff operations console", guide)
 
 
