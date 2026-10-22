@@ -193,7 +193,7 @@ This is a multi-objective evolutionary-search prototype, **not a trained AI mode
 
 ### Site readiness gate: live-like telemetry and manual CAPEX
 
-A separate [site-readiness guide](docs/SITE_READINESS_GATE.md) defines a fail-closed input gate before site-specific offline scenarios. It requires timestamped wind/PV output, critical load, current usable reservoir inventory, reservoir capacity, and RO equipment parameters. Stale telemetry, missing values, invalid numbers, or water inventory above usable capacity block the requested run. Copy [the readiness template](config/site_readiness.example.json) to a private local file and run:
+Use the offline [staff readiness form](tools/site_readiness_form.html) to enter a timestamped telemetry snapshot, static equipment parameters, and (for economic mode) staff-sourced CAPEX/O&M. A separate [site-readiness guide](docs/SITE_READINESS_GATE.md) defines a fail-closed input gate before site-specific offline scenarios. It requires timestamped wind/PV output, critical load, current usable reservoir inventory, reservoir capacity, and RO equipment parameters. Stale telemetry, missing values, invalid numbers, or water inventory above usable capacity block the requested run. Copy [the readiness template](config/site_readiness.example.json) to a private local file and run:
 
 ```bash
 python site_readiness.py path/to/site_readiness.json --mode dispatch --json
