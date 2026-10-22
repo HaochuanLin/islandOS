@@ -191,6 +191,13 @@ This is a multi-objective evolutionary-search prototype, **not a trained AI mode
 **No real-island dataset is bundled or assumed.** If staff can provide measurements later, open [`tools/site_data_entry.html`](tools/site_data_entry.html) in a browser (it works as a local/offline form), enter the site and provenance details, add hourly rows or import an existing CSV, run the basic checks, then download the CSV and metadata JSON. The form does not upload data, invent missing values, or run dispatch. Keep the metadata JSON alongside the CSV.
 
 
+
+### Sensor adapter contract (hardware-ready interface, not live integration)
+
+IslandOS now defines a versioned normalized telemetry contract and mock source in [`islandos_sensors/`](islandos_sensors/), with a [hardware adapter contract](docs/SENSOR_ADAPTER_CONTRACT.md) and [quickstart](docs/SENSOR_ADAPTER_QUICKSTART.md). Messages include site/device/signal IDs, timestamp with timezone, numeric value, unit, quality, source type, and a raw-source reference. The validator rejects missing metadata, unsupported signals/units, stale samples, non-finite values, and non-good quality.
+
+**Important:** no physical sensor connection is implemented. The mock messages are explicitly synthetic. Real hardware still needs a device-specific read-only adapter configured and tested against the actual model/protocol/register map/API, scaling, calibration, and timestamp behavior. This contract does not authorize live control.
+
 ### Site readiness gate: live-like telemetry and manual CAPEX
 
 Use the offline [staff readiness form](tools/site_readiness_form.html) to enter a timestamped telemetry snapshot, static equipment parameters, and (for economic mode) staff-sourced CAPEX/O&M. A separate [site-readiness guide](docs/SITE_READINESS_GATE.md) defines a fail-closed input gate before site-specific offline scenarios. It requires timestamped wind/PV output, critical load, current usable reservoir inventory, reservoir capacity, and RO equipment parameters. Stale telemetry, missing values, invalid numbers, or water inventory above usable capacity block the requested run. Copy [the readiness template](config/site_readiness.example.json) to a private local file and run:
