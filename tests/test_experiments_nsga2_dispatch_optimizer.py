@@ -84,7 +84,7 @@ def test_returned_solutions_are_unique_feasible_and_non_dominated():
 
 
 def test_optimizer_is_reproducible_for_fixed_seed():
-    args = dict(population_size=100, generations=50, seed=123)
+    args = dict(population_size=120, generations=60, seed=123)
     first, _, _ = optimize_dispatch(sample_steps(), sample_config(), **args)
     second, _, _ = optimize_dispatch(sample_steps(), sample_config(), **args)
     first_values = [_objective_vector(row) for row in first]
