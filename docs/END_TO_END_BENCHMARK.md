@@ -42,6 +42,14 @@ The illustrative score is:
 
 Lower is better for this chosen score, but the raw unmet-water and unmet-cooling results must always be inspected alongside it. The weights are a design choice, not a validated social-welfare or reliability objective.
 
+Constraint feasibility is evaluated separately from that score. The rolling planner
+selects a priority with fewer forecast-horizon constraint-violation hours first,
+then uses the illustrative score to break ties. The report's best fixed-priority
+reference follows the same ordering; a separate score-only ranking is retained.
+A policy with any constraint-violation hour is marked infeasible, even if its
+normalized score is lower. Violation hours count distinct hours with one or more
+flags, while violation count sums the flags.
+
 ## What constitutes success
 
 The software benchmark is considered technically successful when:
