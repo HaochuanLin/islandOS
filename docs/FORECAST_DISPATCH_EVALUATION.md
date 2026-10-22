@@ -25,7 +25,7 @@ same unit.
 ## Run
 
 ```bash
-python experiments/evaluate_forecast_dispatch.py path/to/paired_hourly.csv \\
+python experiments/evaluate_forecast_dispatch.py path/to/paired_hourly.csv \
   --output build/forecast-dispatch-evaluation.json
 ```
 
