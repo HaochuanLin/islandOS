@@ -46,7 +46,13 @@ The script holds out the final chronological segment and compares:
   on the training history from the 24-hour seasonal forecast. The correction
   is fitted before the test window and clipped at zero.
 
-It reports MAE, RMSE, and bias on the same held-out hours. It also reports
+It reports MAE, RMSE, and bias on the same held-out hours. In addition, the
+expanding-window rolling-origin backtest recalibrates the seasonal bias before
+each test hour using only earlier observations and earlier forecast errors. Its
+metrics are reported separately from the fixed-training-window comparison.
+A leakage-guard test changes only later observations and verifies that an earlier
+forecast remains unchanged. This checks the implementation's time boundary; it
+does not guarantee that the statistical model is accurate. It also reports
 descriptive Jarque–Bera diagnostics for the held-out demand values and the
 training-history seasonal-forecast errors. The approximate p-value is a
 diagnostic, not proof that a distribution is or is not Gaussian.
