@@ -320,7 +320,7 @@ elif page == "Strategy simulator":
             "and tank overflow = 0. NSGA-II minimizes actual grid electricity cost and RO start count. "
             "Surplus energy is accounting-only and may be curtailed. Peak grid power remains observation-only."
         )
-        st.caption("This is a model-based optimization module using the selected input series; it is not a trained ML model or real-time controller.")
+        st.caption("Runtime build: NSGA2-2OBJ-DIAG-v1 · This is a model-based optimization module using the selected input series; it is not a trained ML model or real-time controller.")
         p1, p2 = st.columns(2)
         with p1:
             pop_size = st.number_input("NSGA-II population size", min_value=120, max_value=300, value=120, step=20)
@@ -355,6 +355,21 @@ elif page == "Strategy simulator":
         optimizer_result = st.session_state.get("islandos_optimizer_result")
         if optimizer_result:
             meta = optimizer_result["meta"]
+            # Never present stale or incompatible session-state output as a successful
+            # result. The current optimizer contract has exactly two objectives and
+            # must count actual chromosome evaluations. Old Streamlit sessions can
+            # survive code reloads, so validate stored metadata before plotting it.
+            objective_count = meta.get("objective_count")
+            evaluations = meta.get("evaluations")
+            if objective_count != 2 or not isinstance(evaluations, (int, float)) or evaluations <= 0:
+                st.error(
+                    "Stale or incompatible NSGA-II result detected. Expected objective_count=2 "
+                    "and evaluations > 0, but got "
+                    f"objective_count={objective_count!r}, evaluations={evaluations!r}. "
+                    "Please click Run strategy comparison, then run NSGA-II again. "
+                    "If this message persists, the deployed app/optimizer code is out of sync."
+                )
+                st.stop()
             st.caption(f"Optimizer data provenance: **{optimizer_result['source']}**")
             st.write(meta.get("message", ""))
             st.write(
