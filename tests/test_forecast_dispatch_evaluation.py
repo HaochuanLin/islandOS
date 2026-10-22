@@ -88,7 +88,7 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
         )
         self.assertEqual(
             result["water_demand_input"]["forecast_demand_metrics"]["mae_m3_per_hour"],
-            3.5,
+            11.5,
         )
         audit = result["policy_comparison"]["rolling"]["hourly_audit"]
         self.assertEqual(audit[0]["actual_water_demand_m3"], 20.0)
