@@ -48,8 +48,8 @@ No missing site values are automatically imputed. The script rejects missing req
 
 ## Outputs
 
-- `strategy_summary.csv`: one row per strategy, including simulated water production/service, unmet demand, spill, RO run hours, energy source split, grid energy cost, optional backup-energy cost estimate, ending water inventory, and the separate diesel-displacement-potential total.
-- `timestep_audit.csv`: time-step-by-strategy source choice, RO power/energy, water inventory balance, demand served/unmet, spill and tariff.
+- `strategy_summary.csv`: one row per strategy, including simulated water production/service, unmet demand, spill, RO run hours, total renewable surplus available and unused, energy source split, grid energy cost, optional backup-energy cost estimate, ending water inventory, and the separate diesel-displacement-potential total.
+- `timestep_audit.csv`: time-step-by-strategy source choice, RO power/energy, available and unused renewable surplus, water inventory balance, demand served/unmet, spill and tariff.
 
 ## Interpretation rules
 
