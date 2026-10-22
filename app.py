@@ -5,12 +5,42 @@ All inputs are synthetic. This is a research visualization, not a site controlle
 """
 from __future__ import annotations
 
+import csv
+import io
+import json
+
 import numpy as np
 import streamlit as st
 
 from island_microgrid_ro_sim import Params, load_data, simulate, check_min_run
 
 st.set_page_config(page_title="islandOS | Energy–Water Lab", page_icon="🌊", layout="wide")
+
+st.markdown("""
+<style>
+:root { color-scheme: light; }
+.block-container { max-width: 1440px; padding-top: 1.4rem; padding-bottom: 3rem; }
+[data-testid="stAppViewContainer"] { background: linear-gradient(180deg, #f4f8fb 0%, #ffffff 38%); }
+[data-testid="stSidebar"] { background: #102b3f; }
+[data-testid="stSidebar"] * { color: #f3f8fb; }
+[data-testid="stSidebar"] [data-baseweb="slider"] * { color: #f3f8fb; }
+h1 { letter-spacing: -0.04em; color: #102b3f; font-weight: 800; }
+h2, h3 { color: #163e54; letter-spacing: -0.02em; }
+[data-testid="stMetric"] { background: white; border: 1px solid #dce7ed; border-radius: 14px; padding: 16px 18px; box-shadow: 0 4px 18px rgba(16,43,63,.045); }
+[data-testid="stMetricLabel"] { color: #587182; font-size: .88rem; }
+[data-testid="stMetricValue"] { color: #102b3f; font-weight: 750; }
+.stTabs [data-baseweb="tab-list"] { gap: 8px; }
+.stTabs [data-baseweb="tab"] { background: #eaf1f5; border-radius: 10px 10px 0 0; padding: 10px 16px; }
+.stTabs [aria-selected="true"] { background: #d9eee9 !important; color: #145b50 !important; }
+div[data-testid="stAlert"] { border-radius: 12px; }
+[data-testid="stDownloadButton"] button { border-radius: 10px; font-weight: 650; }
+@media (max-width: 700px) {
+  .block-container { padding-left: 1rem; padding-right: 1rem; padding-top: .8rem; }
+  h1 { font-size: 2rem !important; }
+  [data-testid="stMetric"] { padding: 12px; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.title("islandOS")
 st.subheader("Island energy–water flexibility lab")
@@ -207,4 +237,85 @@ with tab3:
     )
 
 st.divider()
+st.markdown("### Export this run")
+st.caption("Downloadable files preserve the selected scenario and hourly model outputs for review. They are synthetic simulation records, not field data.")
+hours = list(range(24))
+hourly_rows = []
+for i, hour in enumerate(hours):
+    hourly_rows.append({
+        "hour": hour,
+        "wind_kw": round(float(wind[i]), 4),
+        "solar_kw": round(float(pv[i]), 4),
+        "essential_load_kw": round(float(base_load[i]), 4),
+        "available_surplus_kw": round(float(curtail[i]), 4),
+        "ro_on": int(result["ro_on"][i]),
+        "renewable_surplus_absorbed_kwh": round(float(result["ro_use"][i]), 4),
+        "backup_energy_kwh": round(float(result["ro_backup"][i]), 4),
+        "water_produced_m3": round(float(result["water_prod"][i]), 4),
+        "water_demand_m3": round(float(water_demand[i]), 4),
+        "unmet_water_demand_indicator_m3": round(float(result["deficit"][i]), 4),
+        "reservoir_start_m3": round(float(result["V"][i]), 4),
+        "reservoir_end_m3": round(float(result["V"][i + 1]), 4),
+        "reservoir_spill_m3": round(float(result["spill"][i]), 4),
+    })
+csv_buffer = io.StringIO()
+writer = csv.DictWriter(csv_buffer, fieldnames=list(hourly_rows[0].keys()))
+writer.writeheader()
+writer.writerows(hourly_rows)
+scenario_report = {
+    "project": "islandOS",
+    "scenario_type": "synthetic_demo",
+    "not_field_data": True,
+    "seed": int(seed),
+    "time_step": "1 hour",
+    "horizon_hours": 24,
+    "parameters": {
+        "wind_multiplier": float(wind_scale),
+        "solar_multiplier": float(pv_scale),
+        "essential_load_multiplier": float(load_scale),
+        "ro_rated_power_kw": float(ro_power),
+        "ro_specific_energy_kwh_per_m3": float(sec),
+        "minimum_run_hours": int(min_run),
+        "reservoir_capacity_m3": float(capacity),
+        "initial_stored_water_m3": float(initial),
+        "minimum_reserve_m3": float(dead_storage),
+        "backup_power_allowed": bool(allow_backup),
+    },
+    "summary": {
+        "available_surplus_kwh": round(total_surplus, 4),
+        "renewable_surplus_absorbed_by_ro_kwh": round(used_surplus, 4),
+        "surplus_absorbed_fraction": round(used_surplus / total_surplus, 6) if total_surplus > 0 else 0.0,
+        "water_produced_m3": round(water_produced, 4),
+        "water_demand_m3": round(water_demand_total, 4),
+        "unmet_water_demand_indicator_m3": round(water_deficit, 4),
+        "backup_energy_kwh": round(backup_energy, 4),
+        "minimum_run_check_passed": bool(min_run_ok),
+        "minimum_run_segments_hours": segments,
+        "emergency_stop_hours": np.flatnonzero(result["emergency_stop"]).tolist(),
+    },
+    "hourly_results": hourly_rows,
+    "limitations": [
+        "All scenario inputs are generated synthetic data, not measured island data.",
+        "The RO dispatch is a simplified heuristic with perfect look-ahead over the generated trace.",
+        "This export is for reproducibility and research review, not operational control or a field-performance claim.",
+    ],
+}
+col_a, col_b = st.columns(2)
+with col_a:
+    st.download_button(
+        "Download hourly results (CSV)",
+        data=csv_buffer.getvalue().encode("utf-8"),
+        file_name=f"islandos_seed_{int(seed)}_hourly.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+with col_b:
+    st.download_button(
+        "Download scenario report (JSON)",
+        data=json.dumps(scenario_report, indent=2, ensure_ascii=False).encode("utf-8"),
+        file_name=f"islandos_seed_{int(seed)}_report.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
 st.caption("islandOS • Open research prototype • Reproducible synthetic demonstration")
