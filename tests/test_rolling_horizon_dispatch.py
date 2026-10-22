@@ -119,6 +119,8 @@ class TestRollingHorizonDispatch(unittest.TestCase):
             [0, 1, 0, 1, 0, 0, 0],
         )
         self.assertEqual(result["constraint_violation_hour_indices"], [1, 3])
+        self.assertEqual(result["constraint_violation_hours"], 2)
+        self.assertEqual(result["constraint_violation_count"], 2)
 
         # RO plus ice may never draw more renewable power than was available.
         for row in audit:
