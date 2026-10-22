@@ -55,7 +55,7 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
 
     def test_off_peak_strategy_requires_grid_and_off_peak(self):
         steps = [
-            step("2026-01-01T00:00", price=0.1, off_peak=True, grid=True),
+            step("2026-01-01T00:00", surplus=10, price=0.1, off_peak=True, grid=True),
             step("2026-01-01T01:00", price=0.1, off_peak=True, grid=True),
             step("2026-01-01T02:00", price=0.4, off_peak=False, grid=True),
         ]
@@ -63,6 +63,8 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
         off_peak = next(row for row in summaries if row["strategy"] == "off_peak_only")
         self.assertEqual(off_peak["grid_energy_to_ro_kwh"], 20)
         self.assertAlmostEqual(off_peak["grid_energy_cost"], 2.0)
+        self.assertEqual(off_peak["renewable_surplus_available_kwh"], 10)
+        self.assertEqual(off_peak["renewable_surplus_unused_kwh"], 10)
         rows = [r for r in detail if r["strategy"] == "off_peak_only"]
         self.assertEqual([r["ro_source"] for r in rows], ["grid", "grid", "off"])
 
