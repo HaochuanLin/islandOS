@@ -96,6 +96,7 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 
 | Audit objective weights | `python experiments/weight_sensitivity_audit.py` | Re-score the same synthetic outcomes under alternative illustrative weights |
 | Validate a time-series CSV | `python data_quality.py path/to/data.csv --source-type public` | Checks schema, values, timestamp order and interval spacing |
+| Evaluate freshwater-demand forecast baselines | `python experiments/water_demand_forecast.py path/to/hourly_water_demand.csv --output build/water-demand-forecast/report.json` | Chronological holdout, persistence vs 24-hour seasonal baseline, distribution diagnostics and empirical prediction-interval coverage |
 | Download NASA POWER weather data | See [data workflow](#weather-data-and-forecast-baselines) | Saves hourly environmental parameters and provenance metadata |
 | Run all regression tests | `python -m unittest discover -s tests -v` | Checks selected model invariants and edge cases |
 
@@ -150,6 +151,22 @@ python experiments/evaluate_forecast_dispatch.py \
 The input fixture and deterministic generator are committed under `data/examples/` and `experiments/`. The report compares the supplied forecast against persistence and evaluates rolling dispatch, fixed RO-first / ice-first policies, and a perfect-information hindsight reference. GitHub Actions runs the same check and uploads `islandos-forecast-dispatch-benchmark`.
 
 **Interpretation boundary:** this is an integration and regression benchmark using synthetic data. Its score weights are illustrative; the hindsight policy is not deployable; demands are treated as known; and the model does not represent full island-grid physics. The benchmark can show that the pipeline runs reproducibly, but it cannot prove real-island performance or that rolling dispatch is universally better. See [the benchmark protocol](docs/END_TO_END_BENCHMARK.md) and [the input provenance note](data/examples/README.md).
+
+## Water-demand forecasting baseline
+
+The new `experiments/water_demand_forecast.py` experiment accepts measured
+hourly water demand and evaluates persistence against a 24-hour seasonal-naive
+forecast on a chronological holdout. It reports MAE/RMSE/bias, descriptive
+Gaussian-shape diagnostics for demand and forecast errors, and 90%/95%
+Gaussian-style prediction intervals calibrated from historical forecast errors.
+The intervals are checked against held-out observations; normality is not
+assumed as a fact. The input schema, assumptions, and next steps are documented
+in [the water-demand forecasting guide](docs/WATER_DEMAND_FORECAST.md).
+
+This is a statistical baseline, not deep learning or online learning. It is
+designed to establish a transparent benchmark before adding richer predictors
+or more complex models. Do not treat synthetic data or passing tests as evidence
+of site-specific forecast accuracy.
 
 ## The optimization loop (prototype)
 
