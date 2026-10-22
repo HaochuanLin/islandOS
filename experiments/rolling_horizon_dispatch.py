@@ -119,14 +119,31 @@ def simulate_rolling(
         else np.asarray(forecast_water_demand_m3_per_hour, dtype=float)
     )
     cooling_demand = np.asarray(scenario.cooling_demand_kw_th, dtype=float)
-    if planning_water_demand.shape != water_demand.shape:
+
+    # Validate the realized scenario at this public entry point as well as
+    # validating CSV inputs. Callers may construct Scenario objects directly.
+    realized_series = {
+        "available_surplus_kw": actual,
+        "water_demand_m3_per_hour": water_demand,
+        "cooling_demand_kw_th": cooling_demand,
+    }
+    if actual.ndim != 1 or actual.size == 0:
+        raise ValueError("scenario series must be non-empty one-dimensional arrays")
+    for name, values in realized_series.items():
+        if values.ndim != 1 or values.shape != actual.shape:
+            raise ValueError(f"{name} must match the non-empty scenario horizon")
+        if not np.all(np.isfinite(values)) or np.any(values < 0):
+            raise ValueError(f"{name} must be finite and non-negative")
+    if forecast.ndim != 1 or forecast.shape != actual.shape:
+        raise ValueError("forecast_surplus must match the one-dimensional scenario horizon")
+    if not np.all(np.isfinite(forecast)) or np.any(forecast < 0):
+        raise ValueError("forecast_surplus must be finite and non-negative")
+    if planning_water_demand.ndim != 1 or planning_water_demand.shape != water_demand.shape:
         raise ValueError("forecast_water_demand_m3_per_hour must match the scenario horizon")
     if not np.all(np.isfinite(planning_water_demand)) or np.any(planning_water_demand < 0):
         raise ValueError("forecast water demand must be finite and non-negative")
-    if forecast.shape != actual.shape:
-        raise ValueError("forecast_surplus must match the scenario horizon")
-    if not np.all(np.isfinite(forecast)) or np.any(forecast < 0):
-        raise ValueError("forecast_surplus must be finite and non-negative")
+    if policy not in ("rolling", "ro_first", "ice_first", "perfect_information"):
+        raise ValueError("policy must be rolling, ro_first, ice_first, or perfect_information")
 
     water_inventory = make_ro().config.initial_water_m3
     cold_inventory = make_ice().config.initial_storage_kwh_th
@@ -175,7 +192,7 @@ def simulate_rolling(
             else:
                 chosen = policy
                 plan = _run_horizon(
-                    forecast[t:end], water_demand[t:end], cooling_demand[t:end],
+                    forecast[t:end], planning_water_demand[t:end], cooling_demand[t:end],
                     water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
                     ro_fault_lockout_hours_remaining,
                 )
