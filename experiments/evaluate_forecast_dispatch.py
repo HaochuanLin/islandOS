@@ -106,6 +106,23 @@ def load_paired_series(input_csv: str | Path) -> tuple[list[str], Scenario, list
     return timestamps, scenario, forecast
 
 
+def load_forecast_water_demand(input_csv: str | Path, actual_demand: list[float]) -> list[float]:
+    """Load optional water-demand forecasts; fall back to realized demand for legacy inputs."""
+    input_path = Path(input_csv)
+    with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if "forecast_water_demand_m3" not in (reader.fieldnames or []):
+            return list(actual_demand)
+        rows = list(reader)
+    if len(rows) != len(actual_demand):
+        raise ValueError("forecast_water_demand_m3 row count must match actual water demand")
+    forecast = []
+    for line, row in enumerate(rows, start=2):
+        value = _parse_nonnegative(row, "forecast_water_demand_m3", line)
+        forecast.append(value)
+    return forecast
+
+
 def _forecast_metrics(actual: list[float], forecast: list[float]) -> dict:
     errors = [predicted - observed for observed, predicted in zip(actual, forecast)]
     return {
@@ -127,11 +144,14 @@ def _score(result: dict, scenario: Scenario) -> float:
     )
 
 
-def _evaluate_policies(scenario: Scenario, forecast: list[float]) -> dict:
+def _evaluate_policies(scenario: Scenario, forecast: list[float], forecast_water: list[float] | None = None) -> dict:
     """Evaluate all dispatch policies on one shared realized profile."""
     policies = {}
     for policy in ("rolling", "ro_first", "ice_first", "perfect_information"):
-        result = simulate_rolling(scenario, forecast, policy)
+        result = simulate_rolling(
+            scenario, forecast, policy,
+            forecast_water_demand_m3_per_hour=forecast_water,
+        )
         policies[policy] = {
             **result,
             "normalized_score": round(_score(result, scenario), 8),
@@ -153,7 +173,8 @@ def _evaluate_policies(scenario: Scenario, forecast: list[float]) -> dict:
 def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
     timestamps, scenario, forecast = load_paired_series(input_csv)
     actual = list(scenario.available_surplus_kw)
-    full_evaluation = _evaluate_policies(scenario, forecast)
+    forecast_water = load_forecast_water_demand(input_csv, list(scenario.water_demand_m3_per_hour))
+    full_evaluation = _evaluate_policies(scenario, forecast, forecast_water)
 
     # A one-step persistence forecast at time t uses only realized surplus at t-1.
     # Compare both forecasts on rows 2..N so neither gets a special first-hour case.
@@ -171,8 +192,9 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
         persistence_metrics = _forecast_metrics(aligned_actual, persistence_forecast)
         persistence_mae = persistence_metrics["mae_kw"]
         persistence_rmse = persistence_metrics["rmse_kw"]
-        supplied_dispatch = _evaluate_policies(aligned_scenario, supplied_aligned)
-        persistence_dispatch = _evaluate_policies(aligned_scenario, persistence_forecast)
+        aligned_forecast_water = forecast_water[1:]
+        supplied_dispatch = _evaluate_policies(aligned_scenario, supplied_aligned, aligned_forecast_water)
+        persistence_dispatch = _evaluate_policies(aligned_scenario, persistence_forecast, aligned_forecast_water)
         baseline_comparison = {
             "status": "evaluated",
             "method": "one-step persistence: forecast[t] = actual_surplus[t-1]",
@@ -226,6 +248,14 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
             "interval_hours": 1,
         },
         "forecast_metrics": _forecast_metrics(actual, forecast),
+        "water_demand_input": {
+            "forecast_column_used": "forecast_water_demand_m3" if forecast_water != list(scenario.water_demand_m3_per_hour) else "actual_demand_fallback",
+            "actual_demand_is_used_for_execution": True,
+            "forecast_demand_is_used_for_planning": True,
+            "forecast_demand_metrics": _forecast_metrics(
+                list(scenario.water_demand_m3_per_hour), forecast_water
+            ),
+        },
         "score_definition": (
             "0.45 * unmet water / total water demand + "
             "0.45 * unmet cooling / total cooling demand + "
@@ -246,7 +276,9 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
             "Persistence uses only the previous observed surplus; this is a simple benchmark, not a universally appropriate forecast.",
             "The aligned dispatch comparison resets initial inventories equally for both forecast inputs; it is a controlled window comparison, not continuation of the full-horizon run.",
             "Forecast and realized surplus must be paired by timestamp and use the same kW unit.",
-            "Water and cooling demand inputs are treated as known over the tested horizon.",
+            "If forecast_water_demand_m3 is absent, realized water demand is used for planning as a legacy compatibility fallback; this is a hindsight assumption, not a deployable forecast.",
+            "When forecast_water_demand_m3 is present, it is used for planning while actual water_demand_m3 is used for execution and outcome accounting.",
+            "Cooling demand is treated as known over the tested horizon.",
             "The score weights are illustrative; inspect raw service-deficit metrics as well.",
             "The perfect_information policy is a hindsight reference, not deployable control.",
             "The simulator is simplified and does not model plant interlocks, ramping, or site-specific safety limits.",
