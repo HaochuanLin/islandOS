@@ -261,7 +261,7 @@ def optimize_dispatch(
         DispatchProblem(), algorithm, ("n_gen", int(generations)),
         seed=int(seed), verbose=False, save_history=False, callback=archive,
     )
-    if result.X is None:
+    if result.X is None and not archive.chromosomes:
         return [], [], {
             "feasible_count": 0,
             "unique_feasible_count": 0,
