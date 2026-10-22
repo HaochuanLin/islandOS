@@ -25,6 +25,45 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(result["policy"], "rolling")
         self.assertEqual(len(result["hourly_priority_decisions"]), len(actual))
 
+    def test_water_demand_forecast_is_a_planning_input_and_actual_is_audited(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        scenario = Scenario(
+            name="separate_water_forecast_and_actual",
+            available_surplus_kw=(400.0, 400.0, 400.0),
+            water_demand_m3_per_hour=(5.0, 10.0, 15.0),
+            cooling_demand_kw_th=(0.0, 0.0, 0.0),
+        )
+        result = simulate_rolling(
+            scenario, (400.0, 400.0, 400.0), "ro_first",
+            forecast_water_demand_m3_per_hour=(20.0, 25.0, 30.0),
+        )
+        self.assertEqual(
+            [row["actual_water_demand_m3"] for row in result["hourly_audit"]],
+            [5.0, 10.0, 15.0],
+        )
+        self.assertEqual(
+            [row["forecast_water_demand_m3"] for row in result["hourly_audit"]],
+            [20.0, 25.0, 30.0],
+        )
+        self.assertEqual(
+            [row["planning_water_demand_m3"] for row in result["hourly_audit"]],
+            [20.0, 25.0, 30.0],
+        )
+
+    def test_rejects_misaligned_or_negative_water_demand_forecast(self):
+        scenario = build_scenarios()[0]
+        with self.assertRaisesRegex(ValueError, "must match the scenario horizon"):
+            simulate_rolling(
+                scenario, scenario.available_surplus_kw, "rolling",
+                forecast_water_demand_m3_per_hour=(1.0,),
+            )
+        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+            simulate_rolling(
+                scenario, scenario.available_surplus_kw, "rolling",
+                forecast_water_demand_m3_per_hour=(-1.0,) * len(scenario.available_surplus_kw),
+            )
+
     def test_underforecasted_committed_hour_is_locatable_in_hourly_audit(self):
         from experiments.compare_dispatch_policies import Scenario
 
