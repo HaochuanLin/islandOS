@@ -1,5 +1,8 @@
 """Tests for the receding-horizon dispatch prototype."""
 import unittest
+from unittest.mock import patch
+
+import numpy as np
 
 from experiments.compare_dispatch_policies import build_scenarios
 from experiments.rolling_horizon_dispatch import run_experiment, simulate_rolling
@@ -50,6 +53,67 @@ class TestRollingHorizonDispatch(unittest.TestCase):
             [row["planning_water_demand_m3"] for row in result["hourly_audit"]],
             [20.0, 25.0, 30.0],
         )
+
+    def test_fixed_priority_planning_uses_forecast_water_demand(self):
+        from experiments.rolling_horizon_dispatch import _run_horizon
+
+        scenario = build_scenarios()[0]
+        forecast_water = tuple(value * 0.5 for value in scenario.water_demand_m3_per_hour)
+        with patch(
+            "experiments.rolling_horizon_dispatch._run_horizon",
+            wraps=_run_horizon,
+        ) as run_horizon:
+            simulate_rolling(
+                scenario,
+                scenario.available_surplus_kw,
+                "ro_first",
+                forecast_water_demand_m3_per_hour=forecast_water,
+            )
+
+        # The first horizon call is the planning pass; execution calls later
+        # must still receive realized demand, not the forecast.
+        self.assertEqual(
+            list(np.asarray(run_horizon.call_args_list[0].args[1], dtype=float)),
+            list(forecast_water),
+        )
+        self.assertEqual(
+            list(np.asarray(run_horizon.call_args_list[1].args[1], dtype=float)),
+            [scenario.water_demand_m3_per_hour[0]],
+        )
+
+    def test_rejects_invalid_realized_scenario_series(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        base = Scenario(
+            name="invalid_realized_input",
+            available_surplus_kw=(100.0, 100.0),
+            water_demand_m3_per_hour=(1.0, 1.0),
+            cooling_demand_kw_th=(2.0, 2.0),
+        )
+        with self.assertRaisesRegex(ValueError, "available_surplus_kw must be finite and non-negative"):
+            simulate_rolling(
+                Scenario(base.name, (-1.0, 100.0), base.water_demand_m3_per_hour,
+                         base.cooling_demand_kw_th),
+                (100.0, 100.0),
+            )
+        with self.assertRaisesRegex(ValueError, "cooling_demand_kw_th must match"):
+            simulate_rolling(
+                Scenario(base.name, base.available_surplus_kw, base.water_demand_m3_per_hour,
+                         (2.0,)),
+                base.available_surplus_kw,
+            )
+        with self.assertRaisesRegex(ValueError, "one-dimensional scenario horizon"):
+            simulate_rolling(base, np.array([[100.0, 100.0]]))
+
+    def test_rejects_empty_horizon_and_unknown_policy(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        empty = Scenario("empty", (), (), ())
+        with self.assertRaisesRegex(ValueError, "non-empty one-dimensional"):
+            simulate_rolling(empty, (), "rolling")
+        scenario = build_scenarios()[0]
+        with self.assertRaisesRegex(ValueError, "policy must be"):
+            simulate_rolling(scenario, scenario.available_surplus_kw, "mystery")
 
     def test_rejects_misaligned_or_negative_water_demand_forecast(self):
         scenario = build_scenarios()[0]
