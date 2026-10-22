@@ -140,6 +140,24 @@ class SimulationInvariantTests(unittest.TestCase):
         self.assertEqual(result["ro_on"].tolist(), [1, 1])
         self.assertEqual(float(result["spill"].sum()), 0.0)
 
+    def test_non_numeric_and_boolean_physics_parameters_are_rejected(self):
+        invalid_parameters = [
+            ({"ro_power_kw": "300"}, "ro_power_kw"),
+            ({"ro_sec_kwh_m3": None}, "ro_sec_kwh_m3"),
+            ({"res_capacity_m3": True}, "res_capacity_m3"),
+            ({"res_area_m2": float("inf")}, "res_area_m2"),
+            ({"start_ratio": "0.8"}, "start_ratio"),
+            ({"keep_ratio": False}, "keep_ratio"),
+            ({"allow_backup_power": "False"}, "allow_backup_power"),
+        ]
+        for overrides, expected_message in invalid_parameters:
+            with self.subTest(overrides=overrides):
+                with self.assertRaisesRegex(ValueError, expected_message):
+                    simulate(
+                        [500.0], [0.0], [100.0], [1.0],
+                        Params(**overrides),
+                    )
+
     def test_minimum_run_checker_counts_horizon_truncation(self):
         segments, ok = check_min_run(np.array([0, 1, 1, 1, 0, 1]), 2)
         self.assertEqual(segments, [3, 1])
