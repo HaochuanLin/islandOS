@@ -247,7 +247,8 @@ def optimize_dispatch(
 
     summaries: list[dict] = []
     schedules: list[dict] = []
-    for _, summary, detail, _ in pareto:
+    for _, summary, detail, objective in pareto:
+        summary["optimizer_cost_score"] = round(float(objective[0]), 6)
         summary["strategy"] = f"nsga2_candidate_{len(summaries) + 1:02d}"
         summaries.append(summary)
         schedules.extend({**row, "strategy": summary["strategy"]} for row in detail)
