@@ -2,3 +2,4 @@
 # Python 3.10+ is recommended; CI is tested on Python 3.11. Older versions are not covered.
 numpy>=1.21
 matplotlib>=3.5
+streamlit>=1.36
