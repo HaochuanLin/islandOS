@@ -59,6 +59,33 @@ jobs:
           python experiments/evaluate_forecast_dispatch.py
           data/examples/synthetic_dispatch_benchmark.csv
           --output build/forecast-dispatch-benchmark/results.json
+      - name: Verify synthetic water-forecast dispatch fixture
+        run: python experiments/generate_synthetic_water_forecast_dispatch.py --check
+      - name: Evaluate synthetic water-forecast dispatch integration
+        run: |
+          python experiments/evaluate_forecast_dispatch.py data/examples/synthetic_water_forecast_dispatch.csv --output build/water-forecast-dispatch/results.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/water-forecast-dispatch/results.json").read_text(encoding="utf-8"))
+          assert report["water_demand_input"]["forecast_column_used"] == "forecast_water_demand_m3"
+          assert report["water_demand_input"]["actual_demand_is_used_for_execution"] is True
+          assert report["water_demand_input"]["forecast_demand_is_used_for_planning"] is True
+          assert report["water_demand_input"]["forecast_demand_metrics"]["evaluated_hours"] == 168
+          audit = report["policy_comparison"]["rolling"]["hourly_audit"]
+          assert len(audit) == 168
+          assert audit[0]["actual_water_demand_m3"] == audit[0]["forecast_water_demand_m3"]
+          assert any(row["actual_water_demand_m3"] != row["forecast_water_demand_m3"] for row in audit[1:])
+          print("Synthetic forecast-water-demand-to-dispatch smoke test passed.")
+          PY
+      - name: Upload water-forecast dispatch report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-water-forecast-dispatch-demo
+          path: build/water-forecast-dispatch/results.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload forecast-dispatch benchmark
         uses: actions/upload-artifact@v4
         with:

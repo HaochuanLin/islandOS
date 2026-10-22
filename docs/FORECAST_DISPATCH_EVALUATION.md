@@ -23,6 +23,28 @@ timezone-naive timestamps, and invalid numbers; it does not impute or reorder
 data. Actual and forecast values must refer to the same timestamp and use the
 same unit.
 
+## Runnable synthetic integration example
+
+The repository includes `data/examples/synthetic_water_forecast_dispatch.csv`, a
+synthetic 168-hour paired trace. Its first demand forecast is a shared warm-up
+value; later demand forecasts use the previous hour's demand (persistence).
+The fixture is generated from the synthetic power-dispatch example and is not
+measured island data.
+
+Run it with:
+
+```bash
+python experiments/generate_synthetic_water_forecast_dispatch.py --check
+python experiments/evaluate_forecast_dispatch.py \
+  data/examples/synthetic_water_forecast_dispatch.csv \
+  --output build/water-forecast-dispatch/results.json
+```
+
+GitHub Actions runs this end-to-end command and checks that the report used the
+forecast column while preserving actual demand for execution. The report is
+also uploaded as a CI artifact. Passing this software check validates the data
+path and report contract only; it does not establish real-world forecast skill.
+
 ## Run
 
 ```bash
