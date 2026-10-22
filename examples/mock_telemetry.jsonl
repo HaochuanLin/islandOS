@@ -1,0 +1,2 @@
+{"schema_version":"0.1","site_id":"site-demo","device_id":"mock-meter-01","signal_id":"pv_power","observed_at":"2026-10-22T08:00:00+08:00","value":12.5,"unit":"kW","quality":"good","source_type":"synthetic","raw_reference":"example-only-not-real-data"}
+{"schema_version":"0.1","site_id":"site-demo","device_id":"mock-water-01","signal_id":"reservoir_usable_volume","observed_at":"2026-10-22T08:00:00+08:00","value":50.0,"unit":"m3","quality":"good","source_type":"synthetic","raw_reference":"example-only-not-real-data"}
