@@ -6,7 +6,7 @@ Some inputs change over time and should come from sensor readings or a timestamp
 
 IslandOS does not currently connect to a deployed sensor network. The readiness gate accepts a staff-prepared JSON snapshot; a future adapter can populate the telemetry section from a sensor gateway/export. Do not describe this as live telemetry integration.
 
-## Run the gate
+## Staff input form\n\nOpen [tools/site_readiness_form.html](../tools/site_readiness_form.html) locally in a modern browser. It captures current readings, timestamp/source, asset parameters, and optional economic inputs; economic mode requires the CAPEX/O&M fields and a traceable source. After its basic checks pass, download the JSON and run the Python gate below. The browser form is a convenience layer; the Python gate and optimizer's CSV validator remain the authoritative checks. It does not connect to sensor hardware.\n\n## Run the gate
 
 Start with `config/site_readiness.example.json`, copy it to a local working file, and replace placeholders with verified site values. Keep confidential files out of the public repository.
 
