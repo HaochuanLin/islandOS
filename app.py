@@ -370,6 +370,16 @@ elif page == "Strategy simulator":
             if pareto_rows:
                 pareto_df = pd.DataFrame(pareto_rows)
                 baseline_df = summaries.copy()
+                # Existing heuristic summaries stay untouched; derive their
+                # switch count from the hourly audit solely for the shared plot.
+                heuristic_switches = {}
+                for strategy_name, strategy_rows in details.groupby("strategy"):
+                    on = strategy_rows["ro_power_kw"].fillna(0).astype(float).gt(0).tolist()
+                    heuristic_switches[strategy_name] = sum(
+                        1 for i, is_on in enumerate(on)
+                        if is_on and (i == 0 or not on[i - 1])
+                    )
+                baseline_df["ro_switch_on_count"] = baseline_df["strategy"].map(heuristic_switches).fillna(0)
                 baseline_df["series_type"] = "Existing fixed strategy"
                 pareto_df["series_type"] = "NSGA-II Pareto candidate"
                 plot_df = pd.concat([
