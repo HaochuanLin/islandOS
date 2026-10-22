@@ -35,6 +35,14 @@ The JSON report includes forecast MAE/RMSE/bias and service outcomes for:
 - `ice_first`: fixed cold-storage-first priority, using the same forecast input;
 - `perfect_information`: non-deployable hindsight reference using realized surplus.
 
+Each policy reports both distinct `constraint_violation_hours` and the total
+`constraint_violation_count`; the former counts hours with one or more
+violations, while the latter sums violation flags. A policy is marked feasible
+only when it has zero violation hours. The reported `best_fixed_policy`
+prioritizes fewer violation hours first, then uses the illustrative score to
+break ties. A score-only ranking is retained separately for transparency.
+A score difference is secondary when policies have different violation counts.
+
 The comparison score is illustrative: 45% normalized unmet water demand, 45%
 normalized unmet cooling demand, and 10% normalized remaining surplus. Lower is
 better, but the raw deficit metrics must also be inspected. The report records
