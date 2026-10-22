@@ -103,13 +103,11 @@ The rolling-horizon prototype carries the RO minimum-run commitment between hour
 
 ### Quick start
 
-```bash
-git clone https://github.com/HaochuanLin/islandOS.git
-cd islandOS
-
 Python **3.10 or newer** is required; CI currently tests on Python 3.11.
 
 ```bash
+git clone https://github.com/HaochuanLin/islandOS.git
+cd islandOS
 python -m venv .venv
 
 # Windows PowerShell
