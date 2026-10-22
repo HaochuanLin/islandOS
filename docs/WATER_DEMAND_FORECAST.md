@@ -35,17 +35,21 @@ python experiments/water_demand_forecast.py path/to/hourly_water_demand.csv \
 The script holds out the final chronological segment and compares:
 - **Persistence:** next-hour demand equals the latest observation.
 - **Seasonal naive:** next-hour demand equals the observation 24 hours earlier.
+- **Bias-corrected seasonal naive:** subtract the mean forecast error measured
+  on the training history from the 24-hour seasonal forecast. The correction
+  is fitted before the test window and clipped at zero.
 
 It reports MAE, RMSE, and bias on the same held-out hours. It also reports
 descriptive Jarque–Bera diagnostics for the held-out demand values and the
 training-history seasonal-forecast errors. The approximate p-value is a
 diagnostic, not proof that a distribution is or is not Gaussian.
 
-A Gaussian-style 90% and 95% prediction interval is constructed from the
-historical seasonal-forecast error spread, then evaluated by actual holdout
-coverage. The interval is not guaranteed to have its nominal coverage. Because
-demand cannot be negative, the lower bound is clipped at zero; that makes
-empirical coverage especially important.
+Gaussian-style 90% and 95% prediction intervals are centered on the bias-corrected
+seasonal forecast and use the training-history residual spread. Their empirical
+coverage is measured on held-out observations. The intervals are not guaranteed
+to have nominal coverage. Because demand cannot be negative, the lower bound
+and corrected point forecast are clipped at zero; empirical coverage remains
+important.
 
 ## Why not start with deep learning?
 
