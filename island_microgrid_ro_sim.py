@@ -95,6 +95,64 @@ def load_data(hours: int = 24, seed: int = 42):
 
 # ----------------------------- Simulation -----------------------------
 def simulate(wind, pv, load, water_demand, p: Params):
+    """Run the hourly co-simulation after validating physical inputs and parameters.
+
+    deficit[t] is the unmet water demand needed to preserve the reservoir's
+    minimum reserve (dead storage); it is not a measurement of real-world service
+    interruption. The hourly storage balance is:
+    V[t+1] = V[t] + water_prod[t] - water_demand[t] - spill[t] + deficit[t].
+    """
+    named_inputs = {
+        "wind": wind,
+        "pv": pv,
+        "load": load,
+        "water_demand": water_demand,
+    }
+    arrays = {}
+    for name, values in named_inputs.items():
+        try:
+            values = np.asarray(values, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be a one-dimensional numeric array") from exc
+        if values.ndim != 1:
+            raise ValueError(f"{name} must be one-dimensional")
+        if values.size == 0:
+            raise ValueError("simulation inputs must contain at least one time step")
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"{name} must contain only finite values")
+        if np.any(values < 0):
+            raise ValueError(f"{name} must not contain negative values")
+        arrays[name] = values
+
+    lengths = {len(values) for values in arrays.values()}
+    if len(lengths) != 1:
+        raise ValueError("wind, pv, load, and water_demand must have equal lengths")
+
+    positive_params = {
+        "ro_power_kw": p.ro_power_kw,
+        "ro_sec_kwh_m3": p.ro_sec_kwh_m3,
+        "res_capacity_m3": p.res_capacity_m3,
+        "res_area_m2": p.res_area_m2,
+    }
+    for name, value in positive_params.items():
+        if not np.isfinite(value) or value <= 0:
+            raise ValueError(f"{name} must be finite and greater than zero")
+    if isinstance(p.min_run_hours, bool) or not isinstance(p.min_run_hours, (int, np.integer)) or p.min_run_hours < 1:
+        raise ValueError("min_run_hours must be a positive integer")
+    for name, value in (("start_ratio", p.start_ratio), ("keep_ratio", p.keep_ratio)):
+        if not np.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError(f"{name} must be between zero and one")
+    if not np.isfinite(p.res_min_m3) or p.res_min_m3 < 0:
+        raise ValueError("res_min_m3 must be finite and nonnegative")
+    if not np.isfinite(p.res_init_m3) or not p.res_min_m3 <= p.res_init_m3 <= p.res_capacity_m3:
+        raise ValueError("res_init_m3 must be between res_min_m3 and res_capacity_m3")
+    if not np.isfinite(p.res_base_level_m):
+        raise ValueError("res_base_level_m must be finite")
+
+    wind = arrays["wind"]
+    pv = arrays["pv"]
+    load = arrays["load"]
+    water_demand = arrays["water_demand"]
     T = len(wind)
     curtail = np.maximum(0.0, wind + pv - load)          # curtailed power (kW); 1 h step -> kWh
 
