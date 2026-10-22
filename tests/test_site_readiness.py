@@ -1,5 +1,11 @@
 import unittest
 from datetime import datetime, timezone
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from experiments.run_site_scenario import run_site_scenario
 
 from site_readiness import evaluate_readiness
 
@@ -57,6 +63,16 @@ class SiteReadinessTests(unittest.TestCase):
         report = evaluate_readiness(self.payload, now=self.now)
         self.assertFalse(report["can_start"])
         self.assertIn("reservoir_level_exceeds_capacity", [x["code"] for x in report["blockers"]])
+
+    def test_wrapper_blocks_before_optimizer_when_required_data_missing(self):
+        self.payload["telemetry"].pop("reservoir_level_m3")
+        with TemporaryDirectory() as tmp:
+            readiness = Path(tmp) / "readiness.json"
+            readiness.write_text(json.dumps(self.payload), encoding="utf-8")
+            with patch("experiments.run_site_scenario.run_from_csv") as optimizer:
+                with self.assertRaisesRegex(ValueError, "readiness gate BLOCKED"):
+                    run_site_scenario(readiness, "not-read.csv", Path(tmp) / "out", max_telemetry_age_minutes=60)
+                optimizer.assert_not_called()
 
     def test_bad_values_block(self):
         self.payload["telemetry"]["pv_kw"] = float("nan")
