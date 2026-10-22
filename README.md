@@ -95,7 +95,8 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 | Run equipment-parameter sensitivity | `python experiments/parameter_sensitivity.py path/to/site_hourly.csv --output build/parameter-sensitivity.json` | Compare Pareto outcomes under low/high changes to RO energy intensity, chiller COP, and storage capacities |
 
 | Audit objective weights | `python experiments/weight_sensitivity_audit.py` | Re-score the same synthetic outcomes under alternative illustrative weights |
-| Validate a time-series CSV | `python data_quality.py path/to/data.csv --source-type public` | Checks schema, values, timestamp order and interval spacing |
+| Open staff data-entry form | Open `tools/site_data_entry.html` in a browser | Offline manual entry/import, basic validation, CSV + provenance sidecar export |
+| Validate a time-series CSV | `python data_quality.py path/to/data.csv --source-type public` | Server-side CLI quality gate; checks schema, values, timestamp order and interval spacing |
 | Download NASA POWER weather data | See [data workflow](#weather-data-and-forecast-baselines) | Saves hourly environmental parameters and provenance metadata |
 | Run all regression tests | `python -m unittest discover -s tests -v` | Checks selected model invariants and edge cases |
 
@@ -187,7 +188,9 @@ This is a multi-objective evolutionary-search prototype, **not a trained AI mode
 
 ### Bring your own site data
 
-No real-island dataset is required to develop the interface. Copy [`data/templates/site_hourly_input_template.csv`](data/templates/site_hourly_input_template.csv), add one row per hour, and provide data in the documented units. The input columns are:
+**No real-island dataset is bundled or assumed.** If staff can provide measurements later, open [`tools/site_data_entry.html`](tools/site_data_entry.html) in a browser (it works as a local/offline form), enter the site and provenance details, add hourly rows or import an existing CSV, run the basic checks, then download the CSV and metadata JSON. The form does not upload data, invent missing values, or run dispatch. Keep the metadata JSON alongside the CSV.
+
+The form exports the same schema as [`data/templates/site_hourly_input_template.csv`](data/templates/site_hourly_input_template.csv). Alternatively, edit that template directly. Add one row per interval and provide data in the documented units. The input columns are:
 
 - `timestamp`: ISO-8601 timestamp with timezone, such as `2026-01-01T00:00:00Z`
 - `wind_kw`, `pv_kw`: average wind and solar power during the hour, in kW
@@ -297,6 +300,7 @@ The JSON configuration controls RO specific energy and reservoir assumptions, ch
 | Grid-search / Pareto policy selection | **Experimental** | Small candidate space and illustrative objective weights |
 | NASA POWER importer + provenance | **Implemented** | Environmental data only; not island generation or demand |
 | CSV quality gate and feature preparation | **Implemented** | Structural checks and lag features; no automatic imputation |
+| Staff data-entry window | **Implemented prototype** | Local browser form for manual entry/import and CSV + metadata export; no server, authentication, or dispatch integration |
 | Persistence / seasonal-naive evaluation | **Implemented baseline** | Chronological evaluation of a weather parameter |
 | Trained weather-parameter regression | **Experimental** | Least-squares model, lag/time features and chronological holdout; not connected to dispatch |
 | Integrated, trained forecast-and-dispatch AI | **Not yet implemented** | Requires validated renewable/load targets, forecast-aware dispatch integration and end-to-end evaluation |
