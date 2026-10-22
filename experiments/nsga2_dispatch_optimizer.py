@@ -236,14 +236,14 @@ def optimize_dispatch(
 
     objective_vectors = [c[3] for c in candidates]
     pareto = [c for c in candidates if not _is_dominated(c[3], objective_vectors)]
-    # Different time patterns can legitimately share the same four metrics.
+    # Different time patterns can share the same two optimization metrics.
     # Keep one representative per objective vector so the exported front does
     # not contain overlapping duplicate points.
     pareto_by_objective: dict[tuple[float, ...], tuple[tuple[int, ...], dict, list[dict], tuple[float, ...]]] = {}
     for candidate in pareto:
         pareto_by_objective.setdefault(candidate[3], candidate)
     pareto = list(pareto_by_objective.values())
-    pareto.sort(key=lambda c: (c[3][0], c[3][1], c[3][2], c[3][3]))
+    pareto.sort(key=lambda c: (c[3][0], c[3][1]))
 
     summaries: list[dict] = []
     schedules: list[dict] = []
