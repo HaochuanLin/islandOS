@@ -1,0 +1,69 @@
+import unittest
+from datetime import datetime, timezone
+
+from site_readiness import evaluate_readiness
+
+
+class SiteReadinessTests(unittest.TestCase):
+    def setUp(self):
+        self.now = datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc)
+        self.payload = {
+            "site_name": "Test site",
+            "scenario_start": "2026-10-22T07:00:00+00:00",
+            "telemetry": {
+                "timestamp": "2026-10-22T05:55:00+00:00",
+                "source_type": "sensor_export",
+                "source_reference": "meter-export.csv",
+                "wind_kw": 12.0, "pv_kw": 8.0, "critical_load_kw": 10.0,
+                "reservoir_level_m3": 50.0,
+            },
+            "assets": {
+                "reservoir_capacity_m3": 100.0,
+                "ro_capacity_m3_per_hour": 2.0,
+                "ro_specific_energy_kwh_per_m3": 3.5,
+            },
+            "capex": {
+                "ro_plant_rmb": 1000000, "reservoir_rmb": 200000,
+                "integration_rmb": 80000, "annual_om_rmb": 30000,
+                "source_reference": "budgetary quote, 2026-10-01",
+            },
+        }
+
+    def test_complete_dispatch_inputs_can_pass_gate(self):
+        report = evaluate_readiness(self.payload, "dispatch", now=self.now)
+        self.assertTrue(report["can_start"])
+        self.assertEqual(report["status"], "READY_FOR_OFFLINE_SCENARIO")
+
+    def test_missing_reservoir_sensor_value_blocks(self):
+        self.payload["telemetry"].pop("reservoir_level_m3")
+        report = evaluate_readiness(self.payload, now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("telemetry.reservoir_level_m3", [x["field"] for x in report["blockers"]])
+
+    def test_stale_telemetry_blocks(self):
+        self.payload["telemetry"]["timestamp"] = "2026-10-22T04:00:00+00:00"
+        report = evaluate_readiness(self.payload, now=self.now, max_telemetry_age_minutes=60)
+        self.assertFalse(report["can_start"])
+        self.assertIn("stale_telemetry", [x["code"] for x in report["blockers"]])
+
+    def test_economic_mode_requires_staff_entered_capex(self):
+        self.payload["capex"].pop("ro_plant_rmb")
+        report = evaluate_readiness(self.payload, "economic", now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("capex.ro_plant_rmb", [x["field"] for x in report["blockers"]])
+
+    def test_reservoir_cannot_exceed_capacity(self):
+        self.payload["telemetry"]["reservoir_level_m3"] = 101
+        report = evaluate_readiness(self.payload, now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("reservoir_level_exceeds_capacity", [x["code"] for x in report["blockers"]])
+
+    def test_bad_values_block(self):
+        self.payload["telemetry"]["pv_kw"] = float("nan")
+        report = evaluate_readiness(self.payload, now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("invalid_number", [x["code"] for x in report["blockers"]])
+
+
+if __name__ == "__main__":
+    unittest.main()
