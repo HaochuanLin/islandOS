@@ -11,7 +11,8 @@ python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir outputs/nan_a
 The command writes:
 - `nan_ao_annual_runs.csv`: one row per simulated scenario year;
 - `nan_ao_percentiles.csv`: P5, median, P95 and mean scenario yield;
-- `nan_ao_summary.json`: assumptions, summary and limitations.
+- `nan_ao_summary.json`: assumptions, summary and limitations;
+- `nan_ao_sensitivity.csv`: a deterministic grid of 243 combinations covering event count, representative event duration, available surplus power, RO availability, and specific energy consumption.
 
 Only the Python standard library is required. Repeating the same command with the same Python version, run count and seed is deterministic.
 
@@ -20,6 +21,17 @@ Only the Python standard library is required. Repeating the same command with th
 The model draws an assumed annual count of export-limitation events, event durations, available surplus power, and RO availability. During each event, usable RO energy is the duration multiplied by the lesser of available surplus power and the proposed RO rating. Water volume is usable energy divided by the assumed specific energy consumption.
 
 All distributions are explicit placeholders, not measurements or verified Nan'ao operating statistics. This is an annual event-energy abstraction, **not** a grid power-flow model and not a reconstruction of actual curtailment. It does not establish that any event happened on Nan'ao.
+
+## Sensitivity analysis
+
+The sensitivity CSV is a deterministic full-factorial screen over representative values:
+- 4, 8, or 12 assumed events per year;
+- 4, 8, or 12 hours per event;
+- 10, 25, or 40 kW available surplus;
+- 0.85, 0.925, or 1.0 RO availability;
+- 3.5, 4.0, or 5.0 kWh/m³ specific energy consumption.
+
+This produces 243 combinations. The values show how strongly the assumed inputs affect theoretical water yield; they are **not** probability-weighted results, field forecasts, or estimates of how often Nan'ao actually experiences export limitation. Do not label the sensitivity grid as P5–P95. The original 1,000-run distributional simulation remains a separate result.
 
 ## Equipment status and deployment boundary
 
