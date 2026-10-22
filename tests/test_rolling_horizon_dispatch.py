@@ -108,19 +108,20 @@ class TestRollingHorizonDispatch(unittest.TestCase):
                 "RUNNING",
                 "COMMITMENT_POWER_SHORTFALL",
                 "RECOVERY_LOCKOUT",
-                "COMMITMENT_POWER_SHORTFALL",
-                "RECOVERY_LOCKOUT",
+                "OFF",
+                "RUNNING",
                 "RUNNING",
                 "RUNNING",
             ],
         )
         self.assertEqual(
             [row["ro_fault_lockout_hours_remaining"] for row in audit],
-            [0, 1, 0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0],
         )
-        self.assertEqual(result["constraint_violation_hour_indices"], [1, 3])
-        self.assertEqual(result["constraint_violation_hours"], 2)
-        self.assertEqual(result["constraint_violation_count"], 2)
+        self.assertEqual(result["constraint_violation_hour_indices"], [1])
+        self.assertEqual(result["constraint_violation_hours"], 1)
+        self.assertEqual(result["constraint_violation_count"], 1)
+        self.assertTrue(audit[3]["ro_start_deferred_for_power"])
 
         # RO plus ice may never draw more renewable power than was available.
         for row in audit:
