@@ -314,17 +314,18 @@ elif page == "Strategy simulator":
         st.divider()
         st.subheader("AI Optimizer (Next Version) — NSGA-II Pareto search")
         st.markdown(
-            "The optimizer searches hourly RO on/off schedules. The source rule is renewable-surplus "
-            "power first, then available off-peak grid power. **Hard feasibility requirements:** "
-            "total unmet water demand = 0 and minimum run-time violations = 0. Among feasible schedules, "
-            "NSGA-II minimizes grid electricity cost and maximizes renewable-surplus energy used by RO."
+            "The optimizer selects RO power at each interval from off / 6 / 8 / 10 kW. "
+            "The source rule is renewable-surplus power first, then available off-peak grid power. "
+            "**Hard feasibility requirements:** unmet water demand = 0, minimum run-time violations = 0, "
+            "and tank overflow = 0. NSGA-II minimizes grid cost (with a tiny surplus-use soft preference "
+            "as a tie-breaker) and RO start count. Peak grid power remains observation-only, not an objective."
         )
         st.caption("This is a model-based optimization module using the selected input series; it is not a trained ML model or real-time controller.")
         p1, p2 = st.columns(2)
         with p1:
-            pop_size = st.number_input("NSGA-II population size", min_value=20, max_value=200, value=64, step=8)
+            pop_size = st.number_input("NSGA-II population size", min_value=100, max_value=300, value=100, step=20)
         with p2:
-            generations = st.number_input("NSGA-II generations", min_value=10, max_value=200, value=80, step=10)
+            generations = st.number_input("NSGA-II generations", min_value=50, max_value=300, value=50, step=10)
         if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
             try:
                 # Streamlit reruns the script on every button click. Rebuild the
@@ -361,7 +362,7 @@ elif page == "Strategy simulator":
                 f"Feasible non-dominated schedules retained: {meta.get('feasible_count', 0)}"
             )
             st.caption(
-                f"Objectives: {meta.get('objective_count', 4)} · "
+                f"Objectives: {meta.get('objective_count', 2)} · "
                 f"Unique feasible chromosomes: {meta.get('unique_feasible_count', 0)} · "
                 f"Distinct objective vectors: {meta.get('distinct_objective_vectors', 0)}"
             )
@@ -372,15 +373,15 @@ elif page == "Strategy simulator":
                 baseline_df["series_type"] = "Existing fixed strategy"
                 pareto_df["series_type"] = "NSGA-II Pareto candidate"
                 plot_df = pd.concat([
-                    baseline_df[["strategy", "grid_energy_cost", "surplus_energy_to_ro_kwh", "series_type"]],
-                    pareto_df[["strategy", "grid_energy_cost", "surplus_energy_to_ro_kwh", "series_type"]],
+                    baseline_df[["strategy", "grid_energy_cost", "ro_switch_on_count", "series_type"]],
+                    pareto_df[["strategy", "grid_energy_cost", "ro_switch_on_count", "series_type"]],
                 ], ignore_index=True)
-                st.subheader("Pareto trade-off: grid cost vs. renewable-surplus energy used")
+                st.subheader("Pareto trade-off: grid cost vs. RO start count")
                 st.scatter_chart(
-                    plot_df, x="grid_energy_cost", y="surplus_energy_to_ro_kwh",
+                    plot_df, x="grid_energy_cost", y="ro_switch_on_count",
                     color="series_type",
-                    x_label="Grid electricity cost (model units)",
-                    y_label="Renewable-surplus energy used by RO (kWh)",
+                    x_label="Grid electricity cost (model units; soft preference included in optimizer score)",
+                    y_label="RO switch-on count",
                     height=440,
                 )
                 st.caption("All five existing fixed strategies and feasible NSGA-II candidates are shown together. Fixed strategies are references and may be infeasible.")
