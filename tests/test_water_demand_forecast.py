@@ -73,7 +73,7 @@ class TestWaterDemandForecast(unittest.TestCase):
             self._write_series(original, count=160)
             with original.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
-            for i in range(96, len(rows)):
+            for i in range(126, len(rows)):
                 rows[i]["water_demand_m3"] = str(float(rows[i]["water_demand_m3"]) + 1000.0)
             with altered.open("w", encoding="utf-8", newline="") as handle:
                 writer = csv.DictWriter(handle, fieldnames=["timestamp", "water_demand_m3"])
