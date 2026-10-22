@@ -426,3 +426,6 @@ The dashboard lets reviewers vary synthetic wind, solar and essential-load condi
 **Important:** this is a user interface for the existing simplified 24-hour simulator, not a validated real-island digital twin. It uses generated example inputs and a perfect-look-ahead dispatch heuristic. It omits real grid power-flow constraints, forecast errors in the UI's base run, membrane flushing, water-quality approval, and site-specific plant interlocks. All results must be described as illustrative simulation outputs.
 
 See [the seven-day competition sprint plan](docs/COMPETITION_SPRINT.md) for the validation and submission checklist.
+
+
+For publishing a reviewer-accessible public demo, follow [the deployment guide](docs/DEMO_DEPLOYMENT.md). Hosting requires a team member to connect the repository and verify the live app; the repository does not itself imply that a public web app is already deployed.
