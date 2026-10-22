@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml"><img src="https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml/badge.svg?branch=main" alt="Regression tests"></a>
   <img src="https://img.shields.io/badge/status-research%20prototype-orange" alt="Research prototype">
-  <img src="https://img.shields.io/badge/data-synthetic%20%2B%20NASA%20POWER-blue" alt="Synthetic and NASA POWER data">
+  <img src="https://img.shields.io/badge/data-synthetic%20%2B%20NASA%20POWER%20%2B%20DIB-blue" alt="Synthetic, NASA POWER and Philippines DIB data">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
 </p>
 
@@ -33,7 +33,7 @@ The repository now contains a runnable synthetic demo, experimental flexible-loa
 | ⚡ **Energy dispatch** | Shared-budget, priority-based flexible-load dispatcher |
 | 💧 **Water** | Experimental reverse-osmosis (RO) and freshwater-inventory model |
 | ❄️ **Cooling** | Simplified ice-making / cold-storage load prototype |
-| 🌦️ **Data** | NASA POWER hourly environmental-data importer and strict CSV quality gate |
+| 🌦️ **Data** | NASA POWER weather importer, strict CSV quality gate, and Philippines DIB monthly workbook importer |
 | 📈 **Forecast evaluation** | Persistence and 24-hour seasonal-naive baselines with chronological holdout and multi-window evaluation |
 | 🧪 **Experiments** | Policy comparisons, forecast-to-dispatch evaluation, fixed synthetic end-to-end benchmark, grid search, sensitivity audits |
 | ✅ **Verification** | Unit/regression tests, deterministic fixture check, and GitHub Actions artifacts |
@@ -98,6 +98,7 @@ The diagram shows the **research workflow**, not a claim that every stage is alr
 | Validate a time-series CSV | `python data_quality.py path/to/data.csv --source-type public` | Checks schema, values, timestamp order and interval spacing |
 | Evaluate freshwater-demand forecast baselines | `python experiments/water_demand_forecast.py path/to/hourly_water_demand.csv --output build/water-demand-forecast/report.json` | Chronological holdout, persistence vs 24-hour seasonal baseline, distribution diagnostics and empirical prediction-interval coverage |
 | Download NASA POWER weather data | See [data workflow](#weather-data-and-forecast-baselines) | Saves hourly environmental parameters and provenance metadata |
+| Import Philippines DIB workbook | See [workbook import guide](docs/PHILIPPINES_DIB_IMPORT.md) | Normalizes 208-grid site, monthly load/resource, and diesel asset tables; preserves monthly resolution and records caveats |
 | Run all regression tests | `python -m unittest discover -s tests -v` | Checks selected model invariants and edge cases |
 
 The rolling-horizon prototype carries the RO minimum-run commitment between hourly replans and reports a violation if a committed hour lacks enough renewable power. Its JSON result now includes `hourly_audit` (actual and forecast surplus, chosen priority, RO activity/power, remaining commitment, inventory states, and violation count) plus `constraint_violation_hour_indices` so forecast-error failures can be located rather than hidden in an aggregate. Each RO audit row labels `ro_operating_state` as `OFF`, `RUNNING`, `RUNNING_WITH_BACKUP`, `COMMITMENT_POWER_SHORTFALL`, or `RECOVERY_LOCKOUT`. A no-backup power shortfall records zero actual power use and zero production while raising a constraint violation; `ro_active` means energized, not merely committed. The default prototype then enforces one simulated hour of recovery lockout before another start and carries that counter across hourly replans. This is an explicit simplified restart policy, not a validated plant trip/restart controller: real interlocks, fault diagnosis, startup/ramp dynamics, and site-specific restart criteria remain out of scope.
