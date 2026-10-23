@@ -1,3 +1,7 @@
+## Project maturity and delivery gates
+
+See [Engineering maturity roadmap](ENGINEERING_MATURITY_ROADMAP.md) for the scored targets, evidence requirements, and release gates.
+
 # Experiments and workflows
 
 This page is a command reference for the research workflows in islandOS. Run commands from the repository root after installing the required dependencies. Use `python` below for your active Python environment.
