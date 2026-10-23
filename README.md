@@ -80,6 +80,10 @@ python islandos_advisor.py data/examples/telemetry_replay_demo.csv \
 
 Windows x64 standalone `islandos-gateway.exe` and `islandos-advisor.exe` are built by the [Windows gateway workflow](.github/workflows/windows-gateway-build.yml). The workflow also assembles and executes a portable `islandos-demo-package.zip` containing both programs, example telemetry, a field-mapping template, a double-click launcher, and usage/safety notes; it validates the generated JSON report before uploading the `islandos-gateway-windows-x64` artifact. The executable is an offline telemetry validator/replay tool, not a hardware driver. Real deployment still requires a site-approved point map, protocol adapter, authentication/network configuration, PLC interlocks, and hardware-in-the-loop validation. See [hardware integration architecture](docs/HARDWARE_INTEGRATION_ARCHITECTURE.md).
 
+### One-click synthetic end-to-end demo (Windows)
+
+After downloading and extracting the CI artifact `islandos-demo-package.zip`, double-click `run-synthetic-demo.bat`. It starts the loopback-only gateway, posts a deterministic 24-hour synthetic telemetry window, and opens `http://127.0.0.1:8765/dashboard`. This is designed to demonstrate the complete software path without hardware or site data. Its permissive 90,000-second freshness window is for synthetic replay only; do not use that setting for real sensors. For actual local sensor bridges, use `run-gateway-server.bat`, which retains the default 300-second freshness limit.
+
 ## Local HTTP telemetry ingress (read-only)
 
 The optional `islandos_gateway_server.py` service accepts canonical JSON samples at `POST http://127.0.0.1:8765/telemetry`, validates freshness and required measurements, appends accepted records to JSONL, and exposes `GET /health`, `GET /latest`, `GET /advice`, and the same-origin browser dashboard at `http://127.0.0.1:8765/dashboard`. It binds to loopback only; it has no Modbus/MQTT client and no actuator-write endpoint. A device on the computer needs a local protocol bridge that posts the canonical fields. Do not expose the HTTP service directly to a LAN or public network.
