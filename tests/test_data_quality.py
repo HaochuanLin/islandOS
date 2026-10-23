@@ -74,8 +74,10 @@ class TestDataQuality(unittest.TestCase):
         path = self.write_csv([self.row()])
         with self.assertRaises(ValueError):
             validate_csv(path, "guessed")
-        with self.assertRaises(ValueError):
-            validate_csv(path, "public", 0)
+        for invalid_interval in (0, -1, True, 60.0, "60"):
+            with self.subTest(interval=invalid_interval):
+                with self.assertRaises(ValueError):
+                    validate_csv(path, "public", invalid_interval)
 
 
 if __name__ == "__main__":
