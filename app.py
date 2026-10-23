@@ -321,7 +321,7 @@ elif page == "Strategy simulator":
         d1, d2 = st.columns(2)
         with d1:
             st.download_button(
-                "⬇ Download strategy summary",
+                "⬇ Download strategy summary (with provenance)",
                 dataframe_csv(result["summary"], result["provenance"]),
                 file_name="islandos_strategy_summary.csv",
                 mime="text/csv",
@@ -329,7 +329,7 @@ elif page == "Strategy simulator":
             )
         with d2:
             st.download_button(
-                "⬇ Download timestep audit",
+                "⬇ Download timestep audit (with provenance)",
                 dataframe_csv(result["detail"], result["provenance"]),
                 file_name="islandos_timestep_audit.csv",
                 mime="text/csv",
