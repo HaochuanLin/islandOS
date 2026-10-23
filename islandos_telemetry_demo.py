@@ -10,6 +10,7 @@ import argparse
 from datetime import datetime, timedelta, timezone
 import json
 import math
+import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -38,6 +39,23 @@ def generate_demo_samples(hours=24, now=None):
             "cooling_demand_kw_th": round(max(0.1, cooling), 3),
         })
     return rows
+
+
+def wait_for_gateway(url, timeout=20.0, request_timeout=1.0):
+    """Wait for the local gateway to become ready after a packaged EXE starts."""
+    deadline = time.monotonic() + timeout
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url.rstrip("/") + "/health", timeout=request_timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+                if response.status == 200 and payload.get("status") == "ok":
+                    return True
+                last_error = "gateway health endpoint did not report status=ok"
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            last_error = str(exc)
+        time.sleep(0.25)
+    raise RuntimeError("local gateway did not become ready within %.1f seconds: %s" % (timeout, last_error))
 
 
 def send_samples(url, samples, timeout=3.0):
@@ -74,6 +92,7 @@ def main(argv=None):
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     try:
+        wait_for_gateway(args.url, timeout=20.0, request_timeout=args.timeout)
         samples = generate_demo_samples(args.hours)
         accepted = send_samples(args.url, samples, timeout=args.timeout)
     except (ValueError, RuntimeError) as exc:
