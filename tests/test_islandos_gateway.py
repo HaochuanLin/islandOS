@@ -67,6 +67,41 @@ class TestTelemetryReplayCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(json.loads(result.stdout)["valid"])
 
+    def test_custom_device_mapping_normalizes_vendor_keys_and_units(self):
+        row = {
+            "timestamp": RECEIVED,
+            "pv_surplus_w": 25000,
+            "freshwater_demand_l": 4000,
+            "cooling_wth": 7000,
+            "device_id": "vendor-box",
+            "quality_flag": "good",
+        }
+        mapping = {
+            "schema_version": 1,
+            "fields": {
+                "timestamp_utc": {"source_key": "timestamp"},
+                "renewable_surplus_kw": {"source_key": "pv_surplus_w", "scale": 0.001},
+                "water_demand_m3": {"source_key": "freshwater_demand_l", "scale": 0.001},
+                "cooling_demand_kw_th": {"source_key": "cooling_wth", "scale": 0.001},
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "vendor.jsonl"
+            map_path = Path(tmp) / "mapping.json"
+            source.write_text(json.dumps(row) + "\n", encoding="utf-8")
+            map_path.write_text(json.dumps(mapping), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "islandos_gateway.py"), str(source),
+                 "--mapping", str(map_path), "--received-at", RECEIVED],
+                text=True, capture_output=True, check=False,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertTrue(output["valid"])
+        self.assertEqual(output["values"]["renewable_surplus_kw"], 25.0)
+        self.assertEqual(output["values"]["water_demand_m3"], 4.0)
+        self.assertEqual(output["values"]["cooling_demand_kw_th"], 7.0)
+
     def test_malformed_json_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "broken.jsonl"
