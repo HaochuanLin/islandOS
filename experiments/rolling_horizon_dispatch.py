@@ -214,7 +214,9 @@ def simulate_rolling(
         totals["cooling_unmet_kwh_th"] += step["cooling_unmet"]
         totals["renewable_flexible_load_kwh"] += step["renewable_used"]
         totals["remaining_surplus_kwh"] += step["remaining_surplus"]
-        totals["constraint_violation_hours"] += step["constraint_violations"]
+        # Count affected hours, not per-load violation flags. The audit still
+        # preserves the per-step violation count for detailed diagnosis.
+        totals["constraint_violation_hours"] += int(step["constraint_violations"] > 0)
         decisions.append(chosen)
         hourly_audit.append({
             "hour_index": t,
