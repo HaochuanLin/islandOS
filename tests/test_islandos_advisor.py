@@ -26,6 +26,15 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
         self.assertEqual(report["status"], "advice_ready")
         self.assertEqual(report["row_count"], 3)
         self.assertEqual(len(report["policy_comparison"]), 4)
+        self.assertEqual(
+            {row["weight_profile"] for row in report["weight_sensitivity"]},
+            {"balanced", "water_priority", "cooling_priority", "energy_efficiency"},
+        )
+        self.assertEqual(sum(report["weight_sensitivity_winner_counts"].values()), 4)
+        self.assertIn("not statistical confidence", report["weight_sensitivity_interpretation"])
+        for row in report["weight_sensitivity"]:
+            self.assertAlmostEqual(sum(row["weights"].values()), 1.0)
+            self.assertIn(row["winner_for_this_input"], {"rolling", "ro_first", "ice_first"})
         self.assertEqual(set(report["hourly_audit_by_policy"]), {
             "rolling", "ro_first", "ice_first", "perfect_information"
         })
