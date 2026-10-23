@@ -71,33 +71,50 @@ def prepare_soweki_water_demand(
         raise ValueError("Input CSV contains no data rows")
 
     samples: list[tuple[datetime, float]] = []
-    previous_source_timestamp: datetime | None = None
+    source_rows = len(rows)
+    source_hour_bins_seen: set[datetime] = set()
     source_non_increasing_adjacent_pairs = 0
+    invalid_value_rows_excluded = 0
+    invalid_value_examples: list[dict] = []
+    previous_source_timestamp: datetime | None = None
     for line_number, row in enumerate(rows, start=2):
         stamp = _parse_timestamp(row.get("timestamp") or "", line_number)
         if stamp.second or stamp.microsecond or stamp.minute not in (0, 15, 30, 45):
             raise ValueError(
                 f"Expected a 15-minute-aligned timestamp at CSV line {line_number}"
             )
-        if previous_source_timestamp is not None:
-            if stamp <= previous_source_timestamp:
-                source_non_increasing_adjacent_pairs += 1
+        source_hour_bins_seen.add(stamp.replace(minute=0, second=0, microsecond=0))
+        if previous_source_timestamp is not None and stamp <= previous_source_timestamp:
+            source_non_increasing_adjacent_pairs += 1
+        previous_source_timestamp = stamp
+
         raw_value = (row.get("value") or "").strip()
         try:
             value = float(raw_value)
-        except ValueError as exc:
-            raise ValueError(f"Invalid value at CSV line {line_number}") from exc
-        if not math.isfinite(value) or value < 0:
-            raise ValueError(
-                f"Demand rate must be finite and non-negative at CSV line {line_number}"
+            invalid_reason = (
+                "non_finite" if not math.isfinite(value)
+                else "negative" if value < 0
+                else None
             )
+        except ValueError:
+            value = math.nan
+            invalid_reason = "not_numeric"
+        if invalid_reason is not None:
+            invalid_value_rows_excluded += 1
+            if len(invalid_value_examples) < 10:
+                invalid_value_examples.append({
+                    "line": line_number,
+                    "timestamp": stamp.isoformat(),
+                    "raw_value": raw_value,
+                    "reason": invalid_reason,
+                })
+            continue
         samples.append((stamp, value))
-        previous_source_timestamp = stamp
 
-    source_rows = len(samples)
     # The public export contains exact duplicate rows. Sort by the explicit
     # timestamp, drop only duplicates with the same numeric value, and reject
     # conflicting values for one timestamp rather than silently averaging them.
+    valid_value_rows = len(samples)
     samples.sort(key=lambda item: item[0])
     unique_samples: list[tuple[datetime, float]] = []
     exact_duplicate_rows_deduplicated = 0
@@ -147,19 +164,22 @@ def prepare_soweki_water_demand(
                 "water_demand_m3": f"{value:.9f}",
             })
 
-    source_span_hour_bins = int((max(grouped) - min(grouped)).total_seconds() // HOUR_SECONDS) + 1
+    source_span_hour_bins = int((max(source_hour_bins_seen) - min(source_hour_bins_seen)).total_seconds() // HOUR_SECONDS) + 1
     report = {
         "status": "prepared",
         "source_dataset": "SOWEKI Water Demand Dataset, soweki_wdd_*.csv",
         "source_url": "https://zenodo.org/records/19627517",
         "license": "CC BY 4.0",
         "source_rows": source_rows,
+        "valid_value_rows_before_deduplication": valid_value_rows,
         "unique_timestamp_samples": len(samples),
         "exact_duplicate_rows_deduplicated": exact_duplicate_rows_deduplicated,
+        "invalid_value_rows_excluded": invalid_value_rows_excluded,
+        "invalid_value_examples": invalid_value_examples,
         "source_non_increasing_adjacent_pairs": source_non_increasing_adjacent_pairs,
         "complete_hour_bins_found": len(complete_hours),
-        "partially_observed_hour_bins_excluded": len(grouped) - len(complete_hours),
-        "missing_hour_bins_inside_source_span": source_span_hour_bins - len(grouped),
+        "partially_observed_hour_bins_excluded": len(source_hour_bins_seen) - len(complete_hours),
+        "missing_hour_bins_inside_source_span": source_span_hour_bins - len(source_hour_bins_seen),
         "incomplete_hour_bins_excluded": source_span_hour_bins - len(complete_hours),
         "selected_contiguous_hours": len(selected),
         "minimum_hours_required": min_hours,
