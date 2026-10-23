@@ -121,6 +121,60 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                     process.kill()
                     process.wait(timeout=5)
 
+    def test_vendor_mapping_converts_units_before_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            port = free_port()
+            root = Path(tmp)
+            audit = root / "audit.jsonl"
+            mapping = root / "mapping.json"
+            mapping.write_text(json.dumps({
+                "schema_version": 1,
+                "fields": {
+                    "timestamp_utc": {"source_key": "ts"},
+                    "renewable_surplus_kw": {"source_key": "pv_surplus_w", "scale": 0.001},
+                    "water_demand_m3": {"source_key": "water_l", "scale": 0.001},
+                    "cooling_demand_kw_th": {"source_key": "cooling_wth", "scale": 0.001},
+                },
+            }), encoding="utf-8")
+            process = subprocess.Popen(
+                [sys.executable, str(SERVER), "--port", str(port),
+                 "--audit-file", str(audit), "--mapping", str(mapping)],
+                cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            base = "http://127.0.0.1:%d" % port
+            try:
+                for _ in range(60):
+                    try:
+                        urlopen(base + "/health", timeout=0.25).close()
+                        break
+                    except (URLError, TimeoutError):
+                        time.sleep(0.1)
+                payload = {
+                    "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "pv_surplus_w": 15500,
+                    "water_l": 3250,
+                    "cooling_wth": 8250,
+                    "quality_flag": "good",
+                }
+                request = Request(
+                    base + "/telemetry", data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}, method="POST",
+                )
+                with urlopen(request, timeout=2) as response:
+                    self.assertEqual(response.status, 202)
+                with urlopen(base + "/latest", timeout=2) as response:
+                    latest = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(latest["values"]["renewable_surplus_kw"], 15.5)
+                self.assertEqual(latest["values"]["water_demand_m3"], 3.25)
+                self.assertEqual(latest["values"]["cooling_demand_kw_th"], 8.25)
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_non_loopback_bind_is_rejected(self):
         result = subprocess.run(
             [sys.executable, str(SERVER), "--host", "0.0.0.0", "--port", "8765"],
