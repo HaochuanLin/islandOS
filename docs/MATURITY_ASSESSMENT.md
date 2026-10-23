@@ -56,3 +56,10 @@ A code change alone does not prove a score increase. A workflow definition alone
 ## Non-negotiable operational boundary
 
 islandOS must remain advisory/research software unless and until a site-specific safety case, qualified engineering review, instrument validation, failure handling, and authorized commissioning process exist. Never use this repository as the sole basis for operating desalination equipment, power systems, or other physical infrastructure.
+
+### Phase 2 — CI cancellation protection (in progress; 2026-10-23)
+
+- GitHub Actions history showed recent `RO simulation tests` runs with conclusion `cancelled` during rapid successive pushes. The workflow's concurrency setting used `cancel-in-progress: true`, so a newer push could terminate the active test run before it produced a complete result.
+- Changed `.github/workflows/ro-tests.yml` to `cancel-in-progress: false` and documented why. This preserves an in-flight test suite instead of cancelling it whenever a newer commit arrives. The latest commit is `bed0c5483142194ed9b02340d588ff58c439623c`.
+- Verification status at this update: the workflow configuration change is committed. The full test run for this exact commit has not yet been confirmed complete, so the automated-testing score remains 6.0/10; no score increase is claimed.
+- Evidence: [RO simulation workflow history](https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml) and [CI fix commit](https://github.com/HaochuanLin/islandOS/commit/bed0c5483142194ed9b02340d588ff58c439623c).
