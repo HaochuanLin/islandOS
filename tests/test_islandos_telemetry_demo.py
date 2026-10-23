@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import patch
 
-from islandos_telemetry_demo import generate_demo_samples, send_samples
+from islandos_telemetry_demo import generate_demo_samples, send_samples, wait_for_gateway
 
 
 class FakeResponse:
@@ -47,6 +47,15 @@ class TestSyntheticTelemetryDemo(unittest.TestCase):
         request = open_url.call_args.args[0]
         self.assertEqual(request.full_url, "http://127.0.0.1:8765/telemetry")
         self.assertEqual(request.get_method(), "POST")
+
+    def test_waits_for_gateway_health_before_demo(self):
+        class HealthResponse(FakeResponse):
+            def read(self):
+                return b'{"status":"ok"}'
+        with patch("islandos_telemetry_demo.urlopen", return_value=HealthResponse()) as open_url:
+            self.assertTrue(wait_for_gateway("http://127.0.0.1:8765", timeout=0.1))
+        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(open_url.call_args.args[0], "http://127.0.0.1:8765/health")
 
     def test_rejects_non_loopback_destination_in_cli(self):
         import subprocess
