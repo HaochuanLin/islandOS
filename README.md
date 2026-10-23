@@ -64,7 +64,7 @@ The **Telemetry gateway** page and `islandos_gateway.py` add a first vendor-neut
 ```bash
 # Validate the included synthetic sample deterministically
 python islandos_gateway.py data/examples/telemetry_replay_demo.csv \
-  --format csv --received-at 2026-10-23T05:00:00Z \
+  --format csv --max-age-seconds 7200 --received-at 2026-10-23T07:00:00Z \
   --output build/telemetry/replay-audit.jsonl
 
 # Map a vendor export after editing the example point map for that device
@@ -74,7 +74,7 @@ python islandos_gateway.py vendor-export.jsonl \
 
 # Validate, compare policies, and produce a recommendation-only report
 python islandos_advisor.py data/examples/telemetry_replay_demo.csv \
-  --received-at 2026-10-23T07:00:00Z \
+  --max-age-seconds 7200 --received-at 2026-10-23T07:00:00Z \
   --output build/telemetry/advisor-report.json
 ```
 
