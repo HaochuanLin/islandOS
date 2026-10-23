@@ -1,0 +1,39 @@
+{
+  "title": "Nan'ao Island RO flexibility — illustrative scenario simulation",
+  "seed": 20261021,
+  "runs": 1000,
+  "assumptions": {
+    "site": "Nan'ao Island, Guangdong, China",
+    "model_type": "scenario-based annual export-limitation event-energy abstraction",
+    "ro_rated_power_kw": 50,
+    "ro_specific_energy_kwh_per_m3": 4,
+    "annual_events_distribution": "triangular integer approximation: round(Triangular(4, 12, mode=8))",
+    "event_duration_hours_distribution": "lognormal with median 8 h and sigma=0.5, clipped to [2, 24] h",
+    "available_surplus_power_kw_distribution": "triangular(5, 50, mode=25) kW during an event",
+    "ro_availability_distribution": "uniform(0.85, 1.00) per event",
+    "water_yield_formula": "sum(event_hours * min(available_surplus_kw, RO_rated_power_kw) * RO_availability) / SEC",
+    "standby_ro_status": "No publicly accessible official documentation reviewed by the team confirms an operable standby seawater RO unit on Nan'ao main island. The pilot assumes a modular 50 kW RO unit would be procured, installed and owned by the local water authority, subject to site verification, approval and budget.",
+    "data_status": "assumptions only; no measured Nan'ao curtailment time series supplied",
+    "exclusions": [
+      "No hourly grid power-flow, network congestion, export-limit or dispatch simulation",
+      "No measured renewable generation, demand, curtailment or outage-event dataset",
+      "No water demand, reservoir constraints, water-quality approval or plant ramp/flush model",
+      "No CAPEX/OPEX, savings, ROI, emissions or avoided-outage claims",
+      "No claim that the modeled events actually occurred on Nan'ao"
+    ]
+  },
+  "scenario_water_produced_m3_per_year": {
+    "p05": 237.609,
+    "p50_median": 442.734,
+    "p95": 693.16,
+    "mean": 447.814
+  },
+  "interpretation": "Scenario-based simulation assumption, not measured real-world data. Percentiles describe only the stated assumptions; they are not a forecast, guarantee, validated water yield, or evidence of actual Nan'ao curtailment.",
+  "limitations": [
+    "No hourly grid power-flow, network congestion, export-limit or dispatch simulation",
+    "No measured renewable generation, demand, curtailment or outage-event dataset",
+    "No water demand, reservoir constraints, water-quality approval or plant ramp/flush model",
+    "No CAPEX/OPEX, savings, ROI, emissions or avoided-outage claims",
+    "No claim that the modeled events actually occurred on Nan'ao"
+  ]
+}
