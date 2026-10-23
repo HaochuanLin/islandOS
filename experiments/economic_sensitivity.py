@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 import statistics
 from typing import Any
@@ -94,7 +95,7 @@ def run_economic_sensitivity(
     if input_summary.get("quality_status") != "valid" or row_count not in (8760, 8784):
         raise ValueError("base report must contain a valid complete-calendar-year input summary")
     try:
-        first = __import__("datetime").datetime.fromisoformat(
+        first = datetime.fromisoformat(
             input_summary["first_timestamp"].replace("Z", "+00:00")
         )
         last = __import__("datetime").datetime.fromisoformat(
