@@ -17,6 +17,13 @@ streamlit run app.py
 
 The Streamlit app supports a synthetic demo or uploaded hourly CSV, parameter editing, fixed-strategy comparisons, hourly audits, report downloads, and an experimental NSGA-II search. It is a planning prototype, not a real-time controller.
 
+Additional pages:
+- **Rolling dispatch lab:** runs a fixed, seeded synthetic comparison of receding-horizon dispatch against RO-first and cooling-first priority policies, with forecast-error and objective-weight sensitivity.
+- **Custom dispatch CSV:** validates timestamped paired actual/forecast surplus and water/cooling demand series, then compares rolling, fixed-priority, and perfect-information reference policies. Perfect-information is a hindsight benchmark, not a deployable strategy.
+- **Telemetry gateway:** checks uploaded CSV/JSONL records, creates an operator-review-only dispatch report, and exports an audit. The Streamlit page does not open hardware sockets or write PLC setpoints. The separate local HTTP gateway is loopback-only by default.
+
+Results are tied to the input bytes and relevant settings so stale session-state outputs are cleared when inputs change. All bundled demo inputs remain synthetic; uploaded data passing software validation is not proof of sensor authenticity, calibration, site safety, or field performance.
+
 The strategy-comparison CSV requires these columns:
 
 - `timestamp`: timestamp string, strictly increasing
