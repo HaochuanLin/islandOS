@@ -135,7 +135,11 @@ def main(argv=None):
             policy: round(_score(results[policy], parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6)
             for policy in operational
         }
-        recommended = min(operational, key=lambda policy: (scores[policy], policy))
+        eligible = tuple(
+            policy for policy in operational
+            if results[policy]["constraint_violation_hours"] == 0
+        )
+        recommended = min(eligible, key=lambda policy: (scores[policy], policy)) if eligible else None
         sensitivity = []
         for profile_name, profile_weights in WEIGHT_PROFILES.items():
             profile_scores = {
@@ -146,7 +150,10 @@ def main(argv=None):
                 "weight_profile": profile_name,
                 "weights": profile_weights,
                 "policy_scores": profile_scores,
-                "winner_for_this_input": min(operational, key=lambda policy: (profile_scores[policy], policy)),
+                "winner_for_this_input": (
+                    min(eligible, key=lambda policy: (profile_scores[policy], policy))
+                    if eligible else None
+                ),
             })
         winner_counts = {
             policy: sum(row["winner_for_this_input"] == policy for row in sensitivity)
@@ -166,7 +173,7 @@ def main(argv=None):
                 "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
             })
         report = {
-            "status": "advice_ready",
+            "status": "advice_ready" if recommended is not None else "operator_review_required",
             "mode": "recorded_file_replay",
             "data_status": "user-supplied file; not site-validated",
             "source": args.source,
@@ -180,8 +187,13 @@ def main(argv=None):
                 "they are not statistical confidence or a guarantee of field performance."
             ),
             "policy_comparison": comparison,
+            "eligible_policies": list(eligible),
             "recommended_policy_for_operator_review": recommended,
-            "recommendation_reason": "lowest declared normalized score among rolling and fixed-priority policies for this input only",
+            "recommendation_reason": (
+                "lowest declared normalized score among zero-constraint-violation operational policies for this input only"
+                if recommended is not None else
+                "no operational policy satisfies all reported constraints; operator review is required and no policy is recommended"
+            ),
             "hourly_audit_by_policy": {policy: results[policy]["hourly_audit"] for policy in POLICIES},
             "telemetry_audit": records,
             "operator_action_required": True,
