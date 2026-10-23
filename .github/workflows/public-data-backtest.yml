@@ -1,0 +1,177 @@
+name: Public measured water-demand backtest
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_id:
+        description: SOWEKI measured series ID (1–11)
+        required: true
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+          - "6"
+          - "7"
+          - "8"
+          - "9"
+          - "10"
+          - "11"
+  pull_request:
+    paths:
+      - ".github/workflows/public-data-backtest.yml"
+      - "experiments/prepare_soweki_water_demand.py"
+      - "experiments/water_demand_forecast.py"
+      - "tests/test_prepare_soweki_water_demand.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-public-data-backtest-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  measured-water-demand-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATASET_ID: ${{ inputs.dataset_id || '1' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download and prepare licensed measured series
+        run: |
+          python experiments/prepare_soweki_water_demand.py \
+            --download --dataset-id "$DATASET_ID" \
+            --output build/public-data/soweki_hourly.csv \
+            --report build/public-data/preparation.json
+      - name: Run chronological baseline evaluation
+        run: |
+          python experiments/water_demand_forecast.py \
+            build/public-data/soweki_hourly.csv \
+            --output build/public-data/forecast_report.json
+      - name: Validate evidence and create measured-data summary
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          import math
+          from pathlib import Path
+
+          root = Path("build/public-data")
+          prep = json.loads((root / "preparation.json").read_text(encoding="utf-8"))
+          report = json.loads((root / "forecast_report.json").read_text(encoding="utf-8"))
+          assert prep["status"] == "prepared"
+          assert prep["license"] == "CC BY 4.0"
+          assert prep["source_rows"] > 0
+          assert prep["selected_contiguous_hours"] >= prep["minimum_hours_required"] >= 43
+          assert prep["partially_observed_hour_bins_excluded"] >= 0
+          assert prep["missing_hour_bins_inside_source_span"] >= 0
+          assert "No interpolation" in prep["missing_data_policy"]
+          assert report["status"] == "baseline_evaluated"
+          assert report["row_count"] == prep["selected_contiguous_hours"]
+          assert report["test_rows"] > 0
+          assert report["history_rows"] + report["test_rows"] == report["row_count"]
+          required_models = {"persistence", "seasonal_naive_24h", "seasonal_bias_corrected"}
+          assert required_models == set(report["test_metrics"])
+          for model, metrics in report["test_metrics"].items():
+              for key in ("mae_m3_per_hour", "rmse_m3_per_hour", "bias_predicted_minus_actual_m3_per_hour"):
+                  assert math.isfinite(metrics[key]), (model, key, metrics[key])
+          for name in ("nominal_90pct", "nominal_95pct"):
+              coverage = report["seasonal_prediction_intervals"][name]["empirical_coverage"]
+              assert 0.0 <= coverage <= 1.0
+
+          with (root / "soweki_hourly.csv").open(encoding="utf-8", newline="") as handle:
+              demand = [float(row["water_demand_m3"]) for row in csv.DictReader(handle)]
+          history = demand[:report["history_rows"]]
+          ordered = sorted(history)
+          position = 0.90 * (len(ordered) - 1)
+          lo = math.floor(position)
+          hi = math.ceil(position)
+          threshold = ordered[lo] + (ordered[hi] - ordered[lo]) * (position - lo)
+          peak_rows = [
+              row for row in report["test_predictions"]
+              if row["actual_water_demand_m3"] >= threshold
+          ]
+          forecasts = {
+              "persistence": "persistence_forecast_m3",
+              "seasonal_naive_24h": "seasonal_naive_24h_forecast_m3",
+              "seasonal_bias_corrected": "seasonal_bias_corrected_forecast_m3",
+          }
+          peak_metrics = {}
+          for model, key in forecasts.items():
+              errors = [row[key] - row["actual_water_demand_m3"] for row in peak_rows]
+              peak_metrics[model] = {
+                  "sample_count": len(errors),
+                  "mae_m3_per_hour": (
+                      sum(abs(error) for error in errors) / len(errors) if errors else None
+                  ),
+                  "underforecast_rate": (
+                      sum(error < 0 for error in errors) / len(errors) if errors else None
+                  ),
+                  "threshold_m3_per_hour_from_training_p90": threshold,
+                  "threshold_source": "training history only; fixed before scoring the chronological test window",
+              }
+
+          summary = {
+              "status": "measured_public_data_backtest_completed",
+              "source": {
+                  "name": prep["source_dataset"],
+                  "url": prep["source_url"],
+                  "license": prep["license"],
+                  "series_id": int(__import__("os").environ["DATASET_ID"]),
+                  "source_rows": prep["source_rows"],
+                  "selected_contiguous_hours": prep["selected_contiguous_hours"],
+                  "first_timestamp_utc": prep["first_timestamp_utc"],
+                  "last_timestamp_utc": prep["last_timestamp_utc"],
+                  "partial_hours_excluded": prep["partially_observed_hour_bins_excluded"],
+                  "missing_hour_bins_inside_source_span": prep["missing_hour_bins_inside_source_span"],
+                  "missing_policy": prep["missing_data_policy"],
+              },
+              "chronological_evaluation": {
+                  "history_rows": report["history_rows"],
+                  "test_rows": report["test_rows"],
+                  "first_test_timestamp": report["first_test_timestamp"],
+                  "last_test_timestamp": report["last_test_timestamp"],
+                  "test_metrics": report["test_metrics"],
+                  "prediction_interval_coverage": report["seasonal_prediction_intervals"],
+                  "training_p90_peak_risk": peak_metrics,
+              },
+              "interpretation_limits": [
+                  "This is measured demand from rural German reservoir outflows, not Nan'ao or island data.",
+                  "A single series and chronological holdout do not establish transfer to another location or season.",
+                  "A better metric on this holdout is not a guarantee of operational benefit; compare multiple series and windows.",
+                  "Prediction intervals must be judged by empirical coverage; nominal Gaussian coverage is not guaranteed.",
+                  "This workflow validates a reproducible public-data study, not site safety or a live control system.",
+              ],
+          }
+          (root / "measured_data_summary.json").write_text(
+              json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+          )
+          print(json.dumps({
+              "status": summary["status"],
+              "series_id": summary["source"]["series_id"],
+              "rows": report["row_count"],
+              "test_rows": report["test_rows"],
+              "test_metrics": report["test_metrics"],
+              "peak_risk": peak_metrics,
+          }, indent=2, ensure_ascii=False))
+          PY
+      - name: Upload public-data preparation and evaluation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-soweki-measured-data-backtest
+          path: |
+            build/public-data/preparation.json
+            build/public-data/forecast_report.json
+            build/public-data/measured_data_summary.json
+          if-no-files-found: error
+          retention-days: 90
