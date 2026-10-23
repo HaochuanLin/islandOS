@@ -27,6 +27,25 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(parsed["forecast_water_demand_m3_per_hour"], (5.0, 8.0))
         self.assertTrue(parsed["timestamps_utc"][0].endswith("Z"))
 
+    def test_parsed_scenario_runs_all_dispatch_policies(self):
+        text = (
+            "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,"
+            "cooling_demand_kw_th,forecast_water_demand_m3\\n"
+            "2026-01-01T00:00:00Z,400,380,5,8,6\\n"
+            "2026-01-01T01:00:00Z,0,20,6,9,7\\n"
+            "2026-01-01T02:00:00Z,400,420,4,5,4\\n"
+        )
+        parsed = parse_scenario_csv(text, name="paired_fixture")
+        for policy in ("rolling", "ro_first", "ice_first", "perfect_information"):
+            with self.subTest(policy=policy):
+                result = simulate_rolling(
+                    parsed["scenario"], parsed["forecast_surplus_kw"], policy,
+                    forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+                )
+                self.assertEqual(len(result["hourly_audit"]), 3)
+                self.assertTrue(all(np.isfinite(row["water_inventory_m3"]) for row in result["hourly_audit"]))
+                self.assertEqual(result["constraint_violation_hours"], len(result["constraint_violation_hour_indices"]))
+
     def test_parse_scenario_csv_rejects_missing_columns(self):
         with self.assertRaisesRegex(ValueError, "missing required columns"):
             parse_scenario_csv("timestamp_utc,actual_surplus_kw\\n2026-01-01T00:00:00Z,10\\n")
