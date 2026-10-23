@@ -349,16 +349,32 @@ jobs:
             --output build/forecast-dispatch/uncertainty-comparison.json
           python - <<'PY'
           import json
+          import math
           from pathlib import Path
 
           report = json.loads(Path("build/forecast-dispatch/uncertainty-comparison.json").read_text(encoding="utf-8"))
           assert report["status"] == "uncertainty_dispatch_comparison_completed"
-          assert report["time_basis"]["matched_rows"] > 0
-          assert report["point_forecast_planning"]["forecast_metrics"]["evaluated_hours"] == report["time_basis"]["matched_rows"]
-          assert report["upper_bound_stress_planning"]["forecast_metrics"]["evaluated_hours"] == report["time_basis"]["matched_rows"]
-          assert "water_unmet_m3" in report["change_upper_minus_point"]
-          assert "cooling_unmet_kwh_th" in report["change_upper_minus_point"]
-          print("Synthetic water-demand uncertainty-dispatch smoke test passed.")
+          matched_rows = report["time_basis"]["matched_rows"]
+          assert matched_rows > 0
+          assert report["forecast_columns"]["point"] == "seasonal_bias_corrected_forecast_m3"
+          assert report["forecast_columns"]["upper_bound_stress"] == "seasonal_bias_corrected_90pct_upper_m3"
+
+          for planning_key in ("point_forecast_planning", "upper_bound_stress_planning"):
+              planning = report[planning_key]
+              metrics = planning["forecast_metrics"]
+              assert metrics["evaluated_hours"] == matched_rows
+              for metric_key in ("mae_m3_per_hour", "rmse_m3_per_hour"):
+                  assert math.isfinite(metrics[metric_key]) and metrics[metric_key] >= 0
+              dispatch = planning["rolling_dispatch"]
+              for metric_key in ("water_unmet_m3", "cooling_unmet_kwh_th", "remaining_surplus_kwh"):
+                  assert math.isfinite(dispatch[metric_key]) and dispatch[metric_key] >= 0
+              assert 0 <= dispatch["constraint_violation_hours"] <= matched_rows
+
+          changes = report["change_upper_minus_point"]
+          assert "water_unmet_m3" in changes
+          assert "cooling_unmet_kwh_th" in changes
+          assert all(math.isfinite(value) for value in changes.values())
+          print("Synthetic water-demand uncertainty-dispatch smoke test passed with finite, bounded output checks.")
           PY
       - name: Upload uncertainty-dispatch report
         uses: actions/upload-artifact@v4
