@@ -90,6 +90,7 @@ def _load_power_rows(input_csv: str | Path) -> dict[datetime, dict[str, str]]:
 def _load_forecast_rows(
     report_json: str | Path,
     forecast_column: str | None,
+    fold: int | None,
 ) -> tuple[str, list[dict[str, Any]], str]:
     report_path = Path(report_json)
     try:
@@ -109,6 +110,14 @@ def _load_forecast_rows(
         rows = report.get("test_predictions")
     if not isinstance(rows, list) or not rows:
         raise ValueError("Forecast report must contain non-empty forecast_rows or test_predictions")
+    if any(not isinstance(row, dict) for row in rows):
+        raise ValueError("Every forecast report row must be an object")
+    if fold is not None:
+        if not any("fold" in row for row in rows):
+            raise ValueError("--fold can only be used with a report that contains fold identifiers")
+        rows = [row for row in rows if row.get("fold") == fold]
+        if not rows:
+            raise ValueError(f"Forecast report does not contain fold {fold}")
 
     available_columns = set(rows[0]) - {"timestamp", "actual_water_demand_m3", "fold"}
     selected_column = forecast_column
@@ -143,11 +152,12 @@ def build_forecast_dispatch_input(
     output_csv: str | Path,
     forecast_column: str | None = None,
     report_json: str | Path | None = None,
+    fold: int | None = None,
 ) -> dict[str, Any]:
     """Join a chronological forecast report to paired dispatch inputs by timestamp."""
     power_rows = _load_power_rows(power_csv)
     selected_column, forecast_rows, source_status = _load_forecast_rows(
-        forecast_report_json, forecast_column
+        forecast_report_json, forecast_column, fold
     )
 
     joined: list[tuple[datetime, dict[str, str], float]] = []
@@ -212,6 +222,7 @@ def build_forecast_dispatch_input(
         "forecast_report_json": str(forecast_report_json),
         "forecast_report_status": source_status,
         "forecast_column_used": selected_column,
+        "fold_selected": fold,
         "output_csv": str(output_path),
         "matched_rows": len(joined),
         "first_timestamp_utc": joined[0][0].isoformat().replace("+00:00", "Z"),
@@ -240,6 +251,7 @@ def main() -> None:
     parser.add_argument("power_csv", help="Hourly paired power/dispatch CSV")
     parser.add_argument("forecast_report_json", help="JSON from an IslandOS chronological water-demand forecast experiment")
     parser.add_argument("--forecast-column", help="Prediction field in forecast_rows/test_predictions; auto-selects a known model field if omitted")
+    parser.add_argument("--fold", type=int, help="Optional fold number when joining one window from a repeated backtest report")
     parser.add_argument("--output", default="build/forecast-dispatch/paired_with_water_forecast.csv")
     parser.add_argument("--report", help="Optional JSON sidecar report path")
     args = parser.parse_args()
@@ -250,6 +262,7 @@ def main() -> None:
             args.output,
             forecast_column=args.forecast_column,
             report_json=args.report,
+            fold=args.fold,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
