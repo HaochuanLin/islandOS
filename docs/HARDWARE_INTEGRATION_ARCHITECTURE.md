@@ -112,3 +112,8 @@ The Windows workflow builds both standalone executables, stages them with `telem
 
 
 The optional `--mapping` argument accepts the versioned field/unit map from `config/device_map.example.json`, after adapting source keys to the device export. `GET /advice` evaluates the last 24 accepted records only when they are valid, strictly increasing hourly rows and the newest sample is fresh. It returns the shared policy comparison and weight sensitivity; it never issues a control command.
+
+
+## Local operator dashboard
+
+`GET /dashboard` serves a same-origin browser dashboard directly from the loopback gateway. It polls `/health`, `/latest`, and `/advice`, displays telemetry and policy metrics, and reports when a fresh hourly window is unavailable. The page sets a restrictive Content-Security-Policy, disables framing, uses DOM text assignment for data values, and has no control endpoint. This local dashboard avoids relying on a hosted Streamlit server to reach a user's localhost. It is still a prototype and must not be treated as a safety-rated HMI.
