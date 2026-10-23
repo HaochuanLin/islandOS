@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -78,6 +79,9 @@ class NanAoScenarioTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "nan_ao_percentiles.csv").exists())
             self.assertTrue((Path(tmp) / "nan_ao_summary.json").exists())
             self.assertTrue((Path(tmp) / "nan_ao_financial_screen.json").exists())
+            with (Path(tmp) / "nan_ao_financial_screen.json").open(encoding="utf-8") as handle:
+                financial_screen = json.load(handle)
+            self.assertIn("capital_only_cost_rmb_per_m3_low", financial_screen)
             sensitivity_path = Path(tmp) / "nan_ao_sensitivity.csv"
             self.assertTrue(sensitivity_path.exists())
             with sensitivity_path.open(encoding="utf-8", newline="") as handle:
