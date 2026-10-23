@@ -33,9 +33,9 @@ jobs:
       - name: Compile telemetry safety boundary
         run: python -m py_compile islandos_io.py
       - name: Test telemetry quality and fail-closed control authorization
-        run: python -m unittest tests.test_islandos_io -v
+        run: python -m unittest discover -s tests -p 'test_islandos_io.py' -v
       - name: Test read-only telemetry gateway end-to-end
-        run: python -m unittest tests.test_islandos_gateway -v
+        run: python -m unittest discover -s tests -p 'test_islandos_gateway.py' -v
       - name: Compile telemetry gateway CLI
         run: python -m py_compile islandos_gateway.py
       - name: Smoke-test synthetic telemetry replay fixture
