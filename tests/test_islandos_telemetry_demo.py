@@ -50,6 +50,7 @@ class TestSyntheticTelemetryDemo(unittest.TestCase):
 
     def test_waits_for_gateway_health_before_demo(self):
         class HealthResponse(FakeResponse):
+            status = 200
             def read(self):
                 return b'{"status":"ok"}'
         with patch("islandos_telemetry_demo.urlopen", return_value=HealthResponse()) as open_url:
