@@ -35,6 +35,7 @@ def backtest_water_demand_models(
     initial_train_fraction: float = 0.65,
     test_window_hours: int = 24,
     step_hours: int = 24,
+    max_folds: int = 8,
 ) -> dict[str, Any]:
     """Evaluate baseline and ML forecasts over repeated chronological windows."""
     if not 0.60 <= initial_train_fraction <= 0.85:
@@ -43,20 +44,34 @@ def backtest_water_demand_models(
         raise ValueError("test_window_hours must be at least 24")
     if step_hours < test_window_hours:
         raise ValueError("step_hours must be at least test_window_hours to avoid overlap")
+    if max_folds < 2:
+        raise ValueError("max_folds must be at least 2 to compare multiple time windows")
 
     timestamps, demand = _load_series(input_csv)
     initial_cutoff = int(len(demand) * initial_train_fraction)
     if initial_cutoff - WEEK_LAG_HOURS < 48:
         raise ValueError("Not enough training samples after week-lag feature construction")
 
-    fold_starts = list(
+    available_fold_starts = list(
         range(initial_cutoff, len(demand) - test_window_hours + 1, step_hours)
     )
-    if not fold_starts:
+    if not available_fold_starts:
         raise ValueError(
             "No complete test windows remain; reduce the initial training fraction "
             "or test-window length, or provide more data"
         )
+
+    # Long datasets can contain thousands of possible hourly/daily folds. Sample
+    # evenly across the available period so the backtest remains tractable and
+    # does not silently evaluate only the earliest or latest few windows.
+    if len(available_fold_starts) > max_folds:
+        selected_positions = [
+            round(index * (len(available_fold_starts) - 1) / (max_folds - 1))
+            for index in range(max_folds)
+        ]
+        fold_starts = [available_fold_starts[position] for position in selected_positions]
+    else:
+        fold_starts = available_fold_starts
 
     model_names = (
         "persistence_previous_hour",
@@ -144,6 +159,8 @@ def backtest_water_demand_models(
             "initial_training_cutoff_index": initial_cutoff,
             "test_window_hours": test_window_hours,
             "step_hours": step_hours,
+            "available_fold_count": len(available_fold_starts),
+            "max_folds": max_folds,
             "fold_count": len(folds),
             "evaluated_hours": len(aggregate_actual),
         },
@@ -175,6 +192,7 @@ def main() -> None:
     parser.add_argument("--initial-train-fraction", type=float, default=0.65)
     parser.add_argument("--test-window-hours", type=int, default=24)
     parser.add_argument("--step-hours", type=int, default=24)
+    parser.add_argument("--max-folds", type=int, default=8, help="Maximum number of evenly spaced test windows")
     args = parser.parse_args()
     report = backtest_water_demand_models(
         args.input_csv,
@@ -182,6 +200,7 @@ def main() -> None:
         initial_train_fraction=args.initial_train_fraction,
         test_window_hours=args.test_window_hours,
         step_hours=args.step_hours,
+        max_folds=args.max_folds,
     )
     print(json.dumps({
         "status": report["status"],
