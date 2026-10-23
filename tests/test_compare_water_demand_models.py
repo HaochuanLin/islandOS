@@ -64,10 +64,14 @@ class TestCompareWaterDemandModels(unittest.TestCase):
     def test_rejects_naive_timestamps(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "demand.csv"
-            source.write_text(
-                "timestamp,water_demand_m3\n2025-01-01T00:00:00,10\n",
-                encoding="utf-8",
-            )
+            self._write_series(source)
+            with source.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[0]["timestamp"] = "2025-01-01T00:00:00"
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "water_demand_m3"])
+                writer.writeheader()
+                writer.writerows(rows)
             with self.assertRaisesRegex(ValueError, "timezone offset"):
                 compare_water_demand_models(source, Path(directory) / "report.json")
 
