@@ -29,9 +29,14 @@ jobs:
           import time
           from datetime import datetime, timezone
           from pathlib import Path
-          from urllib.error import URLError, HTTPError
-          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
+          from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          opener = build_opener(NoRedirect)
           base = "https://islandos.streamlit.app"
           health_url = base + "/_stcore/health"
           report = {
@@ -42,51 +47,68 @@ jobs:
               "attempts": [],
           }
 
-          for attempt in range(1, 13):
+          def probe(url, body_limit):
+              request = Request(url, headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
               try:
-                  request = Request(health_url, headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
-                  with urlopen(request, timeout=12) as response:
-                      body = response.read(2048).decode("utf-8", errors="replace").strip()
-                      result = {
-                          "attempt": attempt,
+                  with opener.open(request, timeout=12) as response:
+                      body = response.read(body_limit).decode("utf-8", errors="replace")
+                      return {
                           "http_status": response.status,
-                          "body_excerpt": body[:200],
+                          "content_type": response.headers.get("Content-Type", ""),
+                          "location": response.headers.get("Location"),
+                          "body": body,
                       }
-                  report["attempts"].append(result)
-                  if result["http_status"] == 200 and body.lower() in {"ok", "healthy"}:
-                      break
-                  raise RuntimeError(f"Unexpected health response: {result}")
-              except (URLError, HTTPError, TimeoutError, RuntimeError) as exc:
-                  report["attempts"].append({"attempt": attempt, "error": str(exc)[:300]})
-                  if attempt < 12:
-                      time.sleep(min(10, attempt))
-          else:
-              Path("hosted-health-report.json").write_text(
-                  json.dumps(report, indent=2) + "\n", encoding="utf-8"
-              )
-              print(json.dumps(report, indent=2))
-          raise SystemExit("Hosted Streamlit health endpoint did not become healthy after 12 attempts")
+              except HTTPError as exc:
+                  body = exc.read(body_limit).decode("utf-8", errors="replace")
+                  return {
+                      "http_status": exc.code,
+                      "content_type": exc.headers.get("Content-Type", ""),
+                      "location": exc.headers.get("Location"),
+                      "body": body,
+                  }
+              except (URLError, TimeoutError, OSError) as exc:
+                  return {"error": str(exc)[:300]}
 
-          request = Request(base + "/", headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
-          with urlopen(request, timeout=15) as response:
-              html = response.read(2_000_000).decode("utf-8", errors="replace")
-              report["landing_page"] = {
-                  "http_status": response.status,
-                  "content_type": response.headers.get("Content-Type", ""),
-                  "response_bytes": len(html.encode("utf-8")),
-                  "contains_islandos_marker": "islandos" in html.lower(),
-              }
-              if response.status != 200:
-                  raise SystemExit(f"Landing page returned HTTP {response.status}")
-              if "text/html" not in report["landing_page"]["content_type"].lower():
-                  raise SystemExit("Landing page did not return HTML")
-              if len(html) < 1000:
-                  raise SystemExit("Landing page response is unexpectedly small")
-          report["status"] = "healthy"
+          for attempt in range(1, 13):
+              root = probe(base + "/", 2_000_000)
+              health = probe(health_url, 2048)
+              report["attempts"].append({
+                  "attempt": attempt,
+                  "landing_page": {
+                      key: value for key, value in root.items() if key != "body"
+                  },
+                  "health_endpoint": {
+                      key: value for key, value in health.items() if key != "body"
+                  },
+                  "health_body_excerpt": health.get("body", "")[:200],
+              })
+              root_ok = (
+                  root.get("http_status") == 200
+                  and "text/html" in root.get("content_type", "").lower()
+                  and len(root.get("body", "")) >= 1000
+              )
+              health_ok = (
+                  health.get("http_status") == 200
+                  and health.get("body", "").strip().lower() in {"ok", "healthy"}
+              )
+              if root_ok and health_ok:
+                  report["landing_page"] = {
+                      "http_status": root["http_status"],
+                      "content_type": root["content_type"],
+                      "response_bytes": len(root["body"].encode("utf-8")),
+                      "contains_islandos_marker": "islandos" in root["body"].lower(),
+                  }
+                  report["status"] = "healthy"
+                  break
+              if attempt < 12:
+                  time.sleep(min(10, attempt))
           Path("hosted-health-report.json").write_text(
               json.dumps(report, indent=2) + "\n", encoding="utf-8"
           )
           print(json.dumps(report, indent=2))
+          if report["status"] != "healthy":
+              raise SystemExit("Hosted Streamlit landing page and health endpoint did not both pass")
+
           PY
       - name: Upload hosted health evidence
         if: always()
