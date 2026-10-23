@@ -55,6 +55,14 @@ def evaluate_readiness(payload: dict, mode: str = "dispatch", now=None, max_tele
     """Return blockers and warnings. Missing critical inputs always block the requested mode."""
     if mode not in {"dispatch", "economic"}:
         raise ValueError("mode must be 'dispatch' or 'economic'")
+    if (
+        isinstance(max_telemetry_age_minutes, bool)
+        or not isinstance(max_telemetry_age_minutes, int)
+        or max_telemetry_age_minutes <= 0
+    ):
+        raise ValueError("max_telemetry_age_minutes must be a positive integer")
+    if now is not None and not isinstance(now, datetime):
+        raise ValueError("now must be a datetime when provided")
     if not isinstance(payload, dict):
         payload = {}
     blockers, warnings = [], []
@@ -62,10 +70,15 @@ def evaluate_readiness(payload: dict, mode: str = "dispatch", now=None, max_tele
     if mode == "economic":
         required.update(CAPEX_REQUIRED)
 
+    text_fields = {"site_name", "telemetry.source_reference"}
+    if mode == "economic":
+        text_fields.add("capex.source_reference")
     for path, label in required.items():
         value = _get(payload, path)
         if value is None or (isinstance(value, str) and not value.strip()):
             blockers.append({"code": "missing_required_input", "field": path, "message": f"Missing required input: {label}."})
+        elif path in text_fields and not isinstance(value, str):
+            blockers.append({"code": "invalid_text", "field": path, "message": f"{path} must be a non-empty text value."})
 
     # Check timestamps separately so invalid values do not crash the report.
     for path in ("scenario_start", "telemetry.timestamp"):
@@ -101,9 +114,12 @@ def evaluate_readiness(payload: dict, mode: str = "dispatch", now=None, max_tele
         value = _get(payload, path)
         if value is None or value == "":
             continue
+        if isinstance(value, bool):
+            blockers.append({"code": "invalid_number", "field": path, "message": f"{path} must be numeric, not boolean."})
+            continue
         try:
             number = float(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             blockers.append({"code": "invalid_number", "field": path, "message": f"{path} must be numeric."})
             continue
         if not math.isfinite(number) or number < 0:
@@ -127,9 +143,12 @@ def evaluate_readiness(payload: dict, mode: str = "dispatch", now=None, max_tele
             value = _get(payload, path)
             if value is None or value == "":
                 continue
+            if isinstance(value, bool):
+                blockers.append({"code": "invalid_number", "field": path, "message": f"{label} must be numeric, not boolean."})
+                continue
             try:
                 number = float(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 blockers.append({"code": "invalid_number", "field": path, "message": f"{label} must be numeric."})
                 continue
             if not math.isfinite(number) or number < 0:
