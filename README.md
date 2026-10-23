@@ -82,6 +82,7 @@ For a compact reference to the other experiments, see [Experiments and workflows
 ## Documentation
 
 - **Engineering maturity and delivery gates:** [scored targets, acceptance criteria, and evidence requirements](docs/ENGINEERING_MATURITY_ROADMAP.md)
+- **Plug-and-play platform roadmap:** [modular decision core, signal adapters, configuration, safety boundaries, and local deployment](docs/PLUG_AND_PLAY_PRODUCT_ROADMAP.md)
 
 | Topic | Guide |
 |---|---|
