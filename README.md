@@ -28,7 +28,7 @@ A separate Nan'ao-type scenario is documented in the [Nan'ao scenario guide](doc
 
 ## What it can do today
 
-- **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results.
+- **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results. The app also exposes a rolling-dispatch lab, custom paired-CSV evaluation, and a read-only telemetry review page.
 - **Energy–water dispatch experiments:** compare priority-based flexible-load policies and run a rolling-horizon prototype.
 - **Multi-objective policy search:** use grid search or an experimental NSGA-II optimizer to inspect trade-offs among unmet water/cooling demand and remaining renewable surplus.
 - **Forecasting experiments:** evaluate water-demand baselines and optional machine-learning models with chronological holdouts and rolling backtests.
