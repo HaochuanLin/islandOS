@@ -25,12 +25,16 @@ jobs:
         run: pyinstaller --clean --onefile --name islandos-advisor islandos_advisor.py
       - name: Build portable HTTP gateway executable
         run: pyinstaller --clean --onefile --name islandos-gateway-server islandos_gateway_server.py
+      - name: Build synthetic telemetry demo executable
+        run: pyinstaller --clean --onefile --name islandos-telemetry-demo islandos_telemetry_demo.py
       - name: Smoke-test gateway executable
         run: .\dist\islandos-gateway.exe --help
       - name: Smoke-test advisor executable
         run: .\dist\islandos-advisor.exe --help
       - name: Smoke-test HTTP gateway executable
         run: .\dist\islandos-gateway-server.exe --help
+      - name: Smoke-test synthetic telemetry demo executable
+        run: .\dist\islandos-telemetry-demo.exe --help
       - name: Assemble portable demo package
         shell: pwsh
         run: |
@@ -39,10 +43,12 @@ jobs:
           Copy-Item "dist/islandos-gateway.exe" $package
           Copy-Item "dist/islandos-advisor.exe" $package
           Copy-Item "dist/islandos-gateway-server.exe" $package
+          Copy-Item "dist/islandos-telemetry-demo.exe" $package
           Copy-Item "data/examples/telemetry_replay_demo.csv" "$package/telemetry_replay_demo.csv"
           Copy-Item "config/device_map.example.json" "$package/device_map.example.json"
           Copy-Item "packaging/windows/run-demo.bat" "$package/run-demo.bat"
           Copy-Item "packaging/windows/run-gateway-server.bat" "$package/run-gateway-server.bat"
+          Copy-Item "packaging/windows/run-synthetic-demo.bat" "$package/run-synthetic-demo.bat"
           Copy-Item "packaging/windows/README.txt" "$package/README.txt"
       - name: Run packaged advisor on included demo data
         shell: pwsh
@@ -62,6 +68,7 @@ jobs:
             dist/islandos-gateway.exe
             dist/islandos-advisor.exe
             dist/islandos-gateway-server.exe
+            dist/islandos-telemetry-demo.exe
             dist/islandos-demo-package.zip
           if-no-files-found: error
           retention-days: 30
