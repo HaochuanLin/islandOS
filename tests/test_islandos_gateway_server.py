@@ -201,6 +201,8 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertIn("Local Operator Review", html)
                 self.assertIn('getJson("/advice")', html)
                 self.assertIn("Physical writes: disabled", html)
+                self.assertIn("Download advice JSON", html)
+                self.assertIn("islandos-dispatch-advice.json", html)
                 self.assertNotIn('fetch("/control"', html)
             finally:
                 process.terminate()
