@@ -28,6 +28,7 @@ from experiments.compare_energy_water_strategies import (
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
+from islandos_core.simulation_adapter import simulation_row_to_screening_signals
 from islandos_core.virtual_instrument import make_virtual_reading
 
 st.set_page_config(
@@ -450,9 +451,11 @@ elif page == "Strategy simulator":
             screen_row = strategy_rows.loc[
                 strategy_rows["timestamp"] == screen_timestamp
             ].iloc[0]
+            # Parse once; this estimate is derived from the selected offline input series.
+            input_steps = parse_uploaded_csv(raw)
             estimated_daily_demand = (
-                sum(step.water_demand_m3 for step in parse_uploaded_csv(raw))
-                / max(1e-9, len(parse_uploaded_csv(raw)) * float(dt))
+                sum(step.water_demand_m3 for step in input_steps)
+                / max(1e-9, len(input_steps) * float(dt))
                 * 24.0
             )
             screen_demand = st.number_input(
@@ -472,21 +475,31 @@ elif page == "Strategy simulator":
                 storage_capacity_m3=float(tank),
                 initial_storage_m3=float(screen_row["water_inventory_before_m3"]),
             )
-            screen_result = recommend_ro_screening(
-                screen_config,
-                renewable_surplus=make_virtual_reading(
-                    "renewable_surplus_kw",
-                    float(screen_row["renewable_surplus_available_kw"]),
-                    "kW",
-                    source="simulated-timestep",
-                ),
-                water_inventory=make_virtual_reading(
-                    "water_inventory_m3",
-                    float(screen_row["water_inventory_before_m3"]),
-                    "m3",
-                    source="simulated-timestep",
-                ),
-            )
+            # Simulation timestamps in the built-in CSV are timezone-naive. For this
+            # offline demo only, explicitly interpret them as UTC before adapting them.
+            screen_timestamp_text = str(screen_row["timestamp"])
+            try:
+                parsed_screen_timestamp = datetime.fromisoformat(
+                    screen_timestamp_text.replace("Z", "+00:00")
+                )
+            except ValueError as exc:
+                st.error(f"Cannot screen this row: invalid timestamp ({exc}).")
+                parsed_screen_timestamp = None
+            if parsed_screen_timestamp is not None:
+                if parsed_screen_timestamp.tzinfo is None:
+                    parsed_screen_timestamp = parsed_screen_timestamp.replace(
+                        tzinfo=datetime.now().astimezone().tzinfo
+                    )
+                virtual_signals = simulation_row_to_screening_signals({
+                    "timestamp": parsed_screen_timestamp.isoformat(),
+                    "renewable_surplus_available_kw": screen_row["renewable_surplus_available_kw"],
+                    "water_inventory_before_m3": screen_row["water_inventory_before_m3"],
+                })
+                screen_result = recommend_ro_screening(
+                    screen_config,
+                    renewable_surplus=virtual_signals[0],
+                    water_inventory=virtual_signals[1],
+                )
             st.markdown(f"**Screening outcome:** `{screen_result.action}`")
             st.write(screen_result.reason)
             st.caption(
