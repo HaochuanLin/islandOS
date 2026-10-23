@@ -11,6 +11,10 @@ class TestRollingHorizonSummary(unittest.TestCase):
         self.assertTrue(all("rolling_score" in row for row in rows))
         self.assertTrue(all("best_fixed_score" in row for row in rows))
         self.assertTrue(all("rolling_minus_best_fixed" in row for row in rows))
+        self.assertTrue(all("rolling_water_unmet_m3" in row for row in rows))
+        self.assertTrue(all("best_fixed_water_unmet_m3" in row for row in rows))
+        self.assertTrue(all("rolling_cooling_unmet_kwh_th" in row for row in rows))
+        self.assertTrue(all("best_fixed_cooling_unmet_kwh_th" in row for row in rows))
 
     def test_summary_is_reproducible_and_does_not_claim_universal_winner(self):
         a = summarize_experiment(run_experiment())
