@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install packager
-        run: python -m pip install --upgrade pip pyinstaller
+        run: python -m pip install --upgrade pip pyinstaller numpy
       - name: Build portable gateway executable
         run: pyinstaller --clean --onefile --name islandos-gateway islandos_gateway.py
       - name: Build portable dispatch advisor executable
