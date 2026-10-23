@@ -172,20 +172,31 @@ def simulate(wind, pv, load, water_demand, p: Params):
     V = np.zeros(T + 1)         # reservoir storage; V[t] is the storage at the start of hour t
     V[0] = p.res_init_m3
 
+    def can_run_without_overflow(start, hours):
+        """Check whether a discretionary run fits tank capacity after demand over its horizon."""
+        projected = float(V[start])
+        production = p.ro_power_kw / p.ro_sec_kwh_m3
+        for index in range(start, start + hours):
+            projected += production - water_demand[index]
+            if projected > p.res_capacity_m3 + 1e-9:
+                return False
+            if projected < p.res_min_m3:
+                projected = p.res_min_m3
+        return True
+
     run_len = 0                 # consecutive hours the RO plant has been running
     for t in range(T):
-        full = V[t] >= p.res_capacity_m3 - 1e-9
-
         if run_len > 0 and run_len < p.min_run_hours:
-            on = True                                   # constraint 1: min run time not reached yet, keep running
+            on = True                                   # constraint 1: minimum run time not reached yet, keep running
         elif run_len >= p.min_run_hours:
+            can_run_this_hour = can_run_without_overflow(t, 1)
             if p.allow_backup_power:
-                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and not full
+                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and can_run_this_hour
             else:                                       # no backup: curtailment must carry the full rated power
-                on = (curtail[t] >= p.ro_power_kw) and not full
+                on = (curtail[t] >= p.ro_power_kw) and can_run_this_hour
         else:                                           # currently stopped: look ahead to decide whether to start
             can_finish_in_horizon = (t + p.min_run_hours) <= T
-            if can_finish_in_horizon and not full:
+            if can_finish_in_horizon and can_run_without_overflow(t, p.min_run_hours):
                 window = curtail[t:t + p.min_run_hours]
                 if p.allow_backup_power:
                     # Backup can cover weak hours, so the mean-based threshold is a
