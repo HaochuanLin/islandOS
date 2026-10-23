@@ -923,24 +923,6 @@ elif page == "Telemetry gateway":
                         for item in sensitivity_rows
                     ]), use_container_width=True, hide_index=True)
 
-                    advice_report = {
-                        "status": "advice_ready" if recommended_policy else "operator_review_required",
-                        "mode": "uploaded_telemetry_replay",
-                        "data_status": "software-validated upload; not site-validated",
-                        "row_count": len(dispatch_rows),
-                        "forecast_method": "supplied forecast when present; otherwise persistence baseline; first row cold-start seeded",
-                        "score_weights": weight_profiles["balanced"],
-                        "policy_comparison": policy_rows,
-                        "eligible_policies": eligible_policies,
-                        "recommended_policy_for_operator_review": recommended_policy,
-                        "weight_sensitivity": sensitivity_rows,
-                        "hourly_audit_by_policy": {
-                            policy: dispatch_results[policy]["hourly_audit"]
-                            for policy in dispatch_policies
-                        },
-                        "operator_action_required": True,
-                        "physical_write_performed": False,
-                    }
                     st.download_button(
                         "Download dispatch advice report (JSON)",
                         data=(json.dumps(advice_report, indent=2, sort_keys=True) + "\n").encode("utf-8"),
