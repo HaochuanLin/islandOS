@@ -64,7 +64,8 @@ jobs:
               Path("hosted-health-report.json").write_text(
                   json.dumps(report, indent=2) + "\n", encoding="utf-8"
               )
-              raise SystemExit("Hosted Streamlit health endpoint did not become healthy after 12 attempts")
+              print(json.dumps(report, indent=2))
+          raise SystemExit("Hosted Streamlit health endpoint did not become healthy after 12 attempts")
 
           request = Request(base + "/", headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
           with urlopen(request, timeout=15) as response:
