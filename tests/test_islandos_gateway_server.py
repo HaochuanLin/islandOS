@@ -1,6 +1,7 @@
 """Integration tests for the loopback-only read-only HTTP telemetry gateway."""
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import socket
 import subprocess
@@ -248,6 +249,67 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertEqual(latest["values"]["renewable_surplus_kw"], 15.5)
                 self.assertEqual(latest["values"]["water_demand_m3"], 3.25)
                 self.assertEqual(latest["values"]["cooling_demand_kw_th"], 8.25)
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
+    def test_optional_bearer_token_protects_gateway_endpoints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            port = free_port()
+            env = os.environ.copy()
+            env["ISLANDOS_GATEWAY_TOKEN"] = "test-token-not-for-production"
+            process = subprocess.Popen(
+                [sys.executable, str(SERVER), "--host", "127.0.0.1",
+                 "--port", str(port), "--audit-file", str(Path(tmp) / "audit.jsonl")],
+                cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            base = "http://127.0.0.1:%d" % port
+            try:
+                for _ in range(60):
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate()
+                        self.fail("gateway exited early: %s %s" % (stdout, stderr))
+                    try:
+                        with urlopen(base + "/health", timeout=0.25):
+                            break
+                    except HTTPError as exc:
+                        if exc.code == 401:
+                            break
+                        raise
+                    except (URLError, TimeoutError):
+                        time.sleep(0.1)
+                else:
+                    self.fail("gateway health endpoint did not become ready")
+                with self.assertRaises(HTTPError) as denied:
+                    urlopen(base + "/health", timeout=2)
+                self.assertEqual(denied.exception.code, 401)
+                auth_headers = {"Authorization": "Bearer test-token-not-for-production"}
+                with urlopen(Request(base + "/health", headers=auth_headers), timeout=2) as response:
+                    health = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(health["status"], "ok")
+                now = datetime.now(timezone.utc)
+                payload = {
+                    "timestamp_utc": now.isoformat().replace("+00:00", "Z"),
+                    "renewable_surplus_kw": 12,
+                    "water_demand_m3": 1,
+                    "cooling_demand_kw_th": 2,
+                    "quality_flag": "good",
+                }
+                body = json.dumps(payload).encode("utf-8")
+                with self.assertRaises(HTTPError) as post_denied:
+                    urlopen(Request(base + "/telemetry", data=body,
+                                    headers={"Content-Type": "application/json"}, method="POST"), timeout=2)
+                self.assertEqual(post_denied.exception.code, 401)
+                with urlopen(Request(base + "/telemetry", data=body,
+                                     headers={**auth_headers, "Content-Type": "application/json"},
+                                     method="POST"), timeout=2) as response:
+                    accepted = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(response.status, 202)
+                self.assertEqual(accepted["status"], "accepted")
             finally:
                 process.terminate()
                 try:
