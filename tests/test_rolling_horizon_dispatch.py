@@ -5,7 +5,9 @@ from unittest.mock import patch
 import numpy as np
 
 from experiments.compare_dispatch_policies import build_scenarios
-from experiments.rolling_horizon_dispatch import run_experiment, simulate_rolling
+from experiments.rolling_horizon_dispatch import (
+    run_experiment, simulate_rolling, summarize_aggregate, summarize_experiment,
+)
 
 
 class TestRollingHorizonDispatch(unittest.TestCase):
@@ -188,6 +190,30 @@ class TestRollingHorizonDispatch(unittest.TestCase):
             self.assertGreaterEqual(result["water_unmet_m3"], 0.0)
             self.assertGreaterEqual(result["cooling_unmet_kwh_th"], 0.0)
             self.assertGreaterEqual(result["remaining_surplus_kwh"], 0.0)
+
+    def test_aggregate_summary_accounts_for_every_scenario_error_case(self):
+        rows = run_experiment()
+        summaries = summarize_experiment(rows)
+        aggregate = summarize_aggregate(summaries)
+
+        self.assertEqual(len(rows), 48)
+        self.assertEqual(len(summaries), 12)
+        self.assertEqual(aggregate["comparison_count"], len(summaries))
+        self.assertEqual(
+            aggregate["rolling_better_count"]
+            + aggregate["rolling_tied_count"]
+            + aggregate["rolling_worse_count"],
+            len(summaries),
+        )
+        self.assertTrue(np.isfinite(aggregate["mean_score_delta"]))
+        self.assertTrue(np.isfinite(aggregate["median_score_delta"]))
+        self.assertIn("synthetic comparisons", aggregate["interpretation"])
+
+    def test_aggregate_summary_handles_empty_input(self):
+        aggregate = summarize_aggregate([])
+        self.assertEqual(aggregate["comparison_count"], 0)
+        self.assertIsNone(aggregate["mean_score_delta"])
+        self.assertIsNone(aggregate["best_case"])
 
     def test_experiment_is_reproducible(self):
         self.assertEqual(run_experiment(), run_experiment())
