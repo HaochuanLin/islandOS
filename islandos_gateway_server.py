@@ -325,7 +325,8 @@ def main(argv=None):
     except (OSError, ValueError) as exc:
         parser.error("could not load device mapping: %s" % exc)
 
-    bearer_token = os.environ.get("ISLANDOS_GATEWAY_TOKEN", "")\n    handler = make_handler(args.audit_file, args.source, args.max_age_seconds, mapping, bearer_token or None)
+    bearer_token = os.environ.get("ISLANDOS_GATEWAY_TOKEN", "")
+    handler = make_handler(args.audit_file, args.source, args.max_age_seconds, mapping, bearer_token or None)
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print("IslandOS read-only telemetry gateway listening on http://%s:%d" % (args.host, args.port), flush=True)
     print("No PLC commands or actuator writes are supported.", flush=True)
