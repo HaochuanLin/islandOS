@@ -22,13 +22,13 @@ reanalysis is not the same as an in-situ site measurement.
 Run:
 
 ```bash
-python experiments/validate_dataset_provenance.py provenance.json
+python -m experiments.validate_dataset_provenance provenance.json
 ```
 
 The command prints normalized JSON to standard output. To save it:
 
 ```bash
-python experiments/validate_dataset_provenance.py provenance.json --output build/provenance.normalized.json
+python -m experiments.validate_dataset_provenance provenance.json --output build/provenance.normalized.json
 ```
 
 ## Bind the record to a local file
@@ -37,7 +37,7 @@ To compute the SHA-256 digest of the exact artifact bytes and include it in the
 normalized record:
 
 ```bash
-python experiments/validate_dataset_provenance.py provenance.json --artifact data/hourly.csv --output build/provenance.normalized.json
+python -m experiments.validate_dataset_provenance provenance.json --artifact data/hourly.csv --output build/provenance.normalized.json
 ```
 
 If the metadata already contains a `sha256` value, the command verifies it
