@@ -21,7 +21,7 @@
 ## What it can do today
 
 - **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results.
-- **Energy–water dispatch experiments:** compare priority-based flexible-load policies and run a rolling-horizon prototype.
+- **Energy–water dispatch experiments:** compare priority-based flexible-load policies, run a rolling-horizon prototype, and upload paired hourly power/water/cooling data to compare dispatch policies with a per-hour audit.
 - **Multi-objective policy search:** use grid search or an experimental NSGA-II optimizer to inspect trade-offs among unmet water/cooling demand and remaining renewable surplus.
 - **Forecasting experiments:** evaluate water-demand baselines and optional machine-learning models with chronological holdouts and rolling backtests.
 - **Data preparation:** validate time-series CSVs and import selected public weather, measured microgrid, and monthly planning datasets with provenance notes.
