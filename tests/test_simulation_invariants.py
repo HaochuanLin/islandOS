@@ -164,5 +164,53 @@ class SimulationInvariantTests(unittest.TestCase):
         self.assertFalse(ok)
 
 
+    def test_seeded_randomized_physical_invariants(self):
+        """Stress conservation and storage bounds across varied valid scenarios."""
+        rng = np.random.default_rng(20261023)
+        hours = 24
+        for case in range(100):
+            capacity = float(rng.uniform(100.0, 1500.0))
+            minimum = float(rng.uniform(0.0, min(100.0, capacity)))
+            initial = float(rng.uniform(minimum, capacity))
+            p = Params(
+                ro_power_kw=float(rng.uniform(50.0, 450.0)),
+                ro_sec_kwh_m3=float(rng.uniform(1.0, 5.0)),
+                min_run_hours=int(rng.integers(1, 5)),
+                start_ratio=float(rng.uniform(0.0, 1.0)),
+                keep_ratio=float(rng.uniform(0.0, 1.0)),
+                allow_backup_power=bool(rng.integers(0, 2)),
+                res_capacity_m3=capacity,
+                res_init_m3=initial,
+                res_min_m3=minimum,
+                res_area_m2=float(rng.uniform(10.0, 500.0)),
+            )
+            wind = rng.uniform(0.0, 1200.0, hours)
+            pv = rng.uniform(0.0, 900.0, hours)
+            load = rng.uniform(0.0, 1000.0, hours)
+            demand = rng.uniform(0.0, 50.0, hours)
+
+            with self.subTest(case=case, backup=p.allow_backup_power):
+                result = simulate(wind, pv, load, demand, p)
+                expected_storage = (
+                    result["V"][:-1] + result["water_prod"] - demand
+                    - result["spill"] + result["deficit"]
+                )
+                np.testing.assert_allclose(
+                    result["V"][1:], expected_storage, atol=1e-7, rtol=1e-9
+                )
+                self.assertTrue(np.all(result["V"] >= p.res_min_m3 - 1e-7))
+                self.assertTrue(np.all(result["V"] <= p.res_capacity_m3 + 1e-7))
+                self.assertTrue(np.all(result["spill"] >= 0.0))
+                self.assertTrue(np.all(result["deficit"] >= 0.0))
+                np.testing.assert_allclose(
+                    result["ro_use"] + result["ro_backup"],
+                    result["ro_on"] * p.ro_power_kw,
+                    atol=1e-7,
+                    rtol=1e-9,
+                )
+                self.assertTrue(np.all(result["ro_use"] <= result["curtail"] + 1e-7))
+                self.assertTrue(np.all(result["ro_backup"] >= 0.0))
+
+
 if __name__ == "__main__":
     unittest.main()
