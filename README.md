@@ -1,5 +1,10 @@
 # Nan’ao-type scenario — IslandOS｜Schneider Go Green 2026 Top-12 Finalist
 
+> **Try the interactive IslandOS demo:** [https://islandos.streamlit.app/](https://islandos.streamlit.app/)
+>
+> The public Streamlit app is deployed from this repository's `app.py`. It lets visitors explore the generic synthetic 24-hour energy–water simulation, compare RO dispatch with a no-flexible-RO baseline, adjust assumptions, and export results. **It is a separate demo from the Nan’ao annual Monte Carlo scenario documented on this branch.** All demo inputs are synthetic, not measured island data.
+
+
 > **Scenario-based simulation assumption, not measured real-world data.**
 >
 > This branch documents a synthetic Nan’ao-type scenario for Schneider Go Green 2026 review. It is not based on a measured Nan’ao curtailment time series, is not a grid power-flow model, and does not establish field performance or site feasibility.
