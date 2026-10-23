@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -15,7 +16,8 @@ from pathlib import Path
 import threading
 from urllib.parse import urlparse
 
-from islandos_io import validate_telemetry
+from islandos_advisor import evaluate_dispatch_rows
+from islandos_io import build_dispatch_input_rows, validate_telemetry
 
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
@@ -47,7 +49,7 @@ def make_handler(audit_path, source, max_age_seconds):
 
         def do_GET(self):
             path = urlparse(self.path).path
-            if path not in ("/health", "/latest"):
+            if path not in ("/health", "/latest", "/advice"):
                 self._send(404, {"error": "not found"})
                 return
             if not self._authorized():
@@ -59,6 +61,58 @@ def make_handler(audit_path, source, max_age_seconds):
                     "mode": "read_only_telemetry_ingest",
                     "physical_write_performed": False,
                 })
+                return
+            if path == "/advice":
+                records = deque(maxlen=24)
+                try:
+                    with lock:
+                        if audit_path.exists():
+                            with audit_path.open("r", encoding="utf-8") as stream:
+                                for line in stream:
+                                    if line.strip():
+                                        records.append(json.loads(line))
+                except (OSError, json.JSONDecodeError) as exc:
+                    self._send(500, {"error": "could not read telemetry audit: " + str(exc)})
+                    return
+                if len(records) < 2:
+                    self._send(409, {
+                        "error": "at least two valid hourly telemetry rows are required",
+                        "physical_write_performed": False,
+                    })
+                    return
+                latest_record = records[-1]
+                latest_payload = {"timestamp_utc": latest_record.get("timestamp_utc"), **latest_record.get("values", {})}
+                freshness = validate_telemetry(
+                    latest_payload, source=source,
+                    received_at=datetime.now(timezone.utc),
+                    max_age_seconds=max_age_seconds,
+                )
+                if not freshness.valid:
+                    self._send(409, {
+                        "error": "latest telemetry is not fresh",
+                        "details": list(freshness.errors),
+                        "physical_write_performed": False,
+                    })
+                    return
+                try:
+                    dispatch_rows = build_dispatch_input_rows(list(records))
+                    report = evaluate_dispatch_rows(dispatch_rows, name="http-gateway-live-window")
+                except (TypeError, ValueError) as exc:
+                    self._send(422, {
+                        "error": "telemetry is not dispatch-ready: " + str(exc),
+                        "physical_write_performed": False,
+                    })
+                    return
+                report.update({
+                    "mode": "loopback_http_telemetry",
+                    "data_status": "validated telemetry; site calibration not verified",
+                    "source": source,
+                    "row_count": len(dispatch_rows),
+                    "forecast_method": "persistence baseline; first row cold-start seeded",
+                    "operator_action_required": True,
+                    "physical_write_performed": False,
+                })
+                self._send(200, report)
                 return
             with lock:
                 record = latest["record"]
