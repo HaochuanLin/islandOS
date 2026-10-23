@@ -184,6 +184,11 @@ jobs:
 
           summary = {
               "status": "measured_public_data_backtest_completed",
+              "execution": {
+                  "github_sha": __import__("os").environ.get("GITHUB_SHA"),
+                  "github_run_id": __import__("os").environ.get("GITHUB_RUN_ID"),
+                  "python_version": __import__("sys").version,
+              },
               "source": {
                   "name": prep["source_dataset"],
                   "url": prep["source_url"],
@@ -238,6 +243,8 @@ jobs:
         with:
           name: islandos-soweki-measured-data-backtest
           path: |
+            build/public-data/raw/soweki_source.csv
+            build/public-data/soweki_hourly.csv
             build/public-data/preparation.json
             build/public-data/forecast_report.json
             build/public-data/measured_data_summary.json
