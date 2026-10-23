@@ -39,6 +39,47 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by direct CLI execut
     )
 
 
+def _percentile(values: list[float], quantile: float) -> float:
+    """Return a linearly interpolated percentile without external dependencies."""
+    if not values:
+        raise ValueError("Percentile requires at least one value")
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * quantile
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def _high_demand_metrics(
+    actual: list[float],
+    predicted: list[float],
+    threshold: float,
+) -> dict[str, Any]:
+    """Score forecasts only on hours exceeding a training-history threshold."""
+    selected = [
+        (observed, forecast)
+        for observed, forecast in zip(actual, predicted)
+        if observed >= threshold
+    ]
+    if not selected:
+        return {
+            "event_count": 0,
+            "mae_m3_per_hour": None,
+            "bias_predicted_minus_actual_m3_per_hour": None,
+            "underforecast_rate": None,
+        }
+    errors = [forecast - observed for observed, forecast in selected]
+    return {
+        "event_count": len(selected),
+        "mae_m3_per_hour": sum(abs(error) for error in errors) / len(errors),
+        "bias_predicted_minus_actual_m3_per_hour": sum(errors) / len(errors),
+        "underforecast_rate": sum(error < 0 for error in errors) / len(errors),
+    }
+
+
 def backtest_water_demand_models(
     input_csv: str | Path,
     output_json: str | Path,
@@ -91,6 +132,10 @@ def backtest_water_demand_models(
     )
     aggregate_actual: list[float] = []
     aggregate_predictions: dict[str, list[float]] = {name: [] for name in model_names}
+    aggregate_high_demand_actual: list[float] = []
+    aggregate_high_demand_predictions: dict[str, list[float]] = {
+        name: [] for name in model_names
+    }
     folds: list[dict[str, Any]] = []
     forecast_rows: list[dict[str, Any]] = []
 
@@ -125,6 +170,21 @@ def backtest_water_demand_models(
         fold_metrics = {
             name: _metrics(actual, values) for name, values in predictions.items()
         }
+        # Define peak-demand hours from training history only, not the test window.
+        high_demand_threshold = _percentile(demand[:cutoff], 0.90)
+        fold_high_demand_metrics = {
+            name: _high_demand_metrics(actual, values, high_demand_threshold)
+            for name, values in predictions.items()
+        }
+        high_demand_indices = [
+            position for position, observed in enumerate(actual)
+            if observed >= high_demand_threshold
+        ]
+        aggregate_high_demand_actual.extend(actual[position] for position in high_demand_indices)
+        for name, values in predictions.items():
+            aggregate_high_demand_predictions[name].extend(
+                values[position] for position in high_demand_indices
+            )
         folds.append({
             "fold": fold_number,
             "training_rows": len(train_indices),
@@ -133,6 +193,8 @@ def backtest_water_demand_models(
             "test_end": timestamps[test_indices[-1]].isoformat(),
             "test_rows": len(test_indices),
             "metrics": fold_metrics,
+            "high_demand_threshold_m3_per_hour": high_demand_threshold,
+            "high_demand_metrics": fold_high_demand_metrics,
         })
         aggregate_actual.extend(actual)
         for name, values in predictions.items():
@@ -151,6 +213,28 @@ def backtest_water_demand_models(
     aggregate_metrics = {
         name: _metrics(aggregate_actual, values)
         for name, values in aggregate_predictions.items()
+    }
+    aggregate_high_demand_metrics = {
+        name: _high_demand_metrics(
+            aggregate_high_demand_actual,
+            values,
+            threshold=math.inf,
+        ) if not aggregate_high_demand_actual else {
+            "event_count": len(aggregate_high_demand_actual),
+            "mae_m3_per_hour": sum(
+                abs(predicted - observed)
+                for observed, predicted in zip(aggregate_high_demand_actual, values)
+            ) / len(aggregate_high_demand_actual),
+            "bias_predicted_minus_actual_m3_per_hour": sum(
+                predicted - observed
+                for observed, predicted in zip(aggregate_high_demand_actual, values)
+            ) / len(aggregate_high_demand_actual),
+            "underforecast_rate": sum(
+                predicted < observed
+                for observed, predicted in zip(aggregate_high_demand_actual, values)
+            ) / len(aggregate_high_demand_actual),
+        }
+        for name, values in aggregate_high_demand_predictions.items()
     }
     report: dict[str, Any] = {
         "status": "rolling_backtest_completed",
@@ -175,6 +259,15 @@ def backtest_water_demand_models(
             "evaluated_hours": len(aggregate_actual),
         },
         "aggregate_metrics": aggregate_metrics,
+        "high_demand_evaluation": {
+            "definition": (
+                "A high-demand hour is one whose observed demand is at or above "
+                "the 90th percentile of that fold's training history."
+            ),
+            "threshold_source": "training history only; no test-window values are used to set thresholds",
+            "event_count": len(aggregate_high_demand_actual),
+            "pooled_metrics_by_model": aggregate_high_demand_metrics,
+        },
         "folds": folds,
         "forecast_rows": forecast_rows,
         "limitations": [
