@@ -71,6 +71,26 @@ jobs:
           )
           print("Captured Python, platform, commit, run, and installed-package metadata.")
           PY
+      - name: Validate reproducibility environment manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("build/reproducibility/environment.json")
+          manifest = json.loads(path.read_text(encoding="utf-8"))
+          required = {
+              "python_version", "platform", "github_sha", "github_run_id",
+              "installed_distributions", "limitations",
+          }
+          missing = sorted(required - manifest.keys())
+          assert not missing, f"Environment manifest missing keys: {missing}"
+          assert manifest["github_sha"], "Manifest must identify the source commit"
+          assert manifest["installed_distributions"], "Manifest must list installed packages"
+          assert len(manifest["installed_distributions"]) == len(set(manifest["installed_distributions"]))
+          assert manifest["limitations"], "Manifest must state its interpretation limits"
+          print("Reproducibility environment manifest is valid and identifies this commit.")
+          PY
       - name: Run complete pytest suite (including unittest-compatible tests)
         run: python -m pytest -q
       - name: Run synthetic forecast-monitoring example
