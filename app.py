@@ -109,8 +109,10 @@ def dataframe_csv(rows: list[dict], provenance: dict | None = None) -> bytes:
     """Serialize report rows and optionally repeat their input provenance on each row."""
     frame = pd.DataFrame(rows)
     if provenance:
-        for key in ("source_type", "source_label", "input_sha256"):
-            frame[key] = provenance[key]
+        # Keep every scalar input/configuration field with each exported row so
+        # CSVs remain interpretable outside the live Streamlit session.
+        for key, value in provenance.items():
+            frame[key] = value
     return frame.to_csv(index=False).encode("utf-8")
 
 
@@ -263,6 +265,17 @@ elif page == "Strategy simulator":
         "dt_hours": float(dt),
         "diesel_cost_per_kwh": float(diesel_cost) if diesel_cost > 0 else None,
     })
+    export_provenance = {
+        **input_provenance,
+        "run_signature": simulation_signature,
+        "ro_rated_power_kw": float(ro_kw),
+        "specific_energy_kwh_m3": float(sec),
+        "tank_capacity_m3": float(tank),
+        "initial_water_m3": float(initial),
+        "min_run_hours": int(min_run),
+        "input_interval_hours": float(dt),
+        "backup_energy_cost_per_kwh": float(diesel_cost) if diesel_cost > 0 else None,
+    }
 
     if st.button("▶ Run strategy comparison", type="primary", use_container_width=True):
         try:
@@ -281,7 +294,7 @@ elif page == "Strategy simulator":
                 "detail": detail,
                 "summary": summary,
                 "source": source_label,
-                "provenance": input_provenance,
+                "provenance": export_provenance,
                 "run_signature": simulation_signature,
             }
             st.session_state.pop("islandos_optimizer_result", None)
@@ -303,6 +316,7 @@ elif page == "Strategy simulator":
             f"Source type: `{result['provenance']['source_type']}` · "
             f"Input SHA-256: `{result['provenance']['input_sha256']}`"
         )
+        st.caption(f"Run signature: `{result['provenance']['run_signature']}`")
         with st.expander("Input provenance details", expanded=False):
             st.write(
                 "The digest identifies the exact input bytes used for this run. "
@@ -408,7 +422,14 @@ elif page == "Strategy simulator":
                 st.session_state["islandos_optimizer_result"] = {
                     "summary": pareto_summaries, "detail": pareto_details,
                     "meta": optimizer_meta, "source": source_label,
-                    "provenance": input_provenance,
+                    "provenance": {
+                        **export_provenance,
+                        "run_signature": optimizer_signature,
+                        "optimizer_population_size": int(pop_size),
+                        "optimizer_generations": int(generations),
+                        "optimizer_seed": 42,
+                        "optimizer_build": "NSGA2-2OBJ-DIAG-v1",
+                    },
                     "run_signature": optimizer_signature,
                 }
             except Exception as exc:
