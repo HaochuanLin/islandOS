@@ -56,6 +56,18 @@ class TestCompareWaterDemandModels(unittest.TestCase):
                 and metrics["rmse_m3_per_hour"] >= 0
                 for metrics in report["test_metrics"].values()
             ))
+            walk_forward = report["walk_forward_summary"]
+            self.assertEqual(walk_forward["fold_count"], 3)
+            self.assertEqual(walk_forward["test_rows"], 144)
+            self.assertEqual(sum(fold["test_rows"] for fold in walk_forward["folds"]), 144)
+            for fold in walk_forward["folds"]:
+                self.assertEqual(fold["training_rows_end_before_test_window"], fold["first_test_index"])
+                self.assertLess(fold["training_rows_end_before_test_window"], fold["last_test_index"] + 1)
+                self.assertTrue(all(
+                    metrics["mae_m3_per_hour"] >= 0
+                    and metrics["rmse_m3_per_hour"] >= 0
+                    for metrics in fold["test_metrics"].values()
+                ))
             self.assertEqual(len(report["forecast_rows"]), 144)
             self.assertEqual(report["input_csv_sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
             self.assertTrue(report["model"]["library_version"])
