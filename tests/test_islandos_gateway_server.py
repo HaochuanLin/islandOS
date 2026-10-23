@@ -210,6 +210,49 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                     process.kill()
                     process.wait(timeout=5)
 
+    def test_synthetic_demo_sender_feeds_live_dashboard_advice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            port = free_port()
+            audit = Path(tmp) / "synthetic-audit.jsonl"
+            process = subprocess.Popen(
+                [sys.executable, str(SERVER), "--port", str(port),
+                 "--max-age-seconds", "90000", "--audit-file", str(audit)],
+                cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            base = "http://127.0.0.1:%d" % port
+            try:
+                for _ in range(60):
+                    try:
+                        urlopen(base + "/health", timeout=0.25).close()
+                        break
+                    except (URLError, TimeoutError):
+                        time.sleep(0.1)
+                sender = subprocess.run(
+                    [sys.executable, str(ROOT / "islandos_telemetry_demo.py"),
+                     "--url", base, "--hours", "24"],
+                    cwd=ROOT, text=True, capture_output=True, timeout=20, check=False,
+                )
+                self.assertEqual(sender.returncode, 0, sender.stdout + sender.stderr)
+                self.assertIn("SYNTHETIC DEMO ONLY", sender.stdout)
+                with urlopen(base + "/advice", timeout=5) as response:
+                    advice = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(advice["row_count"], 24)
+                self.assertEqual(len(advice["policy_comparison"]), 4)
+                self.assertTrue(advice["operator_action_required"])
+                self.assertFalse(advice["physical_write_performed"])
+                with urlopen(base + "/dashboard", timeout=2) as response:
+                    self.assertIn("Local Operator Review", response.read().decode("utf-8"))
+                records = audit.read_text(encoding="utf-8").splitlines()
+                self.assertEqual(len(records), 24)
+                self.assertTrue(all("synthetic-demo-generator" in line for line in records))
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_non_loopback_bind_is_rejected(self):
         result = subprocess.run(
             [sys.executable, str(SERVER), "--host", "0.0.0.0", "--port", "8765"],
