@@ -58,7 +58,8 @@ function isoLocal(value){return value?value+":00"+offset():""}
 function number(id,label,errors,required=true){const raw=$(id).value.trim();if(!raw){if(required)errors.push(label+"：缺少输入");return null}const n=Number(raw);if(!Number.isFinite(n)||n<0){errors.push(label+"：必须是有限的非负数字");return null}return n}
 function build(){
  const errors=[],off=offset(),maxAge=number("maxAge","最大数据年龄",errors);
- if(!/^[+-](0\d|1[0-4]):[0-5]\d$/.test(off))errors.push("时区偏移格式或范围无效");
+ if(!/^[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00)$/.test(off))errors.push("时区偏移格式或范围无效");
+ if(maxAge!==null&&maxAge<=0)errors.push("最大数据年龄必须大于零");
  for(const id of ["site","start","measuredAt","sourceRef"])if(!$(id).value.trim())errors.push($(id).previousElementSibling.textContent+"：缺少输入");
  const telemetryTime=isoLocal($("measuredAt").value),startTime=isoLocal($("start").value);
  const parsed=new Date(telemetryTime),startParsed=new Date(startTime);
