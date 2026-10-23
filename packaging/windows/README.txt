@@ -18,7 +18,7 @@ run-demo.bat               Runs the included sample and saves a JSON report.
 
 Local device/gateway integration
 --------------------------------
-1. Double-click run-gateway-server.bat to start the local HTTP receiver.
+1. Double-click run-gateway-server.bat to start the local HTTP receiver and open the operator dashboard at http://127.0.0.1:8765/dashboard.
 2. A device bridge on this same computer can POST one JSON object per sample to
    http://127.0.0.1:8765/telemetry with Content-Type: application/json.
 3. GET /health checks process health; GET /latest returns the latest accepted
@@ -29,7 +29,9 @@ Local device/gateway integration
    vendor keys and units to the canonical schema.
 6. GET /advice returns a recommendation-only report only after at least two
    valid hourly-aligned samples have arrived and the latest sample is fresh.
-7. This endpoint is local-only and ingest-only. It does not speak Modbus/MQTT,
+7. The browser dashboard refreshes every 15 seconds and displays telemetry,
+   policy metrics, and constraint warnings. It never sends device commands.
+8. This endpoint is local-only and ingest-only. It does not speak Modbus/MQTT,
    write PLC setpoints, or control actuators. Use a site-approved local bridge
    for the device's actual protocol; do not expose this HTTP server to a LAN.
 
