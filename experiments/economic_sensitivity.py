@@ -201,6 +201,14 @@ def run_economic_sensitivity(
         "project": "IslandOS",
         "method": "one-factor-at-a-time fixed-candidate economic sensitivity",
         "input_report": source.name,
+        "source_type": input_summary.get("source_type"),
+        "input_summary": input_summary,
+        "data_quality_report": report.get("data_quality_report"),
+        "baseline_optimizer": {
+            key: optimization.get(key)
+            for key in ("algorithm", "seed", "population_size", "generations",
+                        "unique_candidates_evaluated", "decision_space_size")
+        },
         "currency": economics["currency"],
         "relative_change_requested": relative_change,
         "base_economic_assumptions": {key: economics[key] for key in REQUIRED_COST_FIELDS},
