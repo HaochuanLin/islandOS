@@ -246,7 +246,9 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                     self.assertIn("Local Operator Review", response.read().decode("utf-8"))
                 records = audit.read_text(encoding="utf-8").splitlines()
                 self.assertEqual(len(records), 24)
-                self.assertTrue(all("synthetic-demo-generator" in line for line in records))
+                self.assertTrue(all(json.loads(line)["valid"] for line in records))
+                self.assertTrue(all(json.loads(line)["source"] == "http-gateway" for line in records))
+                self.assertTrue(all("renewable_surplus_kw" in json.loads(line)["values"] for line in records))
             finally:
                 process.terminate()
                 try:
