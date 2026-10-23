@@ -8,7 +8,9 @@ on:
       - ".github/workflows/public-data-backtest.yml"
       - "experiments/prepare_soweki_water_demand.py"
       - "experiments/water_demand_forecast.py"
+      - "experiments/compare_water_demand_models.py"
       - "tests/test_prepare_soweki_water_demand.py"
+      - "tests/test_compare_water_demand_models.py"
   workflow_dispatch:
     inputs:
       dataset_id:
@@ -55,6 +57,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+      - name: Install optional ML comparison dependency
+        run: python -m pip install "scikit-learn>=1.4"
       - name: Download and audit source timestamp ordering
         run: |
           python - <<'PY'
@@ -103,6 +107,11 @@ jobs:
           python experiments/water_demand_forecast.py \
             build/public-data/soweki_hourly.csv \
             --output build/public-data/forecast_report.json
+      - name: Compare ML forecast with seasonal baselines
+        run: |
+          python experiments/compare_water_demand_models.py \
+            build/public-data/soweki_hourly.csv \
+            --output build/public-data/model_comparison.json
       - name: Validate evidence and create measured-data summary
         run: |
           python - <<'PY'
