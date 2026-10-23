@@ -322,3 +322,82 @@ jobs:
             build/public-data/measured_data_summary.json
           if-no-files-found: error
           retention-days: 90
+
+  aggregate-series-results:
+    if: always()
+    needs: measured-water-demand-backtest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download completed series artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: islandos-soweki-measured-data-backtest-*
+          path: build/public-data/series-artifacts
+          merge-multiple: false
+      - name: Aggregate cross-series forecast metrics
+        run: |
+          python - <<'PY'
+          import json
+          import statistics
+          from pathlib import Path
+
+          root = Path("build/public-data/series-artifacts")
+          rows = []
+          for path in root.glob("*/measured_data_summary.json"):
+              summary = json.loads(path.read_text(encoding="utf-8"))
+              source = summary.get("source", {})
+              ml = summary.get("ml_comparison", {})
+              row = {
+                  "series_id": source.get("series_id"),
+                  "selected_hours": source.get("selected_contiguous_hours"),
+                  "ml_status": ml.get("status"),
+              }
+              metrics = ml.get("test_metrics", {})
+              if ml.get("status") == "models_compared":
+                  candidate = metrics["hist_gradient_boosting"]
+                  weekly = metrics["seasonal_naive_previous_week"]
+                  row.update({
+                      "hist_gradient_boosting_mae_m3_per_hour": candidate["mae_m3_per_hour"],
+                      "seasonal_weekly_mae_m3_per_hour": weekly["mae_m3_per_hour"],
+                      "mae_reduction_vs_weekly_pct": (1.0 - candidate["mae_m3_per_hour"] / weekly["mae_m3_per_hour"]) * 100.0,
+                      "hist_gradient_boosting_rmse_m3_per_hour": candidate["rmse_m3_per_hour"],
+                      "seasonal_weekly_rmse_m3_per_hour": weekly["rmse_m3_per_hour"],
+                      "model_library_version": ml.get("model", {}).get("library_version"),
+                  })
+              else:
+                  row["reason"] = ml.get("reason", "ML comparison was not produced")
+              rows.append(row)
+          rows.sort(key=lambda row: row["series_id"] or 0)
+          scored = [row for row in rows if "mae_reduction_vs_weekly_pct" in row]
+          reductions = [row["mae_reduction_vs_weekly_pct"] for row in scored]
+          expected_ids = set(range(1, 12))
+          found_ids = {row["series_id"] for row in rows if row["series_id"] is not None}
+          result = {
+              "status": "completed" if found_ids == expected_ids and len(scored) == 11 else "partial",
+              "expected_series_count": 11,
+              "series_artifacts_found": len(rows),
+              "ml_compared_series_count": len(scored),
+              "missing_series_ids": sorted(expected_ids - found_ids),
+              "series_where_ml_beats_weekly_baseline": sum(value > 0 for value in reductions),
+              "mean_mae_reduction_vs_weekly_pct": statistics.mean(reductions) if reductions else None,
+              "median_mae_reduction_vs_weekly_pct": statistics.median(reductions) if reductions else None,
+              "series": rows,
+              "interpretation_limits": [
+                  "The 11 series come from one SOWEKI source collection, not 11 independent regions.",
+                  "Each metric is from one chronological holdout; do not infer island-site transfer or operating savings.",
+                  "One-step forecasts assume the previous hour's measured demand is available.",
+              ],
+          }
+          output = Path("build/public-data/multi_series_summary.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + chr(10), encoding="utf-8")
+          print(json.dumps({key: result[key] for key in ("status", "series_artifacts_found", "ml_compared_series_count", "series_where_ml_beats_weekly_baseline", "mean_mae_reduction_vs_weekly_pct", "median_mae_reduction_vs_weekly_pct", "missing_series_ids")}, indent=2))
+          PY
+      - name: Upload multi-series summary
+        uses: actions/upload-artifact@v7
+        with:
+          name: islandos-soweki-multi-series-summary-${{ github.run_id }}
+          path: build/public-data/multi_series_summary.json
+          if-no-files-found: error
+          retention-days: 90
