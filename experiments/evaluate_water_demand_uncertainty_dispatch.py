@@ -8,6 +8,7 @@ not a claim that the upper bound is a better point forecast.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 import sys
@@ -63,6 +64,21 @@ def evaluate_uncertainty_dispatch(
             or point_join["last_timestamp_utc"] != upper_join["last_timestamp_utc"]
         ):
             raise ValueError("Point and upper-bound forecasts do not cover the same time window")
+
+        with point_csv.open("r", encoding="utf-8", newline="") as handle:
+            point_rows = list(csv.DictReader(handle))
+        with upper_csv.open("r", encoding="utf-8", newline="") as handle:
+            upper_rows = list(csv.DictReader(handle))
+        for index, (point_row, upper_row) in enumerate(zip(point_rows, upper_rows), start=1):
+            if point_row["timestamp_utc"] != upper_row["timestamp_utc"]:
+                raise ValueError(f"Point and upper-bound timestamps differ at joined row {index}")
+            point_value = float(point_row["forecast_water_demand_m3"])
+            upper_value = float(upper_row["forecast_water_demand_m3"])
+            if upper_value + 1e-9 < point_value:
+                raise ValueError(
+                    "Upper-bound forecast must be at least the point forecast "
+                    f"at every timestamp (joined row {index})"
+                )
 
         point_report = evaluate_forecast_dispatch(point_csv)
         upper_report = evaluate_forecast_dispatch(upper_csv)
