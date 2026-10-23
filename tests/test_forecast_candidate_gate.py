@@ -24,6 +24,8 @@ class TestForecastCandidateGate(unittest.TestCase):
                 candidate = actual + 0.2
                 if peak_risk and actual >= 37:
                     candidate = actual - 5.0
+                elif peak_risk:
+                    candidate = actual
                 timestamp = start + timedelta(hours=i)
                 if invalid == "gap" and i == 20:
                     timestamp += timedelta(hours=1)
