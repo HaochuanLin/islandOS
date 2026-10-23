@@ -7,14 +7,14 @@ This repository is a research prototype. The commands and artifacts below make e
 Use Python 3.11, matching the main CI runner:
 
 ```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt scikit-learn pytest
+python -m pip install --upgrade "pip==26.2.2"
+python -m pip install -r requirements-ci.lock
 python -m pip check
 python -m compileall -q .
 python -m pytest -q
 ```
 
-The CI workflow records the commit SHA, runner platform, Python version, and resolved installed distributions in an `environment.json` artifact. This describes the tested environment; it is not a fully pinned dependency lockfile.
+The CI workflow installs `requirements-ci.lock`, an exact version lock captured from a successful Python 3.11 run, and checks that every declared runtime/ML requirement is covered by that lock. `requirements-ml.lock` pins the smaller optional forecasting dependency set and is used by the measured-data workflow. The workflow records commit SHA, runner platform, Python version, and resolved installed distributions in an `environment.json` artifact. The lock pins package versions but does not use package hashes; the Docker build still uses the range-based `requirements.txt`, so production-image pinning remains a gap.
 
 ## Reproduce the public SOWEKI demand baseline
 
