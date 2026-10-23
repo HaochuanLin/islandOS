@@ -1,5 +1,8 @@
 """Tests for fail-closed telemetry and hardware-control safety boundary."""
 import unittest
+import json
+from pathlib import Path
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 from islandos_io import (
@@ -8,6 +11,8 @@ from islandos_io import (
     authorize_control,
     build_dispatch_input_rows,
     build_recommendation,
+    load_device_mapping,
+    apply_device_mapping,
     validate_telemetry,
 )
 
@@ -24,6 +29,72 @@ def good_payload():
         "water_demand_m3": 5.0,
         "cooling_demand_kw_th": 8.0,
     }
+
+
+class TestDeviceMappingContract(unittest.TestCase):
+    def valid_mapping(self):
+        return {
+            "schema_version": 1,
+            "fields": {
+                "timestamp_utc": {"source_key": "ts", "source_unit": "ISO-8601", "canonical_unit": "ISO-8601"},
+                "renewable_surplus_kw": {"source_key": "solar_w", "source_unit": "W", "canonical_unit": "kW", "scale": 0.001},
+                "water_demand_m3": {"source_key": "water_l", "source_unit": "L", "canonical_unit": "m3", "scale": 0.001},
+                "cooling_demand_kw_th": {"source_key": "cooling_kw", "source_unit": "kW_th", "canonical_unit": "kW_th"},
+            },
+        }
+
+    def test_loads_explicit_unit_mapping_and_converts_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping.json"
+            path.write_text(json.dumps(self.valid_mapping()), encoding="utf-8")
+            mapping = load_device_mapping(str(path))
+        payload = apply_device_mapping({
+            "ts": "2026-10-23T05:00:00Z",
+            "solar_w": 42000,
+            "water_l": 1250,
+            "cooling_kw": 8,
+        }, mapping)
+        self.assertEqual(payload["renewable_surplus_kw"], 42.0)
+        self.assertEqual(payload["water_demand_m3"], 1.25)
+        self.assertEqual(payload["timestamp_utc"], "2026-10-23T05:00:00Z")
+
+    def test_rejects_mapping_without_required_fields(self):
+        mapping = self.valid_mapping()
+        del mapping["fields"]["water_demand_m3"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping.json"
+            path.write_text(json.dumps(mapping), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "missing required canonical fields"):
+                load_device_mapping(str(path))
+
+    def test_rejects_missing_or_wrong_canonical_units(self):
+        for mutate in ("missing", "wrong"):
+            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as tmp:
+                mapping = self.valid_mapping()
+                if mutate == "missing":
+                    del mapping["fields"]["water_demand_m3"]["canonical_unit"]
+                else:
+                    mapping["fields"]["water_demand_m3"]["canonical_unit"] = "L"
+                path = Path(tmp) / "mapping.json"
+                path.write_text(json.dumps(mapping), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "canonical_unit"):
+                    load_device_mapping(str(path))
+
+    def test_rejects_duplicate_source_key_and_timestamp_scaling(self):
+        mapping = self.valid_mapping()
+        mapping["fields"]["water_demand_m3"]["source_key"] = "solar_w"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping.json"
+            path.write_text(json.dumps(mapping), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "only one canonical field"):
+                load_device_mapping(str(path))
+        mapping = self.valid_mapping()
+        mapping["fields"]["timestamp_utc"]["scale"] = 1
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping.json"
+            path.write_text(json.dumps(mapping), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "timestamp_utc cannot"):
+                load_device_mapping(str(path))
 
 
 class TestTelemetryValidation(unittest.TestCase):
