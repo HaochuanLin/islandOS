@@ -94,3 +94,8 @@ A separate GitHub Actions workflow builds `islandos-gateway.exe` with PyInstalle
 ## End-to-end recommendation CLI
 
 `islandos_advisor.py` accepts recorded telemetry CSV/JSONL, runs the shared quality gate and device mapping, converts valid hourly rows to the dispatch schema, evaluates rolling and fixed-priority strategies, and writes policy summaries plus per-hour audit rows. The chosen policy is a recommendation for operator review under the declared score weights; it is not a command. CI smoke-tests this path with synthetic data and uploads the resulting JSON report. The Windows workflow builds both the telemetry gateway and the advisor executable.
+
+
+## Recommendation feasibility and weight sensitivity
+
+The advisor first excludes operational policies with non-zero reported constraint-violation hours. If all operational policies are infeasible, it emits `operator_review_required` and no selected policy. For feasible candidates, it reports the score winner under four declared weight profiles (balanced, water priority, cooling priority, energy efficiency). Winner counts describe this specific input only and are not statistical confidence. An operator must verify telemetry, forecasts, operating limits, and local procedures before acting.
