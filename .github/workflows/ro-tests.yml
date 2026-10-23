@@ -39,7 +39,7 @@ jobs:
           assert report["status"] == "review_recommended"
           assert report["row_count"] == 72
           assert report["window_count"] == 3
-          assert report["baseline_window"]["metrics"]["mae_m3_per_hour"] == 1.0
+          assert abs(report["baseline_window"]["metrics"]["mae_m3_per_hour"] - 1.0) < 1e-9
           assert report["most_recent_window"]["metrics"]["mae_m3_per_hour"] == 8.0
           print("Synthetic forecast-monitoring smoke test passed.")
           PY
