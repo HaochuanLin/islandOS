@@ -143,7 +143,7 @@ For a compact reference to the other experiments, see [Experiments and workflows
 python -m pytest -q
 ```
 
-GitHub Actions runs additional regression and reproducibility checks. A passing test verifies software behavior—not model accuracy, engineering feasibility, or real-world benefit.
+GitHub Actions runs additional regression and reproducibility checks. A passing test verifies software behavior—not model accuracy, engineering feasibility, or real-world benefit. See the [reproducibility guide](docs/REPRODUCIBILITY.md) for local commands, public-data provenance, SHA-256 verification, and evidence limitations.
 
 ## Development principles
 
