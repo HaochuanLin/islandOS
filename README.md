@@ -206,7 +206,8 @@ Use the offline [staff readiness form](tools/site_readiness_form.html) to enter 
 
 ```bash
 python site_readiness.py path/to/site_readiness.json --mode dispatch --json
-python site_readiness.py path/to/site_readiness.json --mode economic --json\npython experiments/run_site_scenario.py path/to/site_readiness.json path/to/site_hourly.csv --source-type measured --output-dir build/site-optimization
+python site_readiness.py path/to/site_readiness.json --mode economic --json
+python experiments/run_site_scenario.py path/to/site_readiness.json path/to/site_hourly.csv --source-type measured --output-dir build/site-optimization
 ```
 
 CAPEX and annual O&M are **staff-entered inputs**, not inferred by IslandOS; economic mode blocks until the required cost fields and a traceable source reference are present. Today the gate reads a staff-prepared JSON snapshot or sensor export: **no live sensor connection is implemented**. Use `experiments/run_site_scenario.py` to enforce the gate before the existing offline optimizer; the hourly CSV is independently quality-checked as well. Passing the gate only means input completeness/basic plausibility checks passed. It never starts equipment or authorizes live control.
