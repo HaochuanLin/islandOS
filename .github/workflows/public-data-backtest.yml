@@ -99,6 +99,7 @@ jobs:
         run: |
           python - <<'PY'
           import csv
+          import hashlib
           import json
           import math
           from pathlib import Path
@@ -108,6 +109,11 @@ jobs:
           report = json.loads((root / "forecast_report.json").read_text(encoding="utf-8"))
           assert prep["status"] == "prepared"
           assert prep["license"] == "CC BY 4.0"
+          for key in ("source_file_sha256", "prepared_hourly_csv_sha256"):
+              value = prep[key]
+              assert len(value) == 64 and all(char in "0123456789abcdef" for char in value), key
+          actual_hourly_sha256 = hashlib.sha256((root / "soweki_hourly.csv").read_bytes()).hexdigest()
+          assert actual_hourly_sha256 == prep["prepared_hourly_csv_sha256"], "Prepared hourly CSV hash mismatch"
           assert prep["source_rows"] > 0
           assert prep["source_rows"] == (
               prep["unique_timestamp_samples"]
@@ -172,6 +178,8 @@ jobs:
                   "name": prep["source_dataset"],
                   "url": prep["source_url"],
                   "license": prep["license"],
+                  "source_file_sha256": prep["source_file_sha256"],
+                  "prepared_hourly_csv_sha256": prep["prepared_hourly_csv_sha256"],
                   "series_id": int(__import__("os").environ["DATASET_ID"]),
                   "source_rows": prep["source_rows"],
                   "unique_timestamp_samples": prep["unique_timestamp_samples"],
