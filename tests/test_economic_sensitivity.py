@@ -40,6 +40,7 @@ def make_report(electricity_price=0.12):
     return {
         "input_summary": {
             "quality_status": "valid",
+            "source_type": "measured",
             "row_count": 8760,
             "first_timestamp": "2026-01-01T00:00:00Z",
             "last_timestamp": "2026-12-31T23:00:00Z",
@@ -49,6 +50,12 @@ def make_report(electricity_price=0.12):
             "economics_completeness": {"complete_for_current_declared_fields": True},
         },
         "optimization": {
+            "algorithm": "NSGA-II",
+            "seed": 42,
+            "population_size": 4,
+            "generations": 1,
+            "unique_candidates_evaluated": 2,
+            "decision_space_size": 16,
             "cost_objective_enabled": True,
             "pareto_front": candidates,
         },
@@ -67,6 +74,9 @@ class TestEconomicSensitivity(unittest.TestCase):
 
             self.assertEqual(report["method"], "one-factor-at-a-time fixed-candidate economic sensitivity")
             self.assertEqual(report["baseline_candidate_count"], 2)
+            self.assertEqual(report["source_type"], "measured")
+            self.assertEqual(report["input_summary"]["row_count"], 8760)
+            self.assertEqual(report["baseline_optimizer"]["seed"], 42)
             self.assertEqual(len(report["scenarios"]), 16)
             self.assertTrue(output.exists())
             saved = json.loads(output.read_text(encoding="utf-8"))
