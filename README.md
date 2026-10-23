@@ -61,7 +61,8 @@ In the app, you can:
 2. Set RO power, specific energy, water-tank capacity and initial inventory, minimum run time, and optional cost assumptions.
 3. Compare fixed operating strategies and review summary metrics, water outcomes, and hourly audit rows.
 4. Run the experimental NSGA-II search, inspect feasible candidates and trade-offs, and download reports.
-5. Download a CSV template from the data guide.
+5. Open the separate **Rolling-horizon dispatch lab** page to compare rolling, fixed-priority, and perfect-information reference policies on a paired hourly CSV.
+6. Download a CSV template from the data guide.
 
 **Uploaded data:** the strategy-screening app expects `timestamp`, `renewable_surplus_kw`, `diesel_displacement_potential_kw`, `grid_price_per_kwh`, `off_peak`, `grid_available`, and `water_demand_m3`. The optional `backup_available_kw` column describes an assumed available backup-power limit. See [the app's data guide](docs/ENERGY_WATER_STRATEGY_COMPARISON.md); values and units must be appropriate for your site. Missing values are not silently imputed.
 

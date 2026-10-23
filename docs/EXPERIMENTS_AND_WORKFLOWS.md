@@ -58,6 +58,8 @@ python experiments/forecast_error_robustness.py
 
 These experiments compare replanning with fixed-priority strategies and examine forecast-error sensitivity. They use simplified scenarios and are not an operational controller.
 
+The Streamlit multipage app also includes a **Rolling-horizon energy–water dispatch lab** at `pages/2_Rolling_Horizon_Lab.py`. Start the app with `streamlit run app.py`, then open the separate page from Streamlit's page navigation. It accepts a deterministic synthetic example or a paired hourly CSV with `timestamp_utc`, `actual_surplus_kw`, `forecast_surplus_kw`, `water_demand_m3`, and `cooling_demand_kw_th`; `forecast_water_demand_m3` is optional. The page compares rolling, RO-first, cold-storage-first, and perfect-information reference policies, then exports policy summaries and hourly audit rows. The perfect-information policy is not deployable, and all results remain model-based screening evidence rather than safety approval.
+
 ### Parameter and objective sensitivity
 
 ```bash
