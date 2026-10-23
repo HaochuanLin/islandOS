@@ -59,8 +59,12 @@ class SiteConfiguration:
         missing = sorted(required - set(values))
         if missing:
             raise ConfigurationError("missing required configuration fields: " + ", ".join(missing))
+        allowed = set(cls.__dataclass_fields__)
+        unknown = sorted(set(values) - allowed)
+        if unknown:
+            raise ConfigurationError("invalid configuration fields: " + ", ".join(unknown))
         try:
-            return cls(**{key: values[key] for key in cls.__dataclass_fields__ if key in values})
+            return cls(**{key: values[key] for key in allowed if key in values})
         except TypeError as exc:
             raise ConfigurationError(f"invalid configuration fields: {exc}") from exc
 
