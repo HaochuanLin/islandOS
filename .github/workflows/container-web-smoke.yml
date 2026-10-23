@@ -23,6 +23,8 @@ jobs:
         run: docker build --tag islandos-web:ci .
       - name: Start web app on loopback only
         run: docker run --detach --name islandos-web-ci --publish 127.0.0.1:8501:8501 islandos-web:ci
+      - name: Verify container does not run as root
+        run: test "$(docker exec islandos-web-ci id -u)" -ne 0
       - name: Wait for Streamlit health endpoint
         run: |
           for attempt in $(seq 1 45); do
