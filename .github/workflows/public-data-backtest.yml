@@ -35,7 +35,9 @@ on:
       - ".github/workflows/public-data-backtest.yml"
       - "experiments/prepare_soweki_water_demand.py"
       - "experiments/water_demand_forecast.py"
+      - "experiments/compare_water_demand_models.py"
       - "tests/test_prepare_soweki_water_demand.py"
+      - "tests/test_compare_water_demand_models.py"
 
 permissions:
   contents: read
