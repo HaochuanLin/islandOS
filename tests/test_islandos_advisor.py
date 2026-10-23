@@ -18,7 +18,7 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
             result = subprocess.run(
                 [sys.executable, str(ROOT / "islandos_advisor.py"),
                  str(ROOT / "data/examples/telemetry_replay_demo.csv"),
-                 "--received-at", RECEIVED, "--output", str(output)],
+                 "--max-age-seconds", "7200", "--received-at", RECEIVED, "--output", str(output)],
                 text=True, capture_output=True, check=False,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
