@@ -94,6 +94,12 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertEqual(len(advice["weight_sensitivity"]), 4)
                 self.assertTrue(advice["operator_action_required"])
                 self.assertFalse(advice["physical_write_performed"])
+                with urlopen(base + "/advice?weight_profile=water_priority", timeout=5) as response:
+                    water_priority = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(water_priority["selected_weight_profile"], "water_priority")
+                with self.assertRaises(HTTPError) as invalid_profile:
+                    urlopen(base + "/advice?weight_profile=unsafe", timeout=5)
+                self.assertEqual(invalid_profile.exception.code, 400)
 
                 records = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines()]
                 self.assertEqual(len(records), 2)
@@ -202,6 +208,8 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertIn('getJson("/advice")', html)
                 self.assertIn("Physical writes: disabled", html)
                 self.assertIn("Download advice JSON", html)
+                self.assertIn("Operator objective priority", html)
+                self.assertIn("water_priority", html)
                 self.assertIn("islandos-dispatch-advice.json", html)
                 self.assertNotIn('fetch("/control"', html)
             finally:
