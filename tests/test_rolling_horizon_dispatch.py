@@ -267,6 +267,55 @@ class TestRollingHorizonDispatch(unittest.TestCase):
                     row["actual_surplus_kw"] + 1e-6,
                 )
 
+    def test_hourly_water_and_cooling_inventory_balances_close(self):
+        from experiments.compare_dispatch_policies import make_ice, make_ro
+
+        scenario = build_scenarios()[0]
+        result = simulate_rolling(scenario, scenario.available_surplus_kw)
+        audit = result["hourly_audit"]
+        self.assertTrue(audit)
+
+        # The first step starts from configured inventory; later steps carry
+        # the previous hour's ending state forward without a hidden reset.
+        self.assertAlmostEqual(
+            audit[0]["water_inventory_before_m3"],
+            make_ro().config.initial_water_m3,
+            places=6,
+        )
+        self.assertAlmostEqual(
+            audit[0]["cold_inventory_before_kwh_th"],
+            make_ice().config.initial_storage_kwh_th,
+            places=6,
+        )
+
+        for index, row in enumerate(audit):
+            with self.subTest(hour=row["hour_index"]):
+                water_after = (
+                    row["water_inventory_before_m3"]
+                    + row["water_produced_m3"]
+                    - row["water_spill_m3"]
+                    - row["water_served_m3"]
+                )
+                cold_after = (
+                    row["cold_inventory_before_kwh_th"]
+                    + row["cooling_produced_kwh_th"]
+                    - row["cooling_spill_kwh_th"]
+                    - row["cooling_served_kwh_th"]
+                )
+                self.assertAlmostEqual(water_after, row["water_inventory_m3"], delta=2e-5)
+                self.assertAlmostEqual(cold_after, row["cold_inventory_kwh_th"], delta=2e-5)
+                if index:
+                    self.assertAlmostEqual(
+                        row["water_inventory_before_m3"],
+                        audit[index - 1]["water_inventory_m3"],
+                        places=6,
+                    )
+                    self.assertAlmostEqual(
+                        row["cold_inventory_before_kwh_th"],
+                        audit[index - 1]["cold_inventory_kwh_th"],
+                        places=6,
+                    )
+
     def test_rejects_misaligned_negative_and_nonfinite_power_forecasts(self):
         scenario = build_scenarios()[0]
         with self.assertRaisesRegex(ValueError, "forecast_surplus must match"):
