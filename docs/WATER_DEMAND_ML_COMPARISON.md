@@ -40,6 +40,14 @@ is rolling one hour ahead: once an hour's measured demand is available, it can
 be used as a lag for the next forecast. This is not a multi-day-ahead forecast.
 No rows are shuffled.
 
+## Repeat the evaluation across time windows
+
+A single holdout may be unusually easy or difficult. For a more robust check,
+use the [repeated expanding-window backtest](WATER_DEMAND_ROLLING_BACKTEST.md),
+which retrains the model at several historical cutoffs and reports per-window
+and pooled metrics. It still requires measured data from the target system
+before it can support a claim about that system.
+
 ## How to interpret the result
 
 Do not assume the machine-learning model wins. Keep a simple baseline if it
