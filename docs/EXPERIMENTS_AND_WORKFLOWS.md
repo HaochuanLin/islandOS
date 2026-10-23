@@ -119,7 +119,7 @@ For a public measured water-demand example, see the [SOWEKI guide](SOWEKI_WATER_
 After producing a chronological water-demand model report, join its out-of-sample
 predictions to the matching timestamps in a paired power/dispatch CSV:
 
-\`\`\`bash
+```bash
 python experiments/build_forecast_dispatch_input.py path/to/paired_power.csv \
   build/water-demand-forecast/model-comparison.json \
   --forecast-column hist_gradient_boosting \
@@ -128,16 +128,16 @@ python experiments/build_forecast_dispatch_input.py path/to/paired_power.csv \
 python experiments/evaluate_forecast_dispatch.py \
   build/forecast-dispatch/paired-with-water-forecast.csv \
   --output build/forecast-dispatch/results.json
-\`\`\`
+```
 
-The paired power CSV must contain \`timestamp_utc\`, \`actual_surplus_kw\`,
-\`forecast_surplus_kw\`, \`water_demand_m3\`, and \`cooling_demand_kw_th\`. Its actual
+The paired power CSV must contain `timestamp_utc`, `actual_surplus_kw`,
+`forecast_surplus_kw`, `water_demand_m3`, and `cooling_demand_kw_th`. Its actual
 water-demand values must match the model report at the same timestamps. The
 adapter normalizes timestamps to UTC, rejects mismatches and missing joins, and
 writes only the forecast report's held-out rows. The simulator uses the forecast
 for planning and the actual demand for execution and outcome scoring.
 
-For \`backtest_water_demand_models.py\` reports, add \`--fold N\` to select one
+For `backtest_water_demand_models.py` reports, add `--fold N` to select one
 continuous test window. This avoids combining separated backtest windows into a
 CSV that the hourly dispatch evaluator would correctly reject. The adapter
 does not train or update a model; it connects existing predictions to the
