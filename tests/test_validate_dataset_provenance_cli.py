@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 from experiments.validate_dataset_provenance import main
 from islandos_core.dataset_provenance import sha256_file_bytes
@@ -66,3 +69,26 @@ def test_cli_rejects_non_object_json_root(tmp_path, capsys):
 
     assert main([str(source)]) == 2
     assert "root must be an object" in capsys.readouterr().err
+
+
+def test_documented_module_entrypoint_runs_from_repository_root(tmp_path):
+    source = tmp_path / "provenance.json"
+    source.write_text(json.dumps(valid_metadata()), encoding="utf-8")
+    repository_root = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "experiments.validate_dataset_provenance",
+            str(source),
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["dataset_id"] == "test-dataset"
+    assert result.stderr == ""
