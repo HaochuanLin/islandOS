@@ -11,6 +11,8 @@ on:
       - "experiments/compare_water_demand_models.py"
       - "tests/test_prepare_soweki_water_demand.py"
       - "tests/test_compare_water_demand_models.py"
+  schedule:
+    - cron: "17 5 * * 1"
   workflow_dispatch:
     inputs:
       dataset_id:
@@ -50,8 +52,12 @@ jobs:
   measured-water-demand-backtest:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        dataset_id: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', inputs.dataset_id) || '[1,2,3,4,5,6,7,8,9,10,11]') }}
     env:
-      DATASET_ID: ${{ inputs.dataset_id || '1' }}
+      DATASET_ID: ${{ matrix.dataset_id }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -273,7 +279,7 @@ jobs:
       - name: Upload public-data preparation and evaluation evidence
         uses: actions/upload-artifact@v7
         with:
-          name: islandos-soweki-measured-data-backtest
+          name: islandos-soweki-measured-data-backtest-${{ matrix.dataset_id }}
           path: |
             build/public-data/raw/soweki_source.csv
             build/public-data/soweki_hourly.csv
