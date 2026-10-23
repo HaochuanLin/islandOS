@@ -4,6 +4,13 @@
 
 This is a separate, reproducible scenario for the IslandOS prototype. It does **not** replace or reinterpret the repository's original 24-hour synthetic isolated-island demo.
 
+## Interactive web demo
+
+Explore the public [IslandOS Streamlit demo](https://islandos.streamlit.app/). It is deployed from this repository's `app.py` and demonstrates the generic synthetic 24-hour energy–water dashboard, including same-trace RO policy comparison, scenario controls, charts, and CSV/JSON exports.
+
+**Scope note:** the web app's 24-hour demo is separate from the Nan’ao-specific annual Monte Carlo model in `nan_ao_scenario.py`. The website does not, by itself, display or validate the Nan’ao annual-yield percentiles documented below. Both are assumption-driven simulations, not measured field data.
+
+
 ## Core scenario assumptions
 
 The default run uses 1,000 Monte Carlo scenario years with seed `20261021`. The following are model inputs, not verified Nan'ao operating statistics.
