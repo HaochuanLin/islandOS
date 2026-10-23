@@ -37,6 +37,12 @@ Rows must be strictly ordered and continuous at one-hour intervals. Demand
 must be finite and non-negative. The script rejects missing hours and invalid
 values rather than silently filling or correcting them.
 
+## Evaluate on public measured data
+
+A real public benchmark is available: the SOWEKI water-demand series measured at rural German reservoir outflows. It is not island-specific, but it allows the forecasting pipeline to be checked against measurements rather than only synthetic examples. See [the dataset, license, preparation steps, and limitations](SOWEKI_WATER_DEMAND_DATA.md).
+
+Prepare one downloaded SOWEKI series first, then run the same chronological forecast evaluation on the resulting hourly CSV. Keep the report clearly labeled as SOWEKI data; its accuracy is not evidence of accuracy for Nan'ao or another site.
+
 ## Evaluation
 
 The script holds out the final chronological segment and compares:
