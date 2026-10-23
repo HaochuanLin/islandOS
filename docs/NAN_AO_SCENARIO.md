@@ -1,6 +1,27 @@
 # Nan'ao Island scenario: RO as a flexible load
 
+> **Scenario-based simulation assumption, not measured real-world data.** This document describes a synthetic, assumption-driven scenario for review and exploration. It does not use a measured Nan'ao curtailment time series, does not establish that modeled events occurred on Nan'ao, and is not evidence of site feasibility or field performance.
+
 This is a separate, reproducible scenario for the IslandOS prototype. It does **not** replace or reinterpret the repository's original 24-hour synthetic isolated-island demo.
+
+## Core scenario assumptions
+
+The default run uses 1,000 Monte Carlo scenario years with seed `20261021`. The following are model inputs, not verified Nan'ao operating statistics.
+
+| Input | Assumption used | Interpretation |
+|---|---|---|
+| Annual export-limitation event count | Rounded triangular distribution: minimum 4, maximum 12, mode 8 events/year | Assumed count of potential surplus-energy events |
+| Event duration | Lognormal distribution with median 8 hours and sigma 0.5, clipped to 2–24 hours | Assumed duration for each event |
+| Available surplus power | Triangular distribution: minimum 5 kW, maximum 50 kW, mode 25 kW | Assumed power available to the RO load during an event |
+| Proposed RO rated power | 50 kW | Scenario equipment rating; not confirmation of installed equipment |
+| RO availability per event | Uniform distribution from 0.85 to 1.00 | Assumed operational availability factor |
+| Specific energy consumption (SEC) | 4.0 kWh/m³ | Assumed energy required per cubic metre of produced water |
+| Monte Carlo run count | 1,000 | Number of simulated scenario years in the reported run |
+| Random seed | `20261021` | Fixed seed for reproducibility |
+
+For each event, the modeled usable power is the lesser of available surplus power and the 50 kW RO rating. The event's theoretical water volume is calculated from event duration × usable power × the event RO-availability factor, divided by the assumed SEC. Event volumes are summed to obtain a simulated annual yield.
+
+These distributions and parameters are scenario assumptions. They must not be described as measured local data, an empirically calibrated probability model, or a validated forecast. Changing assumptions can materially change the results.
 
 ## Run it
 
