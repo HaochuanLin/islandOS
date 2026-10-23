@@ -50,11 +50,11 @@ button{border:0;border-radius:9px;background:var(--accent);color:white;padding:1
 <section class="card"><h2>Cooling demand</h2><div id="cooling" class="value">—</div><div class="muted">kW thermal</div></section>
 </div>
 <section class="card" style="margin-top:14px"><h2>Dispatch advice</h2><p id="advice-status" class="status">Waiting for valid hourly telemetry…</p><p id="advice-reason" class="muted">At least two valid hourly-aligned samples and a fresh latest sample are required.</p><div class="table-wrap"><table><thead><tr><th>Policy</th><th>Eligible</th><th>Water unmet (m³)</th><th>Cooling unmet (kWhₜₕ)</th><th>Remaining surplus (kWh)</th><th>Constraint violations (h)</th></tr></thead><tbody id="policies"><tr><td colspan="6">No report available.</td></tr></tbody></table></div><p id="sensitivity" class="muted"></p></section>
-<div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><button id="refresh" type="button">Refresh now</button><span id="checked" class="muted"></span></div>
+<div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><button id="refresh" type="button">Refresh now</button><button id="download-report" type="button" disabled>Download advice JSON</button><span id="checked" class="muted"></span></div>
 <footer>Auto-refreshes every 15 seconds. Advice is based on the most recent available hourly window and a persistence forecast unless supplied forecasts exist. Software validation is not field validation. Physical writes: disabled.</footer>
 </main>
 <script>
-const byId=id=>document.getElementById(id);
+const byId=id=>document.getElementById(id);let lastReport=null;
 const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:d}):"—";
 function setText(id,value){byId(id).textContent=value==null?"—":String(value)}
 async function getJson(path){const r=await fetch(path,{cache:"no-store"});let data={};try{data=await r.json()}catch{}if(!r.ok){const e=new Error(data.error||("HTTP "+r.status));e.status=r.status;e.data=data;throw e}return data}
@@ -68,7 +68,7 @@ async function refresh(){
    setText("updated","Latest sample: "+(latest.timestamp_utc||"unknown")+" · "+(latest.device_id||latest.source||"device"));
   }catch(e){setText("surplus","—");setText("water","—");setText("cooling","—");setText("updated",e.message)}
   try{
-   const report=await getJson("/advice");
+   const report=await getJson("/advice");lastReport=report;byId("download-report").disabled=false;
    const winner=report.recommended_policy_for_operator_review;
    setText("advice-status",winner?"Candidate for operator review: "+winner:"No policy recommendation — operator review required");
    byId("advice-status").className="status "+(winner?"good":"warn");
@@ -81,7 +81,7 @@ async function refresh(){
    });
    setText("sensitivity","Weight-sensitivity winner counts (this input only, not confidence): "+JSON.stringify(report.weight_sensitivity_winner_counts||{}));
   }catch(e){
-   setText("advice-status",e.status===409?"Waiting for fresh, hourly-aligned telemetry":"Advice unavailable");
+   lastReport=null;byId("download-report").disabled=true;setText("advice-status",e.status===409?"Waiting for fresh, hourly-aligned telemetry":"Advice unavailable");
    byId("advice-status").className="status warn";
    setText("advice-reason",e.message+(e.data&&e.data.details?": "+e.data.details.join("; "):""));
    byId("policies").replaceChildren();const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=6;td.textContent="No dispatch recommendation available.";tr.appendChild(td);byId("policies").appendChild(tr);setText("sensitivity","");
@@ -89,7 +89,9 @@ async function refresh(){
  }catch(e){setText("gateway","OFFLINE");byId("gateway").className="value bad";setText("updated",e.message)}
  setText("checked","Last checked: "+new Date().toLocaleTimeString());
 }
-byId("refresh").addEventListener("click",refresh);refresh();setInterval(refresh,15000);
+byId("refresh").addEventListener("click",refresh);
+byId("download-report").addEventListener("click",()=>{if(!lastReport)return;const blob=new Blob([JSON.stringify(lastReport,null,2)+"\n"],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="islandos-dispatch-advice.json";a.click();URL.revokeObjectURL(url)});
+refresh();setInterval(refresh,15000);
 </script>
 </body></html>"""
 
