@@ -22,6 +22,7 @@ python experiments/backtest_water_demand_models.py \
   --initial-train-fraction 0.65 \
   --test-window-hours 24 \
   --step-hours 24 \
+  --max-folds 8 \
   --output build/water-demand-forecast/rolling-backtest.json
 ```
 
@@ -29,6 +30,11 @@ Input must have the same timezone-aware, continuous hourly columns as the
 [model comparison experiment](WATER_DEMAND_ML_COMPARISON.md). Each fold must
 contain at least 24 test hours; test windows cannot overlap. The report includes
 metrics for each fold and pooled metrics across every evaluated hour.
+
+The default maximum is eight test windows, selected evenly across the available
+period. This keeps the experiment tractable for long measured datasets, where
+running hundreds or thousands of model fits would be wasteful. Increase
+`--max-folds` for a more exhaustive analysis when compute time permits.
 
 ## What this improves
 
