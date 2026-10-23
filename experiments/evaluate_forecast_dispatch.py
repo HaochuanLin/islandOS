@@ -252,6 +252,86 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
             "reason": "At least two hourly rows are required to construct a one-step persistence forecast.",
         }
 
+    has_water_forecast = has_forecast_water_demand_column(input_csv)
+    water_demand_persistence_comparison: dict = {
+        "status": "not_evaluated",
+        "reason": (
+            "No forecast_water_demand_m3 column was supplied; actual-demand fallback is hindsight, "
+            "not a forecast to compare."
+        ),
+    }
+    actual_water = list(scenario.water_demand_m3_per_hour)
+    if has_water_forecast:
+        if len(actual_water) >= 2:
+            aligned_actual_water = actual_water[1:]
+            supplied_water_forecast = forecast_water[1:]
+            persistence_water_forecast = actual_water[:-1]
+            aligned_scenario = Scenario(
+                name=f"{scenario.name}_water_forecast_aligned_comparison",
+                available_surplus_kw=tuple(actual[1:]),
+                water_demand_m3_per_hour=tuple(aligned_actual_water),
+                cooling_demand_kw_th=scenario.cooling_demand_kw_th[1:],
+            )
+            aligned_power_forecast = forecast[1:]
+            supplied_water_metrics = _water_forecast_metrics(
+                aligned_actual_water, supplied_water_forecast
+            )
+            persistence_water_metrics = _water_forecast_metrics(
+                aligned_actual_water, persistence_water_forecast
+            )
+            supplied_water_dispatch = _evaluate_policies(
+                aligned_scenario, aligned_power_forecast, supplied_water_forecast
+            )
+            persistence_water_dispatch = _evaluate_policies(
+                aligned_scenario, aligned_power_forecast, persistence_water_forecast
+            )
+            water_demand_persistence_comparison = {
+                "status": "evaluated",
+                "method": "one-step persistence: forecast water demand[t] = actual water demand[t-1]",
+                "aligned_hours": len(aligned_actual_water),
+                "first_aligned_timestamp_utc": timestamps[1],
+                "last_aligned_timestamp_utc": timestamps[-1],
+                "forecast_metrics": {
+                    "supplied_water_forecast": supplied_water_metrics,
+                    "persistence_baseline": persistence_water_metrics,
+                    "mae_skill_vs_persistence": (
+                        round(
+                            (
+                                persistence_water_metrics["mae_m3_per_hour"]
+                                - supplied_water_metrics["mae_m3_per_hour"]
+                            )
+                            / persistence_water_metrics["mae_m3_per_hour"],
+                            8,
+                        )
+                        if persistence_water_metrics["mae_m3_per_hour"] > 0
+                        else None
+                    ),
+                    "skill_interpretation": (
+                        "Positive skill means the supplied water-demand forecast has lower MAE than "
+                        "one-step persistence; null means persistence MAE is zero."
+                    ),
+                },
+                "dispatch_comparison": {
+                    "supplied_water_forecast": supplied_water_dispatch,
+                    "persistence_baseline": persistence_water_dispatch,
+                    "rolling_score_difference_supplied_minus_persistence": round(
+                        supplied_water_dispatch["comparison"]["rolling_score"]
+                        - persistence_water_dispatch["comparison"]["rolling_score"],
+                        8,
+                    ),
+                    "interpretation": (
+                        "Both runs use the same aligned actual and forecast renewable surplus, actual "
+                        "water and cooling demand, initial inventories, and simulator. A negative score "
+                        "difference means the supplied water forecast scored lower on this window only."
+                    ),
+                },
+            }
+        else:
+            water_demand_persistence_comparison = {
+                "status": "not_evaluated",
+                "reason": "At least two hourly rows are required to construct a one-step water-demand persistence forecast.",
+            }
+
     return {
         "experiment": "paired forecast-to-dispatch evaluation",
         "input_csv": str(input_csv),
@@ -264,12 +344,13 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
         },
         "forecast_metrics": _forecast_metrics(actual, forecast),
         "water_demand_input": {
-            "forecast_column_used": "forecast_water_demand_m3" if has_forecast_water_demand_column(input_csv) else "actual_demand_fallback",
+            "forecast_column_used": "forecast_water_demand_m3" if has_water_forecast else "actual_demand_fallback",
             "actual_demand_is_used_for_execution": True,
             "forecast_demand_is_used_for_planning": True,
             "forecast_demand_metrics": _water_forecast_metrics(
                 list(scenario.water_demand_m3_per_hour), forecast_water
             ),
+            "persistence_baseline_comparison": water_demand_persistence_comparison,
         },
         "score_definition": (
             "0.45 * unmet water / total water demand + "
