@@ -52,7 +52,9 @@ hourly bins, then exports only the longest continuous run of complete hours,
 because the forecast baseline rejects gaps. The JSON report records how many
 hours were excluded and the selected time range. If the longest run has fewer
 than 48 hours, the command fails instead of fabricating data; the minimum can
-be adjusted with `--min-hours`, but never below 36.
+be adjusted with `--min-hours`, but never below 43 hours. This lower bound
+leaves enough training history for the baseline's chronological split and
+seasonal-error calibration.
 
 After preparation, evaluate the actual-data baseline:
 
