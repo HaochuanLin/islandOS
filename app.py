@@ -793,6 +793,19 @@ elif page == "Telemetry gateway":
         "Replay historical data (skip live freshness check; never use for live control)",
         value=False,
     )
+    profile_labels = {
+        "balanced": "Balanced",
+        "water_priority": "Water priority",
+        "cooling_priority": "Cooling priority",
+        "energy_efficiency": "Energy efficiency",
+    }
+    weight_profile = st.selectbox(
+        "Operator objective priority",
+        options=tuple(profile_labels),
+        format_func=lambda value: profile_labels[value],
+        help="Changes objective weights only; hard operating constraints still gate recommendations.",
+        key="telemetry_weight_profile",
+    )
     if telemetry_file is None:
         st.info("Upload a device export or the synthetic CSV template to inspect telemetry quality.")
     else:
@@ -877,7 +890,7 @@ elif page == "Telemetry gateway":
                     dispatch_writer.writerows(dispatch_rows)
 
                     advice_report = evaluate_dispatch_rows(
-                        dispatch_rows, name=telemetry_file.name
+                        dispatch_rows, name=telemetry_file.name, weight_profile=weight_profile
                     )
                     advice_report.update({
                         "mode": "uploaded_telemetry_replay",
