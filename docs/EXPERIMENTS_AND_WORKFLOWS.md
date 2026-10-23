@@ -206,3 +206,29 @@ python -m unittest discover -s tests -v
 GitHub Actions also runs configured smoke checks, benchmark reproducibility checks, and generates downloadable artifacts when the workflow succeeds. Artifact reports are retained temporarily by GitHub Actions; consult the latest [workflow runs](https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml).
 
 A passing test means the checked software behavior is reproducible under the test conditions. It does not prove forecast skill, engineering safety, economic viability, or performance in a field deployment.
+
+## Read-only telemetry replay and advice prototype
+
+This optional subsystem is separate from the Streamlit demo and is intended for recorded-data replay and local operator review. It is not a live control system.
+
+Validate/normalize a recorded CSV or JSON Lines stream:
+
+```bash
+python islandos_gateway.py data/examples/telemetry_replay_demo.csv --format csv --mapping configs/device_mapping.example.json --output build/telemetry/validated.jsonl
+```
+
+Generate a recommendation-only report:
+
+```bash
+python islandos_advisor.py data/examples/telemetry_replay_demo.csv --format csv --mapping configs/device_mapping.example.json --output build/telemetry/advisor-report.json
+```
+
+Start the local HTTP review dashboard:
+
+```bash
+python islandos_gateway_server.py --host 127.0.0.1 --port 8765 --audit-file build/telemetry/http-ingest-audit.jsonl
+```
+
+The HTTP server rejects non-loopback bind addresses. Optional bearer-token authentication uses `ISLANDOS_GATEWAY_TOKEN`; it is disabled by default, so do not expose the development service to untrusted networks. No PLC/setpoint writes or actuator commands are implemented. See [the telemetry contract](TELEMETRY_INTEGRATION_CONTRACT.md) for canonical fields, units, freshness, mapping, and security boundaries.
+
+All included replay data is synthetic. A passing software test proves the tested software behavior only; it does not certify sensors, vendor mappings, plant interlocks, forecast quality, or site safety.

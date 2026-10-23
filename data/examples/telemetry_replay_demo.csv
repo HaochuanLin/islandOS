@@ -1,0 +1,4 @@
+timestamp_utc,device_id,quality_flag,renewable_surplus_kw,water_demand_m3,cooling_demand_kw_th
+2026-10-23T05:00:00Z,simulated-gateway-01,good,30,4,7
+2026-10-23T06:00:00Z,simulated-gateway-01,good,24,5,8
+2026-10-23T07:00:00Z,simulated-gateway-01,good,0,6,9

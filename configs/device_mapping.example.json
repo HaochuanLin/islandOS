@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "fields": {
+    "timestamp_utc": {
+      "source_key": "ts",
+      "source_unit": "ISO-8601",
+      "canonical_unit": "ISO-8601"
+    },
+    "renewable_surplus_kw": {
+      "source_key": "solar_power_w",
+      "source_unit": "W",
+      "canonical_unit": "kW",
+      "scale": 0.001,
+      "offset": 0
+    },
+    "water_demand_m3": {
+      "source_key": "water_demand_l",
+      "source_unit": "L",
+      "canonical_unit": "m3",
+      "scale": 0.001,
+      "offset": 0
+    },
+    "cooling_demand_kw_th": {
+      "source_key": "cooling_load_kw_th",
+      "source_unit": "kW_th",
+      "canonical_unit": "kW_th",
+      "scale": 1,
+      "offset": 0
+    }
+  }
+}

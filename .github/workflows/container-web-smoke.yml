@@ -1,0 +1,42 @@
+name: Container web smoke test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Build Streamlit web image
+        run: docker build --tag islandos-web:ci .
+      - name: Start web app on loopback only
+        run: docker run --detach --name islandos-web-ci --publish 127.0.0.1:8501:8501 islandos-web:ci
+      - name: Wait for Streamlit health endpoint
+        run: |
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health; then
+              echo "Streamlit health endpoint is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs islandos-web-ci
+          exit 1
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs islandos-web-ci
+      - name: Stop web container
+        if: always()
+        run: docker rm --force islandos-web-ci || true
