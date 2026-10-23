@@ -175,6 +175,41 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                     process.kill()
                     process.wait(timeout=5)
 
+    def test_dashboard_is_served_with_read_only_security_headers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            port = free_port()
+            process = subprocess.Popen(
+                [sys.executable, str(SERVER), "--port", str(port),
+                 "--audit-file", str(Path(tmp) / "audit.jsonl")],
+                cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            base = "http://127.0.0.1:%d" % port
+            try:
+                for _ in range(60):
+                    try:
+                        with urlopen(base + "/dashboard", timeout=0.25) as response:
+                            html = response.read().decode("utf-8")
+                            headers = response.headers
+                        break
+                    except (URLError, TimeoutError):
+                        time.sleep(0.1)
+                else:
+                    self.fail("dashboard did not become ready")
+                self.assertEqual(headers.get_content_type(), "text/html")
+                self.assertIn("default-src 'none'", headers.get("Content-Security-Policy", ""))
+                self.assertEqual(headers.get("X-Frame-Options"), "DENY")
+                self.assertIn("Local Operator Review", html)
+                self.assertIn('fetch("/advice"', html)
+                self.assertIn("Physical writes: disabled", html)
+                self.assertNotIn('fetch("/control"', html)
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_non_loopback_bind_is_rejected(self):
         result = subprocess.run(
             [sys.executable, str(SERVER), "--host", "0.0.0.0", "--port", "8765"],
