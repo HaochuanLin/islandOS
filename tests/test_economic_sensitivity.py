@@ -98,6 +98,15 @@ class TestEconomicSensitivity(unittest.TestCase):
             ))
             self.assertEqual(len(report["scenarios"]), 14)
 
+    def test_rejects_partial_year_input_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "nsga2_results.json"
+            report = make_report()
+            report["input_summary"]["row_count"] = 24
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "complete-calendar-year"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
     def test_rejects_incomplete_or_invalid_reports(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "nsga2_results.json"
