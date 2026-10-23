@@ -6,12 +6,33 @@ import numpy as np
 
 from experiments.compare_dispatch_policies import build_scenarios
 from experiments.rolling_horizon_dispatch import (
-    parse_scenario_csv, run_experiment, simulate_rolling, summarize_aggregate,
-    summarize_experiment, summarize_weight_sensitivity,
+    generate_synthetic_scenario_csv, parse_scenario_csv, run_experiment,
+    simulate_rolling, summarize_aggregate, summarize_experiment, summarize_weight_sensitivity,
 )
 
 
 class TestRollingHorizonDispatch(unittest.TestCase):
+    def test_generated_synthetic_template_round_trips_through_dispatch(self):
+        text = generate_synthetic_scenario_csv()
+        parsed = parse_scenario_csv(text, name="generated_fixture")
+        self.assertEqual(len(parsed["timestamps_utc"]), 24)
+        self.assertIsNotNone(parsed["forecast_water_demand_m3_per_hour"])
+        result = simulate_rolling(
+            parsed["scenario"], parsed["forecast_surplus_kw"], "rolling",
+            forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+        )
+        self.assertEqual(len(result["hourly_audit"]), 24)
+        self.assertTrue(all(
+            row["ro_power_kw"] + row["ice_power_kw"] <= row["actual_surplus_kw"] + 1e-6
+            for row in result["hourly_audit"]
+        ))
+
+    def test_synthetic_template_rejects_invalid_hour_counts(self):
+        for invalid in (0, -1, 169, True, 1.5):
+            with self.subTest(hours=invalid):
+                with self.assertRaisesRegex(ValueError, "hours must be an integer"):
+                    generate_synthetic_scenario_csv(invalid)
+
     def test_parse_scenario_csv_preserves_actual_and_forecast_inputs(self):
         text = (
             "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,"
