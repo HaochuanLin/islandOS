@@ -1,8 +1,8 @@
 """Read-only HTTP telemetry ingress for islandOS.
 
-The server validates sensor/gateway JSON messages and appends an audit trail.
-It never writes PLC setpoints or actuator commands. It binds to loopback by
-default; non-loopback binding requires explicit opt-in and a bearer token.
+The server validates sensor/gateway JSON messages, appends an audit trail, and
+serves a same-origin read-only operator dashboard. It binds to loopback only.
+It never writes PLC setpoints or actuator commands.
 """
 from __future__ import annotations
 
@@ -20,6 +20,78 @@ from islandos_io import apply_device_mapping, build_dispatch_input_rows, load_de
 
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+_DASHBOARD_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>islandOS · Local Operator Review</title>
+<style>
+:root{color-scheme:light;--ink:#17332f;--muted:#5b716d;--line:#d7e3df;--panel:#fff;--bg:#f3f7f5;--accent:#176c5b;--warn:#8a4b08;--bad:#9b2525}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:24px max(20px,calc((100vw - 1100px)/2));background:#173f38;color:white}header h1{margin:0;font-size:clamp(24px,4vw,36px)}header p{margin:8px 0 0;color:#d7e9e3}
+main{max-width:1100px;margin:24px auto;padding:0 16px 40px}.notice{padding:14px 16px;border:1px solid #e6cba1;background:#fff8e9;border-radius:12px;color:#69400d;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}.card h2{font-size:16px;margin:0 0 12px}.value{font-size:25px;font-weight:700;overflow-wrap:anywhere}.muted{color:var(--muted);font-size:13px}.status{font-weight:700}.good{color:var(--accent)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f5f8f7}.table-wrap{overflow-x:auto}.pill{display:inline-block;border-radius:999px;padding:3px 9px;background:#e3efeb;font-size:12px;font-weight:700}
+button{border:0;border-radius:9px;background:var(--accent);color:white;padding:10px 14px;font-weight:700;cursor:pointer}footer{margin-top:20px;color:var(--muted);font-size:13px}
+@media(max-width:600px){header{padding:20px}main{margin-top:14px}.card{padding:14px}th,td{padding:8px}}
+</style>
+</head>
+<body>
+<header><h1>islandOS · Local Operator Review</h1><p>Live telemetry · energy–water dispatch advice · read-only prototype</p></header>
+<main>
+<div class="notice"><strong>Operator safety boundary:</strong> this dashboard provides advisory analysis only. It cannot write PLC setpoints or actuate equipment. Confirm sensor units, site limits, reserve margins, and operating procedures with the responsible engineer before acting.</div>
+<div class="grid">
+<section class="card"><h2>Gateway</h2><div id="gateway" class="value">Connecting…</div><div id="updated" class="muted">Waiting for status</div></section>
+<section class="card"><h2>Renewable surplus</h2><div id="surplus" class="value">—</div><div class="muted">kW · source-defined surplus</div></section>
+<section class="card"><h2>Freshwater demand</h2><div id="water" class="value">—</div><div class="muted">m³ per sample interval</div></section>
+<section class="card"><h2>Cooling demand</h2><div id="cooling" class="value">—</div><div class="muted">kW thermal</div></section>
+</div>
+<section class="card" style="margin-top:14px"><h2>Dispatch advice</h2><p id="advice-status" class="status">Waiting for valid hourly telemetry…</p><p id="advice-reason" class="muted">At least two valid hourly-aligned samples and a fresh latest sample are required.</p><div class="table-wrap"><table><thead><tr><th>Policy</th><th>Eligible</th><th>Water unmet (m³)</th><th>Cooling unmet (kWhₜₕ)</th><th>Remaining surplus (kWh)</th><th>Constraint violations (h)</th></tr></thead><tbody id="policies"><tr><td colspan="6">No report available.</td></tr></tbody></table></div><p id="sensitivity" class="muted"></p></section>
+<div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><button id="refresh" type="button">Refresh now</button><span id="checked" class="muted"></span></div>
+<footer>Auto-refreshes every 15 seconds. Advice is based on the most recent available hourly window and a persistence forecast unless supplied forecasts exist. Software validation is not field validation. Physical writes: disabled.</footer>
+</main>
+<script>
+const byId=id=>document.getElementById(id);
+const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toLocaleString(undefined,{maximumFractionDigits:d}):"—";
+function setText(id,value){byId(id).textContent=value==null?"—":String(value)}
+async function getJson(path){const r=await fetch(path,{cache:"no-store"});let data={};try{data=await r.json()}catch{}if(!r.ok){const e=new Error(data.error||("HTTP "+r.status));e.status=r.status;e.data=data;throw e}return data}
+async function refresh(){
+ setText("checked","Checking…");
+ try{
+  const health=await getJson("/health");setText("gateway",health.status==="ok"?"ONLINE":"UNKNOWN");byId("gateway").className="value good";
+  try{
+   const latest=await getJson("/latest");const v=latest.values||{};
+   setText("surplus",fmt(v.renewable_surplus_kw));setText("water",fmt(v.water_demand_m3));setText("cooling",fmt(v.cooling_demand_kw_th));
+   setText("updated","Latest sample: "+(latest.timestamp_utc||"unknown")+" · "+(latest.device_id||latest.source||"device"));
+  }catch(e){setText("surplus","—");setText("water","—");setText("cooling","—");setText("updated",e.message)}
+  try{
+   const report=await getJson("/advice");
+   const winner=report.recommended_policy_for_operator_review;
+   setText("advice-status",winner?"Candidate for operator review: "+winner:"No policy recommendation — operator review required");
+   byId("advice-status").className="status "+(winner?"good":"warn");
+   setText("advice-reason",report.recommendation_reason||"No recommendation reason supplied.");
+   const body=byId("policies");body.replaceChildren();
+   (report.policy_comparison||[]).forEach(row=>{
+    const tr=document.createElement("tr");
+    [row.policy,row.eligible_for_recommendation?"Yes":"No",fmt(row.water_unmet_m3),fmt(row.cooling_unmet_kwh_th),fmt(row.remaining_surplus_kwh),fmt(row.constraint_violation_hours,0)].forEach(value=>{const td=document.createElement("td");td.textContent=String(value);tr.appendChild(td)});
+    body.appendChild(tr);
+   });
+   setText("sensitivity","Weight-sensitivity winner counts (this input only, not confidence): "+JSON.stringify(report.weight_sensitivity_winner_counts||{}));
+  }catch(e){
+   setText("advice-status",e.status===409?"Waiting for fresh, hourly-aligned telemetry":"Advice unavailable");
+   byId("advice-status").className="status warn";
+   setText("advice-reason",e.message+(e.data&&e.data.details?": "+e.data.details.join("; "):""));
+   byId("policies").replaceChildren();const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=6;td.textContent="No dispatch recommendation available.";tr.appendChild(td);byId("policies").appendChild(tr);setText("sensitivity","");
+  }
+ }catch(e){setText("gateway","OFFLINE");byId("gateway").className="value bad";setText("updated",e.message)}
+ setText("checked","Last checked: "+new Date().toLocaleTimeString());
+}
+byId("refresh").addEventListener("click",refresh);refresh();setInterval(refresh,15000);
+</script>
+</body></html>"""
 
 
 def _json_bytes(payload):
@@ -43,16 +115,31 @@ def make_handler(audit_path, source, max_age_seconds, mapping=None):
             self.end_headers()
             self.wfile.write(body)
 
+        def _send_html(self, status, body):
+            encoded = body.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(encoded)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.end_headers()
+            self.wfile.write(encoded)
+
         def _authorized(self):
             return True
 
         def do_GET(self):
             path = urlparse(self.path).path
-            if path not in ("/health", "/latest", "/advice"):
+            if path not in ("/health", "/latest", "/advice", "/dashboard"):
                 self._send(404, {"error": "not found"})
                 return
             if not self._authorized():
                 self._send(401, {"error": "unauthorized"})
+                return
+            if path == "/dashboard":
+                self._send_html(200, _DASHBOARD_HTML)
                 return
             if path == "/health":
                 self._send(200, {
