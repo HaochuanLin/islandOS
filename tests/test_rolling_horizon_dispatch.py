@@ -232,5 +232,52 @@ class TestRollingHorizonDispatch(unittest.TestCase):
                 )
 
 
+    def test_constraint_violation_hours_matches_unique_audit_hours(self):
+        scenario = build_scenarios()[0]
+        result = simulate_rolling(scenario, scenario.available_surplus_kw)
+        affected_hours = result["constraint_violation_hour_indices"]
+
+        self.assertEqual(len(affected_hours), len(set(affected_hours)))
+        self.assertEqual(result["constraint_violation_hours"], len(affected_hours))
+        self.assertTrue(
+            all(0 <= hour < len(scenario.available_surplus_kw) for hour in affected_hours)
+        )
+
+    def test_hourly_audit_respects_inventory_and_renewable_power_bounds(self):
+        from experiments.compare_dispatch_policies import make_ice, make_ro
+
+        scenario = build_scenarios()[0]
+        result = simulate_rolling(scenario, scenario.available_surplus_kw)
+        ro_capacity = make_ro().config.reservoir_capacity_m3
+        ice_capacity = make_ice().config.storage_capacity_kwh_th
+
+        self.assertEqual(len(result["hourly_audit"]), len(scenario.available_surplus_kw))
+        for row in result["hourly_audit"]:
+            with self.subTest(hour=row["hour_index"]):
+                self.assertTrue(np.isfinite(row["water_inventory_m3"]))
+                self.assertTrue(np.isfinite(row["cold_inventory_kwh_th"]))
+                self.assertGreaterEqual(row["water_inventory_m3"], -1e-7)
+                self.assertLessEqual(row["water_inventory_m3"], ro_capacity + 1e-7)
+                self.assertGreaterEqual(row["cold_inventory_kwh_th"], -1e-7)
+                self.assertLessEqual(row["cold_inventory_kwh_th"], ice_capacity + 1e-7)
+                self.assertGreaterEqual(row["ro_power_kw"], 0.0)
+                self.assertGreaterEqual(row["ice_power_kw"], 0.0)
+                self.assertLessEqual(
+                    row["ro_power_kw"] + row["ice_power_kw"],
+                    row["actual_surplus_kw"] + 1e-6,
+                )
+
+    def test_rejects_misaligned_negative_and_nonfinite_power_forecasts(self):
+        scenario = build_scenarios()[0]
+        with self.assertRaisesRegex(ValueError, "forecast_surplus must match"):
+            simulate_rolling(scenario, (1.0,))
+        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+            simulate_rolling(scenario, (-1.0,) * len(scenario.available_surplus_kw))
+        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+            simulate_rolling(
+                scenario, (float("nan"),) * len(scenario.available_surplus_kw)
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
