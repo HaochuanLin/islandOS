@@ -1,5 +1,5 @@
 # islandOS MVP simulation prototype
-# Python >= 3.8 is required (dataclasses, type hints)
+# Python >= 3.10 is required (PEP 604 union type syntax; CI and Docker use Python 3.11)
 numpy>=1.21
 matplotlib>=3.5
 openpyxl>=3.1
