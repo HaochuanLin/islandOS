@@ -29,7 +29,11 @@ python experiments/backtest_water_demand_models.py \
 Input must have the same timezone-aware, continuous hourly columns as the
 [model comparison experiment](WATER_DEMAND_ML_COMPARISON.md). Each fold must
 contain at least 24 test hours; test windows cannot overlap. The report includes
-metrics for each fold and pooled metrics across every evaluated hour.
+metrics for each fold and pooled metrics across every evaluated hour. It also
+reports high-demand diagnostics: for each fold, the high-demand threshold is the
+90th percentile of that fold's training history, then the report measures error,
+average under/over-prediction bias, and the share of peak hours that were
+underforecast. The threshold is never derived from the test window.
 
 The default maximum is eight test windows, selected evenly across the available
 period. This keeps the experiment tractable for long measured datasets, where
@@ -43,7 +47,11 @@ running hundreds or thousands of model fits would be wasteful. Increase
 - **Fair comparison:** persistence, previous-day, previous-week and gradient
   boosting are evaluated on the same timestamps.
 - **Leakage control:** each fold trains only on timestamps before its test
-  window. Forecast features use only lagged observations.
+  window. Forecast features use only lagged observations, and the peak-demand
+  threshold comes only from the fold's training history.
+- **Peak-risk visibility:** average error can hide underforecasting during high
+  demand. The extra metrics help expose this risk, but do not replace checking
+  water shortages, storage limits, or dispatch outcomes.
 - **Reproducibility:** model settings are fixed and the report records the
   cutoffs, window sizes, fold metrics and pooled metrics.
 

@@ -48,6 +48,16 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
             self.assertEqual(report["configuration"]["evaluated_hours"], 192)
             self.assertEqual(len(report["folds"]), 8)
             self.assertEqual(len(report["forecast_rows"]), 192)
+            self.assertGreater(report["high_demand_evaluation"]["event_count"], 0)
+            self.assertEqual(
+                set(report["high_demand_evaluation"]["pooled_metrics_by_model"]),
+                set(report["aggregate_metrics"]),
+            )
+            for metric in report["high_demand_evaluation"]["pooled_metrics_by_model"].values():
+                self.assertGreater(metric["event_count"], 0)
+                self.assertGreaterEqual(metric["mae_m3_per_hour"], 0)
+                self.assertGreaterEqual(metric["underforecast_rate"], 0)
+                self.assertLessEqual(metric["underforecast_rate"], 1)
             self.assertEqual(
                 set(report["aggregate_metrics"]),
                 {
@@ -61,6 +71,8 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
                 self.assertLess(fold["training_end"], fold["test_start"])
                 self.assertEqual(fold["test_rows"], 24)
                 self.assertEqual(set(fold["metrics"]), set(report["aggregate_metrics"]))
+                self.assertEqual(set(fold["high_demand_metrics"]), set(report["aggregate_metrics"]))
+                self.assertGreaterEqual(fold["high_demand_threshold_m3_per_hour"], 0)
             saved = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(saved["configuration"]["fold_count"], 8)
 
@@ -143,6 +155,14 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
             self.assertEqual(
                 original_report["folds"][0]["metrics"],
                 altered_report["folds"][0]["metrics"],
+            )
+            self.assertEqual(
+                original_report["folds"][0]["high_demand_threshold_m3_per_hour"],
+                altered_report["folds"][0]["high_demand_threshold_m3_per_hour"],
+            )
+            self.assertEqual(
+                original_report["folds"][0]["high_demand_metrics"],
+                altered_report["folds"][0]["high_demand_metrics"],
             )
             original_first_fold = [
                 row for row in original_report["forecast_rows"] if row["fold"] == 1

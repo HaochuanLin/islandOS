@@ -78,6 +78,10 @@ jobs:
               "hist_gradient_boosting",
           }
           assert all(fold["training_end"] < fold["test_start"] for fold in report["folds"])
+          assert report["high_demand_evaluation"]["event_count"] > 0
+          peak_metrics = report["high_demand_evaluation"]["pooled_metrics_by_model"]
+          assert set(peak_metrics) == set(report["aggregate_metrics"])
+          assert all(0 <= metric["underforecast_rate"] <= 1 for metric in peak_metrics.values())
           print("Repeated chronological water-demand backtest smoke test passed.")
           PY
       - name: Upload water-demand rolling backtest report
