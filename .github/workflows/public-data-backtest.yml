@@ -110,9 +110,12 @@ jobs:
           assert prep["license"] == "CC BY 4.0"
           assert prep["source_rows"] > 0
           assert prep["source_rows"] == (
-              prep["unique_timestamp_samples"] + prep["exact_duplicate_rows_deduplicated"]
+              prep["unique_timestamp_samples"]
+              + prep["exact_duplicate_rows_deduplicated"]
+              + prep["invalid_value_rows_excluded"]
           )
           assert prep["exact_duplicate_rows_deduplicated"] >= 0
+          assert prep["invalid_value_rows_excluded"] >= 0
           assert prep["source_non_increasing_adjacent_pairs"] >= 0
           assert prep["selected_contiguous_hours"] >= prep["minimum_hours_required"] >= 43
           assert prep["partially_observed_hour_bins_excluded"] >= 0
@@ -173,6 +176,8 @@ jobs:
                   "source_rows": prep["source_rows"],
                   "unique_timestamp_samples": prep["unique_timestamp_samples"],
                   "exact_duplicate_rows_deduplicated": prep["exact_duplicate_rows_deduplicated"],
+                  "invalid_value_rows_excluded": prep["invalid_value_rows_excluded"],
+                  "invalid_value_examples": prep["invalid_value_examples"],
                   "source_non_increasing_adjacent_pairs": prep["source_non_increasing_adjacent_pairs"],
                   "selected_contiguous_hours": prep["selected_contiguous_hours"],
                   "first_timestamp_utc": prep["first_timestamp_utc"],
