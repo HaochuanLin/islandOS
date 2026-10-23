@@ -1,4 +1,4 @@
-"Tests for the read-only, explainable RO screening heuristic."
+"""Tests for the read-only, explainable RO screening heuristic."""
 from datetime import datetime, timezone
 import unittest
 
