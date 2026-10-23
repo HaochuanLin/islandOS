@@ -38,11 +38,20 @@ def make_report(electricity_price=0.12):
             },
         })
     return {
+        "input_summary": {
+            "quality_status": "valid",
+            "row_count": 8760,
+            "first_timestamp": "2026-01-01T00:00:00Z",
+            "last_timestamp": "2026-12-31T23:00:00Z",
+        },
         "parameter_configuration": {
             "economics": economics,
             "economics_completeness": {"complete_for_current_declared_fields": True},
         },
-        "optimization": {"pareto_front": candidates},
+        "optimization": {
+            "cost_objective_enabled": True,
+            "pareto_front": candidates,
+        },
     }
 
 
