@@ -1,0 +1,7 @@
+# Exact ML comparison dependencies from the same successful Python 3.11 CI environment.
+# Keep these aligned with requirements-ci.lock and the public-data workflow.
+joblib==1.6.0
+numpy==2.4.6
+scikit-learn==1.9.1
+scipy==1.17.1
+threadpoolctl==3.7.0
