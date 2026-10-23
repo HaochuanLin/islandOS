@@ -43,6 +43,12 @@ class TestDeviceMappingContract(unittest.TestCase):
             },
         }
 
+    def test_repository_example_mapping_is_valid(self):
+        example = Path(__file__).resolve().parents[1] / "configs" / "device_mapping.example.json"
+        mapping = load_device_mapping(str(example))
+        self.assertEqual(mapping["schema_version"], 1)
+        self.assertEqual(mapping["fields"]["renewable_surplus_kw"]["canonical_unit"], "kW")
+
     def test_loads_explicit_unit_mapping_and_converts_values(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mapping.json"
