@@ -24,6 +24,24 @@ python experiments/economic_sensitivity.py build/site-optimization/nsga2_results
 
 The example config contains null economic values and illustrative equipment assumptions; replace them with documented values before the cost objective can run. The sensitivity command defaults to ±20% one-factor-at-a-time perturbations and writes JSON containing the baseline cost range, each varied value, candidate-level annualized costs, cost deltas, and any skipped zero-baseline parameter.
 
+## Reading the JSON report
+
+The output file is designed for audit and downstream analysis. Important fields are:
+
+- `source_type`, `input_summary`, and `data_quality_report`: provenance label, input time coverage/units, and the base optimizer's data-quality assessment.
+- `baseline_optimizer`: algorithm, seed, population size, generation count, and search-size metadata copied from the original optimization report.
+- `base_economic_assumptions` and `relative_change_requested`: the exact values used for the baseline and the requested proportional perturbation.
+- `baseline_annual_cost`: minimum, median, and maximum annualized cost across the baseline Pareto candidates, in the declared currency per year.
+- `scenarios[]`: one tested parameter/value/direction per entry, with the annual cost range, percentage deltas from each candidate's baseline, and each candidate's resulting cost.
+- `skipped_scenarios[]`: zero-baseline or rounded/clamped perturbations that cannot produce a meaningful distinct scenario.
+- `interpretation_limits[]`: limitations that should be retained when sharing or comparing the report.
+
+A percentage delta is defined only when that candidate's baseline annualized cost is greater than zero. If a baseline candidate costs zero, its relative percentage change is mathematically undefined, so the report records a null summary when no deltas are defined and counts the undefined baselines. Do not read null as zero change.
+
+## Reproducibility checklist
+
+Before circulating a result, archive the original CSV and its SHA-256 hash, the exact configuration file and its hash, the optimizer JSON, the generated sensitivity JSON, the Git commit, Python/dependency environment, and the source/provenance evidence for each economic input. Confirm the source label reflects the actual data (measured, public, synthetic, or forecast); never label a synthetic fixture as measured.
+
 ## Interpretation limits
 
 - This is a **fixed-candidate-set re-pricing** analysis. It does not rerun NSGA-II, so a candidate that becomes non-dominated under a changed cost assumption but was absent from the baseline Pareto front will not appear.
