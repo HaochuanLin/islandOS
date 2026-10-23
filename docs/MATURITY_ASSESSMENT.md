@@ -14,16 +14,16 @@ Current estimates are provisional engineering judgments, not independent certifi
 
 ## Baseline scores and targets
 
-| Category | Baseline | Current estimate after phase 3 | Target | Evidence needed to raise score |
+| Category | Baseline | Current estimate after phase 4 | Target | Evidence needed to raise score |
 |---|---:|---:|---:|---|
 | Core simulation and dispatch | 5.5 | 5.5 | 8.5 | Explicit physical/unit invariants, edge-case tests, conservation checks, benchmarked scenarios and documented model limits |
-| Automated testing and reproducibility | 6.0 | 6.8 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
-| Documentation and evidence audit | 6.5 | 7.4 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
+| Automated testing and reproducibility | 6.0 | 7.1 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
+| Documentation and evidence audit | 6.5 | 7.8 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
 | Interactive demo and usability | 6.0 | 6.0 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
 | Branch and release management | 5.5 | 5.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
-| Public data / site data validation | 5.5 | 6.4 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
-| Commercialization and deployment readiness | 3.5 | 3.5 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
-| Overall software engineering maturity | 5.5 | 5.5 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
+| Public data / site data validation | 5.5 | 7.1 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
+| Commercialization and deployment readiness | 3.5 | 4.0 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
+| Overall software engineering maturity | 5.5 | 6.0 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
 | Real-environment operation validation | 2.0 | 2.0 | 7.0 | Independent site data, hardware-in-the-loop or shadow-mode trials, operational logs, signed engineering review and documented rollback; never infer this from simulation alone |
 
 The baseline values are provisional judgments based on visible repository structure and README statements. The current estimates reflect only documented changes and inspected source evidence, not a completed runtime test campaign. The README explicitly describes the system as a research prototype, notes that synthetic inputs are used, and states that it is not a deployed island control system. It also notes that hosted public access has not been verified and that forecasting is not yet an integrated validated forecast-and-control pipeline.
@@ -59,6 +59,18 @@ The number of phases is a planning estimate; later phases depend on findings fro
 - Rescore: automated testing/reproducibility 6.0 → 6.4 and documentation/evidence audit 6.8 → 7.0, justified by a completed passing CI run and archived run manifest/artifacts. Scores remain below target because dependencies are not fully locked, branch protection is not verified, and external/site validation is absent.
 - Reviewed existing tests: shared energy budget and inventory conservation, invalid input rejection, chronological holdout, rolling-origin leakage guard, and demand-distribution diagnostics already have tests. Avoided duplicating these; next work should focus on dependency reproducibility, forecast integration edge cases, and site-data validation.
 
+
+
+### Phase 4 — measured-data ML comparison and reproduction guide (2026-10-24)
+
+- Extended `experiments/compare_water_demand_models.py` to record the exact input CSV SHA-256 and scikit-learn version; added regression assertions for both fields. Commits: [model provenance](https://github.com/HaochuanLin/islandOS/commit/47b9c397b9a07bb68589e04a80b1e2c6186a8610), [regression test](https://github.com/HaochuanLin/islandOS/commit/fa3b19b652c86c36d8663053dcebf7591b1ea262).
+- Added the ML comparison to the public-data workflow. It compares previous-hour, previous-day, previous-week, and HistGradientBoosting forecasts on the same chronological holdout, validates finite metrics and input-hash alignment, and archives the ML report with raw and prepared data: [workflow implementation](https://github.com/HaochuanLin/islandOS/commit/9ee52389177716771bf1d8d7dc0a48ffb73100b8).
+- The public measured-data workflow passed with the ML comparison: [successful run](https://github.com/HaochuanLin/islandOS/actions/runs/39985631870). On SOWEKI series 1, the selected continuous segment contains 5,533 hourly rows (2025-02-05 through 2025-09-23). The chronological split used 3,705 ML training samples and 1,660 test samples. HistGradientBoosting MAE was 0.663 m³/hour versus 0.973 for the previous-week seasonal baseline (about 31.9% lower); RMSE was 0.905 versus 1.351 (about 33.0% lower). The model's reported library version was scikit-learn 1.9.1.
+- This is one dataset and one holdout. It does not establish generalization to other seasons/sites, a deep-learning or online-learning capability, or improved dispatch economics. The model must remain a candidate, not an automatic controller.
+- Added [the reproducibility guide](REPRODUCIBILITY.md) and linked it from the README. It documents local commands, data lineage, hash checks, artifact contents, and interpretation limits.
+- Rescore from completed evidence: automated testing/reproducibility 6.8 → 7.1; documentation/evidence audit 7.4 → 7.8; public-data validation 6.4 → 7.1; commercialization/deployment readiness 3.5 → 4.0 due to repeatable container and Windows build checks; overall software engineering maturity 5.5 → 6.0. Core simulation, interactive demo, branch/release management, and real-environment operation remain unchanged because these changes do not close their specific gaps.
+- The full RO regression workflow passed on the preceding source/doc revision [70b71751 run](https://github.com/HaochuanLin/islandOS/actions/runs/39984921956). The latest model-provenance and measured-ML workflow changes are separately covered by the passing public-data run above; the newest full CI run is tracked independently and must pass before claiming that exact HEAD is fully green.
+
 ## Evidence ledger
 
 For every future score change, record: category and old/new score; exact commit SHA and changed paths; command or workflow used; pass/fail result and link to the run or artifact; remaining limitations and why the score is justified.
@@ -82,5 +94,5 @@ islandOS must remain advisory/research software unless and until a site-specific
 - The public-data workflow independently recomputes both hashes and fails on mismatch; it also validates hash format. Workflow change: [hash validation](https://github.com/HaochuanLin/islandOS/commit/d2add31d71fd00192b8493b46bb5907e5214ff9c).
 - The measured SOWEKI backtest completed successfully with the fingerprint checks: [successful public-data run](https://github.com/HaochuanLin/islandOS/actions/runs/39984584825). Its artifact is available for 90 days. This establishes one repeatable public-data study, not transfer to island or Nan'ao conditions.
 - Enabled automatic execution on relevant pushes to `main`: [workflow trigger change](https://github.com/HaochuanLin/islandOS/commit/a8a9dba987ad015864b45be813df9663e7de6fc6).
-- The newest workflow revision additionally archives both raw source and prepared hourly CSV, not just reports: [artifact update](https://github.com/HaochuanLin/islandOS/commit/8b5cb230f83165cc3132e5e77999d5065a5b302e). That exact revision's run is still queued/in progress at this assessment and is not counted as passed yet.
+- The workflow revision also archives the raw source CSV and prepared hourly CSV alongside reports. The exact revision passed: [successful public-data run](https://github.com/HaochuanLin/islandOS/actions/runs/39984656770); the artifact was verified to contain both CSVs and all reports.
 - Rescore based on the completed public-data run: automated testing/reproducibility 6.4 → 6.8; documentation/evidence audit 7.0 → 7.4; public-data validation 5.5 → 6.4. Remaining gaps include fully pinned dependencies, multiple independent datasets/seasons, protected release settings, and site-specific validation.
