@@ -46,6 +46,17 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_islandos_telemetry_demo.py' -v
       - name: Compile synthetic telemetry demo sender
         run: python -m py_compile islandos_telemetry_demo.py
+      - name: Test reproducible multi-scenario acceptance evidence
+        run: python -m unittest discover -s tests -p 'test_telemetry_advice_acceptance.py' -v
+      - name: Generate synthetic telemetry-to-advice acceptance report
+        run: python experiments/telemetry_advice_acceptance.py --hours 24 --output build/evidence/islandos-acceptance-report.json
+      - name: Upload synthetic acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-telemetry-advice-acceptance
+          path: build/evidence/islandos-acceptance-report.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Test end-to-end dispatch advisor
         run: python -m unittest discover -s tests -p 'test_islandos_advisor.py' -v
       - name: Compile dispatch advisor CLI
