@@ -148,6 +148,9 @@ def make_handler(audit_path, source, max_age_seconds, mapping=None):
                 self._send(200, {
                     "status": "ok",
                     "mode": "read_only_telemetry_ingest",
+                    "device_mapping_loaded": mapping is not None,
+                    "mapping_schema_version": mapping.get("schema_version") if mapping else None,
+                    "mapped_canonical_fields": sorted(mapping.get("fields", {})) if mapping else [],
                     "physical_write_performed": False,
                 })
                 return
