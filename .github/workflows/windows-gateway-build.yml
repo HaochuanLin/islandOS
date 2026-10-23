@@ -21,12 +21,18 @@ jobs:
         run: python -m pip install --upgrade pip pyinstaller
       - name: Build portable gateway executable
         run: pyinstaller --clean --onefile --name islandos-gateway islandos_gateway.py
-      - name: Smoke-test executable
+      - name: Build portable dispatch advisor executable
+        run: pyinstaller --clean --onefile --name islandos-advisor islandos_advisor.py
+      - name: Smoke-test gateway executable
         run: .\dist\islandos-gateway.exe --help
+      - name: Smoke-test advisor executable
+        run: .\dist\islandos-advisor.exe --help
       - name: Upload portable executable
         uses: actions/upload-artifact@v4
         with:
           name: islandos-gateway-windows-x64
-          path: dist/islandos-gateway.exe
+          path: |
+            dist/islandos-gateway.exe
+            dist/islandos-advisor.exe
           if-no-files-found: error
           retention-days: 30
