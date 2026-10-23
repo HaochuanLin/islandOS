@@ -26,10 +26,11 @@ The Streamlit application runs locally and opens in a browser. Confirm that the 
 
 1. **Establish the boundary.** On Overview, point out that this is a research prototype, not a live controller, and that the built-in profile is synthetic.
 2. **Run the baseline comparison.** Open Strategy simulator, select “Synthetic demo (illustrative),” keep the initial settings for the first run, and click “Run strategy comparison.”
-3. **Compare the service outcomes.** Review water produced, water served, unmet demand, and grid energy cost. Explain that the values follow the declared input profile and simplified assumptions.
-4. **Inspect one hourly audit.** Select a strategy and inspect its timestep rows and inventory chart. Use the downloaded summary and audit CSVs to show the outputs are inspectable, not just a single headline score.
-5. **Optionally show optimization.** Run NSGA-II only if time permits. Explain that it searches feasible candidate schedules under the current model and constraints; it is not a trained AI model. The search may return no feasible candidate for some inputs, which is a legitimate result rather than something to conceal.
-6. **Close with validation gaps.** Explain that local measured data, site calibration, complete system constraints, equipment interlocks, and field trials remain future work.
+3. **Open the rolling-dispatch lab.** Run the 48-case experiment, review rolling-vs-fixed counts and weight sensitivity, then inspect an hourly audit and download the JSON evidence.
+4. **Compare the service outcomes.** Review water produced, water served, unmet demand, and grid energy cost. Explain that the values follow the declared input profile and simplified assumptions.
+5. **Inspect one hourly audit.** Select a strategy and inspect its timestep rows and inventory chart. Use the downloaded summary and audit CSVs to show the outputs are inspectable, not just a single headline score.
+6. **Optionally show optimization.** Run NSGA-II only if time permits. Explain that it searches feasible candidate schedules under the current model and constraints; it is not a trained AI model. The search may return no feasible candidate for some inputs, which is a legitimate result rather than something to conceal.
+7. **Close with validation gaps.** Explain that local measured data, site calibration, complete system constraints, equipment interlocks, and field trials remain future work.
 
 ## What to point judges to
 
