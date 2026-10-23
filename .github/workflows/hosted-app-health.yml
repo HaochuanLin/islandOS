@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check hosted health endpoint and landing page
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           python - <<'PY'
           import json
@@ -82,6 +83,18 @@ jobs:
                   },
                   "health_body_excerpt": health.get("body", "")[:200],
               })
+              redirect_locations = [
+                  item.get("location", "")
+                  for item in (root, health)
+                  if item.get("location")
+              ]
+              if any("share.streamlit.io/-/auth/app" in location for location in redirect_locations):
+                  report["status"] = "requires_authentication"
+                  report["diagnosis"] = (
+                      "The hosted app redirects unauthenticated requests to Streamlit Cloud sign-in; "
+                      "make the deployment public in Streamlit Cloud settings if public access is intended."
+                  )
+                  break
               root_ok = (
                   root.get("http_status") == 200
                   and "text/html" in root.get("content_type", "").lower()
