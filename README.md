@@ -1,8 +1,8 @@
-# islandOS — Energy–Water Planning Prototype
+# IslandOS：Rule-based look-ahead scheduling for island freshwater-resilience
 
 <p align="center">
-  <strong>Explore how renewable-energy surplus could support essential island resources.</strong><br>
-  Simulation tools for flexible-load dispatch, water–energy planning, forecasting experiments, and policy comparison.
+  <strong>A general-purpose prototype for island freshwater resilience using renewable-energy surplus.</strong><br>
+  Rule-based look-ahead scheduling explores when surplus wind/solar electricity can drive modular reverse osmosis (RO) and build an emergency freshwater buffer while protecting essential electricity demand.
 </p>
 
 <p align="center">
@@ -18,17 +18,9 @@
 </p>
 <p align="center"><em>Illustrative synthetic simulation only—not field measurements or evidence of real-island performance.</em></p>
 
-## Nan'ao scenario pilot (separate branch)
+## Experimental pilot scenario (Schneider Go Green 2026)
 
-The original 24-hour demo is a **generic synthetic example**, not the Nan'ao Island scenario and not measured site data. The Nan'ao annual scenario model is maintained separately on the [nan-ao-scenario-pilot branch](https://github.com/HaochuanLin/islandOS/tree/nan-ao-scenario-pilot). It is an assumption-based event-energy simulation, not a grid power-flow model or a reconstruction of measured Nan'ao curtailment. Outputs are scenario-based simulation assumptions, not measured real-world data.
-
-To run the Nan'ao scenario from that branch, use the following command from the repository root:
-
-```bash
-python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir outputs/nan_ao
-```
-
-See [the Nan'ao scenario documentation](https://github.com/HaochuanLin/islandOS/blob/nan-ao-scenario-pilot/docs/NAN_AO_SCENARIO.md) for assumptions and limitations.
+A separate Nan'ao-type scenario is maintained on the [nan-ao-scenario-pilot branch](https://github.com/HaochuanLin/islandOS/tree/nan-ao-scenario-pilot). It uses a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021. Its outputs are synthetic scenario assumptions, not measured real-world data. For other competitions, use this main-branch generic demo; switching branches is not required.
 
 ## What it can do today
 
@@ -67,14 +59,16 @@ In the app, you can:
 
 **Uploaded data:** the strategy-screening app expects `timestamp`, `renewable_surplus_kw`, `diesel_displacement_potential_kw`, `grid_price_per_kwh`, `off_peak`, `grid_available`, and `water_demand_m3`. The optional `backup_available_kw` column describes an assumed available backup-power limit. See [the app's data guide](docs/ENERGY_WATER_STRATEGY_COMPARISON.md); values and units must be appropriate for your site. Missing values are not silently imputed.
 
-## Quick start: command-line demo
+## Quick start: generic 24-hour demo
 
-To run the original 24-hour synthetic RO demo instead of the app:
+Install the dependencies and run the general-purpose 24-hour synthetic isolated-island demo (400 kW RO rating; 3.5 kWh/m³ specific energy assumption):
 
 ```bash
 pip install -r requirements.txt
 python island_microgrid_ro_sim.py
 ```
+
+This is a generic demonstration, not the Nan'ao annual event-energy scenario. All outputs are synthetic simulation results, not field measurements.
 
 For a compact reference to the other experiments, see [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md).
 
