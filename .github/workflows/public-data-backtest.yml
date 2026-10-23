@@ -47,10 +47,37 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Download and prepare licensed measured series
+      - name: Download and audit source timestamp ordering
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          import os
+          from pathlib import Path
+          from experiments.prepare_soweki_water_demand import _download_source, _parse_timestamp
+
+          raw = _download_source(int(os.environ["DATASET_ID"]), "build/public-data/raw/soweki_source.csv")
+          with raw.open(encoding="utf-8-sig", newline="") as handle:
+              rows = list(csv.DictReader(handle))
+          stamps = [_parse_timestamp(row.get("timestamp") or "", i + 2) for i, row in enumerate(rows)]
+          non_increasing = [
+              {"line": i + 3, "previous": stamps[i].isoformat(), "current": stamps[i + 1].isoformat()}
+              for i in range(len(stamps) - 1) if stamps[i + 1] <= stamps[i]
+          ]
+          duplicates = len(stamps) - len(set(stamps))
+          audit = {
+              "source_rows": len(stamps),
+              "non_increasing_adjacent_pairs": len(non_increasing),
+              "duplicate_timestamp_count": duplicates,
+              "first_examples": non_increasing[:10],
+              "source_url": "https://zenodo.org/records/19627517",
+          }
+          print(json.dumps(audit, indent=2))
+          PY
+      - name: Prepare hourly measured series without interpolation
         run: |
           python experiments/prepare_soweki_water_demand.py \
-            --download --dataset-id "$DATASET_ID" \
+            build/public-data/raw/soweki_source.csv \
             --output build/public-data/soweki_hourly.csv \
             --report build/public-data/preparation.json
       - name: Run chronological baseline evaluation
