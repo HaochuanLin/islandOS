@@ -149,8 +149,90 @@ def compare_water_demand_models(
     }
     best_mae_model = min(metrics, key=lambda name: metrics[name]["mae_m3_per_hour"])
 
-    report: dict[str, Any] = {
-        "status": "models_compared",
+    # Refit at each later time boundary; each fold only sees targets strictly
+    # before that fold starts. The held-out interval is split into up to 3 windows.
+    remaining_test_rows = len(test_indices)
+    fold_count = min(3, max(1, remaining_test_rows // 24))
+    fold_boundaries = [
+        split + round(remaining_test_rows * index / fold_count)
+        for index in range(fold_count + 1)
+    ]
+    walk_forward_actual: list[float] = []
+    walk_forward_predictions = {name: [] for name in prediction_sets}
+    walk_forward_folds: list[dict[str, Any]] = []
+    for fold_number in range(fold_count):
+        fold_start = fold_boundaries[fold_number]
+        fold_end = fold_boundaries[fold_number + 1]
+        fold_train_indices = list(range(WEEK_LAG_HOURS, fold_start))
+        fold_test_indices = list(range(fold_start, fold_end))
+        fold_model = HistGradientBoostingRegressor(
+            learning_rate=0.08,
+            max_iter=120,
+            max_leaf_nodes=15,
+            l2_regularization=1.0,
+            random_state=2026,
+        )
+        fold_model.fit(
+            [_features(i, timestamps, demand) for i in fold_train_indices],
+            [demand[i] for i in fold_train_indices],
+        )
+        fold_actual = [demand[i] for i in fold_test_indices]
+        fold_predictions = {
+            "persistence_previous_hour": [demand[i - 1] for i in fold_test_indices],
+            "seasonal_naive_previous_day": [demand[i - DAY_LAG_HOURS] for i in fold_test_indices],
+            "seasonal_naive_previous_week": [demand[i - WEEK_LAG_HOURS] for i in fold_test_indices],
+            "hist_gradient_boosting": [
+                max(0.0, float(value))
+                for value in fold_model.predict([_features(i, timestamps, demand) for i in fold_test_indices])
+            ],
+        }
+        walk_forward_actual.extend(fold_actual)
+        for name, values in fold_predictions.items():
+            walk_forward_predictions[name].extend(values)
+        fold_metrics = {
+            name: _metrics(fold_actual, values)
+            for name, values in fold_predictions.items()
+        }
+        weekly_mae = fold_metrics["seasonal_naive_previous_week"]["mae_m3_per_hour"]
+        ml_mae = fold_metrics["hist_gradient_boosting"]["mae_m3_per_hour"]
+        walk_forward_folds.append({
+            "fold": fold_number + 1,
+            "training_samples": len(fold_train_indices),
+            "training_rows_end_before_test_window": fold_start,
+            "first_test_index": fold_start,
+            "last_test_index": fold_end - 1,
+            "first_test_timestamp": timestamps[fold_start].isoformat(),
+            "last_test_timestamp": timestamps[fold_end - 1].isoformat(),
+            "test_rows": len(fold_test_indices),
+            "test_metrics": fold_metrics,
+            "mae_reduction_vs_weekly_pct": (
+                (1.0 - ml_mae / weekly_mae) * 100.0 if weekly_mae > 0 else None
+            ),
+        })
+    walk_forward_metrics = {
+        name: _metrics(walk_forward_actual, values)
+        for name, values in walk_forward_predictions.items()
+    }
+    fold_reductions = [
+        fold["mae_reduction_vs_weekly_pct"]
+        for fold in walk_forward_folds
+        if fold["mae_reduction_vs_weekly_pct"] is not None
+    ]
+    walk_forward_summary = {
+        "method": "expanding-window chronological evaluation; model is refit at each fold boundary using only prior targets",
+        "fold_count": len(walk_forward_folds),
+        "test_rows": len(walk_forward_actual),
+        "metrics": walk_forward_metrics,
+        "mean_fold_mae_reduction_vs_weekly_pct": (
+            sum(fold_reductions) / len(fold_reductions) if fold_reductions else None
+        ),
+        "median_fold_mae_reduction_vs_weekly_pct": (
+            sorted(fold_reductions)[len(fold_reductions) // 2] if fold_reductions else None
+        ),
+        "folds": walk_forward_folds,
+    }
+
+    report: dict[str, Any] = {        "status": "models_compared",
         "input_csv": Path(input_csv).name,
         "input_csv_sha256": hashlib.sha256(Path(input_csv).read_bytes()).hexdigest(),
         "target": "freshwater demand",
@@ -188,6 +270,7 @@ def compare_water_demand_models(
         },
         "test_metrics": metrics,
         "lowest_mae_model_on_this_holdout": best_mae_model,
+        "walk_forward_summary": walk_forward_summary,
         "interpretation": (
             "This ranking applies only to this dataset and holdout. Do not select "
             "a model from one score alone; inspect RMSE, bias, seasonal periods, "
