@@ -115,6 +115,15 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
             },
         ]
         report = evaluate_dispatch_rows(rows, name="unit-test")
+        water_priority = evaluate_dispatch_rows(rows, name="unit-test", weight_profile="water_priority")
+        self.assertEqual(water_priority["selected_weight_profile"], "water_priority")
+        self.assertGreater(water_priority["score_weights"]["unmet_water"], water_priority["score_weights"]["unmet_cooling"])
+        self.assertEqual(
+            {row["policy"]: row["normalized_score"] for row in water_priority["policy_comparison"] if row["policy"] in {"rolling", "ro_first", "ice_first"}},
+            water_priority["weight_sensitivity"][1]["policy_scores"],
+        )
+        with self.assertRaisesRegex(ValueError, "unknown weight profile"):
+            evaluate_dispatch_rows(rows, name="unit-test", weight_profile="unsafe")
         self.assertEqual(len(report["policy_comparison"]), 4)
         self.assertEqual(len(report["weight_sensitivity"]), 4)
         self.assertIn(report["status"], {"advice_ready", "operator_review_required"})
