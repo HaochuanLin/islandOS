@@ -1,4 +1,6 @@
-# islandOS — AI Island Energy Brain
+# Nan’ao-type scenario — IslandOS｜Schneider Go Green 2026 Top-12 Finalist
+
+> **Scenario-based simulation assumption, not measured real-world data.** This branch contains a Nan’ao-type event-energy scenario for Schneider Go Green 2026 review. It is not a reconstruction of measured Nan’ao curtailment, not a grid power-flow model, and not evidence of field performance. The main branch contains a separate generic 400 kW / 3.5 kWh/m³ 24-hour demo; this branch uses a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021. Do not mix outputs from the two scenarios.
 
 <p align="center">
   <strong>Turn renewable-energy surplus into useful island resources.</strong><br>
@@ -379,7 +381,7 @@ Reducing surplus is not automatically a win if water or cooling demand goes unme
 MIT — see [LICENSE](LICENSE).
 
 
-## Nan'ao Island scenario (separate, assumption-driven model)
+## Nan'ao-type event-energy scenario (Schneider Go Green 2026)
 
 A dedicated, reproducible scenario is available on the `nan-ao-scenario-pilot` branch. It is deliberately separate from the original 24-hour synthetic isolated-island demo above; do not mix their outputs.
 
@@ -395,7 +397,7 @@ The scenario writes annual-run CSV, percentile CSV, and a JSON report containing
 Equipment boundary: no publicly accessible official documentation reviewed by the team confirms an operable standby seawater RO unit on Nan'ao main island. The pilot assumes a modular 50 kW RO unit would be procured, installed and owned by the local water authority, subject to site verification, approval and budget. No savings, ROI, emissions or avoided outages are claimed.
 
 
-### Snapshot output (seed 20261021; 1,000 runs)
+### Scenario output summary (seed 20261021; 1,000 Monte Carlo runs)
 
 The committed result snapshot is available at:
 - [JSON summary](outputs/nan_ao_summary_seed_20261021.json)
@@ -429,3 +431,6 @@ See [the seven-day competition sprint plan](docs/COMPETITION_SPRINT.md) for the 
 
 
 For publishing a reviewer-accessible public demo, follow [the deployment guide](docs/DEMO_DEPLOYMENT.md). Hosting requires a team member to connect the repository and verify the live app; the repository does not itself imply that a public web app is already deployed.
+
+
+> **Branch scope:** This branch is dedicated for Schneider Go-Green 2026 review. For the general-purpose IslandOS demo, please switch back to the [main branch](https://github.com/HaochuanLin/islandOS/tree/main). For the scenario assumptions and limitations, see [docs/NAN_AO_SCENARIO.md](docs/NAN_AO_SCENARIO.md).
