@@ -41,6 +41,39 @@ class TestParetoBenchmark(unittest.TestCase):
         self.assertEqual(result["exact"]["unique_candidates_evaluated"], 8)
         self.assertEqual(result["decision_space_size"], 8)
 
+    def test_same_seed_reproduces_pareto_results(self):
+        scenario = build_scenarios()[0]
+        config = self.small_config()
+        first = benchmark(
+            scenario, config, population_size=8, generations=2, seed=42,
+        )
+        second = benchmark(
+            scenario, config, population_size=8, generations=2, seed=42,
+        )
+
+        # Runtime is machine-dependent; compare scientific outputs, not timing.
+        for section in ("exact", "nsga2"):
+            self.assertEqual(
+                first[section]["pareto_genomes"],
+                second[section]["pareto_genomes"],
+            )
+            self.assertEqual(
+                first[section]["pareto_front_count"],
+                second[section]["pareto_front_count"],
+            )
+            self.assertEqual(
+                first[section]["feasible_candidate_count_evaluated"],
+                second[section]["feasible_candidate_count_evaluated"],
+            )
+        self.assertEqual(
+            first["comparison"]["exact_front_recall"],
+            second["comparison"]["exact_front_recall"],
+        )
+        self.assertEqual(
+            first["comparison"]["nsga2_front_precision"],
+            second["comparison"]["nsga2_front_precision"],
+        )
+
     def test_exhaustive_search_refuses_unbounded_candidate_space(self):
         with self.assertRaisesRegex(ValueError, "safety limit"):
             exhaustive_pareto(build_scenarios()[0], self.small_config(), max_candidates=7)
