@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import os
 import math
 import time
 from urllib.error import HTTPError, URLError
@@ -81,10 +82,14 @@ def wait_for_gateway(url, timeout=20.0, request_timeout=1.0):
 def send_samples(url, samples, timeout=3.0):
     accepted = 0
     for sample in samples:
+        headers = {"Content-Type": "application/json"}
+        token = os.environ.get("ISLANDOS_GATEWAY_TOKEN", "")
+        if token:
+            headers["Authorization"] = "Bearer " + token
         request = Request(
             url.rstrip("/") + "/telemetry",
             data=json.dumps(sample, allow_nan=False).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
