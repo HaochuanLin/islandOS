@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import patch
 
-from islandos_telemetry_demo import generate_demo_samples, send_samples, wait_for_gateway
+from islandos_telemetry_demo import generate_demo_samples, send_samples, validate_loopback_url, wait_for_gateway
 
 
 class FakeResponse:
@@ -57,6 +57,18 @@ class TestSyntheticTelemetryDemo(unittest.TestCase):
             self.assertTrue(wait_for_gateway("http://127.0.0.1:8765", timeout=0.1))
         self.assertEqual(open_url.call_count, 1)
         self.assertEqual(open_url.call_args.args[0], "http://127.0.0.1:8765/health")
+
+    def test_loopback_url_validation_rejects_host_spoofing(self):
+        for url in (
+            "http://127.0.0.1:8765@evil.example",
+            "http://127.0.0.1.evil.example:8765",
+            "https://127.0.0.1:8765",
+            "http://localhost:99999",
+        ):
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    validate_loopback_url(url)
+        self.assertEqual(validate_loopback_url("http://127.0.0.1:8765/"), "http://127.0.0.1:8765")
 
     def test_rejects_non_loopback_destination_in_cli(self):
         import subprocess
