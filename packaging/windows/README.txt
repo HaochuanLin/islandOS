@@ -12,6 +12,7 @@ islandos-advisor.exe       Validates telemetry and produces dispatch advice.
 islandos-gateway.exe       Validates/normalizes telemetry records from files.
 islandos-gateway-server.exe Accepts read-only JSON telemetry on loopback HTTP.
 run-gateway-server.bat     Starts the local HTTP ingress at 127.0.0.1:8765.
+run-synthetic-demo.bat     Sends synthetic hourly samples and opens dashboard.
 telemetry_replay_demo.csv  Included example input; not site data.
 device_map.example.json    Example vendor field mapping template.
 run-demo.bat               Runs the included sample and saves a JSON report.
@@ -46,3 +47,12 @@ Important limitations
   authentication/network controls, interlocks, and hardware-in-the-loop testing.
 
 For the local web model, see the project README and Docker Compose instructions.
+
+
+One-click synthetic demo
+------------------------
+Double-click run-synthetic-demo.bat. It starts the gateway with a 90000-second
+freshness window and posts 24 hourly synthetic samples. This setting is only for
+demo replay; never use it for real sensors. For real local telemetry bridges,
+use run-gateway-server.bat, which uses the 300-second default freshness limit.
+All synthetic records are labelled synthetic-demo-generator and are not site data.
