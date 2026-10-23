@@ -20,11 +20,11 @@ footer{color:#64748b;font-size:12px;line-height:1.6}
 <div class="notice"><strong>重要：</strong>动态数据请抄录自有时间戳的仪表/传感器导出；本表不会自动读取传感器。CAPEX 必须来自报价或有明确责任人、日期的估算。缺少关键数据时，不得用 0 或猜测值替代。</div>
 <section class="panel"><h2>1. 站点与测量时效</h2><div class="grid">
 <div><label for="site">站点/微电网名称 *</label><input id="site" required placeholder="站点名称"></div>
-<div><label for="start">离线场景开始时间 *</label><input id="start" type="datetime-local" value="2026-10-22T08:00" required></div>
+<div><label for="start">离线场景开始时间 *</label><input id="start" type="datetime-local" required></div>
 <div><label for="measuredAt">最新仪表数据时间 *</label><input id="measuredAt" type="datetime-local" required></div>
 <div><label for="tz">时区偏移 *</label><select id="tz"><option value="+08:00" selected>中国 UTC+08:00</option><option value="+00:00">UTC+00:00</option><option value="+09:00">日本 UTC+09:00</option><option value="-05:00">UTC-05:00</option><option value="custom">自定义偏移</option></select></div>
 <div><label for="customTz">自定义偏移</label><input id="customTz" placeholder="+05:30" disabled></div>
-<div><label for="sourceType">动态数据来源 *</label><select id="sourceType"><option value="sensor_export">传感器导出 sensor_export</option><option value="measured">现场实测 measured</option><option value="manual">人工抄表 manual</option></select></div>
+<div><label for="sourceType">动态数据来源 *</label><select id="sourceType"><option value="manual" selected>人工抄表 manual</option><option value="sensor_export">传感器导出 sensor_export</option><option value="measured">现场实测 measured</option></select></div>
 <div><label for="sourceRef">仪表编号/导出文件名 *</label><input id="sourceRef" required placeholder="例如 meter-01-export.csv"></div>
 <div><label for="maxAge">允许的最大数据年龄（分钟）</label><input id="maxAge" type="number" min="1" value="60" required></div>
 </div></section>
