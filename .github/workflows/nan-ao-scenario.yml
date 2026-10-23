@@ -1,0 +1,68 @@
+name: Nan'ao scenario validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scenario:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile standalone scenario model
+        run: python -m py_compile nan_ao_scenario.py
+      - name: Run Nan'ao scenario regression tests
+        run: python -m unittest discover -s tests -p "test_nan_ao_scenario.py" -v
+      - name: Generate fixed-seed scenario outputs
+        run: python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir build/nan_ao
+      - name: Validate generated scenario outputs
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          root = Path("build/nan_ao")
+          with (root / "nan_ao_summary.json").open(encoding="utf-8") as handle:
+              summary = json.load(handle)
+          with (root / "nan_ao_financial_screen.json").open(encoding="utf-8") as handle:
+              financial = json.load(handle)
+          with (root / "nan_ao_annual_runs.csv").open(encoding="utf-8", newline="") as handle:
+              annual_rows = list(csv.DictReader(handle))
+          with (root / "nan_ao_sensitivity.csv").open(encoding="utf-8", newline="") as handle:
+              sensitivity_rows = list(csv.DictReader(handle))
+          with (root / "nan_ao_percentiles.csv").open(encoding="utf-8", newline="") as handle:
+              percentiles = list(csv.DictReader(handle))
+
+          assert summary["seed"] == 20261021
+          assert summary["runs"] == 1000
+          assert len(annual_rows) == 1000
+          assert len(sensitivity_rows) == 243
+          assert len(percentiles) == 1
+          values = summary["scenario_water_produced_m3_per_year"]
+          assert 0 <= values["p05"] <= values["p50_median"] <= values["p95"]
+          assert financial["status"].startswith("illustrative capital-only screen")
+          assert financial["annual_water_output_m3"] == values["p50_median"]
+          print("Nan'ao generated output schemas, run counts, and percentile ordering passed.")
+          PY
+      - name: Upload scenario outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-nan-ao-scenario
+          path: build/nan_ao/
+          if-no-files-found: error
+          retention-days: 30
