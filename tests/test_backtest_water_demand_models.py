@@ -38,16 +38,16 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
             report = backtest_water_demand_models(
                 source,
                 output,
-                initial_train_fraction=0.50,
+                initial_train_fraction=0.60,
                 test_window_hours=24,
                 step_hours=24,
             )
 
             self.assertEqual(report["status"], "rolling_backtest_completed")
-            self.assertEqual(report["configuration"]["fold_count"], 10)
-            self.assertEqual(report["configuration"]["evaluated_hours"], 240)
-            self.assertEqual(len(report["folds"]), 10)
-            self.assertEqual(len(report["forecast_rows"]), 240)
+            self.assertEqual(report["configuration"]["fold_count"], 8)
+            self.assertEqual(report["configuration"]["evaluated_hours"], 192)
+            self.assertEqual(len(report["folds"]), 8)
+            self.assertEqual(len(report["forecast_rows"]), 192)
             self.assertEqual(
                 set(report["aggregate_metrics"]),
                 {
@@ -62,7 +62,7 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
                 self.assertEqual(fold["test_rows"], 24)
                 self.assertEqual(set(fold["metrics"]), set(report["aggregate_metrics"]))
             saved = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(saved["configuration"]["fold_count"], 10)
+            self.assertEqual(saved["configuration"]["fold_count"], 8)
 
     def test_rejects_overlapping_test_windows(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -72,7 +72,7 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
                 backtest_water_demand_models(
                     source,
                     Path(directory) / "backtest.json",
-                    initial_train_fraction=0.50,
+                    initial_train_fraction=0.60,
                     test_window_hours=24,
                     step_hours=12,
                 )
