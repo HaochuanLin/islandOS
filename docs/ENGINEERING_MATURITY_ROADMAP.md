@@ -73,3 +73,14 @@ Baseline scores are the assessment recorded on 2026-10-23. They are provisional 
 4. Do not change model parameters, seeds, or scoring weights merely to improve a score.
 5. Every score change should name the commit, test/run evidence, and acceptance criterion that changed.
 6. If a target depends on access to site measurements, operator decisions, credentials, or physical equipment, mark it blocked and document the dependency instead of fabricating evidence.
+
+## Progress log
+
+### 2026-10-23 — CI coverage audit
+
+- Updated `.github/workflows/ro-tests.yml` to install the dependencies declared in `requirements.txt` alongside the additional test dependencies, reducing drift between the documented project environment and CI.
+- Changed the main regression step from `python -m unittest discover -s tests -v` to `python -m pytest -q`. Pytest discovers both pytest-style test functions and unittest-compatible tests; the previous command did not by itself discover ordinary pytest-style test functions. The workflow retains the targeted NSGA-II pytest invocation as a separate focused check.
+- Added explicit schema/numeric-invariant checks for the fixed 168-hour forecast-to-dispatch benchmark report, including aligned persistence-baseline metrics and all four policy result groups.
+- Relevant commits: [dependency alignment](https://github.com/HaochuanLin/islandOS/commit/c2ed08688458e40c6690f1af66606cba20d897d7), [benchmark report assertions](https://github.com/HaochuanLin/islandOS/commit/6e1a2bcc7f8b19ce0af37a98e60cbbbbaa03f76f), [complete pytest suite](https://github.com/HaochuanLin/islandOS/commit/d084395a982265015f0d29d8c3a863b7fe36c8b9).
+
+**Verification status:** these changes have been committed to `main`, but a green CI result for the resulting head commit has not yet been confirmed in this log. Do not increase the automated-testing score until the run completes successfully. If CI exposes failures, fix the causes and rerun rather than reverting to narrower test discovery merely to get a green result.
