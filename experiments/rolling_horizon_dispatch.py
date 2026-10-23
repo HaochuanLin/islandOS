@@ -332,6 +332,51 @@ def summarize_experiment(rows=None):
         })
     return summaries
 
+
+def summarize_aggregate(summaries):
+    """Summarize policy deltas across cases without implying universal superiority."""
+    deltas = [float(row["rolling_minus_best_fixed"]) for row in summaries]
+    if not deltas:
+        return {
+            "comparison_count": 0,
+            "rolling_better_count": 0,
+            "rolling_tied_count": 0,
+            "rolling_worse_count": 0,
+            "mean_score_delta": None,
+            "median_score_delta": None,
+            "best_case": None,
+            "worst_case": None,
+            "interpretation": "No cases were available for aggregation.",
+        }
+
+    ordered = sorted(summaries, key=lambda row: row["rolling_minus_best_fixed"])
+    better = sum(delta < -1e-9 for delta in deltas)
+    tied = sum(abs(delta) <= 1e-9 for delta in deltas)
+    worse = sum(delta > 1e-9 for delta in deltas)
+    return {
+        "comparison_count": len(deltas),
+        "rolling_better_count": better,
+        "rolling_tied_count": tied,
+        "rolling_worse_count": worse,
+        "mean_score_delta": round(float(np.mean(deltas)), 6),
+        "median_score_delta": round(float(np.median(deltas)), 6),
+        "best_case": {
+            "scenario": ordered[0]["scenario"],
+            "forecast_error_profile": ordered[0]["forecast_error_profile"],
+            "score_delta": ordered[0]["rolling_minus_best_fixed"],
+        },
+        "worst_case": {
+            "scenario": ordered[-1]["scenario"],
+            "forecast_error_profile": ordered[-1]["forecast_error_profile"],
+            "score_delta": ordered[-1]["rolling_minus_best_fixed"],
+        },
+        "interpretation": (
+            "Negative delta favors rolling over the best fixed-priority policy; "
+            "results are case-specific synthetic comparisons, not field validation."
+        ),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
@@ -350,16 +395,25 @@ def main():
                 "Weights are illustrative and should be sensitivity-tested before decision use.",
             ],
             "summary": summaries,
+            "aggregate_summary": summarize_aggregate(summaries),
             "rows": rows,
         }, indent=2))
     else:
         print("Synthetic rolling-horizon prototype — not field validated")
         print("Negative delta means rolling scored better than the best fixed priority.")
+        aggregate = summarize_aggregate(summaries)
         print("scenario | forecast | rolling score | best fixed | fixed score | rolling - fixed")
         for row in summaries:
             print(f"{row['scenario']} | {row['forecast_error_profile']} | {row['rolling_score']:.4f} | "
                   f"{row['best_fixed_policy']} | {row['best_fixed_score']:.4f} | "
                   f"{row['rolling_minus_best_fixed']:+.4f}")
+        print(
+            "Aggregate: "
+            f"rolling better/tied/worse = {aggregate['rolling_better_count']}/"
+            f"{aggregate['rolling_tied_count']}/{aggregate['rolling_worse_count']}; "
+            f"mean delta = {aggregate['mean_score_delta']:+.4f}; "
+            f"median delta = {aggregate['median_score_delta']:+.4f}"
+        )
 
 
 if __name__ == "__main__":
