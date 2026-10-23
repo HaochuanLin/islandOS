@@ -66,6 +66,39 @@ class Params:
     res_area_m2: float = 1000.0      # surface area (m2); level = volume / area
     res_base_level_m: float = 0.0    # reservoir bottom elevation / reference level (m)
 
+    def __post_init__(self):
+        numeric_fields = (
+            "ro_power_kw", "ro_sec_kwh_m3", "res_capacity_m3",
+            "res_init_m3", "res_min_m3", "res_area_m2",
+            "res_base_level_m", "start_ratio", "keep_ratio",
+        )
+        for name in numeric_fields:
+            value = getattr(self, name)
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, (int, float, np.integer, np.floating)
+            ):
+                raise ValueError(f"{name} must be numeric")
+            if not np.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+
+        for name in ("ro_power_kw", "ro_sec_kwh_m3", "res_capacity_m3", "res_area_m2"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be > 0")
+        if isinstance(self.min_run_hours, (bool, np.bool_)) or not isinstance(
+            self.min_run_hours, (int, np.integer)
+        ) or self.min_run_hours < 1:
+            raise ValueError("min_run_hours must be a positive integer")
+        if not isinstance(self.allow_backup_power, (bool, np.bool_)):
+            raise ValueError("allow_backup_power must be a boolean")
+        for name in ("start_ratio", "keep_ratio"):
+            if not 0 <= getattr(self, name) <= 1:
+                raise ValueError(f"{name} must be between 0 and 1")
+        if self.res_min_m3 < 0 or self.res_min_m3 > self.res_capacity_m3:
+            raise ValueError("res_min_m3 must be between 0 and res_capacity_m3")
+        if not self.res_min_m3 <= self.res_init_m3 <= self.res_capacity_m3:
+            raise ValueError("res_init_m3 must be between res_min_m3 and res_capacity_m3")
+
+
 
 # ----------------------------- Data -----------------------------
 def load_data(hours: int = 24, seed: int = 42):
@@ -94,8 +127,39 @@ def load_data(hours: int = 24, seed: int = 42):
 
 
 # ----------------------------- Simulation -----------------------------
+def _validated_series(name, values):
+    """Normalize one public simulation input to a finite, non-negative 1-D array."""
+    try:
+        series = np.asarray(values, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain numeric values") from exc
+    if series.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional")
+    return series
+
+
 def simulate(wind, pv, load, water_demand, p: Params):
-    T = len(wind)
+    series = {
+        "wind": _validated_series("wind", wind),
+        "pv": _validated_series("pv", pv),
+        "load": _validated_series("load", load),
+        "water_demand": _validated_series("water_demand", water_demand),
+    }
+    if any(values.size == 0 for values in series.values()):
+        raise ValueError("input series must contain at least one timestep")
+    lengths = {values.size for values in series.values()}
+    if len(lengths) != 1:
+        raise ValueError("wind, pv, load, and water_demand must have equal lengths")
+    for name, values in series.items():
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"{name} must contain only finite values")
+        if np.any(values < 0):
+            raise ValueError(f"{name} must be non-negative")
+
+    wind, pv, load, water_demand = (
+        series["wind"], series["pv"], series["load"], series["water_demand"]
+    )
+    T = wind.size
     curtail = np.maximum(0.0, wind + pv - load)          # curtailed power (kW); 1 h step -> kWh
 
     ro_on = np.zeros(T, dtype=int)
