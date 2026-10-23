@@ -68,7 +68,7 @@ pip install -r requirements.txt
 python island_microgrid_ro_sim.py
 ```
 
-This is a generic demonstration, not the Nan'ao annual event-energy scenario. All outputs are synthetic simulation results, not field measurements.
+This is the generic demonstration. All outputs are synthetic simulation results, not field measurements.
 
 For a compact reference to the other experiments, see [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md).
 
@@ -108,7 +108,7 @@ For a compact reference to the other experiments, see [Experiments and workflows
 ## Important limitations
 
 - Simulation and benchmark fixtures are synthetic unless a dataset is explicitly identified as measured or public.
-- Public data from another site can test the data pipeline, but it does not establish accuracy for Nan'ao or any other island.
+- Public data from another site can test the data pipeline, but it does not establish accuracy for any other island.
 - The RO and cold-storage models simplify real equipment behavior; the full island electrical system, battery dispatch, network constraints, protection, and plant interlocks are not comprehensively modelled.
 - Optimizer results are candidate trade-offs under declared assumptions, not guaranteed operating schedules or safety approvals.
 - Cost estimates are preliminary and omit several project-specific financial and operational factors. No field-proven savings, emissions reductions, or resilience gains are claimed.
