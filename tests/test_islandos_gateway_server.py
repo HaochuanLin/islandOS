@@ -204,10 +204,10 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
             mapping.write_text(json.dumps({
                 "schema_version": 1,
                 "fields": {
-                    "timestamp_utc": {"source_key": "ts"},
-                    "renewable_surplus_kw": {"source_key": "pv_surplus_w", "scale": 0.001},
-                    "water_demand_m3": {"source_key": "water_l", "scale": 0.001},
-                    "cooling_demand_kw_th": {"source_key": "cooling_wth", "scale": 0.001},
+                    "timestamp_utc": {"source_key": "ts", "source_unit": "ISO-8601", "canonical_unit": "ISO-8601"},
+                    "renewable_surplus_kw": {"source_key": "pv_surplus_w", "source_unit": "W", "canonical_unit": "kW", "scale": 0.001},
+                    "water_demand_m3": {"source_key": "water_l", "source_unit": "L", "canonical_unit": "m3", "scale": 0.001},
+                    "cooling_demand_kw_th": {"source_key": "cooling_wth", "source_unit": "W_th", "canonical_unit": "kW_th", "scale": 0.001},
                 },
             }), encoding="utf-8")
             process = subprocess.Popen(
@@ -218,11 +218,18 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
             base = "http://127.0.0.1:%d" % port
             try:
                 for _ in range(60):
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate()
+                        self.fail("gateway exited early: %s %s" % (stdout, stderr))
                     try:
-                        urlopen(base + "/health", timeout=0.25).close()
+                        with urlopen(base + "/health", timeout=0.25) as health_response:
+                            health = json.loads(health_response.read().decode("utf-8"))
                         break
                     except (URLError, TimeoutError):
                         time.sleep(0.1)
+                else:
+                    self.fail("gateway health endpoint did not become ready")
+                self.assertTrue(health["device_mapping_loaded"])
                 payload = {
                     "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     "pv_surplus_w": 15500,
