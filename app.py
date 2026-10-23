@@ -15,6 +15,7 @@ from pathlib import Path
 import tempfile
 
 from app_state import strategy_run_signature
+from islandos_advisor import evaluate_dispatch_rows
 from islandos_io import build_dispatch_input_rows, validate_telemetry
 
 import pandas as pd
@@ -875,81 +876,25 @@ elif page == "Telemetry gateway":
                     dispatch_writer.writeheader()
                     dispatch_writer.writerows(dispatch_rows)
 
-                    parsed_dispatch = parse_rolling_scenario_csv(
-                        dispatch_buffer.getvalue(), name=telemetry_file.name
+                    advice_report = evaluate_dispatch_rows(
+                        dispatch_rows, name=telemetry_file.name
                     )
-                    dispatch_scenario = parsed_dispatch["scenario"]
-                    dispatch_policies = ("rolling", "ro_first", "ice_first", "perfect_information")
-                    dispatch_results = {}
-                    for policy in dispatch_policies:
-                        dispatch_results[policy] = simulate_rolling_dispatch(
-                            dispatch_scenario,
-                            parsed_dispatch["forecast_surplus_kw"],
-                            policy,
-                            forecast_water_demand_m3_per_hour=parsed_dispatch["forecast_water_demand_m3_per_hour"],
-                        )
-
-                    def normalized_dispatch_score(result, weights):
-                        water_total = max(sum(dispatch_scenario.water_demand_m3_per_hour), 1e-9)
-                        cooling_total = max(sum(dispatch_scenario.cooling_demand_kw_th), 1e-9)
-                        surplus_total = max(sum(dispatch_scenario.available_surplus_kw), 1e-9)
-                        return (
-                            weights["unmet_water"] * result["water_unmet_m3"] / water_total
-                            + weights["unmet_cooling"] * result["cooling_unmet_kwh_th"] / cooling_total
-                            + weights["remaining_surplus"] * result["remaining_surplus_kwh"] / surplus_total
-                        )
-
-                    weight_profiles = {
-                        "balanced": {"unmet_water": 0.45, "unmet_cooling": 0.45, "remaining_surplus": 0.10},
-                        "water_priority": {"unmet_water": 0.60, "unmet_cooling": 0.30, "remaining_surplus": 0.10},
-                        "cooling_priority": {"unmet_water": 0.30, "unmet_cooling": 0.60, "remaining_surplus": 0.10},
-                        "energy_efficiency": {"unmet_water": 0.40, "unmet_cooling": 0.40, "remaining_surplus": 0.20},
-                    }
-                    operational_policies = ("rolling", "ro_first", "ice_first")
-                    eligible_policies = [
-                        policy for policy in operational_policies
-                        if dispatch_results[policy]["constraint_violation_hours"] == 0
-                    ]
-                    policy_scores = {
-                        policy: round(normalized_dispatch_score(
-                            dispatch_results[policy], weight_profiles["balanced"]
-                        ), 6)
-                        for policy in dispatch_policies
-                    }
-                    recommended_policy = (
-                        min(eligible_policies, key=lambda policy: (policy_scores[policy], policy))
-                        if eligible_policies else None
-                    )
-                    policy_rows = []
-                    for policy in dispatch_policies:
-                        result = dispatch_results[policy]
-                        policy_rows.append({
-                            "policy": policy,
-                            "normalized_score": policy_scores[policy],
-                            "eligible_for_recommendation": policy in eligible_policies,
-                            "water_unmet_m3": result["water_unmet_m3"],
-                            "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
-                            "remaining_surplus_kwh": result["remaining_surplus_kwh"],
-                            "constraint_violation_hours": result["constraint_violation_hours"],
-                            "final_water_inventory_m3": result["final_water_inventory_m3"],
-                            "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
-                        })
-                    sensitivity_rows = []
-                    for profile_name, weights in weight_profiles.items():
-                        profile_scores = {
-                            policy: round(normalized_dispatch_score(dispatch_results[policy], weights), 6)
-                            for policy in operational_policies
-                        }
-                        winner = (
-                            min(eligible_policies, key=lambda policy: (profile_scores[policy], policy))
-                            if eligible_policies else None
-                        )
-                        sensitivity_rows.append({
-                            "weight_profile": profile_name,
-                            "weights": weights,
-                            "policy_scores": profile_scores,
-                            "winner_for_this_input": winner,
-                        })
+                    advice_report.update({
+                        "mode": "uploaded_telemetry_replay",
+                        "data_status": "software-validated upload; not site-validated",
+                        "source": telemetry_file.name,
+                        "row_count": len(dispatch_rows),
+                        "forecast_method": (
+                            "supplied forecast when present; otherwise persistence baseline; "
+                            "first row cold-start seeded"
+                        ),
+                        "operator_action_required": True,
+                        "physical_write_performed": False,
+                    })
+                    policy_rows = advice_report["policy_comparison"]
+                    eligible_policies = advice_report["eligible_policies"]
+                    recommended_policy = advice_report["recommended_policy_for_operator_review"]
+                    sensitivity_rows = advice_report["weight_sensitivity"]
 
                     st.subheader("Read-only dispatch advice")
                     st.caption(
