@@ -412,7 +412,14 @@ jobs:
                   assert abs(water_residual) <= 2e-5, (row["scenario"], hour["hour_index"], water_residual)
                   assert abs(cold_residual) <= 2e-5, (row["scenario"], hour["hour_index"], cold_residual)
           assert "not field validation" in aggregate["interpretation"]
-          print("Rolling-horizon evidence checks passed: 48 runs, 12 paired comparisons, inventory and power balances closed.")
+          sensitivity = report["weight_sensitivity"]
+          assert {row["weight_profile"] for row in sensitivity} == {"balanced", "water_priority", "cooling_priority"}
+          for row in sensitivity:
+              assert row["comparison_count"] == 12
+              assert row["rolling_better_count"] + row["rolling_tied_count"] + row["rolling_worse_count"] == 12
+              assert abs(sum(row["weights"].values()) - 1.0) < 1e-9
+              assert math.isfinite(row["mean_score_delta"])
+          print("Rolling-horizon evidence checks passed: 48 runs, 12 paired comparisons, 3 weight profiles, inventory and power balances closed.")
           PY
       - name: Upload rolling-horizon evidence report
         uses: actions/upload-artifact@v4
