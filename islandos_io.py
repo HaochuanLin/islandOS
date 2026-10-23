@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import math
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 
 DEFAULT_REQUIRED_FIELDS = (
@@ -291,6 +291,56 @@ def authorize_control(request: ControlRequest, context: SafetyContext) -> Author
         requested_value=requested,
         approved_value=requested if allowed else None,
     )
+
+def build_dispatch_input_rows(telemetry_records: Sequence[Mapping[str, Any]]) -> list:
+    """Convert validated hourly telemetry records into the rolling-dispatch CSV schema.
+
+    Missing forecasts use a persistence baseline from the previous observation.
+    The first row is cold-start seeded from its own observation and must not be
+    treated as an out-of-sample forecast.
+    """
+    if len(telemetry_records) < 2:
+        raise ValueError("at least two hourly telemetry rows are required")
+    if any(not record.get("valid", False) for record in telemetry_records):
+        raise ValueError("all telemetry rows must pass validation before dispatch export")
+
+    parsed_times = [_parse_utc(record.get("timestamp_utc")) for record in telemetry_records]
+    for index in range(1, len(parsed_times)):
+        if parsed_times[index] - parsed_times[index - 1] != timedelta(hours=1):
+            raise ValueError("telemetry timestamps must be strictly increasing at exactly one-hour intervals")
+
+    dispatch_rows = []
+    previous_surplus = None
+    previous_water = None
+    for record in telemetry_records:
+        values = record.get("values")
+        if not isinstance(values, Mapping):
+            raise ValueError("validated telemetry record must include a values mapping")
+        for field in DEFAULT_REQUIRED_FIELDS:
+            if field not in values:
+                raise ValueError("validated telemetry record missing field: " + field)
+        actual_surplus = float(values["renewable_surplus_kw"])
+        water_demand = float(values["water_demand_m3"])
+        forecast_surplus = float(values.get(
+            "forecast_surplus_kw",
+            actual_surplus if previous_surplus is None else previous_surplus,
+        ))
+        forecast_water = float(values.get(
+            "forecast_water_demand_m3",
+            water_demand if previous_water is None else previous_water,
+        ))
+        dispatch_rows.append({
+            "timestamp_utc": record["timestamp_utc"],
+            "actual_surplus_kw": actual_surplus,
+            "forecast_surplus_kw": forecast_surplus,
+            "water_demand_m3": water_demand,
+            "cooling_demand_kw_th": float(values["cooling_demand_kw_th"]),
+            "forecast_water_demand_m3": forecast_water,
+        })
+        previous_surplus = actual_surplus
+        previous_water = water_demand
+    return dispatch_rows
+
 
 def build_recommendation(
     command: str,
