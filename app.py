@@ -27,6 +27,8 @@ from experiments.compare_energy_water_strategies import (
 )
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
+from islandos_core import SiteConfiguration, make_virtual_reading, recommend_ro_screening
+
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
     page_icon="🌊",
@@ -198,6 +200,81 @@ if page == "Overview":
             - How do minimum run-time and rated power affect operation?
             """
         )
+    st.subheader("Read-only RO screening preview")
+    st.caption(
+        "Manual/virtual inputs only. This isolated heuristic preview does not read plant instruments, "
+        "change the strategy simulator, or send equipment commands."
+    )
+    with st.expander("Try an explainable screening recommendation", expanded=False):
+        p1, p2, p3 = st.columns(3)
+        with p1:
+            preview_demand = st.number_input(
+                "Daily water demand (m³/day)", min_value=0.1, value=30.0, step=1.0,
+                key="preview_demand",
+            )
+            preview_ro_capacity = st.number_input(
+                "RO capacity (m³/day)", min_value=0.1, value=60.0, step=1.0,
+                key="preview_ro_capacity",
+            )
+        with p2:
+            preview_sec = st.number_input(
+                "RO specific energy (kWh/m³)", min_value=0.1, value=4.0, step=0.1,
+                key="preview_sec",
+            )
+            preview_tank = st.number_input(
+                "Storage capacity (m³)", min_value=0.1, value=50.0, step=1.0,
+                key="preview_tank",
+            )
+        with p3:
+            preview_inventory = st.number_input(
+                "Current water inventory (m³)", min_value=0.0, value=10.0, step=1.0,
+                key="preview_inventory",
+            )
+            preview_surplus = st.number_input(
+                "Renewable surplus (kW)", min_value=0.0, value=12.0, step=0.5,
+                key="preview_surplus",
+            )
+        preview_price = st.number_input(
+            "Energy price (currency/kWh; recorded as an assumption)",
+            min_value=0.0, value=0.20, step=0.01, key="preview_price",
+        )
+        if preview_inventory > preview_tank:
+            st.error("Current water inventory cannot exceed storage capacity.")
+        else:
+            preview_config = SiteConfiguration(
+                site_id="manual-screening-preview",
+                water_demand_m3_per_day=preview_demand,
+                ro_capacity_m3_per_day=preview_ro_capacity,
+                energy_price_per_kwh=preview_price,
+                ro_specific_energy_kwh_per_m3=preview_sec,
+                storage_capacity_m3=preview_tank,
+                initial_storage_m3=min(preview_inventory, preview_tank),
+            )
+            preview = recommend_ro_screening(
+                preview_config,
+                renewable_surplus=make_virtual_reading(
+                    "renewable_surplus_kw", preview_surplus, "kW",
+                    source="manual-demo-input",
+                ),
+                water_inventory=make_virtual_reading(
+                    "water_inventory_m3", preview_inventory, "m3",
+                    source="manual-demo-input",
+                ),
+            )
+            st.markdown(f"**Screening outcome:** `{preview.action}`")
+            st.write(preview.reason)
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Estimated full-load power", f"{preview.estimated_full_load_power_kw:.2f} kW")
+            m2.metric("Inventory screening target", f"{preview.target_inventory_m3:.2f} m³")
+            m3.metric("Input renewable surplus", f"{preview.renewable_surplus_kw:.2f} kW")
+            with st.expander("Assumptions and limits"):
+                for assumption in preview.assumptions:
+                    st.write(f"- {assumption}")
+                st.write(
+                    "The energy-price field is captured as a site assumption but is not used by this "
+                    "surplus-only heuristic. The recommendation is not an optimizer or operating instruction."
+                )
+
     st.subheader("Recommended workflow")
     st.markdown(
         "1. Open **Strategy simulator** and run the labelled synthetic demo, or upload a site CSV.\n"
