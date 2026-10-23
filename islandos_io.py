@@ -19,6 +19,8 @@ DEFAULT_REQUIRED_FIELDS = (
     "cooling_demand_kw_th",
 )
 
+OPTIONAL_NUMERIC_FIELDS = ("forecast_surplus_kw", "forecast_water_demand_m3")
+
 
 def _parse_utc(value: Any) -> datetime:
     if not isinstance(value, str) or not value.strip():
@@ -163,6 +165,23 @@ def validate_telemetry(
             continue
         if number < 0:
             errors.append("field must be non-negative: " + field)
+            continue
+        values[field] = number
+
+    for field in OPTIONAL_NUMERIC_FIELDS:
+        if field not in payload or payload[field] in (None, ""):
+            continue
+        raw = payload[field]
+        if isinstance(raw, bool):
+            errors.append("optional field must be a finite non-negative number: " + field)
+            continue
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            errors.append("optional field must be a finite non-negative number: " + field)
+            continue
+        if not math.isfinite(number) or number < 0:
+            errors.append("optional field must be a finite non-negative number: " + field)
             continue
         values[field] = number
 
