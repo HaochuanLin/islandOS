@@ -1,5 +1,6 @@
 """Tests for the open Mafate microgrid time-series importer."""
 import csv
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,6 +65,14 @@ class MafateImporterTests(unittest.TestCase):
 
             self.assertEqual(manifest["row_counts"]["microgrid_hourly.csv"], 2)
             self.assertEqual(manifest["source_row_counts"]["meteo"], 3)
+            self.assertEqual(
+                set(manifest["source_file_sha256"]),
+                {"meteo", "solar", "house_1", "house_2", "house_3"},
+            )
+            expected_hash = hashlib.sha256(
+                (source / "Meteo_dataset.csv").read_bytes()
+            ).hexdigest()
+            self.assertEqual(manifest["source_file_sha256"]["meteo"], expected_hash)
             with (output / "microgrid_hourly.csv").open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[0]["timestamp_local"], "2020-05-01T00:00:00")
