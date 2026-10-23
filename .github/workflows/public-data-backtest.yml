@@ -115,11 +115,32 @@ jobs:
           python experiments/water_demand_forecast.py \
             build/public-data/soweki_hourly.csv \
             --output build/public-data/forecast_report.json
-      - name: Compare ML forecast with seasonal baselines
+      - name: Compare ML forecast with seasonal baselines when history permits
         run: |
-          python experiments/compare_water_demand_models.py \
-            build/public-data/soweki_hourly.csv \
-            --output build/public-data/model_comparison.json
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+          from experiments.compare_water_demand_models import compare_water_demand_models
+
+          source = Path("build/public-data/soweki_hourly.csv")
+          output = Path("build/public-data/model_comparison.json")
+          with source.open(encoding="utf-8", newline="") as handle:
+              row_count = sum(1 for _ in csv.DictReader(handle))
+          minimum_rows = 309
+          if row_count < minimum_rows:
+              report = {
+                  "status": "skipped_insufficient_history",
+                  "row_count": row_count,
+                  "minimum_rows_required": minimum_rows,
+                  "reason": "Not enough history for week-lag ML features and a chronological holdout.",
+              }
+              output.write_text(json.dumps(report, indent=2) + chr(10), encoding="utf-8")
+              print(json.dumps(report, indent=2))
+          else:
+              report = compare_water_demand_models(source, output)
+              print(json.dumps({"status": report["status"], "test_metrics": report["test_metrics"]}, indent=2))
+          PY
       - name: Validate evidence and create measured-data summary
         run: |
           python - <<'PY'
