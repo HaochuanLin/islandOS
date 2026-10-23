@@ -1,5 +1,6 @@
 """Tests for the optional water-demand ML comparison experiment."""
 import csv
+import hashlib
 import json
 import math
 import tempfile
@@ -56,6 +57,8 @@ class TestCompareWaterDemandModels(unittest.TestCase):
                 for metrics in report["test_metrics"].values()
             ))
             self.assertEqual(len(report["forecast_rows"]), 144)
+            self.assertEqual(report["input_csv_sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+            self.assertTrue(report["model"]["library_version"])
             self.assertEqual(
                 json.loads(output.read_text(encoding="utf-8"))["status"],
                 "models_compared",
