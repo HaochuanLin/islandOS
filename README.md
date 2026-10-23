@@ -103,7 +103,7 @@ Forecasting work is experimental and deliberately evaluated against transparent 
 
 ## Data sources and experiment guides
 
-- [NASA POWER weather-data workflow](#weather-data-and-forecast-baselines) — environmental parameters, not a direct renewable-generation forecast.
+- NASA POWER weather-data import — environmental parameters, not a direct renewable-generation forecast; see the data-source workflow in the repository.
 - [Philippines DIB workbook importer](docs/PHILIPPINES_DIB_IMPORT.md)
 - [Mafate measured microgrid data](docs/MAFATE_MICROGRID_DATA.md)
 - [SOWEKI public water-demand data](docs/SOWEKI_WATER_DEMAND_DATA.md)
