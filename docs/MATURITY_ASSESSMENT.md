@@ -13,8 +13,8 @@ Each category is scored from 0 to 10. A score above 7 requires repeatable automa
 | Category | Baseline | Current estimate after phase 1 | Target | Evidence needed to raise score |
 |---|---:|---:|---:|---|
 | Core simulation and dispatch | 5.5 | 5.5 | 8.5 | Explicit physical/unit invariants, edge-case tests, conservation checks, benchmarked scenarios and documented model limits |
-| Automated testing and reproducibility | 6.0 | 6.0 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
-| Documentation and evidence audit | 6.5 | 6.8 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
+| Automated testing and reproducibility | 6.0 | 6.4 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
+| Documentation and evidence audit | 6.5 | 7.0 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
 | Interactive demo and usability | 6.0 | 6.0 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
 | Branch and release management | 5.5 | 5.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
 | Public data / site data validation | 5.5 | 5.5 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
@@ -46,6 +46,14 @@ The number of phases is a planning estimate; later phases depend on findings fro
 - Documentation/evidence score moves from 6.5 to 6.8 because scores, proof requirements, scope limits and a progress ledger are now explicit and reviewable. No other score increases because no test run, deployed environment, external dataset validation or field trial has been executed in this phase.
 - Commit introducing the plan: 064420c6dd05d93a6ae0a21f14758f37aaf861d7.
 - Commit recording the rescore: see this file's latest commit history on GitHub.
+
+### Phase 2 — CI evidence and guardrails (2026-10-23)
+
+- The RO simulation test workflow passed on commit `533fa76083b7aae53954465b191405391ac73b82`: [workflow run](https://github.com/HaochuanLin/islandOS/actions/runs/39983177469).
+- The passing run archived the machine-readable reproducibility environment manifest and experiment artifacts, including water-demand rolling backtest, forecast-to-dispatch, and Pareto benchmark outputs. This is reproducible evidence for the synthetic workflow, not proof of site validity.
+- Added CI gates in `.github/workflows/ro-tests.yml` to run `python -m pip check` and `python -m compileall -q .` before generating the environment manifest. Commit: `ea0b52a54f57eb961ab642efb5385a43a5641331`. The new commit's full workflow run is still in progress, so the newly added gates are not yet counted as passing.
+- Rescore: automated testing/reproducibility 6.0 → 6.4 and documentation/evidence audit 6.8 → 7.0, justified by a completed passing CI run and archived run manifest/artifacts. Scores remain below target because dependencies are not fully locked, branch protection is not verified, and external/site validation is absent.
+- Reviewed existing tests: shared energy budget and inventory conservation, invalid input rejection, chronological holdout, rolling-origin leakage guard, and demand-distribution diagnostics already have tests. Avoided duplicating these; next work should focus on dependency reproducibility, forecast integration edge cases, and site-data validation.
 
 ## Evidence ledger
 
