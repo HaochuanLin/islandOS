@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import tempfile
 
+from app_state import strategy_run_signature
+
 import pandas as pd
 import streamlit as st
 
@@ -231,6 +233,20 @@ elif page == "Strategy simulator":
         st.error("Initial tank inventory cannot exceed tank capacity.")
         st.stop()
 
+    current_signature = strategy_run_signature(
+        raw,
+        source_label,
+        {
+            "ro_rated_power_kw": float(ro_kw),
+            "specific_energy_kwh_m3": float(sec),
+            "tank_capacity_m3": float(tank),
+            "initial_water_m3": float(initial),
+            "min_run_hours": int(min_run),
+            "dt_hours": float(dt),
+            "diesel_cost_per_kwh": float(diesel_cost) if diesel_cost > 0 else None,
+        },
+    )
+
     if st.button("▶ Run strategy comparison", type="primary", use_container_width=True):
         try:
             steps = parse_uploaded_csv(raw)
@@ -248,6 +264,7 @@ elif page == "Strategy simulator":
                 "detail": detail,
                 "summary": summary,
                 "source": source_label,
+                "input_signature": current_signature,
             }
             st.session_state.pop("islandos_optimizer_result", None)
         except Exception as exc:
@@ -255,6 +272,14 @@ elif page == "Strategy simulator":
             st.stop()
 
     result = st.session_state.get("islandos_result")
+    if result and result.get("input_signature") != current_signature:
+        st.warning(
+            "Inputs changed since the last strategy run. Previous results were cleared; "
+            "click Run strategy comparison to calculate results for the current settings."
+        )
+        st.session_state.pop("islandos_result", None)
+        st.session_state.pop("islandos_optimizer_result", None)
+        result = None
     if result:
         st.caption(f"Data provenance: **{result['source']}**")
         summaries = pd.DataFrame(result["summary"])
@@ -349,10 +374,14 @@ elif page == "Strategy simulator":
                 st.session_state["islandos_optimizer_result"] = {
                     "summary": pareto_summaries, "detail": pareto_details,
                     "meta": optimizer_meta, "source": source_label,
+                    "input_signature": current_signature,
                 }
             except Exception as exc:
                 st.error(f"NSGA-II optimization failed: {exc}")
         optimizer_result = st.session_state.get("islandos_optimizer_result")
+        if optimizer_result and optimizer_result.get("input_signature") != current_signature:
+            st.session_state.pop("islandos_optimizer_result", None)
+            optimizer_result = None
         if optimizer_result:
             meta = optimizer_result["meta"]
             # Never present stale or incompatible session-state output as a successful
