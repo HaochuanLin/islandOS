@@ -14,5 +14,7 @@ def test_rolling_horizon_page_renders_and_runs_synthetic_comparison():
 
     app.button[0].click().run()
     assert not app.exception
-    assert len(app.dataframe) >= 2
-    assert "Rolling horizon" in app.dataframe[0].value.to_string()
+    frames = [element.value for element in app.dataframe]
+    summary = next(frame for frame in frames if "policy" in frame.columns)
+    assert len(summary) == 4
+    assert "Rolling horizon" in summary["policy"].tolist()
