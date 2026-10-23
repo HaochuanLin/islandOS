@@ -44,6 +44,20 @@ jobs:
         run: python -m py_compile islandos_advisor.py
       - name: Run synthetic telemetry-to-advice example
         run: python islandos_advisor.py data/examples/telemetry_replay_demo.csv --max-age-seconds 7200 --received-at 2026-10-23T07:00:00Z --output build/telemetry/advisor-report.json
+      - name: Assert advisor report includes sensitivity evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("build/telemetry/advisor-report.json").read_text(encoding="utf-8"))
+          assert report["status"] == "advice_ready"
+          assert len(report["policy_comparison"]) == 4
+          profiles = {row["weight_profile"] for row in report["weight_sensitivity"]}
+          assert profiles == {"balanced", "water_priority", "cooling_priority", "energy_efficiency"}
+          assert sum(report["weight_sensitivity_winner_counts"].values()) == 4
+          assert report["physical_write_performed"] is False
+          print("Advisor report includes four-policy comparison, four weight profiles, and recommendation-only safety flags.")
+          PY
       - name: Upload telemetry-to-advice report
         uses: actions/upload-artifact@v4
         with:
