@@ -69,6 +69,15 @@ python experiments/weight_sensitivity_audit.py
 
 The parameter experiment evaluates selected equipment assumptions; the weight audit re-scores the same outcomes under alternative illustrative objective weights.
 
+For a full-year optimization report with all required economic fields supplied, run a fixed-candidate lifecycle-cost sensitivity check:
+
+```bash
+python experiments/economic_sensitivity.py build/site-optimization/nsga2_results.json \
+  --relative-change 0.2 --output build/economic-sensitivity.json
+```
+
+This re-prices the baseline Pareto candidates under one-at-a-time ±20% economic perturbations. It does not rerun NSGA-II, cannot discover candidates missing from the baseline front, and is not a bankable financial assessment. See [economic sensitivity analysis](ECONOMIC_SENSITIVITY.md).
+
 ## Optimization and site data
 
 ### Search policy candidates

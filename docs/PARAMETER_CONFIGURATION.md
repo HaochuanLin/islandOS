@@ -66,7 +66,7 @@ python experiments/parameter_sensitivity.py path/to/site_hourly.csv \
 
 The current experiment compares a baseline with low/high perturbations for RO specific energy, chiller COP, freshwater reservoir capacity, and thermal-storage capacity. It uses a fixed seed and the same optimizer budget for every case, then records Pareto-objective ranges and feasible-candidate counts. Storage-capacity perturbations are clipped so the capacity cannot fall below the configured initial inventory.
 
-This is a deterministic one-factor-at-a-time stress test, **not** probabilistic uncertainty quantification, a confidence interval, or evidence that a tested value is likely. It does not yet model parameter interactions, cost uncertainty, forecast uncertainty, or lifecycle costs. Conclusions remain conditional on the supplied data and simplified physics.
+This is a deterministic one-factor-at-a-time stress test, **not** probabilistic uncertainty quantification, a confidence interval, or evidence that a tested value is likely. It does not model parameter interactions or forecast uncertainty. For the separate lifecycle-cost objective, the [economic sensitivity guide](ECONOMIC_SENSITIVITY.md) re-prices the baseline Pareto candidates under one-at-a-time cost changes; it does not rerun the optimizer and is not a bankable financial assessment. Conclusions remain conditional on the supplied data and simplified physics.
 
 ## What validation does and does not mean
 
@@ -76,5 +76,5 @@ The validator rejects non-finite/negative cost values, invalid equipment bounds,
 
 1. Add source metadata per individual parameter (including a URI/date and confidence range).
 2. Extend cost boundary to replacements, backup generation, unmet-service penalties, and uncertainty.
-3. Add sensitivity/scenario analysis for uncertain economic values.
+3. Extend the fixed-candidate economic sensitivity study to re-optimization and interaction scenarios after the full cost model is validated.
 4. Add a graphical form after the configuration contract stabilizes.
