@@ -183,6 +183,13 @@ jobs:
           if ml_report["status"] == "models_compared":
               assert ml_report["input_csv_sha256"] == prep["prepared_hourly_csv_sha256"]
               assert ml_report["model"]["library_version"]
+              walk_forward = ml_report["walk_forward_summary"]
+              assert walk_forward["fold_count"] >= 1
+              assert walk_forward["test_rows"] == ml_report["chronological_split"]["test_samples"]
+              for fold in walk_forward["folds"]:
+                  assert fold["training_rows_end_before_test_window"] == fold["first_test_index"]
+                  assert fold["training_rows_end_before_test_window"] < fold["last_test_index"] + 1
+                  assert all(math.isfinite(metrics["mae_m3_per_hour"]) for metrics in fold["test_metrics"].values())
               expected_ml_models = {
                   "persistence_previous_hour", "seasonal_naive_previous_day",
                   "seasonal_naive_previous_week", "hist_gradient_boosting",
@@ -246,6 +253,7 @@ jobs:
                   "input_csv_sha256": ml_report["input_csv_sha256"],
                   "model": ml_report["model"],
                   "test_metrics": ml_report["test_metrics"],
+                  "walk_forward_summary": ml_report["walk_forward_summary"],
                   "lowest_mae_model_on_this_holdout": ml_report["lowest_mae_model_on_this_holdout"],
               })
           else:
@@ -357,7 +365,18 @@ jobs:
               if ml.get("status") == "models_compared":
                   candidate = metrics["hist_gradient_boosting"]
                   weekly = metrics["seasonal_naive_previous_week"]
+                  walk_forward = ml.get("walk_forward_summary", {})
+                  walk_metrics = walk_forward.get("metrics", {})
+                  walk_ml = walk_metrics.get("hist_gradient_boosting", {})
+                  walk_weekly = walk_metrics.get("seasonal_naive_previous_week", {})
                   row.update({
+                      "walk_forward_fold_count": walk_forward.get("fold_count"),
+                      "walk_forward_hist_gradient_boosting_mae_m3_per_hour": walk_ml.get("mae_m3_per_hour"),
+                      "walk_forward_seasonal_weekly_mae_m3_per_hour": walk_weekly.get("mae_m3_per_hour"),
+                      "walk_forward_mae_reduction_vs_weekly_pct": (
+                          (1.0 - walk_ml["mae_m3_per_hour"] / walk_weekly["mae_m3_per_hour"]) * 100.0
+                          if walk_ml and walk_weekly and walk_weekly["mae_m3_per_hour"] > 0 else None
+                      ),
                       "hist_gradient_boosting_mae_m3_per_hour": candidate["mae_m3_per_hour"],
                       "seasonal_weekly_mae_m3_per_hour": weekly["mae_m3_per_hour"],
                       "mae_reduction_vs_weekly_pct": (1.0 - candidate["mae_m3_per_hour"] / weekly["mae_m3_per_hour"]) * 100.0,
@@ -371,6 +390,8 @@ jobs:
           rows.sort(key=lambda row: row["series_id"] or 0)
           scored = [row for row in rows if "mae_reduction_vs_weekly_pct" in row]
           reductions = [row["mae_reduction_vs_weekly_pct"] for row in scored]
+          walk_scored = [row for row in rows if row.get("walk_forward_mae_reduction_vs_weekly_pct") is not None]
+          walk_reductions = [row["walk_forward_mae_reduction_vs_weekly_pct"] for row in walk_scored]
           expected_ids = set(range(1, 12))
           found_ids = {row["series_id"] for row in rows if row["series_id"] is not None}
           result = {
@@ -382,6 +403,10 @@ jobs:
               "series_where_ml_beats_weekly_baseline": sum(value > 0 for value in reductions),
               "mean_mae_reduction_vs_weekly_pct": statistics.mean(reductions) if reductions else None,
               "median_mae_reduction_vs_weekly_pct": statistics.median(reductions) if reductions else None,
+              "walk_forward_compared_series_count": len(walk_scored),
+              "walk_forward_series_where_ml_beats_weekly_baseline": sum(value > 0 for value in walk_reductions),
+              "mean_walk_forward_mae_reduction_vs_weekly_pct": statistics.mean(walk_reductions) if walk_reductions else None,
+              "median_walk_forward_mae_reduction_vs_weekly_pct": statistics.median(walk_reductions) if walk_reductions else None,
               "series": rows,
               "interpretation_limits": [
                   "The 11 series come from one SOWEKI source collection, not 11 independent regions.",
