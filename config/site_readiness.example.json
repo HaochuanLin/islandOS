@@ -1,0 +1,25 @@
+{
+  "site_name": "REPLACE_WITH_SITE_NAME",
+  "scenario_start": "2026-10-22T08:00:00+08:00",
+  "telemetry": {
+    "timestamp": "REPLACE_WITH_LATEST_SENSOR_TIMESTAMP",
+    "source_type": "sensor_export",
+    "source_reference": "REPLACE_WITH_SENSOR_ID_OR_EXPORT_FILENAME",
+    "wind_kw": null,
+    "pv_kw": null,
+    "critical_load_kw": null,
+    "reservoir_level_m3": null
+  },
+  "assets": {
+    "reservoir_capacity_m3": null,
+    "ro_capacity_m3_per_hour": null,
+    "ro_specific_energy_kwh_per_m3": null
+  },
+  "capex": {
+    "ro_plant_rmb": null,
+    "reservoir_rmb": null,
+    "integration_rmb": null,
+    "annual_om_rmb": null,
+    "source_reference": ""
+  }
+}

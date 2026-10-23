@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IslandOS | 现场数据录入</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#182230;background:#f4f7fa}
+*{box-sizing:border-box}body{margin:0}header{background:#12324a;color:white;padding:24px clamp(16px,4vw,42px)}
+header h1{margin:0 0 8px;font-size:clamp(22px,4vw,30px)}header p{margin:0;color:#dce8f1;max-width:900px;line-height:1.6}
+main{max-width:1400px;margin:22px auto;padding:0 16px 40px}.panel{background:white;border:1px solid #dce4ec;border-radius:12px;padding:18px;margin-bottom:16px}
+h2{font-size:18px;margin:0 0 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+label{display:block;font-size:13px;font-weight:650;color:#344256;margin-bottom:5px}
+input,select,textarea{width:100%;min-width:0;border:1px solid #c6d1dc;border-radius:7px;padding:10px;background:white;color:#17212e;font:inherit}
+textarea{min-height:70px;resize:vertical}.hint{font-size:12px;color:#64748b;line-height:1.55;margin-top:5px}
+.notice{background:#fff8e6;border:1px solid #f1d48a;color:#674b00;padding:12px;border-radius:8px;line-height:1.55;margin:12px 0}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+button,.filelabel{border:1px solid #c6d1dc;background:#fff;border-radius:8px;padding:9px 13px;font:inherit;font-weight:650;cursor:pointer;color:#203548}
+button.primary{background:#176b87;border-color:#176b87;color:white}button:disabled{opacity:.45;cursor:not-allowed}
+.table-wrap{overflow:auto;border:1px solid #dce4ec;border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:1060px;font-size:13px}th,td{border-bottom:1px solid #e4eaf0;padding:7px;text-align:left}th{background:#f0f5f8;white-space:nowrap}td input{padding:8px;min-width:125px}td:first-child{font-weight:700;color:#526273;width:46px}
+.status{padding:12px;border-radius:8px;background:#edf3f7;white-space:pre-wrap;line-height:1.55}.status.ok{background:#e8f7ef;color:#14532d}.status.bad{background:#fff0ef;color:#8a2118}
+footer{font-size:12px;color:#637487;line-height:1.6;margin-top:12px}
+@media(max-width:600px){.panel{padding:13px}header{padding:20px 16px}}
+</style>
+</head>
+<body>
+<header>
+<h1>IslandOS · 现场数据录入窗口</h1>
+<p>供现场工作人员手动录入或导入逐时数据。此工具只整理和检查输入，不会生成缺失数据、不运行调度、不代表现场已经部署，也不会自动上传任何数据。</p>
+</header>
+<main>
+<section class="panel">
+<h2>1. 场景与数据来源</h2>
+<div class="grid">
+<div><label for="site">站点/微电网名称 *</label><input id="site" placeholder="例如：某海岛微电网" required></div>
+<div><label for="source">数据类型 *</label><select id="source"><option value="measured">现场实测 measured</option><option value="public">公开数据 public</option><option value="forecast">预测数据 forecast</option><option value="synthetic">合成/演示数据 synthetic</option></select></div>
+<div><label for="operator">录入人员/团队</label><input id="operator" placeholder="姓名或团队代号"></div>
+<div><label for="timezone">时区偏移 *</label><select id="timezone"><option value="+08:00" selected>中国标准时间 UTC+08:00</option><option value="+00:00">UTC+00:00</option><option value="+09:00">日本标准时间 UTC+09:00</option><option value="-05:00">UTC-05:00</option><option value="-04:00">UTC-04:00</option><option value="+01:00">UTC+01:00</option><option value="+02:00">UTC+02:00</option><option value="custom">自定义偏移（下方输入）</option></select></div>
+<div><label for="customTz">自定义时区偏移</label><input id="customTz" placeholder="例如 +05:30" disabled></div>
+<div><label for="interval">采样间隔（分钟） *</label><select id="interval"><option value="60" selected>60 · 每小时</option><option value="30">30 · 每半小时</option><option value="15">15 · 每15分钟</option><option value="5">5 · 每5分钟</option></select></div>
+<div><label for="period">数据/工况说明</label><input id="period" placeholder="例如：2026年10月试运行记录"></div>
+<div><label for="reference">来源链接、文件名或仪表编号</label><input id="reference" placeholder="用于追溯；没有可留空"></div>
+</div>
+<div class="notice"><strong>录入边界：</strong>请确认单位和时间戳。发电功率、关键负荷功率单位为 kW；水需求为 m³/采样间隔；冷量需求为 kWₜₕ。当前模板不包含储能 SOC、储水罐液位、设备启停状态、限电指令或电价，这些不能由本表推断。</div>
+</section>
+<section class="panel">
+<h2>2. 逐时数据</h2>
+<div class="hint">带 * 的列必须填写。时间按所选时区解释，且必须严格递增、符合采样间隔。每行代表一个时间点；水需求字段按该采样间隔的需求量填写。不要把未知值填成 0；缺失数据请先补查或保留为草稿。</div>
+<div class="toolbar">
+<button type="button" class="primary" id="addRow">＋ 添加一行</button>
+<button type="button" id="add24">添加 24 个空白小时</button>
+<button type="button" id="validate">检查数据</button>
+<button type="button" id="exportCsv">下载 CSV（仅有效数据）</button>
+<button type="button" id="exportDraft">保存草稿 JSON</button>
+<label class="filelabel" for="importCsv" style="margin:0">导入 CSV</label><input id="importCsv" type="file" accept=".csv,text/csv" hidden>
+<button type="button" id="clear">清空表格</button>
+</div>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>时间 *</th><th>风电 (kW) *</th><th>光伏 (kW) *</th><th>关键负荷 (kW) *</th><th>水需求 (m³/间隔) *</th><th>冷量需求 (kWₜₕ) *</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="status" class="status" role="status" aria-live="polite" style="margin-top:12px">尚未检查数据。可以先录入少量数据并保存草稿。</div>
+<footer>CSV 字段名固定为 timestamp, wind_kw, pv_kw, critical_load_kw, water_demand_m3, cooling_demand_kw_th，以便后续交给 IslandOS 的质量检查工具。所有检查均在当前浏览器本地完成；导出的文件由工作人员自行保存和传递。</footer>
+</section>
+</main>
+<script>
+const fields=[
+ ["timestamp","时间","time"],["wind_kw","风电功率 (kW)","number"],["pv_kw","光伏功率 (kW)","number"],
+ ["critical_load_kw","关键负荷 (kW)","number"],["water_demand_m3","水需求 (m³/间隔)","number"],["cooling_demand_kw_th","冷量需求 (kWₜₕ)","number"]
+];
+const rowsEl=document.getElementById("rows"), statusEl=document.getElementById("status");
+let lastValidation={valid:false,issues:["尚未检查"]};
+function tz(){return document.getElementById("timezone").value==="custom"?document.getElementById("customTz").value.trim():document.getElementById("timezone").value}
+function addRow(values={}) {
+ const tr=document.createElement("tr");
+ const num=document.createElement("td");tr.appendChild(num);
+ for(const [key,label,type] of fields){
+  const td=document.createElement("td"), input=document.createElement("input");
+  input.dataset.key=key;input.setAttribute("aria-label",label);
+  if(type==="time"){input.type="datetime-local";input.step=Number(document.getElementById("interval").value)*60}
+  else {input.type="number";input.min="0";input.step="any";input.inputMode="decimal"}
+  if(values[key]!==undefined&&values[key]!==null)input.value=String(values[key]).replace(/(Z|[+-]\d\d:\d\d)$/,"").slice(0,16);
+  input.addEventListener("input",()=>{lastValidation.valid=false;statusEl.className="status";statusEl.textContent="数据已修改，请重新检查后导出。"});
+  td.appendChild(input);tr.appendChild(td);
+ }
+ const td=document.createElement("td"),del=document.createElement("button");del.type="button";del.textContent="删除";del.onclick=()=>{tr.remove();renumber();lastValidation.valid=false};td.appendChild(del);tr.appendChild(td);
+ rowsEl.appendChild(tr);renumber();
+}
+function renumber(){[...rowsEl.rows].forEach((r,i)=>r.cells[0].textContent=i+1)}
+function valuesFromRow(tr){const out={};tr.querySelectorAll("input[data-key]").forEach(i=>out[i.dataset.key]=i.value.trim());return out}
+function allRows(){return [...rowsEl.rows].map(valuesFromRow)}
+function csvEscape(v){const s=String(v??"");return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function toCsv(data){return [fields.map(x=>x[0]).join(","),...data.map(r=>fields.map(([k])=>csvEscape(r[k])).join(","))].join("\r\n")+"\r\n"}
+function parseCsv(text){
+ const out=[];let row=[],cell="",quoted=false;
+ for(let i=0;i<text.length;i++){const ch=text[i];
+  if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++}else if(ch==='"')quoted=false;else cell+=ch}
+  else if(ch==='"')quoted=true;else if(ch===","){row.push(cell);cell=""}else if(ch==="\n"){row.push(cell.replace(/\r$/,""));if(row.some(v=>v.trim()))out.push(row);row=[];cell=""}else cell+=ch;
+ }
+ if(quoted)throw new Error("CSV 文件存在未闭合的双引号。");
+ if(cell.length||row.length){row.push(cell.replace(/\r$/,""));if(row.some(v=>v.trim()))out.push(row)}
+ if(!out.length)throw new Error("CSV 文件为空。");
+ const headers=out.shift().map(h=>h.trim().replace(/^\uFEFF/,""));
+ const missing=fields.map(f=>f[0]).filter(k=>!headers.includes(k));
+ if(missing.length)throw new Error("CSV 缺少字段："+missing.join(", "));
+ return out.map(cols=>Object.fromEntries(fields.map(([k])=>[k,cols[headers.indexOf(k)]??""])));
+}
+function validate(){
+ const data=allRows(),issues=[];
+ const offset=tz();
+ if(!document.getElementById("site").value.trim())issues.push("请填写站点/微电网名称。");
+ if(!/^[+-](0\d|1[0-4]):[0-5]\d$/.test(offset)||offset.slice(-2)> "59")issues.push("时区偏移格式应为 +08:00、-05:00 或 +00:00；范围请使用合法 UTC 偏移。");
+ if(!data.length)issues.push("至少需要一行数据。");
+ const seen=new Set(), parsed=[];
+ data.forEach((r,i)=>{
+  const line=i+1;
+  if(!r.timestamp)issues.push("第 "+line+" 行：时间不能为空。");
+  else {
+   const d=new Date(r.timestamp+offset);
+   if(Number.isNaN(d.getTime()))issues.push("第 "+line+" 行：时间无效。");
+   else {const iso=d.toISOString();if(seen.has(iso))issues.push("第 "+line+" 行：时间重复。");seen.add(iso);parsed.push({i,ms:d.getTime()})}
+  }
+  for(const [key,label] of fields.slice(1)){
+   const raw=r[key];
+   if(raw===""||raw===undefined){issues.push("第 "+line+" 行："+label+"不能为空；未知值不要填 0。");continue}
+   const n=Number(raw);if(!Number.isFinite(n))issues.push("第 "+line+" 行："+label+"必须为有限数字。");else if(n<0)issues.push("第 "+line+" 行："+label+"不能为负数。")
+  }
+ });
+ const step=Number(document.getElementById("interval").value)*60000;
+ for(let j=1;j<parsed.length;j++){
+  const delta=parsed[j].ms-parsed[j-1].ms;
+  if(delta<=0)issues.push("第 "+(parsed[j].i+1)+" 行：时间必须严格递增。");
+  else if(delta!==step)issues.push("第 "+(parsed[j].i+1)+" 行：与上一条记录间隔 "+(delta/60000)+" 分钟，预期 "+(step/60000)+" 分钟。");
+ }
+ lastValidation={valid:issues.length===0,issues};
+ statusEl.className="status "+(issues.length?"bad":"ok");
+ statusEl.textContent=issues.length?("检查未通过（"+issues.length+" 项）：\n• "+issues.slice(0,80).join("\n• ")+(issues.length>80?"\n…仅显示前 80 项。":"")):("检查通过：共 "+data.length+" 行，时间连续、必填字段完整且数值非负。\n这仅代表格式/基础质量检查通过，不代表数据已被核实，也不代表模型结果经过现场验证。");
+ return lastValidation.valid;
+}
+function download(name,content,type){
+ const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)
+}
+function safeName(s){return (s||"islandos-site").trim().replace(/[^\p{L}\p{N}_-]+/gu,"_").slice(0,60)||"islandos-site"}
+function metadata(){return {schema_version:"1.0",site_name:document.getElementById("site").value.trim(),source_type:document.getElementById("source").value,operator:document.getElementById("operator").value.trim(),timezone_offset:tz(),interval_minutes:Number(document.getElementById("interval").value),period_description:document.getElementById("period").value.trim(),source_reference:document.getElementById("reference").value.trim(),created_at_utc:new Date().toISOString(),data_rows:allRows().length,validation: lastValidation.valid?"browser_basic_checks_passed":"not_validated_or_invalid",limitations:"No missing values imputed; no unit conversion; browser checks do not establish measurement provenance or physical validity."}}
+document.getElementById("addRow").onclick=()=>addRow();
+document.getElementById("add24").onclick=()=>{for(let i=0;i<24;i++)addRow();statusEl.textContent="已添加 24 行空白记录；尚未填入任何测量值。"};
+document.getElementById("validate").onclick=validate;
+document.getElementById("exportCsv").onclick=()=>{
+ if(!validate())return;
+ // datetime-local has minute precision; append seconds before timezone offset.
+ const normalized=allRows().map(r=>({...r,timestamp:r.timestamp.length===16?r.timestamp+":00"+tz():r.timestamp+tz()}));
+ const name=safeName(document.getElementById("site").value);
+ download(name+"_hourly_input.csv",toCsv(normalized),"text/csv;charset=utf-8");
+ download(name+"_metadata.json",JSON.stringify(metadata(),null,2),"application/json;charset=utf-8");
+};
+document.getElementById("exportDraft").onclick=()=>download(safeName(document.getElementById("site").value)+"_draft.json",JSON.stringify({metadata:metadata(),rows:allRows()},null,2),"application/json;charset=utf-8");
+document.getElementById("importCsv").onchange=async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{const data=parseCsv(await file.text());rowsEl.innerHTML="";data.forEach(addRow);statusEl.className="status";statusEl.textContent="已导入 "+data.length+" 行；请核对站点、时区、来源与单位，再执行检查。";lastValidation.valid=false}
+ catch(err){statusEl.className="status bad";statusEl.textContent="导入失败："+err.message}
+ e.target.value="";
+};
+document.getElementById("clear").onclick=()=>{if(confirm("确定清空全部录入行？建议先保存草稿。")){rowsEl.innerHTML="";addRow();lastValidation.valid=false;statusEl.className="status";statusEl.textContent="表格已清空。"}};
+document.getElementById("timezone").onchange=e=>{document.getElementById("customTz").disabled=e.target.value!=="custom";lastValidation.valid=false};
+document.getElementById("interval").onchange=()=>{rowsEl.querySelectorAll('input[data-key="timestamp"]').forEach(i=>i.step=Number(document.getElementById("interval").value)*60);lastValidation.valid=false};
+addRow();
+</script>
+</body>
+</html>

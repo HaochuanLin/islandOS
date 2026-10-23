@@ -232,3 +232,19 @@ python islandos_gateway_server.py --host 127.0.0.1 --port 8765 --audit-file buil
 The HTTP server rejects non-loopback bind addresses. Optional bearer-token authentication uses `ISLANDOS_GATEWAY_TOKEN`; it is disabled by default, so do not expose the development service to untrusted networks. No PLC/setpoint writes or actuator commands are implemented. See [the telemetry contract](TELEMETRY_INTEGRATION_CONTRACT.md) for canonical fields, units, freshness, mapping, and security boundaries.
 
 All included replay data is synthetic. A passing software test proves the tested software behavior only; it does not certify sensors, vendor mappings, plant interlocks, forecast quality, or site safety.
+
+## Site readiness and sensor contract
+
+The sensor adapter contract validates individual normalized sensor messages (schema version, signal identifier, unit, timestamp, quality, and finite values). The separate site-readiness gate checks whether the site-level inputs required for an **offline scenario** are complete and sufficiently fresh. Neither one authenticates the physical sensor, validates calibration, proves engineering safety, or authorizes live control.
+
+Open `tools/site_data_entry.html` for the local staff data-entry form and `tools/site_readiness_form.html` for the readiness snapshot form. These files run locally in a browser and do not automatically upload data.
+
+Inspect the readiness gate using the intentionally placeholder-filled example:
+
+```bash
+python site_readiness.py config/site_readiness.example.json --mode dispatch --json
+```
+
+The example is expected to report blockers until the placeholders and timestamps are replaced with site-confirmed values. A blocked result is the safe default; do not replace missing values with zero or relabel synthetic inputs as measured.
+
+The wrapper `experiments/run_site_scenario.py` requires both a readiness JSON and a separately validated hourly site CSV before it invokes offline optimization. Follow [the site readiness guide](SITE_READINESS_GATE.md) for required fields, source provenance, and the fail-closed behavior. This workflow does not connect to sensors or issue control commands.

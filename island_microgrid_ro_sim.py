@@ -66,6 +66,39 @@ class Params:
     res_area_m2: float = 1000.0      # surface area (m2); level = volume / area
     res_base_level_m: float = 0.0    # reservoir bottom elevation / reference level (m)
 
+    def __post_init__(self):
+        numeric_fields = (
+            "ro_power_kw", "ro_sec_kwh_m3", "res_capacity_m3",
+            "res_init_m3", "res_min_m3", "res_area_m2",
+            "res_base_level_m", "start_ratio", "keep_ratio",
+        )
+        for name in numeric_fields:
+            value = getattr(self, name)
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, (int, float, np.integer, np.floating)
+            ):
+                raise ValueError(f"{name} must be numeric")
+            if not np.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+
+        for name in ("ro_power_kw", "ro_sec_kwh_m3", "res_capacity_m3", "res_area_m2"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be > 0")
+        if isinstance(self.min_run_hours, (bool, np.bool_)) or not isinstance(
+            self.min_run_hours, (int, np.integer)
+        ) or self.min_run_hours < 1:
+            raise ValueError("min_run_hours must be a positive integer")
+        if not isinstance(self.allow_backup_power, (bool, np.bool_)):
+            raise ValueError("allow_backup_power must be a boolean")
+        for name in ("start_ratio", "keep_ratio"):
+            if not 0 <= getattr(self, name) <= 1:
+                raise ValueError(f"{name} must be between 0 and 1")
+        if self.res_min_m3 < 0 or self.res_min_m3 > self.res_capacity_m3:
+            raise ValueError("res_min_m3 must be between 0 and res_capacity_m3")
+        if not self.res_min_m3 <= self.res_init_m3 <= self.res_capacity_m3:
+            raise ValueError("res_init_m3 must be between res_min_m3 and res_capacity_m3")
+
+
 
 # ----------------------------- Data -----------------------------
 def load_data(hours: int = 24, seed: int = 42):
@@ -94,8 +127,39 @@ def load_data(hours: int = 24, seed: int = 42):
 
 
 # ----------------------------- Simulation -----------------------------
+def _validated_series(name, values):
+    """Normalize one public simulation input to a finite, non-negative 1-D array."""
+    try:
+        series = np.asarray(values, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain numeric values") from exc
+    if series.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional")
+    return series
+
+
 def simulate(wind, pv, load, water_demand, p: Params):
-    T = len(wind)
+    series = {
+        "wind": _validated_series("wind", wind),
+        "pv": _validated_series("pv", pv),
+        "load": _validated_series("load", load),
+        "water_demand": _validated_series("water_demand", water_demand),
+    }
+    if any(values.size == 0 for values in series.values()):
+        raise ValueError("input series must contain at least one timestep")
+    lengths = {values.size for values in series.values()}
+    if len(lengths) != 1:
+        raise ValueError("wind, pv, load, and water_demand must have equal lengths")
+    for name, values in series.items():
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"{name} must contain only finite values")
+        if np.any(values < 0):
+            raise ValueError(f"{name} must be non-negative")
+
+    wind, pv, load, water_demand = (
+        series["wind"], series["pv"], series["load"], series["water_demand"]
+    )
+    T = wind.size
     curtail = np.maximum(0.0, wind + pv - load)          # curtailed power (kW); 1 h step -> kWh
 
     ro_on = np.zeros(T, dtype=int)
@@ -108,20 +172,31 @@ def simulate(wind, pv, load, water_demand, p: Params):
     V = np.zeros(T + 1)         # reservoir storage; V[t] is the storage at the start of hour t
     V[0] = p.res_init_m3
 
+    def can_run_without_overflow(start, hours):
+        """Check whether a discretionary run fits tank capacity after demand over its horizon."""
+        projected = float(V[start])
+        production = p.ro_power_kw / p.ro_sec_kwh_m3
+        for index in range(start, start + hours):
+            projected += production - water_demand[index]
+            if projected > p.res_capacity_m3 + 1e-9:
+                return False
+            if projected < p.res_min_m3:
+                projected = p.res_min_m3
+        return True
+
     run_len = 0                 # consecutive hours the RO plant has been running
     for t in range(T):
-        full = V[t] >= p.res_capacity_m3 - 1e-9
-
         if run_len > 0 and run_len < p.min_run_hours:
-            on = True                                   # constraint 1: min run time not reached yet, keep running
+            on = True                                   # constraint 1: minimum run time not reached yet, keep running
         elif run_len >= p.min_run_hours:
+            can_run_this_hour = can_run_without_overflow(t, 1)
             if p.allow_backup_power:
-                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and not full
+                on = (curtail[t] >= p.keep_ratio * p.ro_power_kw) and can_run_this_hour
             else:                                       # no backup: curtailment must carry the full rated power
-                on = (curtail[t] >= p.ro_power_kw) and not full
+                on = (curtail[t] >= p.ro_power_kw) and can_run_this_hour
         else:                                           # currently stopped: look ahead to decide whether to start
             can_finish_in_horizon = (t + p.min_run_hours) <= T
-            if can_finish_in_horizon and not full:
+            if can_finish_in_horizon and can_run_without_overflow(t, p.min_run_hours):
                 window = curtail[t:t + p.min_run_hours]
                 if p.allow_backup_power:
                     # Backup can cover weak hours, so the mean-based threshold is a

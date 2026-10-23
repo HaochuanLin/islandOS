@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IslandOS｜场景启动前检查</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#17212e;background:#f3f6f9}
+*{box-sizing:border-box}body{margin:0}header{background:#12324a;color:#fff;padding:22px max(16px,calc((100% - 1050px)/2))}header h1{font-size:25px;margin:0 0 8px}header p{margin:0;line-height:1.6;color:#dce8f1}
+main{max-width:1050px;margin:22px auto;padding:0 16px 40px}.panel{background:#fff;border:1px solid #dce4ec;border-radius:12px;padding:18px;margin-bottom:14px}h2{font-size:18px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}label{font-size:13px;font-weight:650;display:block;margin-bottom:5px;color:#334155}input,select{width:100%;padding:10px;border:1px solid #c6d1dc;border-radius:7px;font:inherit;background:white}small,.hint{display:block;color:#64748b;font-size:12px;line-height:1.55;margin-top:5px}
+.notice{background:#fff8e6;border:1px solid #f1d48a;color:#674b00;border-radius:8px;padding:12px;line-height:1.6;margin:12px 0}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}button{border:1px solid #c6d1dc;border-radius:8px;background:#fff;padding:10px 14px;font:inherit;font-weight:650;cursor:pointer}button.primary{background:#176b87;color:#fff;border-color:#176b87}
+#result{white-space:pre-wrap;line-height:1.6;padding:12px;border-radius:8px;background:#edf3f7;margin-top:14px}#result.bad{background:#fff0ef;color:#8a2118}#result.good{background:#e8f7ef;color:#14532d}
+footer{color:#64748b;font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<header><h1>IslandOS · 场景启动前数据检查</h1><p>工作人员填写现场仪表读数、设备参数和经济估算。通过后导出 JSON，再由命令行启动离线优化；本页面不会连接传感器或启动设备。</p></header>
+<main>
+<div class="notice"><strong>重要：</strong>动态数据请抄录自有时间戳的仪表/传感器导出；本表不会自动读取传感器。CAPEX 必须来自报价或有明确责任人、日期的估算。缺少关键数据时，不得用 0 或猜测值替代。</div>
+<section class="panel"><h2>1. 站点与测量时效</h2><div class="grid">
+<div><label for="site">站点/微电网名称 *</label><input id="site" required placeholder="站点名称"></div>
+<div><label for="start">离线场景开始时间 *</label><input id="start" type="datetime-local" value="2026-10-22T08:00" required></div>
+<div><label for="measuredAt">最新仪表数据时间 *</label><input id="measuredAt" type="datetime-local" required></div>
+<div><label for="tz">时区偏移 *</label><select id="tz"><option value="+08:00" selected>中国 UTC+08:00</option><option value="+00:00">UTC+00:00</option><option value="+09:00">日本 UTC+09:00</option><option value="-05:00">UTC-05:00</option><option value="custom">自定义偏移</option></select></div>
+<div><label for="customTz">自定义偏移</label><input id="customTz" placeholder="+05:30" disabled></div>
+<div><label for="sourceType">动态数据来源 *</label><select id="sourceType"><option value="sensor_export">传感器导出 sensor_export</option><option value="measured">现场实测 measured</option><option value="manual">人工抄表 manual</option></select></div>
+<div><label for="sourceRef">仪表编号/导出文件名 *</label><input id="sourceRef" required placeholder="例如 meter-01-export.csv"></div>
+<div><label for="maxAge">允许的最大数据年龄（分钟）</label><input id="maxAge" type="number" min="1" value="60" required></div>
+</div></section>
+<section class="panel"><h2>2. 动态运行数据（需要最新有效读数）</h2><div class="grid">
+<div><label for="wind">当前风电功率 (kW) *</label><input id="wind" type="number" min="0" step="any" required></div>
+<div><label for="pv">当前光伏功率 (kW) *</label><input id="pv" type="number" min="0" step="any" required></div>
+<div><label for="load">当前关键电负荷 (kW) *</label><input id="load" type="number" min="0" step="any" required></div>
+<div><label for="waterLevel">水库当前可用水量 (m³) *</label><input id="waterLevel" type="number" min="0" step="any" required></div>
+</div><p class="hint">这里的水量是当前库存，不是水库额定容量。若仪表给的是水位（m），请先按经核实的库容曲线换算；本工具不做猜测换算。</p></section>
+<section class="panel"><h2>3. 设备静态参数（核对铭牌/技术资料）</h2><div class="grid">
+<div><label for="capacity">水库有效容量 (m³) *</label><input id="capacity" type="number" min="0" step="any" required></div>
+<div><label for="roCapacity">RO 产水能力 (m³/h) *</label><input id="roCapacity" type="number" min="0" step="any" required></div>
+<div><label for="roEnergy">RO 单位电耗 (kWh/m³) *</label><input id="roEnergy" type="number" min="0" step="any" required></div>
+</div></section>
+<section class="panel"><h2>4. 经济评估参数（仅经济模式强制要求）</h2><div class="grid">
+<div><label for="mode">本次目标 *</label><select id="mode"><option value="dispatch">离线调度情景（技术输入完整性）</option><option value="economic">经济评估（还需完整 CAPEX/O&M）</option></select></div>
+<div><label for="roCapex">RO 设备 CAPEX (RMB) *</label><input id="roCapex" type="number" min="0" step="any"></div>
+<div><label for="tankCapex">水库/储水设施 CAPEX (RMB) *</label><input id="tankCapex" type="number" min="0" step="any"></div>
+<div><label for="integrationCapex">电气与控制集成 CAPEX (RMB) *</label><input id="integrationCapex" type="number" min="0" step="any"></div>
+<div><label for="om">年运维成本估算 (RMB/year) *</label><input id="om" type="number" min="0" step="any"></div>
+<div><label for="capexRef">报价/估算来源、责任人和日期 *</label><input id="capexRef" placeholder="例如：供应商预算报价，日期，负责人"></div>
+</div><p class="hint">CAPEX 留空时可以做技术输入检查，但不能通过经济评估检查。零值只有在有依据且确实为零时才可填。</p>
+<div class="actions"><button class="primary" id="check">检查本次输入</button><button id="download" disabled>下载 JSON（通过检查后）</button></div><div id="result" role="status" aria-live="polite">尚未检查。检查通过仅表示字段完整和基础合理性通过。</div></section>
+<footer>本地离线页面，无网络请求、无自动上传、无设备控制。JSON 仍需由 site_readiness.py 复核；现场安全、传感器校准、联锁、供水水质及工程审批均不在本检查范围内。</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+$("tz").addEventListener("change",()=>{$("customTz").disabled=$("tz").value!=="custom"});
+function offset(){return $("tz").value==="custom"?$("customTz").value.trim():$("tz").value}
+function isoLocal(value){return value?value+":00"+offset():""}
+function number(id,label,errors,required=true){const raw=$(id).value.trim();if(!raw){if(required)errors.push(label+"：缺少输入");return null}const n=Number(raw);if(!Number.isFinite(n)||n<0){errors.push(label+"：必须是有限的非负数字");return null}return n}
+function build(){
+ const errors=[],off=offset(),maxAge=number("maxAge","最大数据年龄",errors);
+ if(!/^[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00)$/.test(off))errors.push("时区偏移格式或范围无效");
+ if(maxAge!==null&&maxAge<=0)errors.push("最大数据年龄必须大于零");
+ for(const id of ["site","start","measuredAt","sourceRef"])if(!$(id).value.trim())errors.push($(id).previousElementSibling.textContent+"：缺少输入");
+ const telemetryTime=isoLocal($("measuredAt").value),startTime=isoLocal($("start").value);
+ const parsed=new Date(telemetryTime),startParsed=new Date(startTime);
+ if(!Number.isFinite(parsed.getTime()))errors.push("最新仪表数据时间无效");
+ if(!Number.isFinite(startParsed.getTime()))errors.push("场景开始时间无效");
+ if(Number.isFinite(parsed.getTime())&&maxAge!==null){const age=(Date.now()-parsed.getTime())/60000;if(age < -5)errors.push("仪表时间在未来，请检查时钟/时区");else if(age>maxAge)errors.push("仪表数据已过期："+age.toFixed(1)+" 分钟，阈值 "+maxAge+" 分钟")}
+ const wind=number("wind","当前风电功率",errors),pv=number("pv","当前光伏功率",errors),load=number("load","当前关键负荷",errors),level=number("waterLevel","水库当前可用水量",errors);
+ const capacity=number("capacity","水库有效容量",errors),roCapacity=number("roCapacity","RO产水能力",errors),roEnergy=number("roEnergy","RO单位电耗",errors);
+ if(capacity===0)errors.push("水库有效容量必须大于零");if(roCapacity===0)errors.push("RO产水能力必须大于零");if(roEnergy===0)errors.push("RO单位电耗必须大于零");if(level!==null&&capacity!==null&&level>capacity)errors.push("当前可用水量超过水库有效容量");
+ const mode=$("mode").value,capex={};
+ if(mode==="economic"){
+  capex.ro_plant_rmb=number("roCapex","RO设备CAPEX",errors);
+  capex.reservoir_rmb=number("tankCapex","储水设施CAPEX",errors);
+  capex.integration_rmb=number("integrationCapex","集成CAPEX",errors);
+  capex.annual_om_rmb=number("om","年运维成本",errors);
+  capex.source_reference=$("capexRef").value.trim();if(!capex.source_reference)errors.push("经济评估需要报价/估算来源、责任人和日期");
+ }else{
+  for(const [id,key] of [["roCapex","ro_plant_rmb"],["tankCapex","reservoir_rmb"],["integrationCapex","integration_rmb"],["om","annual_om_rmb"]])if($(id).value.trim()!=="")capex[key]=number(id,key,errors,false);
+  if($("capexRef").value.trim())capex.source_reference=$("capexRef").value.trim();
+ }
+ const payload={site_name:$("site").value.trim(),scenario_start:startTime,telemetry:{timestamp:telemetryTime,source_type:$("sourceType").value,source_reference:$("sourceRef").value.trim(),wind_kw:wind,pv_kw:pv,critical_load_kw:load,reservoir_level_m3:level},assets:{reservoir_capacity_m3:capacity,ro_capacity_m3_per_hour:roCapacity,ro_specific_energy_kwh_per_m3:roEnergy},capex};
+ return {errors,payload,mode};
+}
+let current=null;
+$("check").onclick=()=>{current=build();const out=$("result");if(current.errors.length){out.className="bad";out.textContent="检查未通过，禁止导出用于启动的输入文件：\n• "+current.errors.join("\n• ");$("download").disabled=true}else{out.className="good";out.textContent="基础检查通过。模式："+(current.mode==="economic"?"经济评估":"离线调度")+"。请再核对原始仪表、设备资料和成本来源；通过本页面不等于现场验证或安全审批。";$("download").disabled=false}};
+$("download").onclick=()=>{if(!current||current.errors.length)return;const blob=new Blob([JSON.stringify(current.payload,null,2)],{type:"application/json;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="site_readiness.json";a.click();URL.revokeObjectURL(url)};
+</script>
+</body></html>
