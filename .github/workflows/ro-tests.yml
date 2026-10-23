@@ -38,6 +38,15 @@ jobs:
         run: python -m unittest tests.test_islandos_gateway -v
       - name: Compile telemetry gateway CLI
         run: python -m py_compile islandos_gateway.py
+      - name: Smoke-test synthetic telemetry replay fixture
+        run: python islandos_gateway.py data/examples/telemetry_replay_demo.csv --format csv --received-at 2026-10-23T05:00:00Z --output build/telemetry/replay-audit.jsonl
+      - name: Upload telemetry replay audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-telemetry-replay-audit
+          path: build/telemetry/replay-audit.jsonl
+          if-no-files-found: error
+          retention-days: 30
       - name: Run synthetic forecast-monitoring example
         run: |
           python experiments/monitor_forecast_performance.py data/examples/synthetic_forecast_monitor_demo.csv --window-hours 24 --output build/water-demand-forecast/monitor-demo.json
