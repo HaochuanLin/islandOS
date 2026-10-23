@@ -20,7 +20,7 @@ FIELDS = [
 def write_csv(tmp_path, rows, fields=FIELDS):
     path = tmp_path / "input.csv"
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
     return path
