@@ -8,14 +8,14 @@ Baseline scores are provisional engineering assessments, not measured scientific
 
 | Area | Initial baseline | Current verified | Target | Evidence required for target |
 |---|---:|---:|---:|---|
-| Core simulation and dispatch | 87/100 | 92/100 | 93/100 | Explicit invariants for energy/water accounting; adversarial boundary tests; benchmark results that report raw service metrics and do not require the proposed strategy to win every fixture; documented model limits. |
+| Core simulation and dispatch | 87/100 | 93/100 | 93/100 | Explicit invariants for energy/water accounting; adversarial boundary tests; benchmark results that report raw service metrics and do not require the proposed strategy to win every fixture; documented model limits. |
 | Automated tests and reproducibility | 76/100 | 96/100 | 97/100 | Required CI checks on main and pull requests; deterministic fixtures; integration tests for public commands and exported JSON/CSV schemas; useful failure artifacts; no silently skipped core checks. |
 | Documentation and evidence audit | 85/100 | 91/100 | 95/100 | Every major feature links to runnable commands, input schema, provenance, assumptions, expected outputs, limitations, and CI evidence; product and pilot scopes remain distinct. |
 | Interactive demo and usability | 80/100 | 84/100 | 92/100 | Hosted app health is checked separately from code CI; clean-environment startup is tested; upload validation and user-facing failures have regression tests; demo clearly labels synthetic data and export provenance. |
 | Branch and release management | 55/100 | 82/100 | 90/100 | Reduce stale/diverged branches and PRs; each PR has a bounded scope, current base, passing required checks, and a reviewable diff; no mass merge of divergent product/pilot histories. |
 | Public-data / site-data validation | 25/100 | 60/100 | 60/100 | A documented measured or reputable public dataset with license, provenance, units, missingness audit, chronological holdout, baseline comparison, and reproducible results. This target does not imply Nan'ao field validation. |
 | Commercial / deployment readiness | 38/100 | 52/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. |
-| Overall software-engineering maturity | 82/100 | 92/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
+| Overall software-engineering maturity | 82/100 | 93/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
 | Real-world operational validation | 38/100 | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached by code-only work. |
 
 ## Delivery order
@@ -163,4 +163,11 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - All four software workflows passed on PR head `37d4ee9445f227a292357b26fd9d3b64333fb909`: [RO suite run 39953323618](https://github.com/HaochuanLin/islandOS/actions/runs/39953323618), [Nan'ao run 39953323462](https://github.com/HaochuanLin/islandOS/actions/runs/39953323462), [container smoke run 39953323458](https://github.com/HaochuanLin/islandOS/actions/runs/39953323458), and [Windows packaging run 39953323559](https://github.com/HaochuanLin/islandOS/actions/runs/39953323559).
 - The health report itself remains `requires_authentication`, not healthy: anonymous requests receive HTTP 303 to Streamlit Cloud sign-in. This merge adds monitoring; it does not fix visibility. Do not increase demo or deployment scores until the external app is publicly reachable.
 - Branch/release management rises 80→82 for consolidating stale PRs, adding a focused health monitor, and documenting the remaining external deployment gate.
+
+### 2026-10-23 — Minimum-run property added to randomized stress test
+
+- Merged [PR #53](https://github.com/HaochuanLin/islandOS/pull/53) as [`57e4ee8`](https://github.com/HaochuanLin/islandOS/commit/57e4ee88c1c2f5e8bfc4d76e8acc4fb4199d4492).
+- The seeded 100-scenario invariant test now also checks every RO run segment meets `min_run_hours`, and that the no-backup perfect-foresight path does not trigger its emergency-stop fallback on consistent input traces.
+- All four workflows passed on exact PR head `dae5789e4474b87c2af055868909b81d422a46b6`: [RO suite run 39953581944](https://github.com/HaochuanLin/islandOS/actions/runs/39953581944), [Nan'ao run 39953581929](https://github.com/HaochuanLin/islandOS/actions/runs/39953581929), [container smoke run 39953581951](https://github.com/HaochuanLin/islandOS/actions/runs/39953581951), and [Windows packaging run 39953581995](https://github.com/HaochuanLin/islandOS/actions/runs/39953581995).
+- Core simulation rises 92→93, meeting its current target under the documented software-invariant rubric. Overall software-engineering maturity rises 92→93. Testing remains 96 rather than 97 until the required checks on the exact post-merge main head can be verified; PR-head success alone does not satisfy that final evidence gate.
 
