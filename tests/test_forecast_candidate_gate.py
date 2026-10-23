@@ -50,6 +50,22 @@ class TestForecastCandidateGate(unittest.TestCase):
             self.assertEqual(report["row_count"], 48)
             self.assertEqual(json.loads(output.read_text())["status"], report["status"])
 
+    def test_requires_minimum_high_demand_sample_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "series.csv"
+            output = Path(directory) / "report.json"
+            self._write(source)
+            # The fixture has six high-demand observations; seven are required here.
+            report = evaluate_candidate(
+                source,
+                output,
+                high_demand_threshold_m3=37.0,
+                min_high_demand_samples=7,
+            )
+            self.assertEqual(report["status"], "insufficient_high_demand_evidence")
+            self.assertFalse(report["decision_checks"]["high_demand_evidence_sufficient"])
+            self.assertEqual(report["high_demand_metrics"]["event_count"], 6)
+
     def test_rejects_candidate_with_worse_high_demand_underforecasting(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "series.csv"
