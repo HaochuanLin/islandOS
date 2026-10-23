@@ -57,6 +57,24 @@ In the app, you can:
 
 **Uploaded data:** the strategy-screening app expects `timestamp`, `renewable_surplus_kw`, `diesel_displacement_potential_kw`, `grid_price_per_kwh`, `off_peak`, `grid_available`, and `water_demand_m3`. The optional `backup_available_kw` column describes an assumed available backup-power limit. See [the app's data guide](docs/ENERGY_WATER_STRATEGY_COMPARISON.md); values and units must be appropriate for your site. Missing values are not silently imputed.
 
+## Device integration prototype (recommendation-only)
+
+The **Telemetry gateway** page and `islandos_gateway.py` add a first vendor-neutral ingest boundary. The gateway accepts CSV/JSONL, optionally maps vendor-specific field names and scales, checks timestamp freshness and measurement quality, and exports an audit trail. It does **not** open a PLC connection or write setpoints.
+
+```bash
+# Validate the included synthetic sample deterministically
+python islandos_gateway.py data/examples/telemetry_replay_demo.csv \
+  --format csv --received-at 2026-10-23T05:00:00Z \
+  --output build/telemetry/replay-audit.jsonl
+
+# Map a vendor export after editing the example point map for that device
+python islandos_gateway.py vendor-export.jsonl \
+  --mapping config/device_map.example.json \
+  --output build/telemetry/mapped-audit.jsonl
+```
+
+A Windows x64 standalone `islandos-gateway.exe` is built by the [Windows gateway workflow](.github/workflows/windows-gateway-build.yml); download its `islandos-gateway-windows-x64` artifact after the run succeeds. The executable is an offline telemetry validator/replay tool, not a hardware driver. Real deployment still requires a site-approved point map, protocol adapter, authentication/network configuration, PLC interlocks, and hardware-in-the-loop validation. See [hardware integration architecture](docs/HARDWARE_INTEGRATION_ARCHITECTURE.md).
+
 ## Quick start: command-line demo
 
 To run the original 24-hour synthetic RO demo instead of the app:
