@@ -34,6 +34,10 @@ jobs:
         run: python -m py_compile islandos_io.py
       - name: Test telemetry quality and fail-closed control authorization
         run: python -m unittest tests.test_islandos_io -v
+      - name: Test read-only telemetry gateway end-to-end
+        run: python -m unittest tests.test_islandos_gateway -v
+      - name: Compile telemetry gateway CLI
+        run: python -m py_compile islandos_gateway.py
       - name: Run synthetic forecast-monitoring example
         run: |
           python experiments/monitor_forecast_performance.py data/examples/synthetic_forecast_monitor_demo.csv --window-hours 24 --output build/water-demand-forecast/monitor-demo.json
