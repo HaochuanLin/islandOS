@@ -64,6 +64,27 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
             saved = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(saved["configuration"]["fold_count"], 8)
 
+    def test_caps_folds_for_long_series_while_spreading_them_across_time(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "demand.csv"
+            self._write_series(source, count=720)
+            report = backtest_water_demand_models(
+                source,
+                Path(directory) / "backtest.json",
+                initial_train_fraction=0.60,
+                test_window_hours=24,
+                step_hours=24,
+                max_folds=4,
+            )
+
+            self.assertGreater(report["configuration"]["available_fold_count"], 4)
+            self.assertEqual(report["configuration"]["fold_count"], 4)
+            self.assertEqual(report["configuration"]["evaluated_hours"], 96)
+            starts = [fold["test_start"] for fold in report["folds"]]
+            self.assertLess(starts[0], starts[1])
+            self.assertLess(starts[1], starts[2])
+            self.assertLess(starts[2], starts[3])
+
     def test_rejects_overlapping_test_windows(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "demand.csv"
