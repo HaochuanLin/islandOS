@@ -33,6 +33,44 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt scikit-learn pytest
+      - name: Capture reproducibility environment manifest
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import platform
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          Path("build/reproducibility").mkdir(parents=True, exist_ok=True)
+          freeze = subprocess.run(
+              [sys.executable, "-m", "pip", "freeze", "--all"],
+              check=True, capture_output=True, text=True,
+          ).stdout.splitlines()
+          manifest = {
+              "python_version": sys.version,
+              "python_executable": sys.executable,
+              "platform": platform.platform(),
+              "machine": platform.machine(),
+              "github_sha": os.environ.get("GITHUB_SHA"),
+              "github_ref": os.environ.get("GITHUB_REF"),
+              "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+              "github_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "installed_distributions": sorted(freeze),
+              "limitations": [
+                  "This manifest records the environment used for this run; it is not a dependency lockfile.",
+                  "Floating requirements may resolve to different versions in future runs.",
+                  "Synthetic fixtures do not establish real-site validity.",
+              ],
+          }
+          Path("build/reproducibility/environment.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\\n",
+              encoding="utf-8",
+          )
+          print("Captured Python, platform, commit, run, and installed-package metadata.")
+          PY
       - name: Run complete pytest suite (including unittest-compatible tests)
         run: python -m pytest -q
       - name: Run synthetic forecast-monitoring example
@@ -362,3 +400,10 @@ jobs:
           path: build/dispatch-report/
           if-no-files-found: error
           retention-days: 30
+      - name: Upload reproducibility environment manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: islandos-reproducibility-environment
+          path: build/reproducibility/environment.json
+          if-no-files-found: error
+          retention-days: 90
