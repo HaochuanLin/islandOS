@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import sys
 
-from islandos_io import validate_telemetry
+from islandos_io import apply_device_mapping, load_device_mapping, validate_telemetry
 
 
 def _read_rows(path: str, input_format: str):
@@ -45,6 +45,7 @@ def main(argv=None) -> int:
     parser.add_argument("input", help="CSV/JSONL file path, or - for stdin")
     parser.add_argument("--format", choices=("auto", "csv", "jsonl"), default="auto")
     parser.add_argument("--source", default="file-replay")
+    parser.add_argument("--mapping", help="Optional versioned JSON device-field/unit mapping")
     parser.add_argument("--max-age-seconds", type=float, default=300.0)
     parser.add_argument(
         "--received-at",
@@ -63,6 +64,7 @@ def main(argv=None) -> int:
             received_at = received_at.astimezone(timezone.utc)
         if args.max_age_seconds < 0:
             raise ValueError("--max-age-seconds must be non-negative")
+        mapping = load_device_mapping(args.mapping) if args.mapping else None
         records = []
         invalid_count = 0
         for index, row in enumerate(_read_rows(args.input, args.format), start=1):
@@ -75,8 +77,9 @@ def main(argv=None) -> int:
                     "values": {},
                 }
             else:
+                canonical_row = apply_device_mapping(row, mapping) if mapping else row
                 frame = validate_telemetry(
-                    row, source=args.source, received_at=received_at,
+                    canonical_row, source=args.source, received_at=received_at,
                     max_age_seconds=args.max_age_seconds,
                 )
                 record = frame.as_dict()
