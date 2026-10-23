@@ -66,3 +66,15 @@ Suggested first integration sequence: CSV replay -> simulated gateway -> read-on
 ## Current evidence and limitations
 
 CI tests cover timestamp freshness, malformed/missing/non-finite telemetry, device quality flags, default-deny behavior, emergency stop, manual override, operator confirmation, bounds, ramp limits, and recommendation audit fields. These are software-level checks, not hardware-in-the-loop tests. The current system has no validated site point map, device credentials, PLC integration, certified safety layer, or real-island acceptance test. Public and synthetic datasets are useful for development and benchmarking but must be labeled with source, license, coverage, missingness, and known quality limitations.
+
+
+## Local replay gateway
+
+The command-line adapter can replay either CSV or newline-delimited JSON through the exact same telemetry validator used by the safety boundary:
+
+\`\`\`bash
+python islandos_gateway.py data/examples/telemetry.csv --format csv --output build/telemetry/audit.jsonl
+python islandos_gateway.py data/examples/telemetry.jsonl --format jsonl --output build/telemetry/audit.jsonl
+\`\`\`
+
+For deterministic recorded-data tests, supply \`--received-at 2026-10-23T05:00:00Z\`. Invalid rows are still written to the audit output, but the process exits with code 2 so a scheduler or integration harness can detect a rejected batch. The gateway does not issue control commands.
