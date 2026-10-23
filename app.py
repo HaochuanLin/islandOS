@@ -34,6 +34,7 @@ from experiments.rolling_horizon_dispatch import (
     summarize_weight_sensitivity as summarize_rolling_weight_sensitivity,
     parse_scenario_csv as parse_rolling_scenario_csv,
     simulate_rolling as simulate_rolling_dispatch,
+    generate_synthetic_scenario_csv as generate_rolling_dispatch_template,
 )
 
 st.set_page_config(
@@ -631,6 +632,13 @@ elif page == "Custom dispatch CSV":
         "The actual series is used for hourly execution and evaluation; forecasts are planning inputs. "
         "This is a research simulation, not a live controller or a site-safety assessment."
     )
+    st.download_button(
+        "Download 24-hour synthetic CSV template",
+        data=generate_rolling_dispatch_template().encode("utf-8"),
+        file_name="islandos_rolling_dispatch_template.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
     custom_upload = st.file_uploader(
         "Upload paired hourly CSV", type=["csv"], key="custom_rolling_csv"
     )
@@ -684,7 +692,11 @@ elif page == "Custom dispatch CSV":
                 result = item["result"]
                 comparison_rows.append({
                     "policy": item["policy"],
+                    "water_produced_m3": round(sum(row["water_produced_m3"] for row in result["hourly_audit"]), 3),
+                    "water_served_m3": round(sum(row["water_served_m3"] for row in result["hourly_audit"]), 3),
                     "water_unmet_m3": result["water_unmet_m3"],
+                    "cooling_produced_kwh_th": round(sum(row["cooling_produced_kwh_th"] for row in result["hourly_audit"]), 3),
+                    "cooling_served_kwh_th": round(sum(row["cooling_served_kwh_th"] for row in result["hourly_audit"]), 3),
                     "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
                     "renewable_flexible_load_kwh": result["renewable_flexible_load_kwh"],
                     "remaining_surplus_kwh": result["remaining_surplus_kwh"],
