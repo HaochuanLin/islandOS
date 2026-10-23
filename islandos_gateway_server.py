@@ -13,9 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import threading
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from islandos_advisor import evaluate_dispatch_rows
+from islandos_advisor import WEIGHT_PROFILES, evaluate_dispatch_rows
 from islandos_io import apply_device_mapping, build_dispatch_input_rows, load_device_mapping, validate_telemetry
 
 
@@ -49,7 +49,7 @@ button{border:0;border-radius:9px;background:var(--accent);color:white;padding:1
 <section class="card"><h2>Freshwater demand</h2><div id="water" class="value">—</div><div class="muted">m³ per sample interval</div></section>
 <section class="card"><h2>Cooling demand</h2><div id="cooling" class="value">—</div><div class="muted">kW thermal</div></section>
 </div>
-<section class="card" style="margin-top:14px"><h2>Dispatch advice</h2><p id="advice-status" class="status">Waiting for valid hourly telemetry…</p><p id="advice-reason" class="muted">At least two valid hourly-aligned samples and a fresh latest sample are required.</p><div class="table-wrap"><table><thead><tr><th>Policy</th><th>Eligible</th><th>Water unmet (m³)</th><th>Cooling unmet (kWhₜₕ)</th><th>Remaining surplus (kWh)</th><th>Constraint violations (h)</th></tr></thead><tbody id="policies"><tr><td colspan="6">No report available.</td></tr></tbody></table></div><p id="sensitivity" class="muted"></p></section>
+<section class="card" style="margin-top:14px"><h2>Dispatch advice</h2><label for="weight-profile">Operator objective priority</label> <select id="weight-profile"><option value="balanced">Balanced</option><option value="water_priority">Water priority</option><option value="cooling_priority">Cooling priority</option><option value="energy_efficiency">Energy efficiency</option></select><p class="muted">This changes the scoring weights, not physical constraints. Confirm the chosen priority with the operator.</p><p id="advice-status" class="status">Waiting for valid hourly telemetry…</p><p id="advice-reason" class="muted">At least two valid hourly-aligned samples and a fresh latest sample are required.</p><div class="table-wrap"><table><thead><tr><th>Policy</th><th>Eligible</th><th>Water unmet (m³)</th><th>Cooling unmet (kWhₜₕ)</th><th>Remaining surplus (kWh)</th><th>Constraint violations (h)</th></tr></thead><tbody id="policies"><tr><td colspan="6">No report available.</td></tr></tbody></table></div><p id="sensitivity" class="muted"></p></section>
 <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><button id="refresh" type="button">Refresh now</button><button id="download-report" type="button" disabled>Download advice JSON</button><span id="checked" class="muted"></span></div>
 <footer>Auto-refreshes every 15 seconds. Advice is based on the most recent available hourly window and a persistence forecast unless supplied forecasts exist. Software validation is not field validation. Physical writes: disabled.</footer>
 </main>
@@ -68,7 +68,7 @@ async function refresh(){
    setText("updated","Latest sample: "+(latest.timestamp_utc||"unknown")+" · "+(latest.device_id||latest.source||"device"));
   }catch(e){setText("surplus","—");setText("water","—");setText("cooling","—");setText("updated",e.message)}
   try{
-   const report=await getJson("/advice");lastReport=report;byId("download-report").disabled=false;
+   const report=await getJson("/advice?weight_profile="+encodeURIComponent(byId("weight-profile").value));lastReport=report;byId("download-report").disabled=false;
    const winner=report.recommended_policy_for_operator_review;
    setText("advice-status",winner?"Candidate for operator review: "+winner:"No policy recommendation — operator review required");
    byId("advice-status").className="status "+(winner?"good":"warn");
@@ -89,7 +89,7 @@ async function refresh(){
  }catch(e){setText("gateway","OFFLINE");byId("gateway").className="value bad";setText("updated",e.message)}
  setText("checked","Last checked: "+new Date().toLocaleTimeString());
 }
-byId("refresh").addEventListener("click",refresh);
+byId("refresh").addEventListener("click",refresh);byId("weight-profile").addEventListener("change",refresh);
 byId("download-report").addEventListener("click",()=>{if(!lastReport)return;const blob=new Blob([JSON.stringify(lastReport,null,2)+"\n"],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="islandos-dispatch-advice.json";a.click();URL.revokeObjectURL(url)});
 refresh();setInterval(refresh,15000);
 </script>
@@ -133,7 +133,8 @@ def make_handler(audit_path, source, max_age_seconds, mapping=None):
             return True
 
         def do_GET(self):
-            path = urlparse(self.path).path
+            request_url = urlparse(self.path)
+            path = request_url.path
             if path not in ("/health", "/latest", "/advice", "/dashboard"):
                 self._send(404, {"error": "not found"})
                 return
@@ -151,6 +152,13 @@ def make_handler(audit_path, source, max_age_seconds, mapping=None):
                 })
                 return
             if path == "/advice":
+                weight_profile = parse_qs(request_url.query).get("weight_profile", ["balanced"])[0]
+                if weight_profile not in WEIGHT_PROFILES:
+                    self._send(400, {
+                        "error": "unknown weight_profile; choose one of " + ", ".join(WEIGHT_PROFILES),
+                        "physical_write_performed": False,
+                    })
+                    return
                 records = deque(maxlen=24)
                 try:
                     with lock:
@@ -184,7 +192,7 @@ def make_handler(audit_path, source, max_age_seconds, mapping=None):
                     return
                 try:
                     dispatch_rows = build_dispatch_input_rows(list(records))
-                    report = evaluate_dispatch_rows(dispatch_rows, name="http-gateway-live-window")
+                    report = evaluate_dispatch_rows(dispatch_rows, name="http-gateway-live-window", weight_profile=weight_profile)
                 except (TypeError, ValueError) as exc:
                     self._send(422, {
                         "error": "telemetry is not dispatch-ready: " + str(exc),
