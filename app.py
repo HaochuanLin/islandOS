@@ -429,6 +429,71 @@ elif page == "Strategy simulator":
             "water_produced_m3", "water_served_m3", "unmet_water_demand_m3"
         ]]
         st.bar_chart(chart_df)
+        st.subheader("Screen a simulated timestep")
+        st.caption(
+            "Uses one selected row from the current simulation result as virtual input. "
+            "It is an offline explanation layer, not a live measurement or an instruction to operate equipment."
+        )
+        screen_strategy = st.selectbox(
+            "Strategy row to inspect",
+            summaries["strategy"].tolist(),
+            index=3,
+            key="screen_strategy",
+        )
+        strategy_rows = details[details["strategy"] == screen_strategy].copy()
+        if not strategy_rows.empty:
+            screen_timestamp = st.selectbox(
+                "Timestep",
+                strategy_rows["timestamp"].tolist(),
+                key="screen_timestamp",
+            )
+            screen_row = strategy_rows.loc[
+                strategy_rows["timestamp"] == screen_timestamp
+            ].iloc[0]
+            estimated_daily_demand = (
+                sum(step.water_demand_m3 for step in parse_uploaded_csv(raw))
+                / max(1e-9, len(parse_uploaded_csv(raw)) * float(dt))
+                * 24.0
+            )
+            screen_demand = st.number_input(
+                "Assumed daily water demand for screening (m³/day)",
+                min_value=0.1,
+                value=max(0.1, float(estimated_daily_demand)),
+                step=1.0,
+                key="screen_daily_demand",
+                help="Annualized from the selected input series' average interval demand; edit to override.",
+            )
+            screen_config = SiteConfiguration(
+                site_id="simulation-row-screening",
+                water_demand_m3_per_day=screen_demand,
+                ro_capacity_m3_per_day=24.0 * float(ro_kw) / float(sec),
+                energy_price_per_kwh=float(screen_row["grid_price_per_kwh"]),
+                ro_specific_energy_kwh_per_m3=float(sec),
+                storage_capacity_m3=float(tank),
+                initial_storage_m3=float(screen_row["water_inventory_before_m3"]),
+            )
+            screen_result = recommend_ro_screening(
+                screen_config,
+                renewable_surplus=make_virtual_reading(
+                    "renewable_surplus_kw",
+                    float(screen_row["renewable_surplus_available_kw"]),
+                    "kW",
+                    source="simulated-timestep",
+                ),
+                water_inventory=make_virtual_reading(
+                    "water_inventory_m3",
+                    float(screen_row["water_inventory_before_m3"]),
+                    "m3",
+                    source="simulated-timestep",
+                ),
+            )
+            st.markdown(f"**Screening outcome:** `{screen_result.action}`")
+            st.write(screen_result.reason)
+            st.caption(
+                "Inputs are taken from the selected simulated row. The daily-demand estimate is "
+                "based on the uploaded/demo time series and may not represent a full-day operating profile."
+            )
+
         st.subheader("Hourly operating audit")
         chosen = st.selectbox("Inspect strategy", summaries["strategy"].tolist(), index=3)
         chosen_rows = details[details["strategy"] == chosen].copy()
