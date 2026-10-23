@@ -157,6 +157,16 @@ python experiments/evaluate_forecast_dispatch_continuous.py path/to/paired_hourl
 
 The synthetic benchmark compares forecast-driven dispatch with fixed policies and a hindsight reference. For site data, the paired CSV must align actual and forecast surplus with water and cooling demand. The windowed evaluator resets inventories between windows; the continuous evaluator carries state forward. See [forecast-to-dispatch evaluation](FORECAST_DISPATCH_EVALUATION.md) and the [continuous backtest guide](CONTINUOUS_FORECAST_DISPATCH_BACKTEST.md).
 
+### Rolling-horizon dispatch evidence report
+
+Run the receding-horizon policy comparison and export its full machine-readable audit:
+
+```bash
+python experiments/rolling_horizon_dispatch.py --json > rolling-horizon-report.json
+```
+
+The report contains 48 synthetic runs spanning the configured scenarios, four renewable-forecast error profiles, and four dispatch policies, plus 12 case-matched comparisons between rolling dispatch and the best fixed-priority policy. The aggregate reports how often rolling dispatch scores better, ties, or scores worse, along with mean/median score deltas and best/worst cases. Lower scores are better; negative deltas favor rolling dispatch. GitHub Actions checks power and water/cold-inventory balances and uploads the JSON as a short-lived artifact. These are reproducible software experiments on synthetic inputs, not evidence of field performance.
+
 ### Weather-data baseline
 
 ```bash
