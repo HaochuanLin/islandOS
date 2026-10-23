@@ -1,0 +1,237 @@
+"""Vendor-neutral telemetry validation and fail-closed control authorization.
+
+This module deliberately does not open sockets or write to plant hardware. It
+provides the safety boundary that concrete MQTT/Modbus/serial adapters must use.
+The default behavior is recommendation-only and every physical write is denied
+unless all explicit interlocks have been satisfied.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import math
+from typing import Any, Mapping, Optional, Tuple
+
+
+DEFAULT_REQUIRED_FIELDS = (
+    "renewable_surplus_kw",
+    "water_demand_m3",
+    "cooling_demand_kw_th",
+)
+
+
+def _parse_utc(value: Any) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("timestamp_utc must be a non-empty ISO-8601 string")
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError("timestamp_utc must be a valid ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("timestamp_utc must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+@dataclass(frozen=True)
+class TelemetryFrame:
+    source: str
+    timestamp_utc: datetime
+    values: Mapping[str, float]
+    valid: bool
+    errors: Tuple[str, ...]
+    warnings: Tuple[str, ...]
+
+    def as_dict(self) -> dict:
+        return {
+            "source": self.source,
+            "timestamp_utc": self.timestamp_utc.isoformat().replace("+00:00", "Z"),
+            "values": dict(self.values),
+            "valid": self.valid,
+            "errors": list(self.errors),
+            "warnings": list(self.warnings),
+        }
+
+
+def validate_telemetry(
+    payload: Mapping[str, Any],
+    source: str,
+    received_at: Optional[datetime] = None,
+    required_fields: Tuple[str, ...] = DEFAULT_REQUIRED_FIELDS,
+    max_age_seconds: float = 300.0,
+    future_tolerance_seconds: float = 30.0,
+) -> TelemetryFrame:
+    """Validate a vendor-neutral telemetry message without imputing missing data."""
+    if not isinstance(payload, Mapping):
+        raise TypeError("payload must be a mapping")
+    if not str(source).strip():
+        raise ValueError("source must be a non-empty identifier")
+    if not math.isfinite(float(max_age_seconds)) or max_age_seconds < 0:
+        raise ValueError("max_age_seconds must be finite and non-negative")
+    if not math.isfinite(float(future_tolerance_seconds)) or future_tolerance_seconds < 0:
+        raise ValueError("future_tolerance_seconds must be finite and non-negative")
+
+    errors = []
+    warnings = []
+    try:
+        timestamp = _parse_utc(payload.get("timestamp_utc"))
+    except ValueError as exc:
+        timestamp = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        errors.append(str(exc))
+
+    now = received_at or datetime.now(timezone.utc)
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("received_at must be timezone-aware")
+    now = now.astimezone(timezone.utc)
+    age_seconds = (now - timestamp).total_seconds()
+    if not errors and age_seconds > max_age_seconds:
+        errors.append("telemetry is stale")
+    if not errors and age_seconds < -future_tolerance_seconds:
+        errors.append("telemetry timestamp is too far in the future")
+
+    values = {}
+    for field in required_fields:
+        if field not in payload:
+            errors.append("missing required field: " + field)
+            continue
+        raw = payload[field]
+        if isinstance(raw, bool):
+            errors.append("field must be a finite number: " + field)
+            continue
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            errors.append("field must be a finite number: " + field)
+            continue
+        if not math.isfinite(number):
+            errors.append("field must be a finite number: " + field)
+            continue
+        if number < 0:
+            errors.append("field must be non-negative: " + field)
+            continue
+        values[field] = number
+
+    if payload.get("quality_flag") not in (None, "good", "GOOD", True):
+        errors.append("source quality flag is not good")
+    if not payload.get("device_id"):
+        warnings.append("device_id is absent; source identity is not independently verified")
+    return TelemetryFrame(
+        source=str(source),
+        timestamp_utc=timestamp,
+        values=values,
+        valid=not errors,
+        errors=tuple(dict.fromkeys(errors)),
+        warnings=tuple(warnings),
+    )
+
+
+@dataclass(frozen=True)
+class ControlRequest:
+    command: str
+    requested_value: float
+    minimum: float
+    maximum: float
+    max_change_per_step: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class SafetyContext:
+    telemetry_valid: bool = False
+    write_enabled: bool = False
+    operator_confirmed: bool = False
+    emergency_stop: bool = False
+    manual_override: bool = False
+    previous_value: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class AuthorizationDecision:
+    allowed: bool
+    reasons: Tuple[str, ...]
+    requested_value: float
+    approved_value: Optional[float]
+
+    def as_dict(self) -> dict:
+        return {
+            "allowed": self.allowed,
+            "reasons": list(self.reasons),
+            "requested_value": self.requested_value,
+            "approved_value": self.approved_value,
+            "physical_write_performed": False,
+        }
+
+
+def authorize_control(request: ControlRequest, context: SafetyContext) -> AuthorizationDecision:
+    """Fail-closed interlock evaluation; it never performs a hardware write."""
+    reasons = []
+    values = (request.requested_value, request.minimum, request.maximum)
+    if not request.command or not request.command.strip():
+        reasons.append("command identifier is required")
+    if not all(math.isfinite(float(v)) for v in values):
+        reasons.append("requested value and limits must be finite")
+    if request.minimum > request.maximum:
+        reasons.append("minimum exceeds maximum")
+    if math.isfinite(float(request.requested_value)) and (
+        request.requested_value < request.minimum or request.requested_value > request.maximum
+    ):
+        reasons.append("requested value is outside configured operating limits")
+    if request.max_change_per_step is not None:
+        if not math.isfinite(float(request.max_change_per_step)) or request.max_change_per_step < 0:
+            reasons.append("maximum change per step must be finite and non-negative")
+        elif context.previous_value is not None and math.isfinite(float(context.previous_value)):
+            if abs(request.requested_value - context.previous_value) > request.max_change_per_step:
+                reasons.append("requested change exceeds configured ramp limit")
+        elif context.previous_value is None:
+            reasons.append("previous value unavailable for ramp-limit check")
+    if not context.telemetry_valid:
+        reasons.append("telemetry has not passed quality validation")
+    if not context.write_enabled:
+        reasons.append("physical write path is disabled (recommendation-only mode)")
+    if not context.operator_confirmed:
+        reasons.append("explicit operator confirmation is required")
+    if context.emergency_stop:
+        reasons.append("emergency stop is active")
+    if context.manual_override:
+        reasons.append("manual override is active")
+
+    allowed = not reasons
+    return AuthorizationDecision(
+        allowed=allowed,
+        reasons=tuple(reasons),
+        requested_value=float(request.requested_value),
+        approved_value=float(request.requested_value) if allowed else None,
+    )
+
+
+def build_recommendation(
+    command: str,
+    requested_value: float,
+    unit: str,
+    reason: str,
+    source: str,
+    model_version: str,
+    created_at: Optional[datetime] = None,
+) -> dict:
+    """Create an explainable recommendation record, not a command to hardware."""
+    value = float(requested_value)
+    if not math.isfinite(value):
+        raise ValueError("requested_value must be finite")
+    if not command.strip() or not unit.strip() or not reason.strip() or not source.strip():
+        raise ValueError("command, unit, reason and source must be non-empty")
+    timestamp = created_at or datetime.now(timezone.utc)
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise ValueError("created_at must be timezone-aware")
+    return {
+        "kind": "recommendation_only",
+        "command": command,
+        "requested_value": value,
+        "unit": unit,
+        "reason": reason,
+        "source": source,
+        "model_version": model_version,
+        "created_at_utc": timestamp.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "operator_action_required": True,
+        "physical_write_performed": False,
+    }
