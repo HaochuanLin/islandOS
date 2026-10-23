@@ -250,6 +250,38 @@ jobs:
           python experiments/evaluate_forecast_dispatch.py
           data/examples/synthetic_dispatch_benchmark.csv
           --output build/forecast-dispatch-benchmark/results.json
+      - name: Validate forecast-to-dispatch benchmark report
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from pathlib import Path
+
+          path = Path("build/forecast-dispatch-benchmark/results.json")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["time_basis"]["rows"] == 168
+          assert report["time_basis"]["interval_hours"] == 1
+          assert report["forecast_metrics"]["evaluated_hours"] == 168
+          assert all(
+              math.isfinite(report["forecast_metrics"][key])
+              for key in ("mae_kw", "rmse_kw", "bias_forecast_minus_actual_kw")
+          )
+          expected_policies = {"rolling", "ro_first", "ice_first", "perfect_information"}
+          assert set(report["policy_comparison"]) == expected_policies
+          for name, result in report["policy_comparison"].items():
+              for metric in (
+                  "water_unmet_m3",
+                  "cooling_unmet_kwh_th",
+                  "remaining_surplus_kwh",
+                  "normalized_score",
+              ):
+                  assert math.isfinite(result[metric]), (name, metric)
+                  assert result[metric] >= 0, (name, metric)
+          assert report["persistence_baseline_comparison"]["status"] == "evaluated"
+          assert report["persistence_baseline_comparison"]["aligned_hours"] == 167
+          assert report["limitations"], "Report must preserve interpretation limits"
+          print("Forecast-to-dispatch benchmark report schema and numeric invariants passed.")
+          PY
       - name: Verify synthetic water-forecast dispatch fixture
         run: python experiments/generate_synthetic_water_forecast_dispatch.py --check
       - name: Evaluate synthetic water-forecast dispatch integration
