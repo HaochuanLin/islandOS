@@ -87,13 +87,23 @@ class TestForecastCandidateGate(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "finite and non-negative"):
                 evaluate_candidate(source, output, high_demand_threshold_m3=37.0)
 
-    def test_rejects_holdout_without_high_demand_events(self):
+    def test_reports_insufficient_evidence_when_no_high_demand_events(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "series.csv"
             output = Path(directory) / "report.json"
             self._write(source)
-            with self.assertRaisesRegex(ValueError, "No actual observations meet"):
-                evaluate_candidate(source, output, high_demand_threshold_m3=100.0)
+            report = evaluate_candidate(source, output, high_demand_threshold_m3=100.0)
+
+            self.assertEqual(report["status"], "insufficient_high_demand_evidence")
+            self.assertEqual(report["high_demand_metrics"]["event_count"], 0)
+            self.assertIsNone(report["high_demand_metrics"]["incumbent"])
+            self.assertIsNone(report["high_demand_metrics"]["candidate"])
+            self.assertIsNone(report["decision_checks"][
+                "high_demand_underforecast_rate_delta_candidate_minus_incumbent"
+            ])
+            self.assertFalse(report["decision_checks"]["high_demand_evidence_sufficient"])
+            self.assertFalse(report["decision_checks"]["high_demand_risk_check_passed"])
+            self.assertEqual(json.loads(output.read_text())["status"], report["status"])
 
 
 if __name__ == "__main__":

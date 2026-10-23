@@ -40,9 +40,12 @@ The example requires at least a 5% overall MAE improvement. The default risk
 guardrail permits no more than a 2 percentage-point increase in the rate of
 underforecasting during high-demand hours, and also requires high-demand MAE
 not to get worse. By default, at least five high-demand observations are also
-required before a candidate can be recommended. If fewer are available, the
-report says `insufficient_high_demand_evidence` instead of treating a tiny peak
-sample as adequate evidence. You can change this with `--min-high-demand-samples`.
+required before a candidate can be recommended. If fewer are available—including
+zero hours at or above the threshold—the report says
+`insufficient_high_demand_evidence` instead of treating missing peak evidence as
+a pass or crashing. With zero qualifying hours, peak-specific metrics are
+reported as unavailable (`null`). You can change the minimum with
+`--min-high-demand-samples`.
 If the candidate has enough peak observations but fails the overall MAE or
 high-demand risk check, the report says `keep_incumbent_for_now`.
 
