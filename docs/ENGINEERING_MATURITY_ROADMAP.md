@@ -104,3 +104,11 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - Updated current verified scores to reflect these results: testing 94, documentation 89, demo/deployment usability 84, branch/release management 72, deployment readiness 55, core simulation 89, and overall software-engineering maturity 89. These are still below the respective targets.
 - PR #43 remains open but is explicitly annotated: its remaining divergent UI/workflow changes must be reviewed separately. PR #2 also remains open because its unported dispatch/model changes have not been audited. Neither old PR is safe to merge wholesale.
 - These are software and packaging validations only. All included telemetry samples are synthetic, the gateway is loopback-only and recommendation-only, and real-site validation remains unchanged.
+
+### 2026-10-23 — README command and formatting audit
+
+- Fixed the Nan'ao script's inline-code delimiter in the main README and changed the documented full-suite command to `python -m pytest -q`, matching the primary CI workflow's test discovery.
+- Commit: [`74870e3`](https://github.com/HaochuanLin/islandOS/commit/74870e3df16450b02c6cec52f2cfab996534d355).
+- The GitHub connector's current combined-status query returned no status entries for the previously inspected head, and its workflow-run view exposes only pull-request-triggered runs. This is insufficient to assert that the latest main push passed; verify the exact current main SHA in GitHub Actions before changing the testing or overall score.
+- No maturity score is increased by this documentation-only commit. The unresolved divergent PRs and the data/field evidence gates remain open.
+
