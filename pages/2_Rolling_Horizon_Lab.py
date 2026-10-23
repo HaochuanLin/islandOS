@@ -85,7 +85,7 @@ st.caption(
 )
 st.caption(
     f"Source type: `{source_type}` · UTC coverage: "
-    f"{timestamps[0].isoformat()} to {timestamps[-1].isoformat()}"
+    f"{timestamps[0]} to {timestamps[-1]}"
 )
 with st.expander("Input provenance and reproducibility", expanded=False):
     st.write(
