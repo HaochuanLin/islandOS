@@ -61,14 +61,24 @@ jobs:
               rows = list(csv.DictReader(handle))
           stamps = [_parse_timestamp(row.get("timestamp") or "", i + 2) for i, row in enumerate(rows)]
           non_increasing = [
-              {"line": i + 3, "previous": stamps[i].isoformat(), "current": stamps[i + 1].isoformat()}
+              {
+                  "line": i + 3,
+                  "previous": stamps[i].isoformat(),
+                  "current": stamps[i + 1].isoformat(),
+                  "previous_value": rows[i].get("value"),
+                  "current_value": rows[i + 1].get("value"),
+              }
               for i in range(len(stamps) - 1) if stamps[i + 1] <= stamps[i]
           ]
-          duplicates = len(stamps) - len(set(stamps))
+          values_by_stamp = {}
+          for stamp, row in zip(stamps, rows):
+              values_by_stamp.setdefault(stamp, set()).add(row.get("value"))
+          duplicate_groups = [values for values in values_by_stamp.values() if len(values) > 1]
           audit = {
               "source_rows": len(stamps),
               "non_increasing_adjacent_pairs": len(non_increasing),
-              "duplicate_timestamp_count": duplicates,
+              "duplicate_timestamp_count": len(stamps) - len(set(stamps)),
+              "conflicting_duplicate_timestamp_count": len(duplicate_groups),
               "first_examples": non_increasing[:10],
               "source_url": "https://zenodo.org/records/19627517",
           }
