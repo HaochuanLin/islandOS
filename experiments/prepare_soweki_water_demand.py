@@ -71,23 +71,17 @@ def prepare_soweki_water_demand(
         raise ValueError("Input CSV contains no data rows")
 
     samples: list[tuple[datetime, float]] = []
-    previous: datetime | None = None
+    previous_source_timestamp: datetime | None = None
+    source_non_increasing_adjacent_pairs = 0
     for line_number, row in enumerate(rows, start=2):
         stamp = _parse_timestamp(row.get("timestamp") or "", line_number)
         if stamp.second or stamp.microsecond or stamp.minute not in (0, 15, 30, 45):
             raise ValueError(
                 f"Expected a 15-minute-aligned timestamp at CSV line {line_number}"
             )
-        if previous is not None:
-            delta = (stamp - previous).total_seconds()
-            if delta <= 0:
-                raise ValueError(
-                    f"Timestamps must be strictly increasing; check CSV line {line_number}"
-                )
-            if delta % QUARTER_HOUR_SECONDS != 0:
-                raise ValueError(
-                    f"Timestamp spacing is not a multiple of 15 minutes at CSV line {line_number}"
-                )
+        if previous_source_timestamp is not None:
+            if stamp <= previous_source_timestamp:
+                source_non_increasing_adjacent_pairs += 1
         raw_value = (row.get("value") or "").strip()
         try:
             value = float(raw_value)
@@ -98,7 +92,26 @@ def prepare_soweki_water_demand(
                 f"Demand rate must be finite and non-negative at CSV line {line_number}"
             )
         samples.append((stamp, value))
-        previous = stamp
+        previous_source_timestamp = stamp
+
+    source_rows = len(samples)
+    # The public export contains exact duplicate rows. Sort by the explicit
+    # timestamp, drop only duplicates with the same numeric value, and reject
+    # conflicting values for one timestamp rather than silently averaging them.
+    samples.sort(key=lambda item: item[0])
+    unique_samples: list[tuple[datetime, float]] = []
+    exact_duplicate_rows_deduplicated = 0
+    for stamp, value in samples:
+        if unique_samples and stamp == unique_samples[-1][0]:
+            if value != unique_samples[-1][1]:
+                raise ValueError(
+                    f"Conflicting values for duplicate timestamp {stamp.isoformat()}; "
+                    "review the source instead of choosing or averaging values"
+                )
+            exact_duplicate_rows_deduplicated += 1
+            continue
+        unique_samples.append((stamp, value))
+    samples = unique_samples
 
     grouped: dict[datetime, list[tuple[datetime, float]]] = defaultdict(list)
     for stamp, value in samples:
@@ -140,7 +153,10 @@ def prepare_soweki_water_demand(
         "source_dataset": "SOWEKI Water Demand Dataset, soweki_wdd_*.csv",
         "source_url": "https://zenodo.org/records/19627517",
         "license": "CC BY 4.0",
-        "source_rows": len(samples),
+        "source_rows": source_rows,
+        "unique_timestamp_samples": len(samples),
+        "exact_duplicate_rows_deduplicated": exact_duplicate_rows_deduplicated,
+        "source_non_increasing_adjacent_pairs": source_non_increasing_adjacent_pairs,
         "complete_hour_bins_found": len(complete_hours),
         "partially_observed_hour_bins_excluded": len(grouped) - len(complete_hours),
         "missing_hour_bins_inside_source_span": source_span_hour_bins - len(grouped),
