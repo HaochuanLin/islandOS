@@ -78,7 +78,7 @@ python islandos_advisor.py data/examples/telemetry_replay_demo.csv \
   --output build/telemetry/advisor-report.json
 ```
 
-Windows x64 standalone `islandos-gateway.exe` and `islandos-advisor.exe` are built by the [Windows gateway workflow](.github/workflows/windows-gateway-build.yml); download its `islandos-gateway-windows-x64` artifact after the run succeeds. The executable is an offline telemetry validator/replay tool, not a hardware driver. Real deployment still requires a site-approved point map, protocol adapter, authentication/network configuration, PLC interlocks, and hardware-in-the-loop validation. See [hardware integration architecture](docs/HARDWARE_INTEGRATION_ARCHITECTURE.md).
+Windows x64 standalone `islandos-gateway.exe` and `islandos-advisor.exe` are built by the [Windows gateway workflow](.github/workflows/windows-gateway-build.yml). The workflow also assembles and executes a portable `islandos-demo-package.zip` containing both programs, example telemetry, a field-mapping template, a double-click launcher, and usage/safety notes; it validates the generated JSON report before uploading the `islandos-gateway-windows-x64` artifact. The executable is an offline telemetry validator/replay tool, not a hardware driver. Real deployment still requires a site-approved point map, protocol adapter, authentication/network configuration, PLC interlocks, and hardware-in-the-loop validation. See [hardware integration architecture](docs/HARDWARE_INTEGRATION_ARCHITECTURE.md).
 
 ## Run the web model in Docker
 
