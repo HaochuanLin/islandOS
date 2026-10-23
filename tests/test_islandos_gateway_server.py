@@ -51,12 +51,16 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                         stdout, stderr = process.communicate()
                         self.fail("gateway exited early: %s %s" % (stdout, stderr))
                     try:
-                        with urlopen(base + "/health", timeout=0.25):
-                            break
+                        with urlopen(base + "/health", timeout=0.25) as response:
+                            health = json.loads(response.read().decode("utf-8"))
+                        break
                     except (URLError, TimeoutError):
                         time.sleep(0.1)
                 else:
                     self.fail("gateway health endpoint did not become ready")
+                self.assertTrue(health["device_mapping_loaded"])
+                self.assertEqual(health["mapping_schema_version"], 1)
+                self.assertIn("renewable_surplus_kw", health["mapped_canonical_fields"])
                 now = datetime.now(timezone.utc)
                 payload = {
                     "ts": now.isoformat().replace("+00:00", "Z"),
