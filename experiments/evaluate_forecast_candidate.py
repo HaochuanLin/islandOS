@@ -122,7 +122,10 @@ def evaluate_candidate(
         if incumbent_mae > 1e-12
         else (0.0 if candidate_mae <= 1e-12 else -1.0)
     )
-    overall_improved = mae_improvement >= min_mae_improvement_fraction
+    overall_improved = (
+        mae_improvement >= min_mae_improvement_fraction
+        and candidate_mae < incumbent_mae - 1e-12
+    )
     peak_underforecast_delta = (
         high_demand["candidate"]["underforecast_rate"]
         - high_demand["incumbent"]["underforecast_rate"]
