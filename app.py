@@ -8,10 +8,15 @@ Uploaded site data is used as supplied; the built-in demo is synthetic.
 
 import csv
 import io
+import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
+
+from app_state import strategy_run_signature
+from islandos_advisor import evaluate_dispatch_rows
+from islandos_io import build_dispatch_input_rows, validate_telemetry
 
 import pandas as pd
 import streamlit as st
@@ -24,6 +29,15 @@ from experiments.compare_energy_water_strategies import (
     load_site_steps,
 )
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
+from experiments.rolling_horizon_dispatch import (
+    run_experiment as run_rolling_dispatch_experiment,
+    summarize_aggregate as summarize_rolling_aggregate,
+    summarize_experiment as summarize_rolling_experiment,
+    summarize_weight_sensitivity as summarize_rolling_weight_sensitivity,
+    parse_scenario_csv as parse_rolling_scenario_csv,
+    simulate_rolling as simulate_rolling_dispatch,
+    generate_synthetic_scenario_csv as generate_rolling_dispatch_template,
+)
 
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
@@ -112,7 +126,7 @@ with st.sidebar:
     st.caption("Island energy + water planning")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Data guide"],
+        ["Overview", "Strategy simulator", "Rolling dispatch lab", "Custom dispatch CSV", "Telemetry gateway", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -231,6 +245,20 @@ elif page == "Strategy simulator":
         st.error("Initial tank inventory cannot exceed tank capacity.")
         st.stop()
 
+    current_signature = strategy_run_signature(
+        raw,
+        source_label,
+        {
+            "ro_rated_power_kw": float(ro_kw),
+            "specific_energy_kwh_m3": float(sec),
+            "tank_capacity_m3": float(tank),
+            "initial_water_m3": float(initial),
+            "min_run_hours": int(min_run),
+            "dt_hours": float(dt),
+            "diesel_cost_per_kwh": float(diesel_cost) if diesel_cost > 0 else None,
+        },
+    )
+
     if st.button("▶ Run strategy comparison", type="primary", use_container_width=True):
         try:
             steps = parse_uploaded_csv(raw)
@@ -248,6 +276,7 @@ elif page == "Strategy simulator":
                 "detail": detail,
                 "summary": summary,
                 "source": source_label,
+                "input_signature": current_signature,
             }
             st.session_state.pop("islandos_optimizer_result", None)
         except Exception as exc:
@@ -255,6 +284,14 @@ elif page == "Strategy simulator":
             st.stop()
 
     result = st.session_state.get("islandos_result")
+    if result and result.get("input_signature") != current_signature:
+        st.warning(
+            "Inputs changed since the last strategy run. Previous results were cleared; "
+            "click Run strategy comparison to calculate results for the current settings."
+        )
+        st.session_state.pop("islandos_result", None)
+        st.session_state.pop("islandos_optimizer_result", None)
+        result = None
     if result:
         st.caption(f"Data provenance: **{result['source']}**")
         summaries = pd.DataFrame(result["summary"])
@@ -326,6 +363,15 @@ elif page == "Strategy simulator":
             pop_size = st.number_input("NSGA-II population size", min_value=120, max_value=300, value=120, step=20)
         with p2:
             generations = st.number_input("NSGA-II generations", min_value=60, max_value=300, value=60, step=10)
+        optimizer_signature = strategy_run_signature(
+            raw,
+            source_label,
+            {
+                "strategy_input_signature": current_signature,
+                "nsga2_population_size": int(pop_size),
+                "nsga2_generations": int(generations),
+            },
+        )
         if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
             try:
                 # Streamlit reruns the script on every button click. Rebuild the
@@ -349,10 +395,14 @@ elif page == "Strategy simulator":
                 st.session_state["islandos_optimizer_result"] = {
                     "summary": pareto_summaries, "detail": pareto_details,
                     "meta": optimizer_meta, "source": source_label,
+                    "input_signature": optimizer_signature,
                 }
             except Exception as exc:
                 st.error(f"NSGA-II optimization failed: {exc}")
         optimizer_result = st.session_state.get("islandos_optimizer_result")
+        if optimizer_result and optimizer_result.get("input_signature") != optimizer_signature:
+            st.session_state.pop("islandos_optimizer_result", None)
+            optimizer_result = None
         if optimizer_result:
             meta = optimizer_result["meta"]
             # Never present stale or incompatible session-state output as a successful
@@ -452,6 +502,465 @@ elif page == "Strategy simulator":
         )
     else:
         st.info("Set assumptions above, then click **Run strategy comparison** to see results.")
+
+elif page == "Rolling dispatch lab":
+    st.title("Rolling-horizon energy–water dispatch lab")
+    st.write(
+        "Run a reproducible synthetic experiment that compares receding-horizon priority selection "
+        "with fixed RO-first and cooling-first policies under renewable-forecast errors."
+    )
+    st.info(
+        "This lab uses synthetic scenarios only. It demonstrates the dispatch algorithm and audit "
+        "workflow; it does not establish real-island forecast skill or operational performance."
+    )
+    st.markdown(
+        "**Experiment design:** 48 runs across the configured scenarios, four forecast-error profiles, "
+        "and four policies. The report compares rolling dispatch against the best fixed-priority policy "
+        "and checks whether conclusions change under three illustrative objective-weight profiles."
+    )
+    if st.button("▶ Run 48-case rolling-horizon experiment", type="primary", use_container_width=True):
+        with st.spinner("Running scenario, forecast-error, and policy combinations..."):
+            rolling_rows = run_rolling_dispatch_experiment()
+            rolling_summaries = summarize_rolling_experiment(rolling_rows)
+            rolling_aggregate = summarize_rolling_aggregate(rolling_summaries)
+            rolling_sensitivity = summarize_rolling_weight_sensitivity(rolling_rows)
+        st.session_state["islandos_rolling_result"] = {
+            "rows": rolling_rows,
+            "summary": rolling_summaries,
+            "aggregate": rolling_aggregate,
+            "weight_sensitivity": rolling_sensitivity,
+        }
+
+    rolling_result = st.session_state.get("islandos_rolling_result")
+    if rolling_result:
+        aggregate = rolling_result["aggregate"]
+        st.subheader("Cross-case result")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Paired comparisons", str(aggregate["comparison_count"]))
+        m2.metric("Rolling better", str(aggregate["rolling_better_count"]))
+        m3.metric("Tied", str(aggregate["rolling_tied_count"]))
+        m4.metric("Rolling worse", str(aggregate["rolling_worse_count"]))
+        st.caption(
+            f"Mean score delta: {aggregate['mean_score_delta']:+.4f}; "
+            f"median delta: {aggregate['median_score_delta']:+.4f}. "
+            "Negative delta favors rolling dispatch. No universal winner is assumed."
+        )
+        summary_df = pd.DataFrame(rolling_result["summary"])
+        st.subheader("Rolling vs. best fixed-priority policy")
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        chart_df = summary_df.copy()
+        chart_df["case"] = chart_df["scenario"] + " / " + chart_df["forecast_error_profile"]
+        st.bar_chart(chart_df.set_index("case")[["rolling_minus_best_fixed"]])
+
+        st.subheader("Objective-weight sensitivity")
+        sensitivity_df = pd.DataFrame(rolling_result["weight_sensitivity"])
+        st.dataframe(sensitivity_df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Weights are illustrative, not stakeholder-validated. Sensitivity counts expose how often "
+            "the rolling policy beats, ties, or loses to the best fixed policy under each weighting."
+        )
+
+        all_rows = rolling_result["rows"]
+        scenario_names = sorted({row["scenario"] for row in all_rows})
+        error_names = sorted({row["forecast_error_profile"] for row in all_rows})
+        policy_names = ["rolling", "ro_first", "ice_first", "perfect_information"]
+        s1, s2, s3 = st.columns(3)
+        selected_scenario = s1.selectbox("Scenario", scenario_names, key="rolling_lab_scenario")
+        selected_error = s2.selectbox("Forecast-error profile", error_names, key="rolling_lab_error")
+        selected_policy = s3.selectbox("Policy to audit", policy_names, key="rolling_lab_policy")
+        selected = next(
+            row for row in all_rows
+            if row["scenario"] == selected_scenario
+            and row["forecast_error_profile"] == selected_error
+            and row["result"]["policy"] == selected_policy
+        )
+        audit_df = pd.DataFrame(selected["result"]["hourly_audit"])
+        st.subheader("Hourly operating audit")
+        st.line_chart(
+            audit_df.set_index("hour_index")[["actual_surplus_kw", "forecast_surplus_kw"]]
+        )
+        st.line_chart(
+            audit_df.set_index("hour_index")[["water_inventory_m3", "cold_inventory_kwh_th"]]
+        )
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        download_a, download_b, download_c = st.columns(3)
+        with download_a:
+            st.download_button(
+                "Download comparison CSV",
+                dataframe_csv(rolling_result["summary"]),
+                file_name="islandos_rolling_comparison.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with download_b:
+            st.download_button(
+                "Download hourly audit CSV",
+                dataframe_csv(selected["result"]["hourly_audit"]),
+                file_name="islandos_rolling_hourly_audit.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with download_c:
+            report_payload = {
+                "data_status": "synthetic prototype; not field-validated",
+                "aggregate_summary": aggregate,
+                "summary": rolling_result["summary"],
+                "weight_sensitivity": rolling_result["weight_sensitivity"],
+                "rows": all_rows,
+            }
+            st.download_button(
+                "Download full JSON evidence",
+                json.dumps(report_payload, indent=2).encode("utf-8"),
+                file_name="islandos_rolling_horizon_evidence.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+    else:
+        st.info("Click Run 48-case rolling-horizon experiment to generate comparisons and hourly audit evidence.")
+
+elif page == "Custom dispatch CSV":
+    st.title("Run rolling dispatch on your own hourly data")
+    st.write(
+        "Upload aligned renewable-surplus forecasts, realized surplus, water demand, and cooling demand. "
+        "The app will compare four policies and expose the hourly audit for each."
+    )
+    st.markdown(
+        "**Required columns:** `timestamp_utc`, `actual_surplus_kw`, `forecast_surplus_kw`, "
+        "`water_demand_m3`, and `cooling_demand_kw_th`. Optional: `forecast_water_demand_m3` "
+        "for planning demand separate from realized demand. Timestamps must be ISO-8601 with a timezone, "
+        "strictly increasing after UTC normalization. Numeric values must be finite and non-negative."
+    )
+    st.caption(
+        "The actual series is used for hourly execution and evaluation; forecasts are planning inputs. "
+        "This is a research simulation, not a live controller or a site-safety assessment."
+    )
+    st.download_button(
+        "Download 24-hour synthetic CSV template",
+        data=generate_rolling_dispatch_template().encode("utf-8"),
+        file_name="islandos_rolling_dispatch_template.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+    custom_upload = st.file_uploader(
+        "Upload paired hourly CSV", type=["csv"], key="custom_rolling_csv"
+    )
+    if custom_upload is None:
+        st.info("Upload a CSV with the required columns to begin.")
+    else:
+        custom_raw = custom_upload.getvalue()
+        custom_signature = strategy_run_signature(
+            custom_raw, custom_upload.name, {"mode": "custom_rolling_dispatch"}
+        )
+        custom_result = st.session_state.get("islandos_custom_rolling_result")
+        if custom_result and custom_result.get("input_signature") != custom_signature:
+            st.session_state.pop("islandos_custom_rolling_result", None)
+            custom_result = None
+            st.warning("The uploaded file changed. Previous results were cleared; run the comparison again.")
+        try:
+            parsed_custom = parse_rolling_scenario_csv(
+                custom_raw.decode("utf-8-sig"), name=Path(custom_upload.name).stem
+            )
+        except (UnicodeDecodeError, ValueError) as exc:
+            st.error(f"CSV validation failed: {exc}")
+            parsed_custom = None
+
+        if parsed_custom and st.button(
+            "▶ Compare rolling and fixed policies", type="primary", use_container_width=True
+        ):
+            with st.spinner("Simulating four policies with state carried between hours..."):
+                policy_results = []
+                for policy_name in ("rolling", "ro_first", "ice_first", "perfect_information"):
+                    result = simulate_rolling_dispatch(
+                        parsed_custom["scenario"],
+                        parsed_custom["forecast_surplus_kw"],
+                        policy_name,
+                        forecast_water_demand_m3_per_hour=parsed_custom[
+                            "forecast_water_demand_m3_per_hour"
+                        ],
+                    )
+                    policy_results.append({"policy": policy_name, "result": result})
+            st.session_state["islandos_custom_rolling_result"] = {
+                "input_signature": custom_signature,
+                "source": custom_upload.name,
+                "timestamps_utc": parsed_custom["timestamps_utc"],
+                "rows": policy_results,
+            }
+            custom_result = st.session_state["islandos_custom_rolling_result"]
+
+        if custom_result:
+            st.caption(f"Input provenance: **{custom_result['source']}** · {len(custom_result['timestamps_utc'])} hourly rows")
+            comparison_rows = []
+            for item in custom_result["rows"]:
+                result = item["result"]
+                comparison_rows.append({
+                    "policy": item["policy"],
+                    "water_produced_m3": round(sum(row["water_produced_m3"] for row in result["hourly_audit"]), 3),
+                    "water_served_m3": round(sum(row["water_served_m3"] for row in result["hourly_audit"]), 3),
+                    "water_unmet_m3": result["water_unmet_m3"],
+                    "cooling_produced_kwh_th": round(sum(row["cooling_produced_kwh_th"] for row in result["hourly_audit"]), 3),
+                    "cooling_served_kwh_th": round(sum(row["cooling_served_kwh_th"] for row in result["hourly_audit"]), 3),
+                    "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
+                    "renewable_flexible_load_kwh": result["renewable_flexible_load_kwh"],
+                    "remaining_surplus_kwh": result["remaining_surplus_kwh"],
+                    "constraint_violation_hours": result["constraint_violation_hours"],
+                    "final_water_inventory_m3": result["final_water_inventory_m3"],
+                    "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
+                })
+            comparison_df = pd.DataFrame(comparison_rows)
+            st.subheader("Policy comparison")
+            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "Perfect-information is a hindsight reference, not a deployable policy. Lower unmet demand "
+                "and fewer constraint violations matter; remaining surplus alone is not a complete value metric."
+            )
+            policy_choice = st.selectbox(
+                "Policy to inspect",
+                [item["policy"] for item in custom_result["rows"]],
+                key="custom_rolling_policy",
+            )
+            chosen_item = next(item for item in custom_result["rows"] if item["policy"] == policy_choice)
+            audit_df = pd.DataFrame(chosen_item["result"]["hourly_audit"])
+            audit_df["timestamp_utc"] = list(custom_result["timestamps_utc"])
+            st.subheader("Hourly operating audit")
+            st.line_chart(audit_df.set_index("hour_index")[["actual_surplus_kw", "forecast_surplus_kw"]])
+            st.line_chart(audit_df.set_index("hour_index")[["water_inventory_m3"]])
+            st.line_chart(audit_df.set_index("hour_index")[["cold_inventory_kwh_th"]])
+            st.dataframe(audit_df, use_container_width=True, hide_index=True)
+            d1, d2, d3 = st.columns(3)
+            with d1:
+                st.download_button(
+                    "Download policy comparison", dataframe_csv(comparison_rows),
+                    file_name="islandos_custom_dispatch_comparison.csv", mime="text/csv",
+                    use_container_width=True,
+                )
+            with d2:
+                st.download_button(
+                    "Download hourly audit", dataframe_csv(audit_df.to_dict(orient="records")),
+                    file_name="islandos_custom_dispatch_audit.csv", mime="text/csv",
+                    use_container_width=True,
+                )
+            with d3:
+                payload = {
+                    "data_status": "user-supplied input; not field-validated by islandOS",
+                    "source": custom_result["source"],
+                    "comparison": comparison_rows,
+                    "policy_results": custom_result["rows"],
+                }
+                st.download_button(
+                    "Download full JSON evidence", json.dumps(payload, indent=2).encode("utf-8"),
+                    file_name="islandos_custom_dispatch_evidence.json", mime="application/json",
+                    use_container_width=True,
+                )
+
+elif page == "Telemetry gateway":
+    st.title("Telemetry gateway · read-only")
+    st.write(
+        "Validate sensor/gateway messages against a canonical islandOS schema before they enter "
+        "the dispatch model. This page audits data and emits recommendations metadata only; it never writes to a PLC."
+    )
+    st.warning(
+        "Prototype boundary: no Modbus/MQTT socket is opened here and no hardware command is sent. "
+        "For historical files, replay mode skips live freshness checks and must not be used as proof of live sensor health."
+    )
+    now_utc = datetime.now(timezone.utc)
+    sample_rows = []
+    for sample_index, (surplus, water, cooling) in enumerate(((30, 4, 7), (24, 5, 8), (0, 6, 9))):
+        sample_time = now_utc - timedelta(minutes=2 - sample_index)
+        sample_rows.append({
+            "timestamp_utc": sample_time.isoformat().replace("+00:00", "Z"),
+            "device_id": "synthetic-gateway",
+            "quality_flag": "good",
+            "renewable_surplus_kw": surplus,
+            "water_demand_m3": water,
+            "cooling_demand_kw_th": cooling,
+        })
+    sample_csv = pd.DataFrame(sample_rows).to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Download fresh synthetic telemetry CSV",
+        data=sample_csv,
+        file_name="islandos_telemetry_replay_demo.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+    telemetry_file = st.file_uploader(
+        "Upload telemetry CSV or JSONL", type=["csv", "jsonl"], key="telemetry_gateway_upload"
+    )
+    max_age = st.number_input(
+        "Maximum live telemetry age (seconds)", min_value=1, max_value=86400,
+        value=300, step=30,
+    )
+    replay_mode = st.checkbox(
+        "Replay historical data (skip live freshness check; never use for live control)",
+        value=False,
+    )
+    profile_labels = {
+        "balanced": "Balanced",
+        "water_priority": "Water priority",
+        "cooling_priority": "Cooling priority",
+        "energy_efficiency": "Energy efficiency",
+    }
+    weight_profile = st.selectbox(
+        "Operator objective priority",
+        options=tuple(profile_labels),
+        format_func=lambda value: profile_labels[value],
+        help="Changes objective weights only; hard operating constraints still gate recommendations.",
+        key="telemetry_weight_profile",
+    )
+    if telemetry_file is None:
+        st.info("Upload a device export or the synthetic CSV template to inspect telemetry quality.")
+    else:
+        try:
+            raw_text = telemetry_file.getvalue().decode("utf-8-sig")
+            if telemetry_file.name.lower().endswith(".csv"):
+                rows = list(csv.DictReader(io.StringIO(raw_text)))
+            else:
+                rows = []
+                for line_number, line in enumerate(raw_text.splitlines(), start=1):
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    if not isinstance(item, dict):
+                        raise ValueError(f"JSONL line {line_number} must be an object")
+                    rows.append(item)
+            if not rows:
+                raise ValueError("The uploaded file contains no telemetry rows")
+            audited = []
+            for row_index, row in enumerate(rows, start=1):
+                replay_received_at = None
+                if replay_mode:
+                    timestamp_text = row.get("timestamp_utc")
+                    try:
+                        normalized = str(timestamp_text)
+                        if normalized.endswith("Z"):
+                            normalized = normalized[:-1] + "+00:00"
+                        replay_received_at = datetime.fromisoformat(normalized)
+                        if replay_received_at.tzinfo is None or replay_received_at.utcoffset() is None:
+                            replay_received_at = None
+                    except (TypeError, ValueError):
+                        replay_received_at = None
+                    if replay_received_at is None:
+                        replay_received_at = datetime.now(timezone.utc)
+                frame = validate_telemetry(
+                    row, source=telemetry_file.name, received_at=replay_received_at,
+                    max_age_seconds=float(max_age),
+                )
+                record = frame.as_dict()
+                record["row"] = row_index
+                record["operating_mode"] = "historical_replay" if replay_mode else "live_freshness_check"
+                audited.append(record)
+            valid_count = sum(1 for item in audited if item["valid"])
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Rows inspected", len(audited))
+            m2.metric("Valid rows", valid_count)
+            m3.metric("Rejected rows", len(audited) - valid_count)
+            if replay_mode:
+                st.info("Replay mode is for recorded-data inspection only. Freshness results are not evidence of live connectivity.")
+            if valid_count != len(audited):
+                st.error("Some rows failed validation. Do not feed rejected rows into dispatch as trusted telemetry.")
+            else:
+                st.success("All rows passed the configured software-level checks. This does not authenticate the device or certify its measurements.")
+            st.dataframe(pd.DataFrame([
+                {
+                    "row": item["row"],
+                    "timestamp_utc": item["timestamp_utc"],
+                    "valid": item["valid"],
+                    "errors": "; ".join(item["errors"]),
+                    "warnings": "; ".join(item["warnings"]),
+                    **item["values"],
+                }
+                for item in audited
+            ]), use_container_width=True, hide_index=True)
+            if valid_count == len(audited):
+                try:
+                    dispatch_rows = build_dispatch_input_rows(audited)
+                    st.info(
+                        "Dispatch export uses supplied forecast fields when present. Otherwise it uses a "
+                        "persistence baseline (previous observed value); the first row is cold-start seeded "
+                        "from its own observation and must not be counted as an out-of-sample forecast."
+                    )
+                    dispatch_buffer = io.StringIO()
+                    dispatch_writer = csv.DictWriter(
+                        dispatch_buffer,
+                        fieldnames=[
+                            "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+                            "water_demand_m3", "cooling_demand_kw_th", "forecast_water_demand_m3",
+                        ],
+                    )
+                    dispatch_writer.writeheader()
+                    dispatch_writer.writerows(dispatch_rows)
+
+                    advice_report = evaluate_dispatch_rows(
+                        dispatch_rows, name=telemetry_file.name, weight_profile=weight_profile
+                    )
+                    advice_report.update({
+                        "mode": "uploaded_telemetry_replay",
+                        "data_status": "software-validated upload; not site-validated",
+                        "source": telemetry_file.name,
+                        "row_count": len(dispatch_rows),
+                        "forecast_method": (
+                            "supplied forecast when present; otherwise persistence baseline; "
+                            "first row cold-start seeded"
+                        ),
+                        "operator_action_required": True,
+                        "physical_write_performed": False,
+                    })
+                    policy_rows = advice_report["policy_comparison"]
+                    eligible_policies = advice_report["eligible_policies"]
+                    recommended_policy = advice_report["recommended_policy_for_operator_review"]
+                    sensitivity_rows = advice_report["weight_sensitivity"]
+
+                    st.subheader("Read-only dispatch advice")
+                    st.caption(
+                        "This is a model recommendation for operator review, not a hardware command. "
+                        "The first persistence-baseline forecast row is cold-start seeded and is not an "
+                        "out-of-sample forecast."
+                    )
+                    if recommended_policy is None:
+                        st.warning(
+                            "No operational policy has zero reported constraint-violation hours. "
+                            "No policy is recommended; review inputs and operating limits."
+                        )
+                    else:
+                        st.success(
+                            f"Recommended for operator review: {recommended_policy}. "
+                            "This is the lowest balanced score among policies with zero reported constraint violations."
+                        )
+                    st.dataframe(pd.DataFrame(policy_rows), use_container_width=True, hide_index=True)
+                    st.markdown("**Objective-weight sensitivity**")
+                    st.dataframe(pd.DataFrame([
+                        {
+                            "weight_profile": item["weight_profile"],
+                            "winner_for_this_input": item["winner_for_this_input"] or "operator review required",
+                            **item["weights"],
+                        }
+                        for item in sensitivity_rows
+                    ]), use_container_width=True, hide_index=True)
+
+                    st.download_button(
+                        "Download dispatch advice report (JSON)",
+                        data=(json.dumps(advice_report, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+                        file_name="islandos_dispatch_advice.json",
+                        mime="application/json",
+                        use_container_width=True,
+                    )
+                    st.download_button(
+                        "Download dispatch-ready hourly CSV",
+                        data=dispatch_buffer.getvalue().encode("utf-8"),
+                        file_name="islandos_validated_dispatch_input.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+                except ValueError as exc:
+                    st.warning("No dispatch-input shortcut: " + str(exc))
+            st.download_button(
+                "Download telemetry validation audit",
+                data=("\n".join(json.dumps(item, sort_keys=True) for item in audited) + "\n").encode("utf-8"),
+                file_name="islandos_telemetry_validation_audit.jsonl",
+                mime="application/x-ndjson",
+                use_container_width=True,
+            )
+        except (UnicodeDecodeError, csv.Error, json.JSONDecodeError, TypeError, ValueError) as exc:
+            st.error(f"Telemetry file could not be processed: {exc}")
 
 else:
     st.title("Data guide")
