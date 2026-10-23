@@ -89,3 +89,8 @@ A separate GitHub Actions workflow builds `islandos-gateway.exe` with PyInstalle
 ## Local web deployment
 
 `Dockerfile` packages the Streamlit planning UI and its Python dependencies. `docker-compose.yml` binds the app to `127.0.0.1:8501` only. The container workflow builds the image and checks `/_stcore/health`. This proves the web process starts in CI; it is not a security review, live-device connection test, or field validation. Add authentication and network controls before any non-local exposure.
+
+
+## End-to-end recommendation CLI
+
+`islandos_advisor.py` accepts recorded telemetry CSV/JSONL, runs the shared quality gate and device mapping, converts valid hourly rows to the dispatch schema, evaluates rolling and fixed-priority strategies, and writes policy summaries plus per-hour audit rows. The chosen policy is a recommendation for operator review under the declared score weights; it is not a command. CI smoke-tests this path with synthetic data and uploads the resulting JSON report. The Windows workflow builds both the telemetry gateway and the advisor executable.
