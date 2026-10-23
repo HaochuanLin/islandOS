@@ -31,6 +31,11 @@ python experiments/prepare_soweki_water_demand.py \
 python experiments/water_demand_forecast.py \
   build/public-data/soweki_hourly.csv \
   --output build/public-data/forecast_report.json
+
+python -m pip install "scikit-learn>=1.4"
+python experiments/compare_water_demand_models.py \
+  build/public-data/soweki_hourly.csv \
+  --output build/public-data/model_comparison.json
 ```
 
 The first command expects you to supply the downloaded source CSV at the shown path. To download a series directly, use the adapter's `--download --dataset-id N` options and choose a series from 1 through 11.
@@ -41,11 +46,11 @@ The preparation report includes:
 - `prepared_hourly_csv_sha256`: SHA-256 of the produced hourly CSV bytes.
 - Source row counts, duplicate handling, excluded invalid values, time span, missing-data policy, and limitations.
 
-The public-data CI independently recomputes both hashes and fails on a mismatch. Its artifact retains the raw CSV, prepared hourly CSV, preparation report, forecast report, and measured-data summary for 90 days. Use the hashes to confirm that files match the reported experiment; a hash does not prove the source measurements are accurate.
+The public-data CI independently recomputes both hashes and fails on a mismatch. It also compares a scikit-learn gradient-boosting candidate with persistence, previous-day, and previous-week seasonal baselines on the same chronological holdout. The model report records the prepared CSV hash and scikit-learn version. Its artifact retains the raw CSV, prepared hourly CSV, preparation report, baseline forecast report, ML comparison report, and measured-data summary for 90 days. Use the hashes to confirm that files match the reported experiment; a hash does not prove the source measurements are accurate.
 
 ## What the results mean
 
-- Forecast metrics are evaluated on chronological holdout data; the rolling-origin baseline uses only earlier observations for each target.
+- Forecast metrics are evaluated on chronological holdout data; the rolling-origin baseline uses only earlier observations for each target. The ML candidate is a small gradient-boosting model, not deep learning or online learning, and it must earn its place by outperforming simple baselines on measured data.
 - Gaussian demand/error behavior is diagnosed rather than assumed. Prediction-interval coverage is empirical and not guaranteed.
 - SOWEKI is measured demand from rural German reservoir outflows, not island or Nan'ao measurements. A result on this dataset does not establish transfer to another location, season, or operating regime.
 - Synthetic simulation, public-data backtests, and successful CI runs are not field validation. Real deployment requires qualified site review, independent measurement checks, shadow-mode evaluation, fail-safe behavior, human authorization, and rollback procedures.
