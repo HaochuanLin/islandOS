@@ -60,6 +60,7 @@ def evaluate_candidate(
     high_demand_threshold_m3: float,
     min_mae_improvement_fraction: float = 0.0,
     max_underforecast_rate_increase: float = 0.02,
+    min_high_demand_samples: int = 5,
 ) -> dict[str, Any]:
     """Score two aligned forecast series and make a conservative review recommendation."""
     if not math.isfinite(high_demand_threshold_m3) or high_demand_threshold_m3 <= 0:
@@ -68,6 +69,8 @@ def evaluate_candidate(
         raise ValueError("min_mae_improvement_fraction must be between 0 and 1")
     if not 0.0 <= max_underforecast_rate_increase <= 1.0:
         raise ValueError("max_underforecast_rate_increase must be between 0 and 1")
+    if isinstance(min_high_demand_samples, bool) or not isinstance(min_high_demand_samples, int) or min_high_demand_samples < 1:
+        raise ValueError("min_high_demand_samples must be a positive integer")
 
     with Path(input_csv).open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -100,6 +103,7 @@ def evaluate_candidate(
             "No actual observations meet high_demand_threshold_m3; choose a justified threshold "
             "or provide a holdout containing high-demand hours"
         )
+    high_demand_evidence_sufficient = len(peak_indices) >= min_high_demand_samples
 
     overall = {
         "incumbent": _metrics(actual, incumbent),
@@ -138,10 +142,16 @@ def evaluate_candidate(
         peak_underforecast_delta <= max_underforecast_rate_increase
         and peak_mae_not_worse
     )
-    recommend = overall_improved and peak_risk_acceptable
+    recommend = overall_improved and peak_risk_acceptable and high_demand_evidence_sufficient
+    if recommend:
+        status = "candidate_recommended_for_review"
+    elif not high_demand_evidence_sufficient:
+        status = "insufficient_high_demand_evidence"
+    else:
+        status = "keep_incumbent_for_now"
 
     report: dict[str, Any] = {
-        "status": "candidate_recommended_for_review" if recommend else "keep_incumbent_for_now",
+        "status": status,
         "decision_scope": "offline comparison only; human review required before any model change",
         "input_csv": str(input_csv),
         "target": "freshwater demand",
@@ -154,6 +164,8 @@ def evaluate_candidate(
         "decision_checks": {
             "minimum_mae_improvement_fraction": min_mae_improvement_fraction,
             "observed_mae_improvement_fraction": mae_improvement,
+            "minimum_high_demand_samples": min_high_demand_samples,
+            "high_demand_evidence_sufficient": high_demand_evidence_sufficient,
             "overall_mae_check_passed": overall_improved,
             "maximum_allowed_high_demand_underforecast_rate_increase": max_underforecast_rate_increase,
             "high_demand_underforecast_rate_delta_candidate_minus_incumbent": peak_underforecast_delta,
@@ -179,6 +191,7 @@ def main() -> None:
     parser.add_argument("--high-demand-threshold-m3", type=float, required=True)
     parser.add_argument("--min-mae-improvement-fraction", type=float, default=0.0)
     parser.add_argument("--max-underforecast-rate-increase", type=float, default=0.02)
+    parser.add_argument("--min-high-demand-samples", type=int, default=5)
     parser.add_argument("--output", default="build/water-demand-forecast/candidate-review.json")
     args = parser.parse_args()
     report = evaluate_candidate(
@@ -187,6 +200,7 @@ def main() -> None:
         high_demand_threshold_m3=args.high_demand_threshold_m3,
         min_mae_improvement_fraction=args.min_mae_improvement_fraction,
         max_underforecast_rate_increase=args.max_underforecast_rate_increase,
+        min_high_demand_samples=args.min_high_demand_samples,
     )
     print(json.dumps({
         "status": report["status"],
