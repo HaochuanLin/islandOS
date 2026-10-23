@@ -66,6 +66,19 @@ class TestTelemetryValidation(unittest.TestCase):
                 frame = validate_telemetry(payload, "gateway", received_at=NOW)
                 self.assertFalse(frame.valid)
 
+    def test_accepts_optional_forecasts_and_rejects_invalid_optional_values(self):
+        payload = good_payload()
+        payload["forecast_surplus_kw"] = 35.0
+        payload["forecast_water_demand_m3"] = 4.5
+        frame = validate_telemetry(payload, "gateway", received_at=NOW)
+        self.assertTrue(frame.valid)
+        self.assertEqual(frame.values["forecast_surplus_kw"], 35.0)
+        self.assertEqual(frame.values["forecast_water_demand_m3"], 4.5)
+        payload["forecast_surplus_kw"] = float("nan")
+        invalid = validate_telemetry(payload, "gateway", received_at=NOW)
+        self.assertFalse(invalid.valid)
+        self.assertTrue(any("forecast_surplus_kw" in error for error in invalid.errors))
+
     def test_rejects_bad_device_quality_flag(self):
         payload = good_payload()
         payload["quality_flag"] = "sensor_fault"
