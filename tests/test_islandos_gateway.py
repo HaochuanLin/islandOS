@@ -79,10 +79,10 @@ class TestTelemetryReplayCLI(unittest.TestCase):
         mapping = {
             "schema_version": 1,
             "fields": {
-                "timestamp_utc": {"source_key": "timestamp"},
-                "renewable_surplus_kw": {"source_key": "pv_surplus_w", "scale": 0.001},
-                "water_demand_m3": {"source_key": "freshwater_demand_l", "scale": 0.001},
-                "cooling_demand_kw_th": {"source_key": "cooling_wth", "scale": 0.001},
+                "timestamp_utc": {"source_key": "timestamp", "source_unit": "ISO-8601", "canonical_unit": "ISO-8601"},
+                "renewable_surplus_kw": {"source_key": "pv_surplus_w", "source_unit": "W", "canonical_unit": "kW", "scale": 0.001},
+                "water_demand_m3": {"source_key": "freshwater_demand_l", "source_unit": "L", "canonical_unit": "m3", "scale": 0.001},
+                "cooling_demand_kw_th": {"source_key": "cooling_wth", "source_unit": "W_th", "canonical_unit": "kW_th", "scale": 0.001},
             },
         }
         with tempfile.TemporaryDirectory() as tmp:
