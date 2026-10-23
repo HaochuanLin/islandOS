@@ -63,6 +63,17 @@ class TestWaterDemandUncertaintyDispatch(unittest.TestCase):
             saved = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(saved["time_basis"]["matched_rows"], 48)
 
+            for row in rows:
+                row["seasonal_bias_corrected_90pct_upper_m3"] = (
+                    row["actual_water_demand_m3"] - 2.0
+                )
+            forecast.write_text(json.dumps({
+                "status": "baseline_evaluated",
+                "test_predictions": rows,
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Upper-bound forecast must be at least"):
+                evaluate_uncertainty_dispatch(power, forecast, output)
+
     def test_rejects_same_column_for_point_and_upper_bound(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
