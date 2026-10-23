@@ -27,12 +27,34 @@ jobs:
         run: .\dist\islandos-gateway.exe --help
       - name: Smoke-test advisor executable
         run: .\dist\islandos-advisor.exe --help
-      - name: Upload portable executable
+      - name: Assemble portable demo package
+        shell: pwsh
+        run: |
+          $package = "dist/islandos-demo-package"
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          Copy-Item "dist/islandos-gateway.exe" $package
+          Copy-Item "dist/islandos-advisor.exe" $package
+          Copy-Item "data/examples/telemetry_replay_demo.csv" "$package/telemetry_replay_demo.csv"
+          Copy-Item "config/device_map.example.json" "$package/device_map.example.json"
+          Copy-Item "packaging/windows/run-demo.bat" "$package/run-demo.bat"
+          Copy-Item "packaging/windows/README.txt" "$package/README.txt"
+      - name: Run packaged advisor on included demo data
+        shell: pwsh
+        run: |
+          $package = "dist/islandos-demo-package"
+          & "$package/islandos-advisor.exe" "$package/telemetry_replay_demo.csv" --max-age-seconds 7200 --received-at 2026-10-23T07:00:00Z --output "$package/advisor-report.json"
+          if ($LASTEXITCODE -ne 0) { throw "Packaged advisor demo failed with exit code $LASTEXITCODE" }
+          python -c "import json; from pathlib import Path; p=json.loads(Path(r'dist/islandos-demo-package/advisor-report.json').read_text(encoding='utf-8')); assert p['status'] == 'advice_ready'; assert len(p['policy_comparison']) == 4; assert len(p['weight_sensitivity']) == 4; assert p['physical_write_performed'] is False; print('Packaged advisor report validated.')"
+      - name: Zip portable demo package
+        shell: pwsh
+        run: Compress-Archive -Path "dist/islandos-demo-package/*" -DestinationPath "dist/islandos-demo-package.zip" -Force
+      - name: Upload portable executable and demo package
         uses: actions/upload-artifact@v4
         with:
           name: islandos-gateway-windows-x64
           path: |
             dist/islandos-gateway.exe
             dist/islandos-advisor.exe
+            dist/islandos-demo-package.zip
           if-no-files-found: error
           retention-days: 30
