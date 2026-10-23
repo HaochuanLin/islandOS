@@ -54,8 +54,8 @@ def prepare_soweki_water_demand(
     min_hours: int = 48,
 ) -> dict:
     """Prepare a contiguous hourly demand series without inventing missing values."""
-    if min_hours < 36:
-        raise ValueError("min_hours must be at least 36 for the forecast baseline")
+    if min_hours < 43:
+        raise ValueError("min_hours must be at least 43 for the forecast baseline's default chronological split")
 
     input_path = Path(input_csv)
     with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -119,7 +119,7 @@ def prepare_soweki_water_demand(
         raise ValueError(
             f"Only {len(selected)} consecutive complete hours are available; "
             f"at least {min_hours} are required. Check source gaps or lower --min-hours "
-            "(minimum allowed: 36)."
+            "(minimum allowed: 43)."
         )
 
     output_path = Path(output_csv)
@@ -133,6 +133,7 @@ def prepare_soweki_water_demand(
                 "water_demand_m3": f"{value:.9f}",
             })
 
+    source_span_hour_bins = int((max(grouped) - min(grouped)).total_seconds() // HOUR_SECONDS) + 1
     report = {
         "status": "prepared",
         "source_dataset": "SOWEKI Water Demand Dataset, soweki_wdd_*.csv",
@@ -140,7 +141,9 @@ def prepare_soweki_water_demand(
         "license": "CC BY 4.0",
         "source_rows": len(samples),
         "complete_hour_bins_found": len(complete_hours),
-        "incomplete_hour_bins_excluded": len(grouped) - len(complete_hours),
+        "partially_observed_hour_bins_excluded": len(grouped) - len(complete_hours),
+        "missing_hour_bins_inside_source_span": source_span_hour_bins - len(grouped),
+        "incomplete_hour_bins_excluded": source_span_hour_bins - len(complete_hours),
         "selected_contiguous_hours": len(selected),
         "minimum_hours_required": min_hours,
         "first_timestamp_utc": selected[0][0].isoformat().replace("+00:00", "Z"),
