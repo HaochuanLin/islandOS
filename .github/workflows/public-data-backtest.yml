@@ -66,7 +66,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install optional ML comparison dependency
-        run: python -m pip install "scikit-learn>=1.4"
+        run: python -m pip install -r requirements-ml.lock
       - name: Download and audit source timestamp ordering
         run: |
           python - <<'PY'
