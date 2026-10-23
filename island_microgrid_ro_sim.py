@@ -18,11 +18,11 @@ wind, pv, load (kW) and water_demand (m3/h) as equally long arrays.
 Backup power switch `Params.allow_backup_power` (default True)
   - True : if curtailment is below the RO rated power during a forced-run hour, the
            shortfall is covered by backup power (diesel / storage) and booked in `ro_backup`.
-  - False: backup power is forbidden and `ro_backup` is always 0. The start decision is
-           the same mean-based test (`start_ratio`) as in the True mode. If curtailment
-           cannot sustain the rated power in some hour of a running cycle, the RO plant is
-           stopped immediately (emergency stop). This can violate the minimum continuous
-           run constraint; check_min_run() will then report the violation.
+  - False: backup power is forbidden and `ro_backup` is always 0. A new run starts
+    only when every hour in the look-ahead minimum-run window can supply the full
+    rated power; the mean-based `start_ratio` threshold is not used. If a later
+    power shortfall nevertheless occurs, the emergency-stop fallback can violate
+    the minimum continuous-run constraint, which `check_min_run()` will report.
 
 Key assumption 1: perfect foresight
   The RO start decision reads the *actual* curtailment of the next `min_run_hours` hours,
@@ -210,11 +210,11 @@ def simulate(wind, pv, load, water_demand, p: Params):
             else:
                 on = False
 
-        # WARNING: this emergency stop may violate the RO minimum continuous run hardware
-        # constraint. It is only a safety fallback for scenarios with forecast errors. Under
-        # the perfect-foresight baseline it is NOT guaranteed to stay inactive, because the
-        # start test above uses the window mean, so a single weak hour inside an accepted
-        # window triggers it. check_min_run() will flag such violations.
+        # Safety fallback for an unexpected power shortfall in no-backup mode. The
+        # perfect-foresight start rule requires every hour in the minimum-run window to
+        # have rated power, so this should remain inactive for a consistent input trace.
+        # If it fires, the run-time hardware constraint may be violated and check_min_run()
+        # will report that violation; real forecast-error behavior is not simulated here.
         if on and (not p.allow_backup_power) and curtail[t] < p.ro_power_kw:
             on = False
             if 0 < run_len < p.min_run_hours:
