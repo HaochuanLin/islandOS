@@ -1,5 +1,6 @@
 """Tests for the read-only, explainable RO screening heuristic."""
 from datetime import datetime, timezone
+import json
 import unittest
 
 from islandos_core.configuration import SiteConfiguration
@@ -33,6 +34,21 @@ class DecisionScreeningTests(unittest.TestCase):
         self.assertEqual(result.action, "consider_run_on_surplus")
         self.assertAlmostEqual(result.estimated_full_load_power_kw, 17.5)
         self.assertIn("human review only", " ".join(result.assumptions))
+
+    def test_payload_is_versioned_json_and_explicitly_not_a_command(self):
+        result = recommend_ro_screening(
+            CONFIG,
+            renewable_surplus=reading("renewable_surplus_kw", 20, "kW"),
+            water_inventory=reading("water_inventory_m3", 5, "m3"),
+        )
+        payload = result.to_payload()
+        encoded = json.dumps(payload)
+        decoded = json.loads(encoded)
+        self.assertEqual(decoded["schema_version"], "1.0")
+        self.assertEqual(decoded["mode"], "read_only_screening")
+        self.assertIsNone(decoded["control_command"])
+        self.assertEqual(decoded["recommendation"]["action"], result.action)
+        self.assertIsInstance(decoded["recommendation"]["assumptions"], list)
 
     def test_low_surplus_holds(self):
         result = recommend_ro_screening(

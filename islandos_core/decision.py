@@ -6,6 +6,7 @@ or substitute for plant operating procedures. Inputs must already be validated.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from .configuration import SiteConfiguration
 from .signals import SignalReading
@@ -22,6 +23,27 @@ class ScreeningRecommendation:
     target_inventory_m3: float
     renewable_surplus_kw: float
     assumptions: tuple[str, ...]
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a JSON-compatible, versioned payload for APIs and audit logs.
+
+        The schema version is independent of the heuristic implementation.
+        This payload is a recommendation record, not a control command.
+        """
+        return {
+            "schema_version": "1.0",
+            "recommendation": {
+                "action": self.action,
+                "reason": self.reason,
+                "estimated_full_load_power_kw": self.estimated_full_load_power_kw,
+                "water_inventory_m3": self.water_inventory_m3,
+                "target_inventory_m3": self.target_inventory_m3,
+                "renewable_surplus_kw": self.renewable_surplus_kw,
+                "assumptions": list(self.assumptions),
+            },
+            "control_command": None,
+            "mode": "read_only_screening",
+        }
 
 
 def recommend_ro_screening(
