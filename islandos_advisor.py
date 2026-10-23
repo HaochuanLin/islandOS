@@ -62,8 +62,11 @@ def _score(result, scenario, weights=None):
     )
 
 
-def evaluate_dispatch_rows(dispatch_rows, name="telemetry"):
-    """Run the shared policy comparison used by the CLI and web UI."""
+def evaluate_dispatch_rows(dispatch_rows, name="telemetry", weight_profile="balanced"):
+    """Run the shared policy comparison with an explicit operator objective profile."""
+    if weight_profile not in WEIGHT_PROFILES:
+        raise ValueError("unknown weight profile: %s" % weight_profile)
+    selected_weights = WEIGHT_PROFILES[weight_profile]
     if not dispatch_rows:
         raise ValueError("at least one dispatch input row is required")
     buffer = io.StringIO(newline="")
@@ -84,11 +87,11 @@ def evaluate_dispatch_rows(dispatch_rows, name="telemetry"):
         policy for policy in OPERATIONAL_POLICIES
         if results[policy]["constraint_violation_hours"] == 0
     )
-    balanced_scores = {
-        policy: round(_score(results[policy], parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6)
+    selected_scores = {
+        policy: round(_score(results[policy], parsed["scenario"], selected_weights), 6)
         for policy in OPERATIONAL_POLICIES
     }
-    recommended = min(eligible, key=lambda policy: (balanced_scores[policy], policy)) if eligible else None
+    recommended = min(eligible, key=lambda policy: (selected_scores[policy], policy)) if eligible else None
 
     sensitivity = []
     for profile_name, profile_weights in WEIGHT_PROFILES.items():
@@ -114,7 +117,7 @@ def evaluate_dispatch_rows(dispatch_rows, name="telemetry"):
         result = results[policy]
         comparison.append({
             "policy": policy,
-            "normalized_score": round(_score(result, parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6),
+            "normalized_score": round(_score(result, parsed["scenario"], selected_weights), 6),
             "eligible_for_recommendation": policy in eligible,
             "water_unmet_m3": result["water_unmet_m3"],
             "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
@@ -125,7 +128,8 @@ def evaluate_dispatch_rows(dispatch_rows, name="telemetry"):
         })
     return {
         "status": "advice_ready" if recommended is not None else "operator_review_required",
-        "score_weights": WEIGHT_PROFILES["balanced"],
+        "selected_weight_profile": weight_profile,
+        "score_weights": selected_weights,
         "weight_sensitivity": sensitivity,
         "weight_sensitivity_winner_counts": winner_counts,
         "weight_sensitivity_interpretation": (
@@ -149,6 +153,8 @@ def main(argv=None):
     parser.add_argument("input", help="Hourly telemetry CSV/JSONL file, or - for stdin")
     parser.add_argument("--format", choices=("auto", "csv", "jsonl"), default="auto")
     parser.add_argument("--source", default="recorded-telemetry")
+    parser.add_argument("--weight-profile", choices=tuple(WEIGHT_PROFILES), default="balanced",
+                        help="Operator objective priority used for the primary recommendation")
     parser.add_argument("--mapping", help="Optional vendor field/unit mapping JSON")
     parser.add_argument("--max-age-seconds", type=float, default=300.0)
     parser.add_argument("--received-at", help="Timezone-aware ISO timestamp for deterministic replay")
@@ -199,7 +205,7 @@ def main(argv=None):
             return 2
 
         dispatch_rows = build_dispatch_input_rows(records)
-        evaluation = evaluate_dispatch_rows(dispatch_rows, name=Path(args.input).stem or "stdin")
+        evaluation = evaluate_dispatch_rows(dispatch_rows, name=Path(args.input).stem or "stdin", weight_profile=args.weight_profile)
         report = {
             "mode": "recorded_file_replay",
             "data_status": "user-supplied file; not site-validated",
