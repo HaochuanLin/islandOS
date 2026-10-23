@@ -104,3 +104,8 @@ The advisor first excludes operational policies with non-zero reported constrain
 ## Portable Windows demo package
 
 The Windows workflow builds both standalone executables, stages them with `telemetry_replay_demo.csv`, `device_map.example.json`, `run-demo.bat`, and `README.txt`, runs the packaged advisor on the included fixture, validates the resulting JSON report, and uploads `islandos-demo-package.zip`. This validates offline replay packaging, not a live device connection or field control loop.
+
+
+## Loopback HTTP telemetry ingress
+
+`islandos_gateway_server.py` provides a standard-library HTTP receiver for a local device bridge. It accepts one canonical JSON telemetry object per POST, applies timestamp/measurement validation, and appends accepted messages to JSONL. `/health` and `/latest` are read-only endpoints. The server refuses non-loopback binds; for remote devices, use a site-approved bridge and authenticated TLS reverse proxy rather than exposing this prototype directly. It has no Modbus/MQTT implementation and no actuator-write endpoint. Integration tests verify acceptance, persistence, latest-record retrieval, invalid-measurement rejection, and loopback-only binding.
