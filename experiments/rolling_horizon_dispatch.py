@@ -8,8 +8,11 @@ a simple run commitment, not plant interlocks or full operational feasibility.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -109,6 +112,82 @@ def _execute_one(
         "ice_power_kw": float(ice.power_used_kw[0]) if ice else 0.0,
         "ro_run_hours_remaining": int(ro.run_hours_remaining) if ro else ro_run_hours_remaining,
         "ro_fault_lockout_hours_remaining": int(ro.fault_lockout_hours_remaining) if ro else ro_fault_lockout_hours_remaining,
+    }
+
+
+def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
+    """Parse an aligned hourly power/water/cooling CSV for the rolling dispatcher.
+
+    Required columns: timestamp_utc, actual_surplus_kw, forecast_surplus_kw,
+    water_demand_m3, cooling_demand_kw_th. An optional forecast_water_demand_m3
+    column supplies planning demand separately from realized demand.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("CSV input must be non-empty text")
+    reader = csv.DictReader(io.StringIO(text))
+    required = {
+        "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+        "water_demand_m3", "cooling_demand_kw_th",
+    }
+    if not reader.fieldnames:
+        raise ValueError("CSV must include a header row")
+    missing = sorted(required - set(reader.fieldnames))
+    if missing:
+        raise ValueError(f"CSV missing required columns: {', '.join(missing)}")
+    rows = list(reader)
+    if not rows:
+        raise ValueError("CSV must contain at least one data row")
+
+    timestamps = []
+    numeric = {key: [] for key in (
+        "actual_surplus_kw", "forecast_surplus_kw", "water_demand_m3", "cooling_demand_kw_th"
+    )}
+    has_forecast_water = "forecast_water_demand_m3" in reader.fieldnames
+    forecast_water = []
+    for index, row in enumerate(rows, start=2):
+        stamp_text = (row.get("timestamp_utc") or "").strip()
+        try:
+            stamp = datetime.fromisoformat(stamp_text.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"row {index}: timestamp_utc must be a valid ISO-8601 timestamp") from exc
+        if stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise ValueError(f"row {index}: timestamp_utc must include a timezone")
+        stamp = stamp.astimezone(timezone.utc)
+        if timestamps and stamp <= timestamps[-1]:
+            raise ValueError("timestamp_utc values must be strictly increasing after UTC normalization")
+        timestamps.append(stamp)
+
+        for key in numeric:
+            raw_value = (row.get(key) or "").strip()
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"row {index}: {key} must be numeric") from exc
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"row {index}: {key} must be finite and non-negative")
+            numeric[key].append(value)
+
+        if has_forecast_water:
+            raw_value = (row.get("forecast_water_demand_m3") or "").strip()
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"row {index}: forecast_water_demand_m3 must be numeric") from exc
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"row {index}: forecast_water_demand_m3 must be finite and non-negative")
+            forecast_water.append(value)
+
+    scenario = Scenario(
+        name=str(name),
+        available_surplus_kw=tuple(numeric["actual_surplus_kw"]),
+        water_demand_m3_per_hour=tuple(numeric["water_demand_m3"]),
+        cooling_demand_kw_th=tuple(numeric["cooling_demand_kw_th"]),
+    )
+    return {
+        "scenario": scenario,
+        "forecast_surplus_kw": tuple(numeric["forecast_surplus_kw"]),
+        "forecast_water_demand_m3_per_hour": tuple(forecast_water) if has_forecast_water else None,
+        "timestamps_utc": tuple(stamp.isoformat().replace("+00:00", "Z") for stamp in timestamps),
     }
 
 
