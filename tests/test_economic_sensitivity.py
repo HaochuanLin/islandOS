@@ -192,6 +192,37 @@ class TestEconomicSensitivity(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "complete-calendar-year hourly"):
                 run_economic_sensitivity(source, Path(directory) / "out.json")
 
+    def test_zero_cost_baseline_has_undefined_relative_deltas(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "nsga2_results.json"
+            report = make_report()
+            economics = report["parameter_configuration"]["economics"]
+            for field in (
+                "electricity_price_per_kwh",
+                "ro_capex",
+                "ro_fixed_om_per_year",
+                "ro_variable_om_per_m3",
+                "chiller_capex",
+                "chiller_fixed_om_per_year",
+                "discount_rate",
+            ):
+                economics[field] = 0.0
+            for candidate in report["optimization"]["pareto_front"]:
+                candidate["objectives"]["annualized_lifecycle_cost_per_year"] = _annual_cost(
+                    candidate["cost_breakdown"], economics
+                )
+            source.write_text(json.dumps(report), encoding="utf-8")
+
+            result = run_economic_sensitivity(source, Path(directory) / "out.json")
+            self.assertEqual(result["baseline_annual_cost"]["max"], 0.0)
+            self.assertEqual(len(result["scenarios"]), 2)
+            for scenario in result["scenarios"]:
+                delta = scenario["delta_percent_from_baseline"]
+                self.assertIsNone(delta["min"])
+                self.assertIsNone(delta["median"])
+                self.assertIsNone(delta["max"])
+                self.assertEqual(delta["undefined_baseline_count"], 2)
+
     def test_rejects_partial_year_input_report(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "nsga2_results.json"
