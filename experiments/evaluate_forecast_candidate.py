@@ -98,11 +98,8 @@ def evaluate_candidate(
         candidate.append(_value(row.get("candidate_forecast_m3"), "candidate_forecast_m3", line))
 
     peak_indices = [i for i, observed in enumerate(actual) if observed >= high_demand_threshold_m3]
-    if not peak_indices:
-        raise ValueError(
-            "No actual observations meet high_demand_threshold_m3; choose a justified threshold "
-            "or provide a holdout containing high-demand hours"
-        )
+    # Zero qualifying peak observations are insufficient evidence, not malformed
+    # input. Keep the report schema explicit and refuse to recommend a candidate.
     high_demand_evidence_sufficient = len(peak_indices) >= min_high_demand_samples
 
     overall = {
@@ -115,8 +112,8 @@ def evaluate_candidate(
     high_demand = {
         "threshold_m3_per_hour": high_demand_threshold_m3,
         "event_count": len(peak_indices),
-        "incumbent": _metrics(peak_actual, peak_incumbent),
-        "candidate": _metrics(peak_actual, peak_candidate),
+        "incumbent": _metrics(peak_actual, peak_incumbent) if peak_indices else None,
+        "candidate": _metrics(peak_actual, peak_candidate) if peak_indices else None,
     }
 
     incumbent_mae = overall["incumbent"]["mae_m3_per_hour"]
@@ -133,13 +130,15 @@ def evaluate_candidate(
     peak_underforecast_delta = (
         high_demand["candidate"]["underforecast_rate"]
         - high_demand["incumbent"]["underforecast_rate"]
+        if peak_indices else None
     )
-    peak_mae_not_worse = (
+    peak_mae_not_worse = bool(peak_indices) and (
         high_demand["candidate"]["mae_m3_per_hour"]
         <= high_demand["incumbent"]["mae_m3_per_hour"] + 1e-12
     )
     peak_risk_acceptable = (
-        peak_underforecast_delta <= max_underforecast_rate_increase
+        peak_underforecast_delta is not None
+        and peak_underforecast_delta <= max_underforecast_rate_increase
         and peak_mae_not_worse
     )
     recommend = overall_improved and peak_risk_acceptable and high_demand_evidence_sufficient
