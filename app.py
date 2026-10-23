@@ -155,7 +155,7 @@ if page == "Overview":
         )
     with future_col:
         st.markdown(
-            "**AI Optimizer — NSGA-II multi-objective Pareto search**\n\n"
+            "**Experimental optimizer — NSGA-II Pareto search**\n\n"
             "The optimizer searches candidate hourly RO schedules and retains non-dominated "
             "feasible solutions. It is a model-based search, not machine learning trained on field data."
         )
@@ -312,7 +312,7 @@ elif page == "Strategy simulator":
                 use_container_width=True,
             )
         st.divider()
-        st.subheader("AI Optimizer (Next Version) — NSGA-II Pareto search")
+        st.subheader("Experimental optimizer — NSGA-II Pareto search")
         st.markdown(
             "The optimizer selects RO power at each interval from off / 6 / 8 / 10 kW. "
             "The source rule is renewable-surplus power first, then available off-peak grid power. "
