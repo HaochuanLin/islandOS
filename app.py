@@ -998,7 +998,7 @@ elif page == "Telemetry gateway":
                     }
                     st.download_button(
                         "Download dispatch advice report (JSON)",
-                        data=(json.dumps(advice_report, indent=2, sort_keys=True) + "\\n").encode("utf-8"),
+                        data=(json.dumps(advice_report, indent=2, sort_keys=True) + "\n").encode("utf-8"),
                         file_name="islandos_dispatch_advice.json",
                         mime="application/json",
                         use_container_width=True,
