@@ -210,6 +210,18 @@ class SimulationInvariantTests(unittest.TestCase):
                 )
                 self.assertTrue(np.all(result["ro_use"] <= result["curtail"] + 1e-7))
                 self.assertTrue(np.all(result["ro_backup"] >= 0.0))
+                run_segments, min_run_ok = check_min_run(
+                    result["ro_on"], p.min_run_hours
+                )
+                self.assertTrue(
+                    min_run_ok,
+                    f"case {case} violated minimum-run invariant: {run_segments}",
+                )
+                if not p.allow_backup_power:
+                    self.assertEqual(
+                        int(result["emergency_stop"].sum()), 0,
+                        f"case {case} triggered an unexpected emergency stop",
+                    )
 
 
 if __name__ == "__main__":
