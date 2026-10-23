@@ -68,3 +68,8 @@ Do not claim without additional evidence:
 ## Device-integration prototype
 
 For a quick, deterministic telemetry ingest demo, run `python islandos_gateway.py data/examples/telemetry_replay_demo.csv --format csv --received-at 2026-10-23T05:00:00Z --output build/telemetry/replay-audit.jsonl`. Inspect the output for each row's validity, canonical values, warnings, and rejection reasons. For a vendor export, pass a site-approved field map with `--mapping config/device_map.example.json`; edit its source keys and scale factors first. The fixture is synthetic and the gateway is read-only. The Windows executable is built by the separate `Build Windows telemetry gateway` workflow when that run completes successfully.
+
+
+## One-click synthetic demo
+
+The Windows package contains `run-synthetic-demo.bat`, which starts the loopback gateway with a 90,000-second freshness window and posts a generated 24-hour hourly-aligned telemetry window. This exists solely so a reviewer can see telemetry validation, policy comparison, and the browser dashboard without real equipment. The synthetic source ID is explicit. Real device bridges must use the normal gateway launcher and a site-appropriate freshness threshold; never carry the replay threshold into a live deployment.
