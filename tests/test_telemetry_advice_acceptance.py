@@ -16,8 +16,8 @@ class TestTelemetryAdviceAcceptance(unittest.TestCase):
     def test_report_has_complete_checks_and_transparent_data_status(self):
         report = build_acceptance_report(hours=24)
         self.assertEqual(report["scenario_count"], 4)
-        self.assertEqual(report["checks_total"], 16)
-        self.assertEqual(report["checks_passed"], 16)
+        self.assertEqual(report["checks_total"], 32)
+        self.assertEqual(report["checks_passed"], 32)
         self.assertTrue(report["all_checks_passed"])
         self.assertEqual(report["data_status"], "synthetic_only_not_site_data_not_field_validation")
         self.assertIn("No device authentication", " ".join(report["limitations"]))
