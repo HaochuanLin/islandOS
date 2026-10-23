@@ -40,7 +40,7 @@ def make_report(electricity_price=0.12):
     return {
         "input_summary": {
             "quality_status": "valid",
-            "source_type": "measured",
+            "source_type": "synthetic",
             "row_count": 8760,
             "first_timestamp": "2026-01-01T00:00:00Z",
             "last_timestamp": "2026-12-31T23:00:00Z",
@@ -74,7 +74,7 @@ class TestEconomicSensitivity(unittest.TestCase):
 
             self.assertEqual(report["method"], "one-factor-at-a-time fixed-candidate economic sensitivity")
             self.assertEqual(report["baseline_candidate_count"], 2)
-            self.assertEqual(report["source_type"], "measured")
+            self.assertEqual(report["source_type"], "synthetic")
             self.assertEqual(report["input_summary"]["row_count"], 8760)
             self.assertEqual(report["baseline_optimizer"]["seed"], 42)
             self.assertEqual(len(report["scenarios"]), 16)
@@ -95,6 +95,38 @@ class TestEconomicSensitivity(unittest.TestCase):
                 electricity_low["annual_cost"]["median"],
                 electricity_high["annual_cost"]["median"],
             )
+
+    def test_public_cli_writes_parseable_provenance_report(self):
+        import subprocess
+        import sys
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "nsga2_results.json"
+            output = root / "economic-sensitivity.json"
+            source.write_text(json.dumps(make_report()), encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "experiments/economic_sensitivity.py",
+                    str(source),
+                    "--relative-change", "0.2",
+                    "--output", str(output),
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            summary = json.loads(completed.stdout)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(summary["scenario_count"], 16)
+            self.assertEqual(report["source_type"], "synthetic")
+            self.assertEqual(report["baseline_optimizer"]["seed"], 42)
+            self.assertEqual(len(report["scenarios"]), 16)
+            self.assertIn("not a bankable financial assessment", " ".join(report["interpretation_limits"]))
 
     def test_zero_baseline_economic_field_is_reported_as_skipped(self):
         with tempfile.TemporaryDirectory() as directory:
