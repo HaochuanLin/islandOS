@@ -1,8 +1,8 @@
-"Explainable, read-only screening recommendation for RO operation.
+"""Explainable, read-only screening recommendation for RO operation.
 
 This is a one-step heuristic for demonstrations, not an optimizer, controller,
 or substitute for plant operating procedures. Inputs must already be validated.
-"
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
