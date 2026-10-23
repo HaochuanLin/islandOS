@@ -156,3 +156,6 @@ GitHub Actions runs additional regression and reproducibility checks. A passing 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+
+The advisor compares four policies and checks sensitivity across four declared objective-weight profiles. It recommends only among operational policies with zero reported constraint-violation hours; if none is feasible, it requests operator review and returns no recommendation. This remains decision support, not a control command.
