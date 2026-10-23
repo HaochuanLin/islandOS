@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import sklearn
 
 try:
     from sklearn.ensemble import HistGradientBoostingRegressor
@@ -149,6 +152,7 @@ def compare_water_demand_models(
     report: dict[str, Any] = {
         "status": "models_compared",
         "input_csv": Path(input_csv).name,
+        "input_csv_sha256": hashlib.sha256(Path(input_csv).read_bytes()).hexdigest(),
         "target": "freshwater demand",
         "target_column": "water_demand_m3",
         "units": "m3 per hourly interval",
@@ -170,6 +174,7 @@ def compare_water_demand_models(
         "model": {
             "name": "HistGradientBoostingRegressor",
             "library": "scikit-learn",
+            "library_version": sklearn.__version__,
             "random_state": 2026,
             "features": [
                 "previous-hour demand",
