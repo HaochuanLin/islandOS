@@ -57,6 +57,12 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "strictly increasing"):
             parse_scenario_csv(prefix + "2026-01-01T01:00:00Z,10,10,1,1\\n2026-01-01T00:00:00Z,10,10,1,1\\n")
 
+    def test_parse_scenario_csv_rejects_non_hourly_gaps(self):
+        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\\n"
+        text = prefix + "2026-01-01T00:00:00Z,10,10,1,1\\n2026-01-01T02:00:00Z,10,10,1,1\\n"
+        with self.assertRaisesRegex(ValueError, "exactly one hour apart"):
+            parse_scenario_csv(text)
+
     def test_parse_scenario_csv_rejects_negative_nonfinite_and_blank_forecasts(self):
         prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\\n"
         with self.assertRaisesRegex(ValueError, "finite and non-negative"):
