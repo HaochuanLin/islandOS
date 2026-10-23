@@ -35,6 +35,59 @@ def _parse_utc(value: Any) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def load_device_mapping(path: str) -> dict:
+    """Load a versioned canonical-field map from a JSON file."""
+    import json
+    from pathlib import Path
+
+    mapping = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(mapping, dict) or mapping.get("schema_version") != 1:
+        raise ValueError("device mapping schema_version must be 1")
+    fields = mapping.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError("device mapping must define a non-empty fields object")
+    for canonical, spec in fields.items():
+        if not isinstance(canonical, str) or not isinstance(spec, dict):
+            raise ValueError("each mapped field must have a name and object definition")
+        if not isinstance(spec.get("source_key"), str) or not spec["source_key"]:
+            raise ValueError("mapped field %s needs a non-empty source_key" % canonical)
+        for option in ("scale", "offset"):
+            if option in spec:
+                value = spec[option]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ValueError("mapped field %s %s must be finite numeric" % (canonical, option))
+    return mapping
+
+
+def apply_device_mapping(payload: Mapping[str, Any], mapping: Mapping[str, Any]) -> dict:
+    """Map vendor-specific keys/units to canonical field names before validation."""
+    if not isinstance(payload, Mapping):
+        raise TypeError("payload must be a mapping")
+    fields = mapping.get("fields")
+    if not isinstance(fields, Mapping):
+        raise ValueError("device mapping must define fields")
+    normalized = dict(payload)
+    for canonical, spec in fields.items():
+        if not isinstance(spec, Mapping) or not isinstance(spec.get("source_key"), str):
+            raise ValueError("invalid mapping definition for %s" % canonical)
+        source_key = spec["source_key"]
+        if source_key not in payload:
+            normalized[canonical] = None
+            continue
+        value = payload[source_key]
+        if canonical != "timestamp_utc" and value is not None:
+            if isinstance(value, bool):
+                normalized[canonical] = value
+            else:
+                try:
+                    normalized[canonical] = float(value) * float(spec.get("scale", 1.0)) + float(spec.get("offset", 0.0))
+                except (TypeError, ValueError):
+                    normalized[canonical] = value
+        else:
+            normalized[canonical] = value
+    return normalized
+
+
 @dataclass(frozen=True)
 class TelemetryFrame:
     source: str
