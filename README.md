@@ -24,7 +24,7 @@ The public Streamlit app is deployed from this repository's `app.py`. It demonst
 
 ## Experimental pilot scenario (Schneider Go Green 2026)
 
-A separate Nan'ao-type scenario is documented in the [Nan'ao scenario guide](docs/NAN_AO_SCENARIO.md) and implemented in `nan_ao_scenario.py`). It uses a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021. Its outputs are synthetic scenario assumptions, not measured real-world data. The main-branch interactive app remains the generic product demo; the scenario does not replace it.
+A separate Nan'ao-type scenario is documented in the [Nan'ao scenario guide](docs/NAN_AO_SCENARIO.md) and implemented in `nan_ao_scenario.py`. It uses a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021. Its outputs are synthetic scenario assumptions, not measured real-world data. The main-branch interactive app remains the generic product demo; the scenario does not replace it.
 
 ## What it can do today
 
@@ -127,7 +127,7 @@ For a compact reference to the other experiments, see [Experiments and workflows
 ## Run tests
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pytest -q
 ```
 
 GitHub Actions runs additional regression and reproducibility checks. A passing test verifies software behavior—not model accuracy, engineering feasibility, or real-world benefit.
