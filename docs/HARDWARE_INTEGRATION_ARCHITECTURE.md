@@ -109,3 +109,6 @@ The Windows workflow builds both standalone executables, stages them with `telem
 ## Loopback HTTP telemetry ingress
 
 `islandos_gateway_server.py` provides a standard-library HTTP receiver for a local device bridge. It accepts one canonical JSON telemetry object per POST, applies timestamp/measurement validation, and appends accepted messages to JSONL. `/health` and `/latest` are read-only endpoints. The server refuses non-loopback binds; for remote devices, use a site-approved bridge and authenticated TLS reverse proxy rather than exposing this prototype directly. It has no Modbus/MQTT implementation and no actuator-write endpoint. Integration tests verify acceptance, persistence, latest-record retrieval, invalid-measurement rejection, and loopback-only binding.
+
+
+The optional `--mapping` argument accepts the versioned field/unit map from `config/device_map.example.json`, after adapting source keys to the device export. `GET /advice` evaluates the last 24 accepted records only when they are valid, strictly increasing hourly rows and the newest sample is fresh. It returns the shared policy comparison and weight sensitivity; it never issues a control command.
