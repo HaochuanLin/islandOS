@@ -98,6 +98,60 @@ class TestWaterDemandRollingBacktest(unittest.TestCase):
                     step_hours=12,
                 )
 
+    def test_earlier_fold_is_unchanged_when_later_observations_are_modified(self):
+        """Future data must not leak into a fold's training or one-step features."""
+        with tempfile.TemporaryDirectory() as directory:
+            original = Path(directory) / "original.csv"
+            altered = Path(directory) / "altered.csv"
+            original_output = Path(directory) / "original.json"
+            altered_output = Path(directory) / "altered.json"
+            self._write_series(original, count=720)
+
+            with original.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+
+            first_cutoff = int(len(rows) * 0.60)
+            first_test_end = first_cutoff + 24
+            # Preserve the first fold's training history and all observations
+            # used during its test window; alter only strictly later outcomes.
+            for index in range(first_test_end, len(rows)):
+                rows[index]["water_demand_m3"] = str(
+                    float(rows[index]["water_demand_m3"]) + 500.0
+                )
+            with altered.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "water_demand_m3"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            original_report = backtest_water_demand_models(
+                original,
+                original_output,
+                initial_train_fraction=0.60,
+                test_window_hours=24,
+                step_hours=24,
+                max_folds=4,
+            )
+            altered_report = backtest_water_demand_models(
+                altered,
+                altered_output,
+                initial_train_fraction=0.60,
+                test_window_hours=24,
+                step_hours=24,
+                max_folds=4,
+            )
+
+            self.assertEqual(
+                original_report["folds"][0]["metrics"],
+                altered_report["folds"][0]["metrics"],
+            )
+            original_first_fold = [
+                row for row in original_report["forecast_rows"] if row["fold"] == 1
+            ]
+            altered_first_fold = [
+                row for row in altered_report["forecast_rows"] if row["fold"] == 1
+            ]
+            self.assertEqual(original_first_fold, altered_first_fold)
+
 
 if __name__ == "__main__":
     unittest.main()
