@@ -62,6 +62,88 @@ def _score(result, scenario, weights=None):
     )
 
 
+def evaluate_dispatch_rows(dispatch_rows, name="telemetry"):
+    """Run the shared policy comparison used by the CLI and web UI."""
+    if not dispatch_rows:
+        raise ValueError("at least one dispatch input row is required")
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=list(dispatch_rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(dispatch_rows)
+    parsed = parse_scenario_csv(buffer.getvalue(), name=name)
+    results = {}
+    for policy in POLICIES:
+        results[policy] = simulate_rolling(
+            parsed["scenario"],
+            parsed["forecast_surplus_kw"],
+            policy,
+            forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+        )
+
+    eligible = tuple(
+        policy for policy in OPERATIONAL_POLICIES
+        if results[policy]["constraint_violation_hours"] == 0
+    )
+    balanced_scores = {
+        policy: round(_score(results[policy], parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6)
+        for policy in OPERATIONAL_POLICIES
+    }
+    recommended = min(eligible, key=lambda policy: (balanced_scores[policy], policy)) if eligible else None
+
+    sensitivity = []
+    for profile_name, profile_weights in WEIGHT_PROFILES.items():
+        profile_scores = {
+            policy: round(_score(results[policy], parsed["scenario"], profile_weights), 6)
+            for policy in OPERATIONAL_POLICIES
+        }
+        sensitivity.append({
+            "weight_profile": profile_name,
+            "weights": profile_weights,
+            "policy_scores": profile_scores,
+            "winner_for_this_input": (
+                min(eligible, key=lambda policy: (profile_scores[policy], policy))
+                if eligible else None
+            ),
+        })
+    winner_counts = {
+        policy: sum(row["winner_for_this_input"] == policy for row in sensitivity)
+        for policy in OPERATIONAL_POLICIES
+    }
+    comparison = []
+    for policy in POLICIES:
+        result = results[policy]
+        comparison.append({
+            "policy": policy,
+            "normalized_score": round(_score(result, parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6),
+            "eligible_for_recommendation": policy in eligible,
+            "water_unmet_m3": result["water_unmet_m3"],
+            "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
+            "remaining_surplus_kwh": result["remaining_surplus_kwh"],
+            "constraint_violation_hours": result["constraint_violation_hours"],
+            "final_water_inventory_m3": result["final_water_inventory_m3"],
+            "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
+        })
+    return {
+        "status": "advice_ready" if recommended is not None else "operator_review_required",
+        "score_weights": WEIGHT_PROFILES["balanced"],
+        "weight_sensitivity": sensitivity,
+        "weight_sensitivity_winner_counts": winner_counts,
+        "weight_sensitivity_interpretation": (
+            "Winner counts are across the declared weight profiles for this input only; "
+            "they are not statistical confidence or a guarantee of field performance."
+        ),
+        "policy_comparison": comparison,
+        "eligible_policies": list(eligible),
+        "recommended_policy_for_operator_review": recommended,
+        "recommendation_reason": (
+            "lowest declared normalized score among zero-constraint-violation operational policies for this input only"
+            if recommended is not None else
+            "no operational policy satisfies all reported constraints; operator review is required and no policy is recommended"
+        ),
+        "hourly_audit_by_policy": {policy: results[policy]["hourly_audit"] for policy in POLICIES},
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", help="Hourly telemetry CSV/JSONL file, or - for stdin")
@@ -117,84 +199,14 @@ def main(argv=None):
             return 2
 
         dispatch_rows = build_dispatch_input_rows(records)
-        buffer = io.StringIO(newline="")
-        writer = csv.DictWriter(buffer, fieldnames=list(dispatch_rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(dispatch_rows)
-        parsed = parse_scenario_csv(buffer.getvalue(), name=Path(args.input).stem or "stdin")
-        results = {}
-        for policy in POLICIES:
-            results[policy] = simulate_rolling(
-                parsed["scenario"],
-                parsed["forecast_surplus_kw"],
-                policy,
-                forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
-            )
-        operational = OPERATIONAL_POLICIES
-        scores = {
-            policy: round(_score(results[policy], parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6)
-            for policy in operational
-        }
-        eligible = tuple(
-            policy for policy in operational
-            if results[policy]["constraint_violation_hours"] == 0
-        )
-        recommended = min(eligible, key=lambda policy: (scores[policy], policy)) if eligible else None
-        sensitivity = []
-        for profile_name, profile_weights in WEIGHT_PROFILES.items():
-            profile_scores = {
-                policy: round(_score(results[policy], parsed["scenario"], profile_weights), 6)
-                for policy in operational
-            }
-            sensitivity.append({
-                "weight_profile": profile_name,
-                "weights": profile_weights,
-                "policy_scores": profile_scores,
-                "winner_for_this_input": (
-                    min(eligible, key=lambda policy: (profile_scores[policy], policy))
-                    if eligible else None
-                ),
-            })
-        winner_counts = {
-            policy: sum(row["winner_for_this_input"] == policy for row in sensitivity)
-            for policy in operational
-        }
-        comparison = []
-        for policy in POLICIES:
-            result = results[policy]
-            comparison.append({
-                "policy": policy,
-                "normalized_score": round(_score(result, parsed["scenario"]), 6),
-                "water_unmet_m3": result["water_unmet_m3"],
-                "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
-                "remaining_surplus_kwh": result["remaining_surplus_kwh"],
-                "constraint_violation_hours": result["constraint_violation_hours"],
-                "final_water_inventory_m3": result["final_water_inventory_m3"],
-                "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
-            })
+        evaluation = evaluate_dispatch_rows(dispatch_rows, name=Path(args.input).stem or "stdin")
         report = {
-            "status": "advice_ready" if recommended is not None else "operator_review_required",
             "mode": "recorded_file_replay",
             "data_status": "user-supplied file; not site-validated",
             "source": args.source,
             "row_count": len(records),
             "forecast_method": "supplied forecasts where present; otherwise persistence baseline; first row cold-start seeded",
-            "score_weights": WEIGHT_PROFILES["balanced"],
-            "weight_sensitivity": sensitivity,
-            "weight_sensitivity_winner_counts": winner_counts,
-            "weight_sensitivity_interpretation": (
-                "Winner counts are across the declared weight profiles for this input only; "
-                "they are not statistical confidence or a guarantee of field performance."
-            ),
-            "policy_comparison": comparison,
-            "eligible_policies": list(eligible),
-            "recommended_policy_for_operator_review": recommended,
-            "recommendation_reason": (
-                "lowest declared normalized score among zero-constraint-violation operational policies for this input only"
-                if recommended is not None else
-                "no operational policy satisfies all reported constraints; operator review is required and no policy is recommended"
-            ),
-            "hourly_audit_by_policy": {policy: results[policy]["hourly_audit"] for policy in POLICIES},
+            **evaluation,
             "telemetry_audit": records,
             "operator_action_required": True,
             "physical_write_performed": False,
