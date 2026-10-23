@@ -87,6 +87,33 @@ def test_returned_solutions_are_unique_feasible_and_non_dominated():
         assert not _is_dominated(candidate, vectors[:i] + vectors[i + 1:])
 
 
+
+def test_optimizer_quality_is_stable_across_multiple_seeds():
+    """Every seed must return feasible, unique, nondominated points."""
+    for seed in (3, 19, 41):
+        summaries, _, meta = optimize_dispatch(
+            sample_steps(), sample_config(),
+            population_size=120, generations=60, seed=seed,
+        )
+        assert summaries, f"seed={seed}: {meta['message']}"
+        assert meta["objective_count"] == 2
+        assert 0 < meta["evaluations"] <= 120 * 60
+        assert all(row["unmet_water_demand_m3"] == 0.0 for row in summaries)
+        assert all(row["minimum_run_constraint_violations"] == 0 for row in summaries)
+        assert all(row["water_spill_m3"] == 0.0 for row in summaries)
+        assert all(
+            -1e-6 <= row["ending_water_inventory_m3"]
+            <= sample_config().tank_capacity_m3 + 1e-6
+            for row in summaries
+        )
+        vectors = [_objective_vector(row) for row in summaries]
+        assert len(vectors) == len(set(vectors)), f"seed={seed}: duplicate objective vectors"
+        for i, candidate in enumerate(vectors):
+            assert not _is_dominated(candidate, vectors[:i] + vectors[i + 1:]), (
+                f"seed={seed}: dominated point returned"
+            )
+
+
 def test_optimizer_is_reproducible_for_fixed_seed():
     args = dict(population_size=120, generations=60, seed=123)
     first, _, _ = optimize_dispatch(sample_steps(), sample_config(), **args)
