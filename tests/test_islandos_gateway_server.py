@@ -23,6 +23,70 @@ def free_port():
 
 
 class TestReadOnlyHTTPGateway(unittest.TestCase):
+    def test_vendor_mapping_ingests_converted_values_through_http(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            port = free_port()
+            mapping_path = Path(tmp) / "mapping.json"
+            audit = Path(tmp) / "audit.jsonl"
+            mapping = {
+                "schema_version": 1,
+                "fields": {
+                    "timestamp_utc": {"source_key": "ts", "source_unit": "ISO-8601", "canonical_unit": "ISO-8601"},
+                    "renewable_surplus_kw": {"source_key": "solar_w", "source_unit": "W", "canonical_unit": "kW", "scale": 0.001},
+                    "water_demand_m3": {"source_key": "water_l", "source_unit": "L", "canonical_unit": "m3", "scale": 0.001},
+                    "cooling_demand_kw_th": {"source_key": "cooling_kw", "source_unit": "kW_th", "canonical_unit": "kW_th"},
+                },
+            }
+            mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+            process = subprocess.Popen(
+                [sys.executable, str(SERVER), "--host", "127.0.0.1",
+                 "--port", str(port), "--max-age-seconds", "120",
+                 "--mapping", str(mapping_path), "--audit-file", str(audit)],
+                cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            base = "http://127.0.0.1:%d" % port
+            try:
+                for _ in range(60):
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate()
+                        self.fail("gateway exited early: %s %s" % (stdout, stderr))
+                    try:
+                        with urlopen(base + "/health", timeout=0.25):
+                            break
+                    except (URLError, TimeoutError):
+                        time.sleep(0.1)
+                else:
+                    self.fail("gateway health endpoint did not become ready")
+                now = datetime.now(timezone.utc)
+                payload = {
+                    "ts": now.isoformat().replace("+00:00", "Z"),
+                    "solar_w": 42000,
+                    "water_l": 1250,
+                    "cooling_kw": 8,
+                }
+                request = Request(
+                    base + "/telemetry",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=3) as response:
+                    accepted = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(response.status, 202)
+                self.assertTrue(accepted["valid"])
+                record = json.loads(audit.read_text(encoding="utf-8").splitlines()[-1])
+                self.assertEqual(record["values"]["renewable_surplus_kw"], 42.0)
+                self.assertEqual(record["values"]["water_demand_m3"], 1.25)
+                self.assertEqual(record["values"]["cooling_demand_kw_th"], 8.0)
+                self.assertFalse(record["physical_write_performed"])
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_live_ingest_validates_persists_and_exposes_latest(self):
         with tempfile.TemporaryDirectory() as tmp:
             port = free_port()
