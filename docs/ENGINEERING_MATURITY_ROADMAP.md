@@ -263,3 +263,11 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - Hardened the validator to reject non-mapping top-level input, non-string data-status values, empty/malformed HTTPS URLs, and URL parser errors with the documented `DatasetProvenanceError` instead of leaking incidental implementation exceptions ([validator commit](https://github.com/HaochuanLin/islandOS/commit/b1fd1d864b8cebba16586c33bd66631f887802b2)).
 - Added regression cases for malformed IPv6 URLs, empty HTTPS hosts, list-valued status, non-mapping metadata, and non-bytes hash input ([test commit](https://github.com/HaochuanLin/islandOS/commit/6bb1e978d4082d3913732ef178e6bab850049eb3)).
 - Score impact: no maturity score is raised solely because code was committed. Wait for CI against the exact `main` SHA, then reassess data-validation and overall engineering evidence. This metadata contract does not establish dataset licensing, accuracy, site relevance, or field validity.
+
+
+### 2026-10-23 — Reusable provenance audit command
+
+- Added `experiments/validate_dataset_provenance.py`, a command-line interface that validates and normalizes a provenance JSON record and can bind it to a local artifact's exact SHA-256 bytes.
+- The CLI rejects a declared digest that does not match the supplied file and exits non-zero for malformed JSON or invalid metadata; regression coverage is in `tests/test_validate_dataset_provenance_cli.py`.
+- Added [Dataset provenance validation](DATASET_PROVENANCE.md) with the schema, commands, and limits. This makes the contract directly usable in offline workflows; it does not yet automatically attach metadata to every importer or prove source accuracy/licence compliance.
+- Score impact remains pending until the full CI workflow completes successfully for the exact main commit. Do not increase real-world validation scores based on this software-only change.
