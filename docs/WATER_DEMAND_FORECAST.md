@@ -70,6 +70,15 @@ to have nominal coverage. Because demand cannot be negative, the lower bound
 and corrected point forecast are clipped at zero; empirical coverage remains
 important.
 
+## Compare a first machine-learning model
+
+The optional [water-demand model comparison](WATER_DEMAND_ML_COMPARISON.md)
+adds a small scikit-learn gradient-boosting model and compares it with previous-hour,
+previous-day, and previous-week baselines on the same chronological holdout.
+It is deliberately not deep learning. The model should only be considered better
+if it improves out-of-sample results across multiple time windows and useful
+operational metrics, not just one synthetic demo.
+
 ## Why not start with deep learning?
 
 A neural network can be useful when there is enough high-quality historical

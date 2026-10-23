@@ -45,6 +45,28 @@ jobs:
           assert "nominal_90pct" in report["seasonal_prediction_intervals"]
           print("Synthetic water-demand forecast smoke test passed.")
           PY
+      - name: Compare water-demand ML with naive baselines
+        run: |
+          python experiments/compare_water_demand_models.py data/examples/synthetic_water_demand_demo.csv --output build/water-demand-forecast/model-comparison.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/water-demand-forecast/model-comparison.json").read_text(encoding="utf-8"))
+          assert report["status"] == "models_compared"
+          assert report["chronological_split"]["test_samples"] > 0
+          expected = {"persistence_previous_hour", "seasonal_naive_previous_day", "seasonal_naive_previous_week", "hist_gradient_boosting"}
+          assert expected == set(report["test_metrics"])
+          assert all(metric["mae_m3_per_hour"] >= 0 for metric in report["test_metrics"].values())
+          print("Synthetic water-demand ML comparison smoke test passed.")
+          PY
+      - name: Upload water-demand ML comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-water-demand-ml-comparison
+          path: build/water-demand-forecast/model-comparison.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload water-demand forecast example report
         uses: actions/upload-artifact@v4
         with:
