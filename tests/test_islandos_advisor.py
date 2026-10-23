@@ -39,6 +39,10 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
             "rolling", "ro_first", "ice_first", "perfect_information"
         })
         self.assertIn(report["recommended_policy_for_operator_review"], {"rolling", "ro_first", "ice_first"})
+        self.assertIn(report["recommended_policy_for_operator_review"], report["eligible_policies"])
+        comparison = {row["policy"]: row for row in report["policy_comparison"]}
+        for policy in report["eligible_policies"]:
+            self.assertEqual(comparison[policy]["constraint_violation_hours"], 0)
         self.assertTrue(report["operator_action_required"])
         self.assertFalse(report["physical_write_performed"])
 
