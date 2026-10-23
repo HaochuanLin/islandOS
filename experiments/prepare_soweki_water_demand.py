@@ -15,6 +15,7 @@ import math
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 QUARTER_HOUR_SECONDS = 15 * 60
 HOUR_SECONDS = 60 * 60
@@ -168,15 +169,49 @@ def prepare_soweki_water_demand(
     return report
 
 
+def _download_source(dataset_id: int, destination: str | Path) -> Path:
+    """Download one openly licensed SOWEKI CSV from its canonical Zenodo record."""
+    if not 1 <= dataset_id <= 11:
+        raise ValueError("dataset_id must be between 1 and 11")
+    url = (
+        "https://zenodo.org/records/19627517/files/"
+        f"soweki_wdd_{dataset_id}.csv?download=1"
+    )
+    destination_path = Path(destination)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    request = Request(url, headers={"User-Agent": "islandOS-public-data-adapter/1.0"})
+    with urlopen(request, timeout=60) as response:
+        if response.status != 200:
+            raise RuntimeError(f"Dataset download failed with HTTP status {response.status}")
+        with destination_path.open("wb") as handle:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+    return destination_path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input_csv", help="Downloaded SOWEKI source CSV, e.g. soweki_wdd_1.csv")
+    parser.add_argument("input_csv", nargs="?", help="Local SOWEKI CSV; omit when using --download")
+    parser.add_argument("--download", action="store_true", help="Download the selected public SOWEKI dataset automatically")
+    parser.add_argument("--dataset-id", type=int, choices=range(1, 12), default=1, help="SOWEKI series number (1–11) when using --download")
     parser.add_argument("--output", default="build/water-demand-forecast/soweki_hourly.csv")
     parser.add_argument("--report", default=None, help="Optional report JSON path")
     parser.add_argument("--min-hours", type=int, default=48)
     args = parser.parse_args()
+    if args.download:
+        if args.input_csv:
+            parser.error("Do not pass input_csv together with --download")
+        raw_path = Path("build/water-demand-forecast/raw") / f"soweki_wdd_{args.dataset_id}.csv"
+        input_csv = _download_source(args.dataset_id, raw_path)
+    else:
+        if not args.input_csv:
+            parser.error("Provide input_csv or use --download")
+        input_csv = args.input_csv
     report = prepare_soweki_water_demand(
-        args.input_csv, args.output, report_json=args.report, min_hours=args.min_hours
+        input_csv, args.output, report_json=args.report, min_hours=args.min_hours
     )
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
