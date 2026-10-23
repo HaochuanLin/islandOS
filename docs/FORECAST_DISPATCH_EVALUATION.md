@@ -120,7 +120,7 @@ one row, the persistence comparison is reported as unavailable.
 
 ## Water-demand forecast versus persistence
 
-When \`forecast_water_demand_m3\` is present, the evaluator compares
+When `forecast_water_demand_m3` is present, the evaluator compares
 the supplied water forecast against a one-step persistence baseline on rows 2
 through N. Both forecast metrics and dispatch simulations use the same aligned
 hours, renewable forecast, realized power, actual water demand, cooling demand,
@@ -128,13 +128,13 @@ and initial inventories. The persistence forecast for hour t uses actual water
 demand from hour t-1.
 
 The JSON report places this under
-\`water_demand_input.persistence_baseline_comparison\`. It reports
+`water_demand_input.persistence_baseline_comparison`. It reports
 MAE/RMSE/bias, MAE skill relative to persistence, and the rolling-dispatch score
 difference. Negative dispatch-score difference means the supplied water
 forecast produced a lower illustrative score on this aligned trace only; it
 does not establish a general benefit.
 
-If no \`forecast_water_demand_m3\` column is supplied, this comparison is
+If no `forecast_water_demand_m3` column is supplied, this comparison is
 skipped because using actual demand as the planning input would be hindsight,
 not a forecast. At least two hourly rows are required for persistence alignment.
 
