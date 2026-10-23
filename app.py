@@ -15,6 +15,7 @@ from pathlib import Path
 import tempfile
 
 from app_state import strategy_run_signature
+from islandos_io import validate_telemetry
 
 import pandas as pd
 import streamlit as st
@@ -124,7 +125,7 @@ with st.sidebar:
     st.caption("Island energy + water planning")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Rolling dispatch lab", "Custom dispatch CSV", "Data guide"],
+        ["Overview", "Strategy simulator", "Rolling dispatch lab", "Custom dispatch CSV", "Telemetry gateway", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -749,6 +750,121 @@ elif page == "Custom dispatch CSV":
                     file_name="islandos_custom_dispatch_evidence.json", mime="application/json",
                     use_container_width=True,
                 )
+
+elif page == "Telemetry gateway":
+    st.title("Telemetry gateway · read-only")
+    st.write(
+        "Validate sensor/gateway messages against a canonical islandOS schema before they enter "
+        "the dispatch model. This page audits data and emits recommendations metadata only; it never writes to a PLC."
+    )
+    st.warning(
+        "Prototype boundary: no Modbus/MQTT socket is opened here and no hardware command is sent. "
+        "For historical files, replay mode skips live freshness checks and must not be used as proof of live sensor health."
+    )
+    now_utc = datetime.now().astimezone().astimezone(__import__("datetime").timezone.utc)
+    sample_rows = []
+    for sample_index, (surplus, water, cooling) in enumerate(((30, 4, 7), (24, 5, 8), (0, 6, 9))):
+        sample_time = now_utc - timedelta(minutes=2 - sample_index)
+        sample_rows.append({
+            "timestamp_utc": sample_time.isoformat().replace("+00:00", "Z"),
+            "device_id": "synthetic-gateway",
+            "quality_flag": "good",
+            "renewable_surplus_kw": surplus,
+            "water_demand_m3": water,
+            "cooling_demand_kw_th": cooling,
+        })
+    sample_csv = pd.DataFrame(sample_rows).to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Download fresh synthetic telemetry CSV",
+        data=sample_csv,
+        file_name="islandos_telemetry_replay_demo.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+    telemetry_file = st.file_uploader(
+        "Upload telemetry CSV or JSONL", type=["csv", "jsonl"], key="telemetry_gateway_upload"
+    )
+    max_age = st.number_input(
+        "Maximum live telemetry age (seconds)", min_value=1, max_value=86400,
+        value=300, step=30,
+    )
+    replay_mode = st.checkbox(
+        "Replay historical data (skip live freshness check; never use for live control)",
+        value=False,
+    )
+    if telemetry_file is None:
+        st.info("Upload a device export or the synthetic CSV template to inspect telemetry quality.")
+    else:
+        try:
+            raw_text = telemetry_file.getvalue().decode("utf-8-sig")
+            if telemetry_file.name.lower().endswith(".csv"):
+                rows = list(csv.DictReader(io.StringIO(raw_text)))
+            else:
+                rows = []
+                for line_number, line in enumerate(raw_text.splitlines(), start=1):
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    if not isinstance(item, dict):
+                        raise ValueError(f"JSONL line {line_number} must be an object")
+                    rows.append(item)
+            if not rows:
+                raise ValueError("The uploaded file contains no telemetry rows")
+            audited = []
+            for row_index, row in enumerate(rows, start=1):
+                replay_received_at = None
+                if replay_mode:
+                    timestamp_text = row.get("timestamp_utc")
+                    try:
+                        normalized = str(timestamp_text)
+                        if normalized.endswith("Z"):
+                            normalized = normalized[:-1] + "+00:00"
+                        replay_received_at = datetime.fromisoformat(normalized)
+                        if replay_received_at.tzinfo is None or replay_received_at.utcoffset() is None:
+                            replay_received_at = None
+                    except (TypeError, ValueError):
+                        replay_received_at = None
+                    if replay_received_at is None:
+                        replay_received_at = datetime.now().astimezone()
+                frame = validate_telemetry(
+                    row, source=telemetry_file.name, received_at=replay_received_at,
+                    max_age_seconds=float(max_age),
+                )
+                record = frame.as_dict()
+                record["row"] = row_index
+                record["operating_mode"] = "historical_replay" if replay_mode else "live_freshness_check"
+                audited.append(record)
+            valid_count = sum(1 for item in audited if item["valid"])
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Rows inspected", len(audited))
+            m2.metric("Valid rows", valid_count)
+            m3.metric("Rejected rows", len(audited) - valid_count)
+            if replay_mode:
+                st.info("Replay mode is for recorded-data inspection only. Freshness results are not evidence of live connectivity.")
+            if valid_count != len(audited):
+                st.error("Some rows failed validation. Do not feed rejected rows into dispatch as trusted telemetry.")
+            else:
+                st.success("All rows passed the configured software-level checks. This does not authenticate the device or certify its measurements.")
+            st.dataframe(pd.DataFrame([
+                {
+                    "row": item["row"],
+                    "timestamp_utc": item["timestamp_utc"],
+                    "valid": item["valid"],
+                    "errors": "; ".join(item["errors"]),
+                    "warnings": "; ".join(item["warnings"]),
+                    **item["values"],
+                }
+                for item in audited
+            ]), use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download telemetry validation audit",
+                data=("\n".join(json.dumps(item, sort_keys=True) for item in audited) + "\n").encode("utf-8"),
+                file_name="islandos_telemetry_validation_audit.jsonl",
+                mime="application/x-ndjson",
+                use_container_width=True,
+            )
+        except (UnicodeDecodeError, csv.Error, json.JSONDecodeError, TypeError, ValueError) as exc:
+            st.error(f"Telemetry file could not be processed: {exc}")
 
 else:
     st.title("Data guide")
