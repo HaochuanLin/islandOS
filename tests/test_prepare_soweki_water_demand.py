@@ -1,5 +1,6 @@
 """Tests for the SOWEKI public water-demand data adapter."""
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -39,6 +40,10 @@ class TestPrepareSowekiWaterDemand(unittest.TestCase):
             self.assertAlmostEqual(float(rows[0]["water_demand_m3"]), 2.5)
             self.assertEqual(report["source_rows"], 240)
             self.assertEqual(report["selected_contiguous_hours"], 60)
+            self.assertEqual(report["source_file_sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+            self.assertEqual(report["prepared_hourly_csv_sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
+            self.assertEqual(len(report["source_file_sha256"]), 64)
+            self.assertEqual(len(report["prepared_hourly_csv_sha256"]), 64)
             self.assertEqual(json.loads(report_path.read_text())["status"], "prepared")
 
     def test_drops_incomplete_hour_without_interpolation(self):
