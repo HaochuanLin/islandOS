@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -26,7 +25,7 @@ def _json_bytes(payload):
     return (json.dumps(payload, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
 
 
-def make_handler(audit_path, source, max_age_seconds, token):
+def make_handler(audit_path, source, max_age_seconds):
     audit_path = Path(audit_path)
     lock = threading.Lock()
     latest = {"record": None}
@@ -44,13 +43,7 @@ def make_handler(audit_path, source, max_age_seconds, token):
             self.wfile.write(body)
 
         def _authorized(self):
-            if token is None:
-                return True
-            header = self.headers.get("Authorization", "")
-            prefix = "Bearer "
-            if not header.startswith(prefix):
-                return False
-            return hmac.compare_digest(header[len(prefix):], token)
+            return True
 
         def do_GET(self):
             path = urlparse(self.path).path
@@ -154,25 +147,19 @@ def main(argv=None):
     parser.add_argument("--source", default="http-gateway")
     parser.add_argument("--audit-file", default="build/telemetry/http-ingest-audit.jsonl")
     parser.add_argument("--max-age-seconds", type=float, default=300.0)
-    parser.add_argument("--allow-remote", action="store_true",
-                        help="Allow a non-loopback bind only with ISLANDOS_GATEWAY_TOKEN set")
     args = parser.parse_args(argv)
 
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
     if args.max_age_seconds < 0:
         parser.error("--max-age-seconds must be non-negative")
-    token = os.environ.get("ISLANDOS_GATEWAY_TOKEN") or None
     if args.host not in _LOOPBACK_HOSTS:
-        if not args.allow_remote:
-            parser.error("non-loopback binding requires --allow-remote")
-        if token is None:
-            parser.error("non-loopback binding requires ISLANDOS_GATEWAY_TOKEN")
-        parser.error("remote HTTP is not TLS-protected; use a trusted TLS reverse proxy and network controls")
-    if args.allow_remote and args.host in _LOOPBACK_HOSTS:
-        parser.error("--allow-remote is only meaningful for non-loopback hosts")
+        parser.error(
+            "bind only to loopback; use a site-approved authenticated TLS reverse proxy "
+            "or local device adapter for remote clients"
+        )
 
-    handler = make_handler(args.audit_file, args.source, args.max_age_seconds, token)
+    handler = make_handler(args.audit_file, args.source, args.max_age_seconds)
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print("IslandOS read-only telemetry gateway listening on http://%s:%d" % (args.host, args.port), flush=True)
     print("No PLC commands or actuator writes are supported.", flush=True)
