@@ -13,6 +13,8 @@ from pathlib import Path
 import statistics
 from typing import Any
 
+from data_quality import SOURCE_TYPES
+
 ECONOMIC_FIELDS = (
     ("electricity_price_per_kwh", "Electricity opportunity price"),
     ("ro_capex", "RO capital cost"),
@@ -127,20 +129,21 @@ def run_economic_sensitivity(
     quality_report = report.get("data_quality_report")
     if (
         input_summary.get("quality_status") != "valid"
+        or input_summary.get("source_type") not in SOURCE_TYPES
         or not isinstance(quality_report, dict)
         or quality_report.get("status") != "valid"
         or input_summary.get("interval_minutes") != 60
         or row_count not in (8760, 8784)
     ):
-        raise ValueError("base report must contain a valid complete-calendar-year hourly input summary")
+        raise ValueError("base report must contain valid provenance and a complete-calendar-year hourly input summary")
+    first_raw = input_summary.get("first_timestamp")
+    last_raw = input_summary.get("last_timestamp")
+    if not isinstance(first_raw, str) or not isinstance(last_raw, str):
+        raise ValueError("base report must include parseable first/last timestamps")
     try:
-        first = datetime.fromisoformat(
-            input_summary["first_timestamp"].replace("Z", "+00:00")
-        )
-        last = datetime.fromisoformat(
-            input_summary["last_timestamp"].replace("Z", "+00:00")
-        )
-    except (KeyError, TypeError, ValueError) as exc:
+        first = datetime.fromisoformat(first_raw.replace("Z", "+00:00"))
+        last = datetime.fromisoformat(last_raw.replace("Z", "+00:00"))
+    except ValueError as exc:
         raise ValueError("base report must include parseable first/last timestamps") from exc
     leap_year = first.year % 4 == 0 and (first.year % 100 != 0 or first.year % 400 == 0)
     expected_hours = 8784 if leap_year else 8760
