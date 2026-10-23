@@ -126,7 +126,7 @@ class TestEconomicSensitivity(unittest.TestCase):
             self.assertEqual(report["source_type"], "synthetic")
             self.assertEqual(report["baseline_optimizer"]["seed"], 42)
             self.assertEqual(len(report["scenarios"]), 16)
-            self.assertIn("not a bankable financial assessment", " ".join(report["interpretation_limits"]))
+            self.assertIn("not a bankable financial model", " ".join(report["interpretation_limits"]))
 
     def test_zero_baseline_economic_field_is_reported_as_skipped(self):
         with tempfile.TemporaryDirectory() as directory:
