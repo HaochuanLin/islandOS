@@ -28,7 +28,14 @@ def validate_dataset_provenance(metadata: Mapping[str, Any]) -> dict[str, Any]:
     time_start, time_end, timezone, frequency, variables, license, data_status,
     source_version. Optional sha256 is a lowercase SHA-256 digest of the exact
     local artifact. Timestamps must be ISO-8601 and timezone-aware.
+
+    Invalid input is reported consistently as ``DatasetProvenanceError`` rather
+    than leaking implementation exceptions such as ``TypeError`` from set
+    membership or URL parsing.
     """
+    if not isinstance(metadata, Mapping):
+        raise DatasetProvenanceError("metadata must be a mapping")
+
     required = {
         "dataset_id", "source_name", "source_url", "retrieved_at",
         "time_start", "time_end", "timezone", "frequency", "variables",
@@ -44,12 +51,18 @@ def validate_dataset_provenance(metadata: Mapping[str, Any]) -> dict[str, Any]:
             raise DatasetProvenanceError(f"{key} must be a non-empty string")
 
     url = metadata["source_url"]
-    parsed = urlparse(url) if isinstance(url, str) else None
-    if parsed is None or parsed.scheme != "https" or not parsed.netloc:
+    if not isinstance(url, str) or not url.strip():
+        raise DatasetProvenanceError("source_url must be an absolute HTTPS URL")
+    try:
+        parsed = urlparse(url)
+        valid_https_url = parsed.scheme == "https" and bool(parsed.netloc) and bool(parsed.hostname)
+    except ValueError:
+        valid_https_url = False
+    if not valid_https_url:
         raise DatasetProvenanceError("source_url must be an absolute HTTPS URL")
 
     status = metadata["data_status"]
-    if status not in _ALLOWED_STATUSES:
+    if not isinstance(status, str) or status not in _ALLOWED_STATUSES:
         raise DatasetProvenanceError(
             "data_status must be one of: " + ", ".join(sorted(_ALLOWED_STATUSES))
         )
