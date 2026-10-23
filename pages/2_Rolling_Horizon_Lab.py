@@ -79,12 +79,13 @@ if parsed["forecast_water_demand_m3_per_hour"] is not None:
 st.caption(f"Validated source: **{source_label}** · {len(input_frame)} continuous hourly rows")
 with st.expander("Preview validated input", expanded=False):
     st.dataframe(input_frame.head(24), use_container_width=True, hide_index=True)
-    st.line_chart(
-        input_frame.set_index("timestamp_utc")[[
-            "actual_surplus_kw", "forecast_surplus_kw",
-            "water_demand_m3", "cooling_demand_kw_th",
-        ]]
-    )
+    chart_input = input_frame.set_index("timestamp_utc")
+    st.subheader("Available surplus power (kW)")
+    st.line_chart(chart_input[["actual_surplus_kw", "forecast_surplus_kw"]])
+    st.subheader("Water demand (m³ per hour)")
+    st.line_chart(chart_input[["water_demand_m3"]])
+    st.subheader("Cooling demand (kW thermal)")
+    st.line_chart(chart_input[["cooling_demand_kw_th"]])
 
 if st.button("Run four-policy rolling comparison", type="primary", use_container_width=True):
     policies = ("rolling", "ro_first", "ice_first", "perfect_information")
