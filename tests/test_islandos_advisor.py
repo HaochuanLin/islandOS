@@ -7,6 +7,9 @@ import tempfile
 import unittest
 
 
+from islandos_advisor import evaluate_dispatch_rows
+
+
 ROOT = Path(__file__).resolve().parents[1]
 RECEIVED = "2026-10-23T07:00:00Z"
 
@@ -83,6 +86,43 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 2)
         self.assertIn("exactly one-hour intervals", result.stderr)
+
+    def test_shared_dispatch_evaluator_reports_feasibility_and_sensitivity(self):
+        rows = [
+            {
+                "timestamp_utc": "2026-10-23T05:00:00Z",
+                "actual_surplus_kw": 20.0,
+                "forecast_surplus_kw": 20.0,
+                "water_demand_m3": 4.0,
+                "cooling_demand_kw_th": 7.0,
+                "forecast_water_demand_m3": 4.0,
+            },
+            {
+                "timestamp_utc": "2026-10-23T06:00:00Z",
+                "actual_surplus_kw": 35.0,
+                "forecast_surplus_kw": 20.0,
+                "water_demand_m3": 5.0,
+                "cooling_demand_kw_th": 8.0,
+                "forecast_water_demand_m3": 4.0,
+            },
+            {
+                "timestamp_utc": "2026-10-23T07:00:00Z",
+                "actual_surplus_kw": 15.0,
+                "forecast_surplus_kw": 35.0,
+                "water_demand_m3": 6.0,
+                "cooling_demand_kw_th": 9.0,
+                "forecast_water_demand_m3": 5.0,
+            },
+        ]
+        report = evaluate_dispatch_rows(rows, name="unit-test")
+        self.assertEqual(len(report["policy_comparison"]), 4)
+        self.assertEqual(len(report["weight_sensitivity"]), 4)
+        self.assertIn(report["status"], {"advice_ready", "operator_review_required"})
+        if report["recommended_policy_for_operator_review"] is not None:
+            self.assertIn(report["recommended_policy_for_operator_review"], report["eligible_policies"])
+        for policy in report["eligible_policies"]:
+            row = next(item for item in report["policy_comparison"] if item["policy"] == policy)
+            self.assertEqual(row["constraint_violation_hours"], 0)
 
     def test_help_does_not_require_input_file(self):
         result = subprocess.run(
