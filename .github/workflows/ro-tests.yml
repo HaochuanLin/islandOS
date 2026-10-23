@@ -15,8 +15,8 @@ permissions:
 
 concurrency:
   group: islandos-ci-${{ github.workflow }}-${{ github.ref }}
-  # Preserve an in-flight full test suite; rapid pushes must not cancel its evidence run.
-  cancel-in-progress: false
+  # Prefer the newest commit during rapid iteration; stale runs are superseded to keep feedback timely.
+  cancel-in-progress: true
 
 jobs:
   unit-tests:
