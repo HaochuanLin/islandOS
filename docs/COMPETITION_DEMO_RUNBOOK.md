@@ -63,3 +63,8 @@ Do not claim without additional evidence:
 - Guaranteed water security, resilience, fuel savings, or emissions reductions.
 - Safety certification, a validated digital twin, or autonomous plant control.
 - That the optimizer's preferred schedule is globally optimal outside the configured search and model assumptions.
+
+
+## Device-integration prototype
+
+For a quick, deterministic telemetry ingest demo, run `python islandos_gateway.py data/examples/telemetry_replay_demo.csv --format csv --received-at 2026-10-23T05:00:00Z --output build/telemetry/replay-audit.jsonl`. Inspect the output for each row's validity, canonical values, warnings, and rejection reasons. The fixture is synthetic and the gateway is read-only. The Windows executable is built by the separate `Build Windows telemetry gateway` workflow when that run completes successfully.
