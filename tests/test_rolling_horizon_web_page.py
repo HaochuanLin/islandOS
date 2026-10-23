@@ -12,6 +12,13 @@ def test_rolling_horizon_page_renders_and_runs_synthetic_comparison():
     assert not app.exception
     assert app.title[0].value == "Rolling-horizon energy–water dispatch lab"
 
+    provenance_hashes = app.get("code")
+    assert len(provenance_hashes) == 1
+    assert len(provenance_hashes[0].value) == 64
+    captions = [element.value for element in app.get("caption")]
+    assert any("Source type: `synthetic`" in value for value in captions)
+    assert any("UTC coverage:" in value for value in captions)
+
     app.button[0].click().run()
     assert not app.exception
     frames = [element.value for element in app.dataframe]
