@@ -32,6 +32,8 @@ from experiments.rolling_horizon_dispatch import (
     summarize_aggregate as summarize_rolling_aggregate,
     summarize_experiment as summarize_rolling_experiment,
     summarize_weight_sensitivity as summarize_rolling_weight_sensitivity,
+    parse_scenario_csv as parse_rolling_scenario_csv,
+    simulate_rolling as simulate_rolling_dispatch,
 )
 
 st.set_page_config(
@@ -121,7 +123,7 @@ with st.sidebar:
     st.caption("Island energy + water planning")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Rolling dispatch lab", "Data guide"],
+        ["Overview", "Strategy simulator", "Rolling dispatch lab", "Custom dispatch CSV", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -612,6 +614,129 @@ elif page == "Rolling dispatch lab":
             )
     else:
         st.info("Click Run 48-case rolling-horizon experiment to generate comparisons and hourly audit evidence.")
+
+elif page == "Custom dispatch CSV":
+    st.title("Run rolling dispatch on your own hourly data")
+    st.write(
+        "Upload aligned renewable-surplus forecasts, realized surplus, water demand, and cooling demand. "
+        "The app will compare four policies and expose the hourly audit for each."
+    )
+    st.markdown(
+        "**Required columns:** `timestamp_utc`, `actual_surplus_kw`, `forecast_surplus_kw`, "
+        "`water_demand_m3`, and `cooling_demand_kw_th`. Optional: `forecast_water_demand_m3` "
+        "for planning demand separate from realized demand. Timestamps must be ISO-8601 with a timezone, "
+        "strictly increasing after UTC normalization. Numeric values must be finite and non-negative."
+    )
+    st.caption(
+        "The actual series is used for hourly execution and evaluation; forecasts are planning inputs. "
+        "This is a research simulation, not a live controller or a site-safety assessment."
+    )
+    custom_upload = st.file_uploader(
+        "Upload paired hourly CSV", type=["csv"], key="custom_rolling_csv"
+    )
+    if custom_upload is None:
+        st.info("Upload a CSV with the required columns to begin.")
+    else:
+        custom_raw = custom_upload.getvalue()
+        custom_signature = strategy_run_signature(
+            custom_raw, custom_upload.name, {"mode": "custom_rolling_dispatch"}
+        )
+        custom_result = st.session_state.get("islandos_custom_rolling_result")
+        if custom_result and custom_result.get("input_signature") != custom_signature:
+            st.session_state.pop("islandos_custom_rolling_result", None)
+            custom_result = None
+            st.warning("The uploaded file changed. Previous results were cleared; run the comparison again.")
+        try:
+            parsed_custom = parse_rolling_scenario_csv(
+                custom_raw.decode("utf-8-sig"), name=Path(custom_upload.name).stem
+            )
+        except (UnicodeDecodeError, ValueError) as exc:
+            st.error(f"CSV validation failed: {exc}")
+            parsed_custom = None
+
+        if parsed_custom and st.button(
+            "▶ Compare rolling and fixed policies", type="primary", use_container_width=True
+        ):
+            with st.spinner("Simulating four policies with state carried between hours..."):
+                policy_results = []
+                for policy_name in ("rolling", "ro_first", "ice_first", "perfect_information"):
+                    result = simulate_rolling_dispatch(
+                        parsed_custom["scenario"],
+                        parsed_custom["forecast_surplus_kw"],
+                        policy_name,
+                        forecast_water_demand_m3_per_hour=parsed_custom[
+                            "forecast_water_demand_m3_per_hour"
+                        ],
+                    )
+                    policy_results.append({"policy": policy_name, "result": result})
+            st.session_state["islandos_custom_rolling_result"] = {
+                "input_signature": custom_signature,
+                "source": custom_upload.name,
+                "timestamps_utc": parsed_custom["timestamps_utc"],
+                "rows": policy_results,
+            }
+            custom_result = st.session_state["islandos_custom_rolling_result"]
+
+        if custom_result:
+            st.caption(f"Input provenance: **{custom_result['source']}** · {len(custom_result['timestamps_utc'])} hourly rows")
+            comparison_rows = []
+            for item in custom_result["rows"]:
+                result = item["result"]
+                comparison_rows.append({
+                    "policy": item["policy"],
+                    "water_unmet_m3": result["water_unmet_m3"],
+                    "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
+                    "renewable_flexible_load_kwh": result["renewable_flexible_load_kwh"],
+                    "remaining_surplus_kwh": result["remaining_surplus_kwh"],
+                    "constraint_violation_hours": result["constraint_violation_hours"],
+                    "final_water_inventory_m3": result["final_water_inventory_m3"],
+                    "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
+                })
+            comparison_df = pd.DataFrame(comparison_rows)
+            st.subheader("Policy comparison")
+            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "Perfect-information is a hindsight reference, not a deployable policy. Lower unmet demand "
+                "and fewer constraint violations matter; remaining surplus alone is not a complete value metric."
+            )
+            policy_choice = st.selectbox(
+                "Policy to inspect",
+                [item["policy"] for item in custom_result["rows"]],
+                key="custom_rolling_policy",
+            )
+            chosen_item = next(item for item in custom_result["rows"] if item["policy"] == policy_choice)
+            audit_df = pd.DataFrame(chosen_item["result"]["hourly_audit"])
+            audit_df["timestamp_utc"] = list(custom_result["timestamps_utc"])
+            st.subheader("Hourly operating audit")
+            st.line_chart(audit_df.set_index("hour_index")[["actual_surplus_kw", "forecast_surplus_kw"]])
+            st.line_chart(audit_df.set_index("hour_index")[["water_inventory_m3"]])
+            st.line_chart(audit_df.set_index("hour_index")[["cold_inventory_kwh_th"]])
+            st.dataframe(audit_df, use_container_width=True, hide_index=True)
+            d1, d2, d3 = st.columns(3)
+            with d1:
+                st.download_button(
+                    "Download policy comparison", dataframe_csv(comparison_rows),
+                    file_name="islandos_custom_dispatch_comparison.csv", mime="text/csv",
+                    use_container_width=True,
+                )
+            with d2:
+                st.download_button(
+                    "Download hourly audit", dataframe_csv(audit_df.to_dict(orient="records")),
+                    file_name="islandos_custom_dispatch_audit.csv", mime="text/csv",
+                    use_container_width=True,
+                )
+            with d3:
+                payload = {
+                    "data_status": "user-supplied input; not field-validated by islandOS",
+                    "source": custom_result["source"],
+                    "comparison": comparison_rows,
+                    "policy_results": custom_result["rows"],
+                }
+                st.download_button(
+                    "Download full JSON evidence", json.dumps(payload, indent=2).encode("utf-8"),
+                    file_name="islandos_custom_dispatch_evidence.json", mime="application/json",
+                    use_container_width=True,
+                )
 
 else:
     st.title("Data guide")
