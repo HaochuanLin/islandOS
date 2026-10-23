@@ -88,6 +88,58 @@ def build_acceptance_report(hours=24):
         winner = first["recommended_policy_for_operator_review"]
         winner_ok = winner is None or winner in first["eligible_policies"]
         checks.append({"scenario": name, "check": "recommendation_is_eligible", "passed": winner_ok})
+        audit_summaries = {}
+        audits = first["hourly_audit_by_policy"]
+        audit_complete = all(len(audits[policy]) == hours for policy in audits)
+        checks.append({"scenario": name, "check": "hourly_audit_complete", "passed": audit_complete})
+        water_balance_ok = True
+        cooling_balance_ok = True
+        inventory_nonnegative = True
+        for policy, audit in audits.items():
+            audit_summaries[policy] = {
+                "hours_audited": len(audit),
+                "max_water_balance_residual_m3": 0.0,
+                "max_cooling_balance_residual_kwh_th": 0.0,
+                "minimum_water_inventory_m3": None,
+                "minimum_cold_inventory_kwh_th": None,
+            }
+            for row in audit:
+                water_residual = abs(
+                    row["water_inventory_m3"] -
+                    (row["water_inventory_before_m3"] + row["water_produced_m3"]
+                     - row["water_served_m3"] - row["water_spill_m3"])
+                )
+                cooling_residual = abs(
+                    row["cold_inventory_kwh_th"] -
+                    (row["cold_inventory_before_kwh_th"] + row["cooling_produced_kwh_th"]
+                     - row["cooling_served_kwh_th"] - row["cooling_spill_kwh_th"])
+                )
+                audit_summaries[policy]["max_water_balance_residual_m3"] = max(
+                    audit_summaries[policy]["max_water_balance_residual_m3"], water_residual
+                )
+                audit_summaries[policy]["max_cooling_balance_residual_kwh_th"] = max(
+                    audit_summaries[policy]["max_cooling_balance_residual_kwh_th"], cooling_residual
+                )
+                current_water = row["water_inventory_m3"]
+                current_cold = row["cold_inventory_kwh_th"]
+                prior_water = row["water_inventory_before_m3"]
+                prior_cold = row["cold_inventory_before_kwh_th"]
+                inventory_nonnegative = inventory_nonnegative and min(
+                    current_water, current_cold, prior_water, prior_cold
+                ) >= -1e-6
+                prior_min_water = audit_summaries[policy]["minimum_water_inventory_m3"]
+                prior_min_cold = audit_summaries[policy]["minimum_cold_inventory_kwh_th"]
+                audit_summaries[policy]["minimum_water_inventory_m3"] = (
+                    current_water if prior_min_water is None else min(prior_min_water, current_water)
+                )
+                audit_summaries[policy]["minimum_cold_inventory_kwh_th"] = (
+                    current_cold if prior_min_cold is None else min(prior_min_cold, current_cold)
+                )
+                water_balance_ok = water_balance_ok and water_residual <= 5e-5
+                cooling_balance_ok = cooling_balance_ok and cooling_residual <= 5e-5
+        checks.append({"scenario": name, "check": "water_inventory_conservation", "passed": water_balance_ok})
+        checks.append({"scenario": name, "check": "cooling_inventory_conservation", "passed": cooling_balance_ok})
+        checks.append({"scenario": name, "check": "nonnegative_inventories", "passed": inventory_nonnegative})
         results[name] = {
             "description": config["description"],
             "input_rows": len(rows),
@@ -97,6 +149,7 @@ def build_acceptance_report(hours=24):
             "policy_comparison": policies,
             "weight_sensitivity": first["weight_sensitivity"],
             "weight_sensitivity_winner_counts": first["weight_sensitivity_winner_counts"],
+            "hourly_audit_integrity": audit_summaries,
             "recommendation_reason": first["recommendation_reason"],
         }
     return {
