@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -20,18 +21,51 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments.build_forecast_dispatch_input import build_forecast_dispatch_input
-from experiments.evaluate_forecast_dispatch import evaluate_forecast_dispatch
+from experiments.evaluate_forecast_dispatch import (
+    load_forecast_water_demand,
+    load_paired_series,
+)
+from experiments.rolling_horizon_dispatch import simulate_rolling
 
 
-def _rolling_summary(report: dict[str, Any]) -> dict[str, Any]:
-    rolling = report["policy_comparison"]["rolling"]
+def _forecast_metrics(actual: list[float], predicted: list[float]) -> dict[str, float]:
+    if not actual or len(actual) != len(predicted):
+        raise ValueError("Actual and forecast demand must be non-empty and aligned")
+    errors = [forecast - observed for observed, forecast in zip(actual, predicted)]
     return {
-        "normalized_score": rolling["normalized_score"],
-        "water_unmet_m3": rolling["water_unmet_m3"],
-        "cooling_unmet_kwh_th": rolling["cooling_unmet_kwh_th"],
-        "remaining_surplus_kwh": rolling["remaining_surplus_kwh"],
-        "constraint_violation_hours": rolling["constraint_violation_hours"],
+        "mae_m3_per_hour": sum(abs(error) for error in errors) / len(errors),
+        "rmse_m3_per_hour": math.sqrt(sum(error * error for error in errors) / len(errors)),
+        "bias_forecast_minus_actual_m3_per_hour": sum(errors) / len(errors),
+        "evaluated_hours": len(errors),
     }
+
+
+def _evaluate_rolling(csv_path: Path) -> tuple[dict[str, Any], dict[str, float]]:
+    _, scenario, forecast_surplus = load_paired_series(csv_path)
+    actual_water = list(scenario.water_demand_m3_per_hour)
+    forecast_water = load_forecast_water_demand(csv_path, actual_water)
+    result = simulate_rolling(
+        scenario,
+        forecast_surplus,
+        policy="rolling",
+        forecast_water_demand_m3_per_hour=forecast_water,
+    )
+    water_total = max(sum(actual_water), 1e-9)
+    cooling_total = max(sum(scenario.cooling_demand_kw_th), 1e-9)
+    surplus_total = max(sum(scenario.available_surplus_kw), 1e-9)
+    score = (
+        0.45 * result["water_unmet_m3"] / water_total
+        + 0.45 * result["cooling_unmet_kwh_th"] / cooling_total
+        + 0.10 * result["remaining_surplus_kwh"] / surplus_total
+    )
+    summary = {
+        "normalized_score": round(score, 8),
+        "water_unmet_m3": result["water_unmet_m3"],
+        "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
+        "remaining_surplus_kwh": result["remaining_surplus_kwh"],
+        "constraint_violation_hours": result["constraint_violation_hours"],
+    }
+    return summary, _forecast_metrics(actual_water, forecast_water)
 
 
 def evaluate_uncertainty_dispatch(
@@ -80,11 +114,9 @@ def evaluate_uncertainty_dispatch(
                     f"at every timestamp (joined row {index})"
                 )
 
-        point_report = evaluate_forecast_dispatch(point_csv)
-        upper_report = evaluate_forecast_dispatch(upper_csv)
+        point_dispatch, point_metrics = _evaluate_rolling(point_csv)
+        upper_dispatch, upper_metrics = _evaluate_rolling(upper_csv)
 
-    point_dispatch = _rolling_summary(point_report)
-    upper_dispatch = _rolling_summary(upper_report)
     report: dict[str, Any] = {
         "status": "uncertainty_dispatch_comparison_completed",
         "experiment": "point forecast versus upper prediction-bound planning stress test",
@@ -101,11 +133,11 @@ def evaluate_uncertainty_dispatch(
             "interval_hours": 1,
         },
         "point_forecast_planning": {
-            "forecast_metrics": point_report["water_demand_input"]["forecast_demand_metrics"],
+            "forecast_metrics": point_metrics,
             "rolling_dispatch": point_dispatch,
         },
         "upper_bound_stress_planning": {
-            "forecast_metrics": upper_report["water_demand_input"]["forecast_demand_metrics"],
+            "forecast_metrics": upper_metrics,
             "rolling_dispatch": upper_dispatch,
             "interpretation": (
                 "This run plans against the selected upper prediction bound while still "
@@ -131,7 +163,7 @@ def evaluate_uncertainty_dispatch(
     }
     output_path = Path(output_json)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    output_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
     return report
 
 
