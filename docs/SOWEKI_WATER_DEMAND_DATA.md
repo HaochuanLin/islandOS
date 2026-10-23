@@ -76,3 +76,18 @@ patterns, real missingness, and outliers. It does not replace local historical
 data: occupancy, tourism, weather, leakage, storage levels, and operating
 policies may differ. When site-specific data eventually becomes available, it
 should be evaluated separately and should determine which model is adopted.
+
+### Verified reproducible example run
+
+The public-data workflow was run successfully on 2026-10-23 for SOWEKI series 1. The evidence artifact is attached to [GitHub Actions run 39952100393](https://github.com/HaochuanLin/islandOS/actions/runs/39952100393). The prepared contiguous segment contained 5,533 hourly rows, with 1,384 rows in the chronological holdout.
+
+| Forecast baseline | Holdout MAE (m³/h) | Holdout RMSE (m³/h) | Bias, forecast − actual (m³/h) |
+|---|---:|---:|---:|
+| Persistence (previous hour) | 1.0513 | 1.3948 | +0.0020 |
+| Seasonal naive (24 hours) | 0.9751 | 1.3721 | −0.0098 |
+| Bias-corrected seasonal naive | 0.9751 | 1.3721 | −0.0090 |
+
+The training-history 90th-percentile threshold was 9.5195 m³/h. Among 103 holdout hours at or above that threshold, the underforecast rate was approximately 83.5% for all three baselines. Peak-period MAE was 1.5956 m³/h for persistence and about 2.01 m³/h for the seasonal variants. Thus, the seasonal baseline improved overall MAE but performed worse on this peak-demand subset.
+
+These are results for one measured rural-German series and one chronological split. They do not demonstrate transfer to islands, Nan'ao, other seasons, or operational water-supply adequacy. Review the attached JSON artifact for source-quality counts, interval coverage, and limitations before using the metrics.
+
