@@ -81,6 +81,12 @@ class SiteReadinessTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, html)
 
+    def test_staff_form_rejects_invalid_timezone_bounds_and_zero_freshness(self):
+        form = Path(__file__).resolve().parents[1] / "tools" / "site_readiness_form.html"
+        html = form.read_text(encoding="utf-8")
+        self.assertIn('14:00)$/.test(off)', html)
+        self.assertIn("maxAge<=0", html)
+
     def test_bad_values_block(self):
         self.payload["telemetry"]["pv_kw"] = float("nan")
         report = evaluate_readiness(self.payload, now=self.now)
