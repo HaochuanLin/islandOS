@@ -11,7 +11,7 @@ outflows serving small rural areas in Germany.
 - **Time resolution:** 15 minutes
 - **Coverage:** series-specific dates from 2024 through January 2026
 - **Typical size:** approximately 47,000–70,000 records per series
-- **Source columns:** \`timestamp\` and \`value\`; \`value\` is a demand flow rate in m³/h
+- **Source columns:** `timestamp` and `value`; `value` is a demand flow rate in m³/h
 - **License:** Creative Commons Attribution 4.0 International (CC BY 4.0)
 - **Source:** https://zenodo.org/records/19627517
 - **Citation:** Sehmer, F., Hoffmann, M., Kloos, N., & Bergmann, R. (2026).
@@ -24,19 +24,23 @@ that a model trained here will generalize to islands or other utilities.
 
 ## Download and prepare one series
 
-1. Open the [Zenodo dataset page](https://zenodo.org/records/19627517).
-2. Download one of the files named \`soweki_wdd_1.csv\` through
-   \`soweki_wdd_11.csv\`. Do not rename or edit its columns.
-3. From the repository root, run:
+The adapter can download the public source directly; you do not need to find or
+upload a data file yourself. From the repository root, run:
 
-\`\`\`bash
-python experiments/prepare_soweki_water_demand.py path/to/soweki_wdd_1.csv \\
-  --output build/water-demand-forecast/soweki_hourly.csv \\
+```bash
+python experiments/prepare_soweki_water_demand.py --download --dataset-id 1 \
+  --output build/water-demand-forecast/soweki_hourly.csv \
   --report build/water-demand-forecast/soweki_preparation.json
-\`\`\`
+```
+
+Choose any dataset ID from 1 to 11. The raw download is saved under
+`build/water-demand-forecast/raw/` and the prepared hourly series is saved
+separately. Alternatively, download a CSV manually from the
+[Zenodo dataset page](https://zenodo.org/records/19627517) and pass its path
+instead of `--download`.
 
 The adapter converts the 15-minute series into the hourly format accepted by
-\`experiments/water_demand_forecast.py\`. Four quarter-hour flow-rate samples
+`experiments/water_demand_forecast.py`. Four quarter-hour flow-rate samples
 are averaged per hour. Because the source values are in m³/h, that mean rate
 has the same numerical value as the volume in m³ over a one-hour interval.
 
@@ -48,15 +52,15 @@ hourly bins, then exports only the longest continuous run of complete hours,
 because the forecast baseline rejects gaps. The JSON report records how many
 hours were excluded and the selected time range. If the longest run has fewer
 than 48 hours, the command fails instead of fabricating data; the minimum can
-be adjusted with \`--min-hours\`, but never below 36.
+be adjusted with `--min-hours`, but never below 36.
 
 After preparation, evaluate the actual-data baseline:
 
-\`\`\`bash
-python experiments/water_demand_forecast.py \\
-  build/water-demand-forecast/soweki_hourly.csv \\
+```bash
+python experiments/water_demand_forecast.py \
+  build/water-demand-forecast/soweki_hourly.csv \
   --output build/water-demand-forecast/soweki_forecast_report.json
-\`\`\`
+```
 
 Compare the result with the synthetic demo, but keep the results separate and
 label the SOWEKI source in any chart or presentation. Use chronological
