@@ -1,6 +1,14 @@
 name: Public measured water-demand backtest
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/public-data-backtest.yml"
+      - "experiments/prepare_soweki_water_demand.py"
+      - "experiments/water_demand_forecast.py"
+      - "tests/test_prepare_soweki_water_demand.py"
   workflow_dispatch:
     inputs:
       dataset_id:
