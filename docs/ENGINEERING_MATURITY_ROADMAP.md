@@ -6,17 +6,17 @@ This roadmap turns the project's maturity scores into evidence-based release gat
 
 Baseline scores are provisional engineering assessments, not measured scientific quantities. The initial 2026-10-23 audit found that CI's unittest discovery did not cover ordinary pytest-style test functions; the automated-testing baseline and overall score have therefore been revised downward pending a green run of the expanded suite. Target scores are goals, not claims that the targets have already been met.
 
-| Area | Baseline | Target | Evidence required for target |
-|---|---:|---:|---|
-| Core simulation and dispatch | 87/100 | 93/100 | Explicit invariants for energy/water accounting; adversarial boundary tests; benchmark results that report raw service metrics and do not require the proposed strategy to win every fixture; documented model limits. |
-| Automated tests and reproducibility | 76/100 | 97/100 | Required CI checks on main and pull requests; deterministic fixtures; integration tests for public commands and exported JSON/CSV schemas; useful failure artifacts; no silently skipped core checks. |
-| Documentation and evidence audit | 85/100 | 95/100 | Every major feature links to runnable commands, input schema, provenance, assumptions, expected outputs, limitations, and CI evidence; product and pilot scopes remain distinct. |
-| Interactive demo and usability | 80/100 | 92/100 | Hosted app health is checked separately from code CI; clean-environment startup is tested; upload validation and user-facing failures have regression tests; demo clearly labels synthetic data and export provenance. |
-| Branch and release management | 55/100 | 90/100 | Reduce stale/diverged branches and PRs; each PR has a bounded scope, current base, passing required checks, and a reviewable diff; no mass merge of divergent product/pilot histories. |
-| Public-data / site-data validation | 25/100 | 60/100 | A documented measured or reputable public dataset with license, provenance, units, missingness audit, chronological holdout, baseline comparison, and reproducible results. This target does not imply Nan'ao field validation. |
-| Commercial / deployment readiness | 38/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. |
-| Overall software-engineering maturity | 82/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
-| Real-world operational validation | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached with synthetic tests alone. |
+| Area | Initial baseline | Current verified | Target | Evidence required for target |
+|---|---:|---:|---:|---|
+| Core simulation and dispatch | 87/100 | 87/100 | 93/100 | Explicit invariants for energy/water accounting; adversarial boundary tests; benchmark results that report raw service metrics and do not require the proposed strategy to win every fixture; documented model limits. |
+| Automated tests and reproducibility | 76/100 | 90/100 | 97/100 | Required CI checks on main and pull requests; deterministic fixtures; integration tests for public commands and exported JSON/CSV schemas; useful failure artifacts; no silently skipped core checks. |
+| Documentation and evidence audit | 85/100 | 85/100 | 95/100 | Every major feature links to runnable commands, input schema, provenance, assumptions, expected outputs, limitations, and CI evidence; product and pilot scopes remain distinct. |
+| Interactive demo and usability | 80/100 | 80/100 | 92/100 | Hosted app health is checked separately from code CI; clean-environment startup is tested; upload validation and user-facing failures have regression tests; demo clearly labels synthetic data and export provenance. |
+| Branch and release management | 55/100 | 62/100 | 90/100 | Reduce stale/diverged branches and PRs; each PR has a bounded scope, current base, passing required checks, and a reviewable diff; no mass merge of divergent product/pilot histories. |
+| Public-data / site-data validation | 25/100 | 25/100 | 60/100 | A documented measured or reputable public dataset with license, provenance, units, missingness audit, chronological holdout, baseline comparison, and reproducible results. This target does not imply Nan'ao field validation. |
+| Commercial / deployment readiness | 38/100 | 38/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. |
+| Overall software-engineering maturity | 82/100 | 85/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
+| Real-world operational validation | 38/100 | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached with synthetic tests alone. |
 
 ## Delivery order
 
@@ -86,3 +86,12 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - Relevant commits: [dependency alignment](https://github.com/HaochuanLin/islandOS/commit/c2ed08688458e40c6690f1af66606cba20d897d7), [benchmark report assertions](https://github.com/HaochuanLin/islandOS/commit/6e1a2bcc7f8b19ce0af37a98e60cbbbbaa03f76f), [complete pytest suite](https://github.com/HaochuanLin/islandOS/commit/d084395a982265015f0d29d8c3a863b7fe36c8b9).
 
 **Verification status:** these changes have been committed to `main`, but a green CI result for the resulting head commit has not yet been confirmed in this log. Do not increase the automated-testing score until the run completes successfully. If CI exposes failures, fix the causes and rerun rather than reverting to narrower test discovery merely to get a green result.
+
+### 2026-10-23 — Full-suite validation and clean scenario port
+
+- The complete `pytest` suite passed on the clean Nan'ao port's PR head, including the new forecast-dispatch input-validation tests. The previously separate NSGA-II optimizer check and the full synthetic forecast-to-dispatch integration workflow also passed.
+- The dedicated Nan'ao scenario workflow passed: the script compiled, its unittest regression suite passed, the fixed-seed 1,000-run output generation completed, JSON/CSV invariants passed, and the artifact uploaded successfully.
+- Evidence: [RO simulation tests, run 39946761604](https://github.com/HaochuanLin/islandOS/actions/runs/39946761604) and [Nan'ao scenario validation, run 39946761587](https://github.com/HaochuanLin/islandOS/actions/runs/39946761587). Both ran on PR head `b97bff87ec47430584f5b68eb968ec224e84abae`.
+- Merged [PR #44](https://github.com/HaochuanLin/islandOS/pull/44) as [commit `a2cb50d`](https://github.com/HaochuanLin/islandOS/commit/a2cb50dbcb60bf8abf332785de617a7be1bbf778). The port is based on current `main` and avoids merging the entire divergent Nan'ao branch.
+- Adjusted the **current verified** testing score from 76 to 90 and overall software-engineering score from 82 to 85. These are interim scores, not target completion. Branch management moves only from 55 to 62 because the old PR #2 still contains additional unreviewed changes and PR #43 remains divergent.
+- The post-merge `main` push run is not confirmed by the currently available workflow-run view; the verified runs above are on the exact code tree tested before merge. Keep that distinction explicit until the post-merge checks are confirmed.
