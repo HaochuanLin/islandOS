@@ -21,6 +21,18 @@ invalid values instead of silently repairing the data.
 
 ## Run it
 
+A clearly synthetic 72-hour example is included at `data/examples/synthetic_forecast_monitor_demo.csv`. It deliberately changes forecast error in the final day so you can see how a review alert works. It is **not measured data** and does not represent real forecast accuracy. Run it with:
+
+```bash
+python experiments/monitor_forecast_performance.py \\
+  data/examples/synthetic_forecast_monitor_demo.csv \\
+  --window-hours 24 \\
+  --output build/water-demand-forecast/monitor-demo.json
+```
+
+The expected result is `review_recommended` because the example's last-day error is deliberately larger than its first-day error. GitHub Actions runs this example as a smoke test and saves the JSON report as an artifact.
+
+
 From the repository root:
 
 ```bash
