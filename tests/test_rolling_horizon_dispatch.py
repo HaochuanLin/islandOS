@@ -15,9 +15,9 @@ class TestRollingHorizonDispatch(unittest.TestCase):
     def test_parse_scenario_csv_preserves_actual_and_forecast_inputs(self):
         text = (
             "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,"
-            "cooling_demand_kw_th,forecast_water_demand_m3\\n"
-            "2026-01-01T00:00:00Z,20,18,4,6,5\\n"
-            "2026-01-01T01:00:00+00:00,15,17,5,7,8\\n"
+            "cooling_demand_kw_th,forecast_water_demand_m3\n"
+            "2026-01-01T00:00:00Z,20,18,4,6,5\n"
+            "2026-01-01T01:00:00+00:00,15,17,5,7,8\n"
         )
         parsed = parse_scenario_csv(text, name="uploaded_case")
         self.assertEqual(parsed["scenario"].name, "uploaded_case")
@@ -30,10 +30,10 @@ class TestRollingHorizonDispatch(unittest.TestCase):
     def test_parsed_scenario_runs_all_dispatch_policies(self):
         text = (
             "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,"
-            "cooling_demand_kw_th,forecast_water_demand_m3\\n"
-            "2026-01-01T00:00:00Z,400,380,5,8,6\\n"
-            "2026-01-01T01:00:00Z,0,20,6,9,7\\n"
-            "2026-01-01T02:00:00Z,400,420,4,5,4\\n"
+            "cooling_demand_kw_th,forecast_water_demand_m3\n"
+            "2026-01-01T00:00:00Z,400,380,5,8,6\n"
+            "2026-01-01T01:00:00Z,0,20,6,9,7\n"
+            "2026-01-01T02:00:00Z,400,420,4,5,4\n"
         )
         parsed = parse_scenario_csv(text, name="paired_fixture")
         for policy in ("rolling", "ro_first", "ice_first", "perfect_information"):
@@ -48,31 +48,31 @@ class TestRollingHorizonDispatch(unittest.TestCase):
 
     def test_parse_scenario_csv_rejects_missing_columns(self):
         with self.assertRaisesRegex(ValueError, "missing required columns"):
-            parse_scenario_csv("timestamp_utc,actual_surplus_kw\\n2026-01-01T00:00:00Z,10\\n")
+            parse_scenario_csv("timestamp_utc,actual_surplus_kw\n2026-01-01T00:00:00Z,10\n")
 
     def test_parse_scenario_csv_rejects_naive_or_unordered_timestamps(self):
-        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\\n"
+        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\n"
         with self.assertRaisesRegex(ValueError, "must include a timezone"):
-            parse_scenario_csv(prefix + "2026-01-01T00:00:00,10,10,1,1\\n")
+            parse_scenario_csv(prefix + "2026-01-01T00:00:00,10,10,1,1\n")
         with self.assertRaisesRegex(ValueError, "strictly increasing"):
-            parse_scenario_csv(prefix + "2026-01-01T01:00:00Z,10,10,1,1\\n2026-01-01T00:00:00Z,10,10,1,1\\n")
+            parse_scenario_csv(prefix + "2026-01-01T01:00:00Z,10,10,1,1\n2026-01-01T00:00:00Z,10,10,1,1\n")
 
     def test_parse_scenario_csv_rejects_non_hourly_gaps(self):
-        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\\n"
-        text = prefix + "2026-01-01T00:00:00Z,10,10,1,1\\n2026-01-01T02:00:00Z,10,10,1,1\\n"
+        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\n"
+        text = prefix + "2026-01-01T00:00:00Z,10,10,1,1\n2026-01-01T02:00:00Z,10,10,1,1\n"
         with self.assertRaisesRegex(ValueError, "exactly one hour apart"):
             parse_scenario_csv(text)
 
     def test_parse_scenario_csv_rejects_negative_nonfinite_and_blank_forecasts(self):
-        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\\n"
+        prefix = "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,cooling_demand_kw_th\n"
         with self.assertRaisesRegex(ValueError, "finite and non-negative"):
-            parse_scenario_csv(prefix + "2026-01-01T00:00:00Z,-1,10,1,1\\n")
+            parse_scenario_csv(prefix + "2026-01-01T00:00:00Z,-1,10,1,1\n")
         with self.assertRaisesRegex(ValueError, "finite and non-negative"):
-            parse_scenario_csv(prefix + "2026-01-01T00:00:00Z,10,nan,1,1\\n")
+            parse_scenario_csv(prefix + "2026-01-01T00:00:00Z,10,nan,1,1\n")
         with self.assertRaisesRegex(ValueError, "forecast_water_demand_m3 must be numeric"):
             parse_scenario_csv(
-                prefix.replace("cooling_demand_kw_th\\n", "cooling_demand_kw_th,forecast_water_demand_m3\\n")
-                + "2026-01-01T00:00:00Z,10,10,1,1,\\n"
+                prefix.replace("cooling_demand_kw_th\n", "cooling_demand_kw_th,forecast_water_demand_m3\n")
+                + "2026-01-01T00:00:00Z,10,10,1,1,\n"
             )
 
     def test_one_step_is_committed_and_state_is_reported(self):
