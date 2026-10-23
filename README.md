@@ -105,6 +105,7 @@ For a compact reference to the other experiments, see [Experiments and workflows
 | Import measured Mafate microgrid time series | [Mafate data guide](docs/MAFATE_MICROGRID_DATA.md) |
 | Import the Philippines DIB workbook | [DIB import guide](docs/PHILIPPINES_DIB_IMPORT.md) |
 | Equipment and economic assumptions | [Parameter configuration](docs/PARAMETER_CONFIGURATION.md) |
+| Fixed-candidate lifecycle-cost sensitivity | [Economic sensitivity guide](docs/ECONOMIC_SENSITIVITY.md) |
 | Synthetic benchmark protocol | [End-to-end benchmark](docs/END_TO_END_BENCHMARK.md) |
 | Optimizer comparison methodology | [Pareto benchmark](docs/PARETO_BENCHMARK.md) |
 | More runnable commands | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) |
