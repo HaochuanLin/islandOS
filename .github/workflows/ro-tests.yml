@@ -50,7 +50,7 @@ jobs:
           print("Synthetic forecast-monitoring smoke test passed.")
           PY
       - name: Upload forecast-monitoring example report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-forecast-monitor-demo
           path: build/water-demand-forecast/monitor-demo.json
@@ -98,7 +98,7 @@ jobs:
           print("Synthetic forecast-candidate review smoke test passed.")
           PY
       - name: Upload forecast-candidate review report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-forecast-candidate-review
           path: build/water-demand-forecast/candidate-review.json
@@ -192,7 +192,7 @@ jobs:
           print("Model-generated water forecast → dispatch integration smoke test passed.")
           PY
       - name: Upload model-generated forecast-to-dispatch report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-model-water-forecast-dispatch
           path: |
@@ -225,21 +225,21 @@ jobs:
           print("Repeated chronological water-demand backtest smoke test passed.")
           PY
       - name: Upload water-demand rolling backtest report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-water-demand-rolling-backtest
           path: build/water-demand-forecast/rolling-backtest.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload water-demand ML comparison report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-water-demand-ml-comparison
           path: build/water-demand-forecast/model-comparison.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload water-demand forecast example report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-water-demand-forecast-demo
           path: build/water-demand-forecast/report.json
@@ -307,14 +307,14 @@ jobs:
           print("Synthetic forecast-water-demand-to-dispatch smoke test passed.")
           PY
       - name: Upload water-forecast dispatch report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-water-forecast-dispatch-demo
           path: build/water-forecast-dispatch/results.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload forecast-dispatch benchmark
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-forecast-dispatch-benchmark
           path: build/forecast-dispatch-benchmark/results.json
@@ -348,14 +348,14 @@ jobs:
                   )
           PY
       - name: Upload Pareto benchmark
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-pareto-benchmark
           path: build/pareto-benchmark/results.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload dispatch report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-dispatch-report
           path: build/dispatch-report/

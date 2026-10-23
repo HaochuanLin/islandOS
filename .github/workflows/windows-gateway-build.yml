@@ -67,7 +67,7 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path "dist/islandos-demo-package/*" -DestinationPath "dist/islandos-demo-package.zip" -Force
       - name: Upload portable executable and demo package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-gateway-windows-x64
           path: |

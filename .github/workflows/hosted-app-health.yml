@@ -125,7 +125,7 @@ jobs:
           PY
       - name: Upload hosted health evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: islandos-hosted-health-report
           path: hosted-health-report.json
