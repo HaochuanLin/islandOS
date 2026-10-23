@@ -1,0 +1,181 @@
+"""End-to-end recommendation-only dispatch advisor for recorded telemetry."""
+from __future__ import annotations
+
+import argparse
+import csv
+from datetime import datetime, timezone
+import io
+import json
+from pathlib import Path
+import sys
+
+from islandos_io import (
+    apply_device_mapping,
+    build_dispatch_input_rows,
+    load_device_mapping,
+    validate_telemetry,
+)
+from experiments.rolling_horizon_dispatch import parse_scenario_csv, simulate_rolling
+
+
+POLICIES = ("rolling", "ro_first", "ice_first", "perfect_information")
+
+
+def _read_rows(path, input_format):
+    text = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8-sig")
+    chosen = input_format
+    if chosen == "auto":
+        chosen = "csv" if path.lower().endswith(".csv") else "jsonl"
+    if chosen == "csv":
+        yield from csv.DictReader(text.splitlines())
+        return
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            yield {"__parse_error__": "line %d: %s" % (line_number, exc)}
+            continue
+        if not isinstance(row, dict):
+            yield {"__parse_error__": "line %d: JSONL rows must be objects" % line_number}
+            continue
+        yield row
+
+
+def _score(result, scenario):
+    water_total = max(sum(scenario.water_demand_m3_per_hour), 1e-9)
+    cooling_total = max(sum(scenario.cooling_demand_kw_th), 1e-9)
+    power_total = max(sum(scenario.available_surplus_kw), 1e-9)
+    return (
+        0.45 * result["water_unmet_m3"] / water_total
+        + 0.45 * result["cooling_unmet_kwh_th"] / cooling_total
+        + 0.10 * result["remaining_surplus_kwh"] / power_total
+    )
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", help="Hourly telemetry CSV/JSONL file, or - for stdin")
+    parser.add_argument("--format", choices=("auto", "csv", "jsonl"), default="auto")
+    parser.add_argument("--source", default="recorded-telemetry")
+    parser.add_argument("--mapping", help="Optional vendor field/unit mapping JSON")
+    parser.add_argument("--max-age-seconds", type=float, default=300.0)
+    parser.add_argument("--received-at", help="Timezone-aware ISO timestamp for deterministic replay")
+    parser.add_argument("--output", default="-", help="JSON report path, or - for stdout")
+    args = parser.parse_args(argv)
+
+    try:
+        received_at = None
+        if args.received_at:
+            value = args.received_at[:-1] + "+00:00" if args.received_at.endswith("Z") else args.received_at
+            received_at = datetime.fromisoformat(value)
+            if received_at.tzinfo is None or received_at.utcoffset() is None:
+                raise ValueError("--received-at must include a timezone")
+            received_at = received_at.astimezone(timezone.utc)
+        if args.max_age_seconds < 0:
+            raise ValueError("--max-age-seconds must be non-negative")
+        mapping = load_device_mapping(args.mapping) if args.mapping else None
+        records = []
+        for index, row in enumerate(_read_rows(args.input, args.format), start=1):
+            if "__parse_error__" in row:
+                records.append({
+                    "row": index, "valid": False, "errors": [row["__parse_error__"]],
+                    "warnings": [], "values": {}, "timestamp_utc": None,
+                })
+                continue
+            canonical = apply_device_mapping(row, mapping) if mapping else row
+            frame = validate_telemetry(
+                canonical, source=args.source, received_at=received_at,
+                max_age_seconds=args.max_age_seconds,
+            )
+            record = frame.as_dict()
+            record["row"] = index
+            records.append(record)
+
+        invalid = [record for record in records if not record["valid"]]
+        if invalid:
+            report = {
+                "status": "rejected",
+                "mode": "recorded_file_replay",
+                "source": args.source,
+                "valid_rows": len(records) - len(invalid),
+                "rejected_rows": len(invalid),
+                "telemetry_audit": records,
+                "physical_write_performed": False,
+                "operator_action_required": True,
+            }
+            _write_report(report, args.output)
+            return 2
+
+        dispatch_rows = build_dispatch_input_rows(records)
+        buffer = io.StringIO(newline="")
+        writer = csv.DictWriter(buffer, fieldnames=list(dispatch_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(dispatch_rows)
+        parsed = parse_scenario_csv(buffer.getvalue(), name=Path(args.input).stem or "stdin")
+        results = {}
+        for policy in POLICIES:
+            results[policy] = simulate_rolling(
+                parsed["scenario"],
+                parsed["forecast_surplus_kw"],
+                policy,
+                forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+            )
+        operational = ("rolling", "ro_first", "ice_first")
+        scores = {policy: round(_score(results[policy], parsed["scenario"]), 6) for policy in operational}
+        recommended = min(operational, key=lambda policy: (scores[policy], policy))
+        comparison = []
+        for policy in POLICIES:
+            result = results[policy]
+            comparison.append({
+                "policy": policy,
+                "normalized_score": round(_score(result, parsed["scenario"]), 6),
+                "water_unmet_m3": result["water_unmet_m3"],
+                "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
+                "remaining_surplus_kwh": result["remaining_surplus_kwh"],
+                "constraint_violation_hours": result["constraint_violation_hours"],
+                "final_water_inventory_m3": result["final_water_inventory_m3"],
+                "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
+            })
+        report = {
+            "status": "advice_ready",
+            "mode": "recorded_file_replay",
+            "data_status": "user-supplied file; not site-validated",
+            "source": args.source,
+            "row_count": len(records),
+            "forecast_method": "supplied forecasts where present; otherwise persistence baseline; first row cold-start seeded",
+            "score_weights": {"unmet_water": 0.45, "unmet_cooling": 0.45, "remaining_surplus": 0.10},
+            "policy_comparison": comparison,
+            "recommended_policy_for_operator_review": recommended,
+            "recommendation_reason": "lowest declared normalized score among rolling and fixed-priority policies for this input only",
+            "hourly_audit_by_policy": {policy: results[policy]["hourly_audit"] for policy in POLICIES},
+            "telemetry_audit": records,
+            "operator_action_required": True,
+            "physical_write_performed": False,
+            "limitations": [
+                "recorded-file replay, not a live sensor connection",
+                "synthetic or supplied forecasts are not validated for a real island",
+                "perfect_information is a hindsight reference, not an operational policy",
+                "no PLC command, setpoint write, or actuator operation is performed",
+            ],
+        }
+        _write_report(report, args.output)
+        return 0
+    except (OSError, ValueError, TypeError, csv.Error, json.JSONDecodeError) as exc:
+        print("islandOS advisor error: %s" % exc, file=sys.stderr)
+        return 2
+
+
+def _write_report(report, output_path):
+    text = json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
+    if output_path == "-":
+        sys.stdout.write(text + "\n")
+    else:
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
