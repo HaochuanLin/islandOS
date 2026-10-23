@@ -7,6 +7,7 @@ import numpy as np
 from experiments.compare_dispatch_policies import build_scenarios
 from experiments.rolling_horizon_dispatch import (
     run_experiment, simulate_rolling, summarize_aggregate, summarize_experiment,
+    summarize_weight_sensitivity,
 )
 
 
@@ -208,6 +209,22 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertTrue(np.isfinite(aggregate["mean_score_delta"]))
         self.assertTrue(np.isfinite(aggregate["median_score_delta"]))
         self.assertIn("synthetic comparisons", aggregate["interpretation"])
+
+    def test_weight_sensitivity_covers_all_cases_and_normalized_profiles(self):
+        reports = summarize_weight_sensitivity(run_experiment())
+        self.assertEqual(
+            {row["weight_profile"] for row in reports},
+            {"balanced", "water_priority", "cooling_priority"},
+        )
+        for row in reports:
+            with self.subTest(profile=row["weight_profile"]):
+                self.assertEqual(row["comparison_count"], 12)
+                self.assertEqual(
+                    row["rolling_better_count"] + row["rolling_tied_count"] + row["rolling_worse_count"],
+                    12,
+                )
+                self.assertAlmostEqual(sum(row["weights"].values()), 1.0, places=9)
+                self.assertTrue(np.isfinite(row["mean_score_delta"]))
 
     def test_aggregate_summary_handles_empty_input(self):
         aggregate = summarize_aggregate([])
