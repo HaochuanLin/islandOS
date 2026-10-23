@@ -104,7 +104,7 @@ This runbook does not provide the controls needed for a production service. Befo
 - Authentication, authorization, identity lifecycle, and audit logging.
 - TLS termination, network segmentation, firewall policy, vulnerability management, and patch cadence.
 - Data classification, retention/deletion, backup/restore, incident response, and access to uploaded/exported files.
-- Dependency and image pinning, software bill of materials, image scanning, signed release artifacts, and rollback.
+- Dependency and image pinning, software bill of materials, image scanning, signed release artifacts, and rollback. The repository's dependency audit workflow and Dependabot update configuration provide a baseline check for resolved Python packages and GitHub Actions versions, but they do not replace lockfiles, container-image scanning, an SBOM, or a release-signing process. See [SECURITY.md](../SECURITY.md) for vulnerability reporting guidance.
 - Load limits, availability objectives, monitoring/alerting, support ownership, and recovery procedures.
 - Site-specific data permissions, validation, operational sign-off, and a separate safety review for any future integration.
 
