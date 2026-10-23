@@ -60,6 +60,33 @@ jobs:
           assert all(metric["mae_m3_per_hour"] >= 0 for metric in report["test_metrics"].values())
           print("Synthetic water-demand ML comparison smoke test passed.")
           PY
+      - name: Run repeated chronological water-demand backtest
+        run: |
+          python experiments/backtest_water_demand_models.py data/examples/synthetic_water_demand_demo.csv --initial-train-fraction 0.65 --test-window-hours 24 --step-hours 24 --output build/water-demand-forecast/rolling-backtest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/water-demand-forecast/rolling-backtest.json").read_text(encoding="utf-8"))
+          assert report["status"] == "rolling_backtest_completed"
+          assert report["configuration"]["fold_count"] >= 3
+          assert report["configuration"]["evaluated_hours"] > 0
+          assert set(report["aggregate_metrics"]) == {
+              "persistence_previous_hour",
+              "seasonal_naive_previous_day",
+              "seasonal_naive_previous_week",
+              "hist_gradient_boosting",
+          }
+          assert all(fold["training_end"] < fold["test_start"] for fold in report["folds"])
+          print("Repeated chronological water-demand backtest smoke test passed.")
+          PY
+      - name: Upload water-demand rolling backtest report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-water-demand-rolling-backtest
+          path: build/water-demand-forecast/rolling-backtest.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload water-demand ML comparison report
         uses: actions/upload-artifact@v4
         with:
