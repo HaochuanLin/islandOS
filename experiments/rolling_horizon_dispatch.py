@@ -8,8 +8,11 @@ a simple run commitment, not plant interlocks or full operational feasibility.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -88,6 +91,14 @@ def _execute_one(
     return {
         "water_inventory": float(ro.inventory[-1]) if ro else water_inventory,
         "cold_inventory": float(ice.inventory[-1]) if ice else cold_inventory,
+        "water_inventory_before": float(water_inventory),
+        "cold_inventory_before": float(cold_inventory),
+        "water_produced": float(ro.resource_produced[0]) if ro else 0.0,
+        "water_served": float(ro.demand_served[0]) if ro else 0.0,
+        "water_spill": float(ro.spill[0]) if ro else 0.0,
+        "cooling_produced": float(ice.resource_produced[0]) if ice else 0.0,
+        "cooling_served": float(ice.demand_served[0]) if ice else 0.0,
+        "cooling_spill": float(ice.spill[0]) if ice else 0.0,
         "water_unmet": float(ro.unmet_demand.sum()) if ro else water_demand,
         "cooling_unmet": float(ice.unmet_demand.sum()) if ice else cooling_demand,
         "renewable_used": float(result.renewable_power_used_kw.sum()),
@@ -102,6 +113,115 @@ def _execute_one(
         "ro_run_hours_remaining": int(ro.run_hours_remaining) if ro else ro_run_hours_remaining,
         "ro_fault_lockout_hours_remaining": int(ro.fault_lockout_hours_remaining) if ro else ro_fault_lockout_hours_remaining,
     }
+
+
+def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
+    """Parse an aligned hourly power/water/cooling CSV for the rolling dispatcher.
+
+    Required columns: timestamp_utc, actual_surplus_kw, forecast_surplus_kw,
+    water_demand_m3, cooling_demand_kw_th. An optional forecast_water_demand_m3
+    column supplies planning demand separately from realized demand.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("CSV input must be non-empty text")
+    reader = csv.DictReader(io.StringIO(text))
+    required = {
+        "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+        "water_demand_m3", "cooling_demand_kw_th",
+    }
+    if not reader.fieldnames:
+        raise ValueError("CSV must include a header row")
+    missing = sorted(required - set(reader.fieldnames))
+    if missing:
+        raise ValueError(f"CSV missing required columns: {', '.join(missing)}")
+    rows = list(reader)
+    if not rows:
+        raise ValueError("CSV must contain at least one data row")
+
+    timestamps = []
+    numeric = {key: [] for key in (
+        "actual_surplus_kw", "forecast_surplus_kw", "water_demand_m3", "cooling_demand_kw_th"
+    )}
+    has_forecast_water = "forecast_water_demand_m3" in reader.fieldnames
+    forecast_water = []
+    for index, row in enumerate(rows, start=2):
+        stamp_text = (row.get("timestamp_utc") or "").strip()
+        try:
+            stamp = datetime.fromisoformat(stamp_text.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"row {index}: timestamp_utc must be a valid ISO-8601 timestamp") from exc
+        if stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise ValueError(f"row {index}: timestamp_utc must include a timezone")
+        stamp = stamp.astimezone(timezone.utc)
+        if timestamps:
+            delta = stamp - timestamps[-1]
+            if delta <= timedelta(0):
+                raise ValueError("timestamp_utc values must be strictly increasing after UTC normalization")
+            if delta != timedelta(hours=1):
+                raise ValueError("timestamp_utc values must be exactly one hour apart")
+        timestamps.append(stamp)
+
+        for key in numeric:
+            raw_value = (row.get(key) or "").strip()
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"row {index}: {key} must be numeric") from exc
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"row {index}: {key} must be finite and non-negative")
+            numeric[key].append(value)
+
+        if has_forecast_water:
+            raw_value = (row.get("forecast_water_demand_m3") or "").strip()
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"row {index}: forecast_water_demand_m3 must be numeric") from exc
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"row {index}: forecast_water_demand_m3 must be finite and non-negative")
+            forecast_water.append(value)
+
+    scenario = Scenario(
+        name=str(name),
+        available_surplus_kw=tuple(numeric["actual_surplus_kw"]),
+        water_demand_m3_per_hour=tuple(numeric["water_demand_m3"]),
+        cooling_demand_kw_th=tuple(numeric["cooling_demand_kw_th"]),
+    )
+    return {
+        "scenario": scenario,
+        "forecast_surplus_kw": tuple(numeric["forecast_surplus_kw"]),
+        "forecast_water_demand_m3_per_hour": tuple(forecast_water) if has_forecast_water else None,
+        "timestamps_utc": tuple(stamp.isoformat().replace("+00:00", "Z") for stamp in timestamps),
+    }
+
+
+def generate_synthetic_scenario_csv(hours: int = 24) -> str:
+    """Return a deterministic, explicitly synthetic paired hourly dispatch CSV."""
+    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 1 or hours > 168:
+        raise ValueError("hours must be an integer from 1 to 168")
+    output = io.StringIO(newline="")
+    fields = [
+        "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+        "water_demand_m3", "cooling_demand_kw_th", "forecast_water_demand_m3",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for index in range(hours):
+        actual_surplus = 0.0 if index % 6 == 3 else float(15 + (index % 8) * 4)
+        forecast_surplus = max(0.0, actual_surplus + (8.0 if index % 4 == 0 else -5.0))
+        water_demand = float(4 + index % 4)
+        cooling_demand = float(6 + index % 5)
+        forecast_water = max(0.0, water_demand + (1.0 if index % 3 == 0 else -0.5))
+        writer.writerow({
+            "timestamp_utc": (start + timedelta(hours=index)).isoformat().replace("+00:00", "Z"),
+            "actual_surplus_kw": actual_surplus,
+            "forecast_surplus_kw": forecast_surplus,
+            "water_demand_m3": water_demand,
+            "cooling_demand_kw_th": cooling_demand,
+            "forecast_water_demand_m3": forecast_water,
+        })
+    return output.getvalue()
 
 
 def simulate_rolling(
@@ -214,7 +334,9 @@ def simulate_rolling(
         totals["cooling_unmet_kwh_th"] += step["cooling_unmet"]
         totals["renewable_flexible_load_kwh"] += step["renewable_used"]
         totals["remaining_surplus_kwh"] += step["remaining_surplus"]
-        totals["constraint_violation_hours"] += step["constraint_violations"]
+        # Count affected hours, not per-load violation flags. The audit still
+        # preserves the per-step violation count for detailed diagnosis.
+        totals["constraint_violation_hours"] += int(step["constraint_violations"] > 0)
         decisions.append(chosen)
         hourly_audit.append({
             "hour_index": t,
@@ -231,7 +353,15 @@ def simulate_rolling(
             "ro_constraint_violation": step["ro_constraint_violation"],
             "ro_run_hours_remaining": step["ro_run_hours_remaining"],
             "ro_fault_lockout_hours_remaining": step["ro_fault_lockout_hours_remaining"],
+            "water_inventory_before_m3": round(step["water_inventory_before"], 6),
+            "water_produced_m3": round(step["water_produced"], 6),
+            "water_served_m3": round(step["water_served"], 6),
+            "water_spill_m3": round(step["water_spill"], 6),
             "water_inventory_m3": round(water_inventory, 6),
+            "cold_inventory_before_kwh_th": round(step["cold_inventory_before"], 6),
+            "cooling_produced_kwh_th": round(step["cooling_produced"], 6),
+            "cooling_served_kwh_th": round(step["cooling_served"], 6),
+            "cooling_spill_kwh_th": round(step["cooling_spill"], 6),
             "cold_inventory_kwh_th": round(cold_inventory, 6),
             "total_constraint_violations": step["constraint_violations"],
         })
@@ -310,9 +440,112 @@ def summarize_experiment(rows=None):
             "best_fixed_score": round(best_fixed_score, 6),
             "rolling_minus_best_fixed": round(rolling_score - best_fixed_score, 6),
             "perfect_information_score": round(score(policies["perfect_information"]), 6),
+            "rolling_water_unmet_m3": round(policies["rolling"]["water_unmet_m3"], 3),
+            "best_fixed_water_unmet_m3": round(policies[best_fixed_name]["water_unmet_m3"], 3),
+            "rolling_cooling_unmet_kwh_th": round(policies["rolling"]["cooling_unmet_kwh_th"], 3),
+            "best_fixed_cooling_unmet_kwh_th": round(policies[best_fixed_name]["cooling_unmet_kwh_th"], 3),
+            "rolling_remaining_surplus_kwh": round(policies["rolling"]["remaining_surplus_kwh"], 3),
+            "best_fixed_remaining_surplus_kwh": round(policies[best_fixed_name]["remaining_surplus_kwh"], 3),
+            "rolling_constraint_violation_hours": int(policies["rolling"]["constraint_violation_hours"]),
+            "best_fixed_constraint_violation_hours": int(policies[best_fixed_name]["constraint_violation_hours"]),
             "interpretation": "case-specific comparison; no universal winner assumed",
         })
     return summaries
+
+
+def summarize_aggregate(summaries):
+    """Summarize policy deltas across cases without implying universal superiority."""
+    deltas = [float(row["rolling_minus_best_fixed"]) for row in summaries]
+    if not deltas:
+        return {
+            "comparison_count": 0,
+            "rolling_better_count": 0,
+            "rolling_tied_count": 0,
+            "rolling_worse_count": 0,
+            "mean_score_delta": None,
+            "median_score_delta": None,
+            "best_case": None,
+            "worst_case": None,
+            "interpretation": "No cases were available for aggregation.",
+        }
+
+    ordered = sorted(summaries, key=lambda row: row["rolling_minus_best_fixed"])
+    better = sum(delta < -1e-9 for delta in deltas)
+    tied = sum(abs(delta) <= 1e-9 for delta in deltas)
+    worse = sum(delta > 1e-9 for delta in deltas)
+    return {
+        "comparison_count": len(deltas),
+        "rolling_better_count": better,
+        "rolling_tied_count": tied,
+        "rolling_worse_count": worse,
+        "mean_score_delta": round(float(np.mean(deltas)), 6),
+        "median_score_delta": round(float(np.median(deltas)), 6),
+        "best_case": {
+            "scenario": ordered[0]["scenario"],
+            "forecast_error_profile": ordered[0]["forecast_error_profile"],
+            "score_delta": ordered[0]["rolling_minus_best_fixed"],
+        },
+        "worst_case": {
+            "scenario": ordered[-1]["scenario"],
+            "forecast_error_profile": ordered[-1]["forecast_error_profile"],
+            "score_delta": ordered[-1]["rolling_minus_best_fixed"],
+        },
+        "interpretation": (
+            "Negative delta favors rolling over the best fixed-priority policy; "
+            "results are case-specific synthetic comparisons, not field validation."
+        ),
+    }
+
+
+def summarize_weight_sensitivity(rows=None):
+    """Check whether rolling-vs-fixed conclusions change with objective weights."""
+    if rows is None:
+        rows = run_experiment()
+    scenarios = {scenario.name: scenario for scenario in build_scenarios()}
+    grouped = {}
+    for row in rows:
+        key = (row["scenario"], row["forecast_error_profile"])
+        grouped.setdefault(key, {})[row["result"]["policy"]] = row["result"]
+
+    weight_profiles = {
+        "balanced": {"water": 0.45, "cooling": 0.45, "surplus": 0.10},
+        "water_priority": {"water": 0.60, "cooling": 0.30, "surplus": 0.10},
+        "cooling_priority": {"water": 0.30, "cooling": 0.60, "surplus": 0.10},
+    }
+    reports = []
+    for profile_name, weights in weight_profiles.items():
+        deltas = []
+        for (scenario_name, _error_name), policies in sorted(grouped.items()):
+            required = {"rolling", "ro_first", "ice_first"}
+            if not required.issubset(policies):
+                raise ValueError(f"incomplete policy group for {scenario_name}: {sorted(policies)}")
+            scenario = scenarios[scenario_name]
+            water_total = max(float(sum(scenario.water_demand_m3_per_hour)), 1e-9)
+            cooling_total = max(float(sum(scenario.cooling_demand_kw_th)), 1e-9)
+            power_total = max(float(sum(scenario.available_surplus_kw)), 1e-9)
+
+            def score(result):
+                return (
+                    weights["water"] * result["water_unmet_m3"] / water_total
+                    + weights["cooling"] * result["cooling_unmet_kwh_th"] / cooling_total
+                    + weights["surplus"] * result["remaining_surplus_kwh"] / power_total
+                )
+
+            best_fixed = min(score(policies[name]) for name in ("ro_first", "ice_first"))
+            deltas.append(score(policies["rolling"]) - best_fixed)
+        reports.append({
+            "weight_profile": profile_name,
+            "weights": weights,
+            "comparison_count": len(deltas),
+            "rolling_better_count": sum(delta < -1e-9 for delta in deltas),
+            "rolling_tied_count": sum(abs(delta) <= 1e-9 for delta in deltas),
+            "rolling_worse_count": sum(delta > 1e-9 for delta in deltas),
+            "mean_score_delta": round(float(np.mean(deltas)), 6) if deltas else None,
+            "median_score_delta": round(float(np.median(deltas)), 6) if deltas else None,
+            "interpretation": "Synthetic case-matched sensitivity only; weights are illustrative, not stakeholder-validated.",
+        })
+    return reports
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -332,16 +565,26 @@ def main():
                 "Weights are illustrative and should be sensitivity-tested before decision use.",
             ],
             "summary": summaries,
+            "aggregate_summary": summarize_aggregate(summaries),
+            "weight_sensitivity": summarize_weight_sensitivity(rows),
             "rows": rows,
         }, indent=2))
     else:
         print("Synthetic rolling-horizon prototype — not field validated")
         print("Negative delta means rolling scored better than the best fixed priority.")
+        aggregate = summarize_aggregate(summaries)
         print("scenario | forecast | rolling score | best fixed | fixed score | rolling - fixed")
         for row in summaries:
             print(f"{row['scenario']} | {row['forecast_error_profile']} | {row['rolling_score']:.4f} | "
                   f"{row['best_fixed_policy']} | {row['best_fixed_score']:.4f} | "
                   f"{row['rolling_minus_best_fixed']:+.4f}")
+        print(
+            "Aggregate: "
+            f"rolling better/tied/worse = {aggregate['rolling_better_count']}/"
+            f"{aggregate['rolling_tied_count']}/{aggregate['rolling_worse_count']}; "
+            f"mean delta = {aggregate['mean_score_delta']:+.4f}; "
+            f"median delta = {aggregate['median_score_delta']:+.4f}"
+        )
 
 
 if __name__ == "__main__":
