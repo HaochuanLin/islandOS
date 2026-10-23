@@ -112,6 +112,8 @@ jobs:
           for key in ("source_file_sha256", "prepared_hourly_csv_sha256"):
               value = prep[key]
               assert len(value) == 64 and all(char in "0123456789abcdef" for char in value), key
+          actual_source_sha256 = hashlib.sha256((root / "raw/soweki_source.csv").read_bytes()).hexdigest()
+          assert actual_source_sha256 == prep["source_file_sha256"], "Downloaded source CSV hash mismatch"
           actual_hourly_sha256 = hashlib.sha256((root / "soweki_hourly.csv").read_bytes()).hexdigest()
           assert actual_hourly_sha256 == prep["prepared_hourly_csv_sha256"], "Prepared hourly CSV hash mismatch"
           assert prep["source_rows"] > 0
