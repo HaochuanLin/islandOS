@@ -205,7 +205,7 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertIn("default-src 'none'", headers.get("Content-Security-Policy", ""))
                 self.assertEqual(headers.get("X-Frame-Options"), "DENY")
                 self.assertIn("Local Operator Review", html)
-                self.assertIn('getJson("/advice")', html)
+                self.assertIn('getJson("/advice?weight_profile="+encodeURIComponent', html)
                 self.assertIn("Physical writes: disabled", html)
                 self.assertIn("Download advice JSON", html)
                 self.assertIn("Operator objective priority", html)
