@@ -12,7 +12,7 @@ import csv
 import io
 import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -153,8 +153,12 @@ def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
         if stamp.tzinfo is None or stamp.utcoffset() is None:
             raise ValueError(f"row {index}: timestamp_utc must include a timezone")
         stamp = stamp.astimezone(timezone.utc)
-        if timestamps and stamp <= timestamps[-1]:
-            raise ValueError("timestamp_utc values must be strictly increasing after UTC normalization")
+        if timestamps:
+            delta = stamp - timestamps[-1]
+            if delta <= timedelta(0):
+                raise ValueError("timestamp_utc values must be strictly increasing after UTC normalization")
+            if delta != timedelta(hours=1):
+                raise ValueError("timestamp_utc values must be exactly one hour apart")
         timestamps.append(stamp)
 
         for key in numeric:
