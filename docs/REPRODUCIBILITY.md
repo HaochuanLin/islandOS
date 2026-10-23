@@ -46,7 +46,7 @@ The preparation report includes:
 - `prepared_hourly_csv_sha256`: SHA-256 of the produced hourly CSV bytes.
 - Source row counts, duplicate handling, excluded invalid values, time span, missing-data policy, and limitations.
 
-The public-data CI independently recomputes both hashes and fails on a mismatch. It also compares a scikit-learn gradient-boosting candidate with persistence, previous-day, and previous-week seasonal baselines on the same chronological holdout. The model report records the prepared CSV hash and scikit-learn version. Each series artifact retains the raw CSV, prepared hourly CSV, preparation report, baseline forecast report, ML comparison report, and measured-data summary for 90 days. A separate aggregation job publishes per-series metrics, missing-series status, and mean/median MAE reduction across the 11 series. Use the hashes to confirm that files match the reported experiment; a hash does not prove the source measurements are accurate.
+The public-data CI independently recomputes both hashes and fails on a mismatch. It also compares a scikit-learn gradient-boosting candidate with persistence, previous-day, and previous-week seasonal baselines on the same chronological holdout. The model report records the prepared CSV hash and scikit-learn version. It also retrains at up to three expanding-window boundaries: every fold uses only targets before its test window and reports metrics against the same naive baselines. Each series artifact retains the raw CSV, prepared hourly CSV, preparation report, baseline forecast report, ML comparison report, and measured-data summary for 90 days. A separate aggregation job publishes per-series metrics, missing-series status, and mean/median MAE reduction for both the primary holdout and the expanding-window evaluation. Use the hashes to confirm that files match the reported experiment; a hash does not prove the source measurements are accurate.
 
 ## What the results mean
 
@@ -59,6 +59,6 @@ The public-data CI independently recomputes both hashes and fails on a mismatch.
 
 - [Main regression workflow](https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml)
 - [Public measured-data backtest workflow](https://github.com/HaochuanLin/islandOS/actions/workflows/public-data-backtest.yml)
-- [Successful 11-series measured-data matrix and aggregate report](https://github.com/HaochuanLin/islandOS/actions/runs/39986497014)
+- [Successful 11-series matrix, expanding-window backtests, and aggregate report](https://github.com/HaochuanLin/islandOS/actions/runs/39987177812)
 - [Earlier single-series measured-data run with SHA-256 checks](https://github.com/HaochuanLin/islandOS/actions/runs/39984656770)
 - [Maturity assessment and remaining gaps](MATURITY_ASSESSMENT.md)
