@@ -316,6 +316,57 @@ jobs:
           path: build/pareto-benchmark/results.json
           if-no-files-found: error
           retention-days: 30
+      - name: Run synthetic water-demand uncertainty-dispatch stress test
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/water-demand-forecast/report.json").read_text(encoding="utf-8"))
+          rows = report["test_predictions"]
+          assert rows, "Water-demand baseline must provide held-out predictions"
+          output = Path("build/forecast-dispatch/uncertainty-power-input.csv")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          with output.open("w", encoding="utf-8", newline="") as handle:
+              writer = csv.DictWriter(handle, fieldnames=[
+                  "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+                  "water_demand_m3", "cooling_demand_kw_th",
+              ])
+              writer.writeheader()
+              for index, row in enumerate(rows):
+                  writer.writerow({
+                      "timestamp_utc": row["timestamp"],
+                      "actual_surplus_kw": 24 + index % 8,
+                      "forecast_surplus_kw": 23 + index % 8,
+                      "water_demand_m3": row["actual_water_demand_m3"],
+                      "cooling_demand_kw_th": 7 + index % 4,
+                  })
+          PY
+          python experiments/evaluate_water_demand_uncertainty_dispatch.py \
+            build/forecast-dispatch/uncertainty-power-input.csv \
+            build/water-demand-forecast/report.json \
+            --output build/forecast-dispatch/uncertainty-comparison.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/forecast-dispatch/uncertainty-comparison.json").read_text(encoding="utf-8"))
+          assert report["status"] == "uncertainty_dispatch_comparison_completed"
+          assert report["time_basis"]["matched_rows"] > 0
+          assert report["point_forecast_planning"]["forecast_metrics"]["evaluated_hours"] == report["time_basis"]["matched_rows"]
+          assert report["upper_bound_stress_planning"]["forecast_metrics"]["evaluated_hours"] == report["time_basis"]["matched_rows"]
+          assert "water_unmet_m3" in report["change_upper_minus_point"]
+          assert "cooling_unmet_kwh_th" in report["change_upper_minus_point"]
+          print("Synthetic water-demand uncertainty-dispatch smoke test passed.")
+          PY
+      - name: Upload uncertainty-dispatch report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-water-demand-uncertainty-dispatch
+          path: build/forecast-dispatch/uncertainty-comparison.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload dispatch report
         uses: actions/upload-artifact@v4
         with:
