@@ -377,6 +377,56 @@ def summarize_aggregate(summaries):
     }
 
 
+def summarize_weight_sensitivity(rows=None):
+    """Check whether rolling-vs-fixed conclusions change with objective weights."""
+    if rows is None:
+        rows = run_experiment()
+    scenarios = {scenario.name: scenario for scenario in build_scenarios()}
+    grouped = {}
+    for row in rows:
+        key = (row["scenario"], row["forecast_error_profile"])
+        grouped.setdefault(key, {})[row["result"]["policy"]] = row["result"]
+
+    weight_profiles = {
+        "balanced": {"water": 0.45, "cooling": 0.45, "surplus": 0.10},
+        "water_priority": {"water": 0.60, "cooling": 0.30, "surplus": 0.10},
+        "cooling_priority": {"water": 0.30, "cooling": 0.60, "surplus": 0.10},
+    }
+    reports = []
+    for profile_name, weights in weight_profiles.items():
+        deltas = []
+        for (scenario_name, _error_name), policies in sorted(grouped.items()):
+            required = {"rolling", "ro_first", "ice_first"}
+            if not required.issubset(policies):
+                raise ValueError(f"incomplete policy group for {scenario_name}: {sorted(policies)}")
+            scenario = scenarios[scenario_name]
+            water_total = max(float(sum(scenario.water_demand_m3_per_hour)), 1e-9)
+            cooling_total = max(float(sum(scenario.cooling_demand_kw_th)), 1e-9)
+            power_total = max(float(sum(scenario.available_surplus_kw)), 1e-9)
+
+            def score(result):
+                return (
+                    weights["water"] * result["water_unmet_m3"] / water_total
+                    + weights["cooling"] * result["cooling_unmet_kwh_th"] / cooling_total
+                    + weights["surplus"] * result["remaining_surplus_kwh"] / power_total
+                )
+
+            best_fixed = min(score(policies[name]) for name in ("ro_first", "ice_first"))
+            deltas.append(score(policies["rolling"]) - best_fixed)
+        reports.append({
+            "weight_profile": profile_name,
+            "weights": weights,
+            "comparison_count": len(deltas),
+            "rolling_better_count": sum(delta < -1e-9 for delta in deltas),
+            "rolling_tied_count": sum(abs(delta) <= 1e-9 for delta in deltas),
+            "rolling_worse_count": sum(delta > 1e-9 for delta in deltas),
+            "mean_score_delta": round(float(np.mean(deltas)), 6) if deltas else None,
+            "median_score_delta": round(float(np.median(deltas)), 6) if deltas else None,
+            "interpretation": "Synthetic case-matched sensitivity only; weights are illustrative, not stakeholder-validated.",
+        })
+    return reports
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
@@ -396,6 +446,7 @@ def main():
             ],
             "summary": summaries,
             "aggregate_summary": summarize_aggregate(summaries),
+            "weight_sensitivity": summarize_weight_sensitivity(rows),
             "rows": rows,
         }, indent=2))
     else:
