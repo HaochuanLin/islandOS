@@ -13,6 +13,26 @@ import math
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+
+
+def validate_loopback_url(url):
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except (TypeError, ValueError):
+        raise ValueError("demo sender requires a valid loopback HTTP URL")
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or (port is not None and not 1 <= port <= 65535)
+    ):
+        raise ValueError("demo sender only permits a loopback HTTP URL")
+    return url.rstrip("/")
 
 
 def generate_demo_samples(hours=24, now=None):
@@ -87,8 +107,10 @@ def main(argv=None):
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--timeout", type=float, default=3.0)
     args = parser.parse_args(argv)
-    if not args.url.startswith("http://127.0.0.1:") and not args.url.startswith("http://localhost:"):
-        parser.error("demo sender only permits a loopback HTTP URL")
+    try:
+        args.url = validate_loopback_url(args.url)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     try:
