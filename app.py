@@ -8,6 +8,7 @@ Uploaded site data is used as supplied; the built-in demo is synthetic.
 
 import csv
 import io
+import json
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,6 +27,12 @@ from experiments.compare_energy_water_strategies import (
     load_site_steps,
 )
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
+from experiments.rolling_horizon_dispatch import (
+    run_experiment as run_rolling_dispatch_experiment,
+    summarize_aggregate as summarize_rolling_aggregate,
+    summarize_experiment as summarize_rolling_experiment,
+    summarize_weight_sensitivity as summarize_rolling_weight_sensitivity,
+)
 
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
@@ -114,7 +121,7 @@ with st.sidebar:
     st.caption("Island energy + water planning")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Data guide"],
+        ["Overview", "Strategy simulator", "Rolling dispatch lab", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -351,6 +358,15 @@ elif page == "Strategy simulator":
             pop_size = st.number_input("NSGA-II population size", min_value=120, max_value=300, value=120, step=20)
         with p2:
             generations = st.number_input("NSGA-II generations", min_value=60, max_value=300, value=60, step=10)
+        optimizer_signature = strategy_run_signature(
+            raw,
+            source_label,
+            {
+                "strategy_input_signature": current_signature,
+                "nsga2_population_size": int(pop_size),
+                "nsga2_generations": int(generations),
+            },
+        )
         if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
             try:
                 # Streamlit reruns the script on every button click. Rebuild the
@@ -374,12 +390,12 @@ elif page == "Strategy simulator":
                 st.session_state["islandos_optimizer_result"] = {
                     "summary": pareto_summaries, "detail": pareto_details,
                     "meta": optimizer_meta, "source": source_label,
-                    "input_signature": current_signature,
+                    "input_signature": optimizer_signature,
                 }
             except Exception as exc:
                 st.error(f"NSGA-II optimization failed: {exc}")
         optimizer_result = st.session_state.get("islandos_optimizer_result")
-        if optimizer_result and optimizer_result.get("input_signature") != current_signature:
+        if optimizer_result and optimizer_result.get("input_signature") != optimizer_signature:
             st.session_state.pop("islandos_optimizer_result", None)
             optimizer_result = None
         if optimizer_result:
@@ -481,6 +497,121 @@ elif page == "Strategy simulator":
         )
     else:
         st.info("Set assumptions above, then click **Run strategy comparison** to see results.")
+
+elif page == "Rolling dispatch lab":
+    st.title("Rolling-horizon energy–water dispatch lab")
+    st.write(
+        "Run a reproducible synthetic experiment that compares receding-horizon priority selection "
+        "with fixed RO-first and cooling-first policies under renewable-forecast errors."
+    )
+    st.info(
+        "This lab uses synthetic scenarios only. It demonstrates the dispatch algorithm and audit "
+        "workflow; it does not establish real-island forecast skill or operational performance."
+    )
+    st.markdown(
+        "**Experiment design:** 48 runs across the configured scenarios, four forecast-error profiles, "
+        "and four policies. The report compares rolling dispatch against the best fixed-priority policy "
+        "and checks whether conclusions change under three illustrative objective-weight profiles."
+    )
+    if st.button("▶ Run 48-case rolling-horizon experiment", type="primary", use_container_width=True):
+        with st.spinner("Running scenario, forecast-error, and policy combinations..."):
+            rolling_rows = run_rolling_dispatch_experiment()
+            rolling_summaries = summarize_rolling_experiment(rolling_rows)
+            rolling_aggregate = summarize_rolling_aggregate(rolling_summaries)
+            rolling_sensitivity = summarize_rolling_weight_sensitivity(rolling_rows)
+        st.session_state["islandos_rolling_result"] = {
+            "rows": rolling_rows,
+            "summary": rolling_summaries,
+            "aggregate": rolling_aggregate,
+            "weight_sensitivity": rolling_sensitivity,
+        }
+
+    rolling_result = st.session_state.get("islandos_rolling_result")
+    if rolling_result:
+        aggregate = rolling_result["aggregate"]
+        st.subheader("Cross-case result")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Paired comparisons", str(aggregate["comparison_count"]))
+        m2.metric("Rolling better", str(aggregate["rolling_better_count"]))
+        m3.metric("Tied", str(aggregate["rolling_tied_count"]))
+        m4.metric("Rolling worse", str(aggregate["rolling_worse_count"]))
+        st.caption(
+            f"Mean score delta: {aggregate['mean_score_delta']:+.4f}; "
+            f"median delta: {aggregate['median_score_delta']:+.4f}. "
+            "Negative delta favors rolling dispatch. No universal winner is assumed."
+        )
+        summary_df = pd.DataFrame(rolling_result["summary"])
+        st.subheader("Rolling vs. best fixed-priority policy")
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        chart_df = summary_df.copy()
+        chart_df["case"] = chart_df["scenario"] + " / " + chart_df["forecast_error_profile"]
+        st.bar_chart(chart_df.set_index("case")[["rolling_minus_best_fixed"]])
+
+        st.subheader("Objective-weight sensitivity")
+        sensitivity_df = pd.DataFrame(rolling_result["weight_sensitivity"])
+        st.dataframe(sensitivity_df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Weights are illustrative, not stakeholder-validated. Sensitivity counts expose how often "
+            "the rolling policy beats, ties, or loses to the best fixed policy under each weighting."
+        )
+
+        all_rows = rolling_result["rows"]
+        scenario_names = sorted({row["scenario"] for row in all_rows})
+        error_names = sorted({row["forecast_error_profile"] for row in all_rows})
+        policy_names = ["rolling", "ro_first", "ice_first", "perfect_information"]
+        s1, s2, s3 = st.columns(3)
+        selected_scenario = s1.selectbox("Scenario", scenario_names, key="rolling_lab_scenario")
+        selected_error = s2.selectbox("Forecast-error profile", error_names, key="rolling_lab_error")
+        selected_policy = s3.selectbox("Policy to audit", policy_names, key="rolling_lab_policy")
+        selected = next(
+            row for row in all_rows
+            if row["scenario"] == selected_scenario
+            and row["forecast_error_profile"] == selected_error
+            and row["result"]["policy"] == selected_policy
+        )
+        audit_df = pd.DataFrame(selected["result"]["hourly_audit"])
+        st.subheader("Hourly operating audit")
+        st.line_chart(
+            audit_df.set_index("hour_index")[["actual_surplus_kw", "forecast_surplus_kw"]]
+        )
+        st.line_chart(
+            audit_df.set_index("hour_index")[["water_inventory_m3", "cold_inventory_kwh_th"]]
+        )
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        download_a, download_b, download_c = st.columns(3)
+        with download_a:
+            st.download_button(
+                "Download comparison CSV",
+                dataframe_csv(rolling_result["summary"]),
+                file_name="islandos_rolling_comparison.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with download_b:
+            st.download_button(
+                "Download hourly audit CSV",
+                dataframe_csv(selected["result"]["hourly_audit"]),
+                file_name="islandos_rolling_hourly_audit.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with download_c:
+            report_payload = {
+                "data_status": "synthetic prototype; not field-validated",
+                "aggregate_summary": aggregate,
+                "summary": rolling_result["summary"],
+                "weight_sensitivity": rolling_result["weight_sensitivity"],
+                "rows": all_rows,
+            }
+            st.download_button(
+                "Download full JSON evidence",
+                json.dumps(report_payload, indent=2).encode("utf-8"),
+                file_name="islandos_rolling_horizon_evidence.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+    else:
+        st.info("Click Run 48-case rolling-horizon experiment to generate comparisons and hourly audit evidence.")
 
 else:
     st.title("Data guide")
