@@ -8,14 +8,14 @@ Baseline scores are provisional engineering assessments, not measured scientific
 
 | Area | Initial baseline | Current verified | Target | Evidence required for target |
 |---|---:|---:|---:|---|
-| Core simulation and dispatch | 87/100 | 91/100 | 93/100 | Explicit invariants for energy/water accounting; adversarial boundary tests; benchmark results that report raw service metrics and do not require the proposed strategy to win every fixture; documented model limits. |
-| Automated tests and reproducibility | 76/100 | 95/100 | 97/100 | Required CI checks on main and pull requests; deterministic fixtures; integration tests for public commands and exported JSON/CSV schemas; useful failure artifacts; no silently skipped core checks. |
+| Core simulation and dispatch | 87/100 | 92/100 | 93/100 | Explicit invariants for energy/water accounting; adversarial boundary tests; benchmark results that report raw service metrics and do not require the proposed strategy to win every fixture; documented model limits. |
+| Automated tests and reproducibility | 76/100 | 96/100 | 97/100 | Required CI checks on main and pull requests; deterministic fixtures; integration tests for public commands and exported JSON/CSV schemas; useful failure artifacts; no silently skipped core checks. |
 | Documentation and evidence audit | 85/100 | 90/100 | 95/100 | Every major feature links to runnable commands, input schema, provenance, assumptions, expected outputs, limitations, and CI evidence; product and pilot scopes remain distinct. |
 | Interactive demo and usability | 80/100 | 85/100 | 92/100 | Hosted app health is checked separately from code CI; clean-environment startup is tested; upload validation and user-facing failures have regression tests; demo clearly labels synthetic data and export provenance. |
 | Branch and release management | 55/100 | 74/100 | 90/100 | Reduce stale/diverged branches and PRs; each PR has a bounded scope, current base, passing required checks, and a reviewable diff; no mass merge of divergent product/pilot histories. |
 | Public-data / site-data validation | 25/100 | 25/100 | 60/100 | A documented measured or reputable public dataset with license, provenance, units, missingness audit, chronological holdout, baseline comparison, and reproducible results. This target does not imply Nan'ao field validation. |
 | Commercial / deployment readiness | 38/100 | 57/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. |
-| Overall software-engineering maturity | 82/100 | 90/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
+| Overall software-engineering maturity | 82/100 | 91/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
 | Real-world operational validation | 38/100 | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached by code-only work. |
 
 ## Delivery order
@@ -120,4 +120,12 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - Updated current engineering assessments modestly: core simulation 89→91, testing 94→95, documentation 89→90, demo/usability 84→85, branch management 72→74, deployment readiness 55→57, and overall software engineering 89→90. These remain below targets and are tied to the cited tested PR head; the connector still does not expose a confirmed post-merge push run for the exact main SHA.
 - A separate follow-up, [PR #47](https://github.com/HaochuanLin/islandOS/pull/47), adds 100 deterministic randomized physical-invariant cases. Its CI status is not yet available through the current workflow view, so those cases are not included in the score update.
 - The open legacy PRs #2 and #43 remain unaudited in their residual diffs; do not merge them wholesale. Public-data/site-data validation and real-world operational validation remain unchanged because no island-specific measured data or supervised pilot evidence was added.
+
+### 2026-10-23 — Randomized physical-invariant stress tests merged
+
+- Merged [PR #47](https://github.com/HaochuanLin/islandOS/pull/47) as [`92e4cd7`](https://github.com/HaochuanLin/islandOS/commit/92e4cd7ed5eec42d0442c8eb7b11ad2b3fb839af).
+- Added 100 fixed-seed randomized scenarios covering water-volume conservation, reservoir lower/upper bounds, non-negative spill/deficit, renewable draw limits, and RO rated-power accounting with backup enabled and disabled.
+- All four validation workflows passed on the exact PR head `f76b3f3c8a5f29b7ca6dbe00cb52f70d9712ad64`: [RO regression, run 39951249477](https://github.com/HaochuanLin/islandOS/actions/runs/39951249477), [Nan'ao scenario, run 39951249457](https://github.com/HaochuanLin/islandOS/actions/runs/39951249457), [container smoke test, run 39951249475](https://github.com/HaochuanLin/islandOS/actions/runs/39951249475), and [Windows packaging, run 39951249563](https://github.com/HaochuanLin/islandOS/actions/runs/39951249563).
+- Updated current verified scores: core simulation 91→92, automated tests 95→96, overall software-engineering maturity 90→91. The randomized test increases software invariant coverage only; it does not establish model fidelity or site performance.
+- The measured SOWEKI workflow in [PR #49](https://github.com/HaochuanLin/islandOS/pull/49) has produced a successful public-data run, but its changes remain unmerged and require final review of all required checks before the public-data score changes.
 
