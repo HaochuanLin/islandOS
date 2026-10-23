@@ -36,15 +36,18 @@ When a strategy comparison completes, the app offers:
 - **Timestep audit CSV:** per-interval strategy decisions and water/energy accounting.
 - **NSGA-II Pareto CSV:** feasible candidate schedules returned by the optimizer, if the configured search finds any.
 
-The strategy summary, timestep audit, and NSGA-II Pareto exports include three provenance columns:
+The strategy summary, timestep audit, and NSGA-II Pareto exports include provenance and run-configuration columns:
 
 - `source_type`: `synthetic` for the built-in demonstration or `user_uploaded_unverified` for uploaded input.
 - `source_label`: the displayed input label; for uploads it includes the uploaded filename.
 - `input_sha256`: SHA-256 of the exact input bytes used by the app.
+- `run_signature`: a deterministic SHA-256 signature over the exact input hash and the settings relevant to that report. For strategy CSVs this is the strategy run signature; for Pareto CSVs it is the optimizer run signature.
+- Strategy configuration columns include `ro_rated_power_kw`, `specific_energy_kwh_m3`, `tank_capacity_m3`, `initial_water_m3`, `min_run_hours`, `input_interval_hours`, and `backup_energy_cost_per_kwh`.
+- Pareto exports also include `optimizer_population_size`, `optimizer_generations`, `optimizer_seed`, and `optimizer_build`.
 
-The hash helps identify whether two reports used identical input bytes. **It does not prove the source is authentic, data are measured, units are correct, the dataset is complete, the data are licensed for use, or the measurements are accurate.** Keep the original input, its external source/licence record, app commit SHA, model assumptions, and exported files together for reproducibility.
+The input hash helps identify whether two reports used identical input bytes. The run signature helps identify whether reports were generated from the same input and relevant settings. **Neither proves the source is authentic, data are measured, units are correct, the dataset is complete, the data are licensed for use, or the measurements are accurate.** Keep the original input, its external source/licence record, app commit SHA, model assumptions, and exported files together for reproducibility.
 
-If input bytes change while an optimizer result remains in the Streamlit session, the app clears the cached optimizer result rather than showing or exporting a schedule computed from a different input. Run the optimizer again to generate a result for the current data.
+If input bytes or model settings change while results remain in the Streamlit session, the app clears stale strategy and optimizer results rather than showing or exporting a report computed from a different configuration. Changing optimizer budget/build settings also invalidates the cached Pareto result. Run the relevant comparison or optimizer again to generate a result for the current configuration.
 
 ## Interpretation and limits
 
@@ -57,4 +60,4 @@ If input bytes change while an optimizer result remains in the Streamlit session
 
 ## Verification
 
-The primary app has a Streamlit AppTest for visible source provenance in the strategy results and regression coverage that cached optimizer output is discarded when its input hash no longer matches. Pull-request CI also exercises the full pytest suite, scenario validation, container startup, Windows packaging, and hosted-app health diagnostic. A passing health diagnostic does not mean the external hosted app is publicly accessible, and a passing software test does not validate physical model fidelity.
+The primary app has Streamlit AppTests for visible source provenance and run signatures, and regression coverage that strategy and optimizer output is discarded when the input or run configuration no longer matches. Pull-request CI also exercises the full pytest suite, scenario validation, container startup, Windows packaging, and hosted-app health diagnostic. A passing health diagnostic does not mean the external hosted app is publicly accessible, and a passing software test does not validate physical model fidelity.

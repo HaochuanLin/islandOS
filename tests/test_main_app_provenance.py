@@ -18,6 +18,9 @@ def test_main_app_exports_include_visible_provenance():
 
     captions = [element.value for element in app.get("caption")]
     assert any("Source type: `synthetic`" in value for value in captions)
+    run_signatures = [value for value in captions if "Run signature:" in value]
+    assert len(run_signatures) == 1
+    assert len(run_signatures[0].split("`")[1]) == 64
     hashes = [element.value for element in app.get("code")]
     assert any(len(value) == 64 for value in hashes)
 
