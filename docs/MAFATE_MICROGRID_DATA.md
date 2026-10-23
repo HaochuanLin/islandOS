@@ -48,13 +48,16 @@ The script uses only Python's standard library. It writes:
 | `solar_plant_hourly.csv` | Hourly mean of PV, inverter and battery measurements |
 | `house_loads_hourly.csv` | Hourly mean per-house load and per-channel readings, converted from W to kW |
 | `microgrid_hourly.csv` | Combined hourly features for forecast experiments |
-| `manifest.json` | Citation, licence, source row counts, hourly coverage and limitations |
+| `manifest.json` | Citation, licence, source row counts, per-file SHA-256 hashes, hourly coverage and limitations |
 
 ## Data handling and limits
 
 - The script computes the arithmetic mean of the readings that exist in each
   hour. It does **not** interpolate missing measurements or convert average
   power into an energy total.
+- The manifest records a SHA-256 digest for each of the five raw source CSVs.
+  These hashes let reviewers verify that later experiments use byte-identical
+  source files; they do not prove measurement accuracy or completeness.
 - Source channels `Input4`, `Input5`, and `Input1` are treated as the total
   load for houses 1, 2, and 3 respectively, following the dataset README. The
   other channels represent different appliances in each house; their meanings
