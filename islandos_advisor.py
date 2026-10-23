@@ -19,6 +19,13 @@ from experiments.rolling_horizon_dispatch import parse_scenario_csv, simulate_ro
 
 
 POLICIES = ("rolling", "ro_first", "ice_first", "perfect_information")
+OPERATIONAL_POLICIES = ("rolling", "ro_first", "ice_first")
+WEIGHT_PROFILES = {
+    "balanced": {"unmet_water": 0.45, "unmet_cooling": 0.45, "remaining_surplus": 0.10},
+    "water_priority": {"unmet_water": 0.60, "unmet_cooling": 0.30, "remaining_surplus": 0.10},
+    "cooling_priority": {"unmet_water": 0.30, "unmet_cooling": 0.60, "remaining_surplus": 0.10},
+    "energy_efficiency": {"unmet_water": 0.40, "unmet_cooling": 0.40, "remaining_surplus": 0.20},
+}
 
 
 def _read_rows(path, input_format):
@@ -43,14 +50,15 @@ def _read_rows(path, input_format):
         yield row
 
 
-def _score(result, scenario):
+def _score(result, scenario, weights=None):
+    weights = weights or WEIGHT_PROFILES["balanced"]
     water_total = max(sum(scenario.water_demand_m3_per_hour), 1e-9)
     cooling_total = max(sum(scenario.cooling_demand_kw_th), 1e-9)
     power_total = max(sum(scenario.available_surplus_kw), 1e-9)
     return (
-        0.45 * result["water_unmet_m3"] / water_total
-        + 0.45 * result["cooling_unmet_kwh_th"] / cooling_total
-        + 0.10 * result["remaining_surplus_kwh"] / power_total
+        weights["unmet_water"] * result["water_unmet_m3"] / water_total
+        + weights["unmet_cooling"] * result["cooling_unmet_kwh_th"] / cooling_total
+        + weights["remaining_surplus"] * result["remaining_surplus_kwh"] / power_total
     )
 
 
@@ -122,9 +130,28 @@ def main(argv=None):
                 policy,
                 forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
             )
-        operational = ("rolling", "ro_first", "ice_first")
-        scores = {policy: round(_score(results[policy], parsed["scenario"]), 6) for policy in operational}
+        operational = OPERATIONAL_POLICIES
+        scores = {
+            policy: round(_score(results[policy], parsed["scenario"], WEIGHT_PROFILES["balanced"]), 6)
+            for policy in operational
+        }
         recommended = min(operational, key=lambda policy: (scores[policy], policy))
+        sensitivity = []
+        for profile_name, profile_weights in WEIGHT_PROFILES.items():
+            profile_scores = {
+                policy: round(_score(results[policy], parsed["scenario"], profile_weights), 6)
+                for policy in operational
+            }
+            sensitivity.append({
+                "weight_profile": profile_name,
+                "weights": profile_weights,
+                "policy_scores": profile_scores,
+                "winner_for_this_input": min(operational, key=lambda policy: (profile_scores[policy], policy)),
+            })
+        winner_counts = {
+            policy: sum(row["winner_for_this_input"] == policy for row in sensitivity)
+            for policy in operational
+        }
         comparison = []
         for policy in POLICIES:
             result = results[policy]
@@ -145,7 +172,13 @@ def main(argv=None):
             "source": args.source,
             "row_count": len(records),
             "forecast_method": "supplied forecasts where present; otherwise persistence baseline; first row cold-start seeded",
-            "score_weights": {"unmet_water": 0.45, "unmet_cooling": 0.45, "remaining_surplus": 0.10},
+            "score_weights": WEIGHT_PROFILES["balanced"],
+            "weight_sensitivity": sensitivity,
+            "weight_sensitivity_winner_counts": winner_counts,
+            "weight_sensitivity_interpretation": (
+                "Winner counts are across the declared weight profiles for this input only; "
+                "they are not statistical confidence or a guarantee of field performance."
+            ),
             "policy_comparison": comparison,
             "recommended_policy_for_operator_review": recommended,
             "recommendation_reason": "lowest declared normalized score among rolling and fixed-priority policies for this input only",
