@@ -129,6 +129,12 @@ For a compact reference to the other experiments, see [Experiments and workflows
 | Integrated forecast-aware island controller | Not implemented as a validated end-to-end system |
 | Live equipment control, site safety validation, and field-proven savings | Not available |
 
+## Public measured-data forecast validation
+
+The public-data CI evaluates all 11 SOWEKI water-demand series using chronological holdouts and compares a scikit-learn gradient-boosting candidate against previous-hour, previous-day, and previous-week baselines. In the archived run, gradient boosting had lower MAE than the previous-week baseline on all 11 series; mean MAE reduction was 37.5% and median reduction was 35.2%. See the [11-series workflow and aggregate artifact](https://github.com/HaochuanLin/islandOS/actions/runs/39986497014).
+
+**Interpretation boundary:** these series are from one rural German reservoir-outflow collection, not 11 independent locations, island demand, or desalination production. Each score is from one chronological holdout and one-step-ahead forecasts assume the previous hour's measured demand is available. The result does not prove island-site transfer, online learning, deep learning, or better dispatch economics. Full provenance and reproduction steps are in the [reproducibility guide](docs/REPRODUCIBILITY.md).
+
 ## Important limitations
 
 - Simulation and benchmark fixtures are synthetic unless a dataset is explicitly identified as measured or public.
