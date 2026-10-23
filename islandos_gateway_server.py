@@ -10,7 +10,9 @@ import argparse
 from datetime import datetime, timezone
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hmac
 import json
+import os
 from pathlib import Path
 import threading
 from urllib.parse import parse_qs, urlparse
@@ -100,7 +102,7 @@ def _json_bytes(payload):
     return (json.dumps(payload, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
 
 
-def make_handler(audit_path, source, max_age_seconds, mapping=None):
+def make_handler(audit_path, source, max_age_seconds, mapping=None, bearer_token=None):
     audit_path = Path(audit_path)
     lock = threading.Lock()
     latest = {"record": None}
@@ -130,7 +132,11 @@ def make_handler(audit_path, source, max_age_seconds, mapping=None):
             self.wfile.write(encoded)
 
         def _authorized(self):
-            return True
+            if not bearer_token:
+                return True
+            supplied = self.headers.get("Authorization", "")
+            expected = "Bearer " + bearer_token
+            return hmac.compare_digest(supplied, expected)
 
         def do_GET(self):
             request_url = urlparse(self.path)
@@ -319,7 +325,7 @@ def main(argv=None):
     except (OSError, ValueError) as exc:
         parser.error("could not load device mapping: %s" % exc)
 
-    handler = make_handler(args.audit_file, args.source, args.max_age_seconds, mapping)
+    bearer_token = os.environ.get("ISLANDOS_GATEWAY_TOKEN", "")\n    handler = make_handler(args.audit_file, args.source, args.max_age_seconds, mapping, bearer_token or None)
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print("IslandOS read-only telemetry gateway listening on http://%s:%d" % (args.host, args.port), flush=True)
     print("No PLC commands or actuator writes are supported.", flush=True)
