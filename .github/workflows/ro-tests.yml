@@ -60,6 +60,66 @@ jobs:
           assert all(metric["mae_m3_per_hour"] >= 0 for metric in report["test_metrics"].values())
           print("Synthetic water-demand ML comparison smoke test passed.")
           PY
+      - name: Join ML water-demand forecasts to dispatch and evaluate
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/water-demand-forecast/model-comparison.json").read_text(encoding="utf-8"))
+          rows = report["forecast_rows"]
+          assert rows, "ML comparison must provide out-of-sample forecast rows"
+          output = Path("build/forecast-dispatch/power-input.csv")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          with output.open("w", encoding="utf-8", newline="") as handle:
+              writer = csv.DictWriter(handle, fieldnames=[
+                  "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+                  "water_demand_m3", "cooling_demand_kw_th",
+              ])
+              writer.writeheader()
+              for index, row in enumerate(rows):
+                  writer.writerow({
+                      "timestamp_utc": row["timestamp"],
+                      "actual_surplus_kw": 22 + index % 9,
+                      "forecast_surplus_kw": 21 + index % 9,
+                      "water_demand_m3": row["actual_water_demand_m3"],
+                      "cooling_demand_kw_th": 8 + index % 4,
+                  })
+          print(f"Created a clearly synthetic paired power trace for {len(rows)} ML forecast timestamps.")
+          PY
+          python experiments/build_forecast_dispatch_input.py \
+            build/forecast-dispatch/power-input.csv \
+            build/water-demand-forecast/model-comparison.json \
+            --forecast-column hist_gradient_boosting \
+            --output build/forecast-dispatch/paired-with-water-forecast.csv
+          python experiments/evaluate_forecast_dispatch.py \
+            build/forecast-dispatch/paired-with-water-forecast.csv \
+            --output build/forecast-dispatch/results.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          joined = json.loads(Path("build/forecast-dispatch/paired-with-water-forecast.report.json").read_text(encoding="utf-8"))
+          result = json.loads(Path("build/forecast-dispatch/results.json").read_text(encoding="utf-8"))
+          assert joined["status"] == "forecast_dispatch_input_built"
+          assert joined["forecast_column_used"] == "hist_gradient_boosting"
+          assert joined["matched_rows"] > 0
+          assert result["time_basis"]["rows"] == joined["matched_rows"]
+          assert result["water_demand_input"]["forecast_column_used"] == "forecast_water_demand_m3"
+          assert result["water_demand_input"]["actual_demand_is_used_for_execution"] is True
+          assert result["water_demand_input"]["forecast_demand_is_used_for_planning"] is True
+          print("Model-generated water forecast → dispatch integration smoke test passed.")
+          PY
+      - name: Upload model-generated forecast-to-dispatch report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-model-water-forecast-dispatch
+          path: |
+            build/forecast-dispatch/paired-with-water-forecast.report.json
+            build/forecast-dispatch/results.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Run repeated chronological water-demand backtest
         run: |
           python experiments/backtest_water_demand_models.py data/examples/synthetic_water_demand_demo.csv --initial-train-fraction 0.65 --test-window-hours 24 --step-hours 24 --output build/water-demand-forecast/rolling-backtest.json
