@@ -1,6 +1,6 @@
 {
   "site_name": "REPLACE_WITH_SITE_NAME",
-  "scenario_start": "2026-10-22T08:00:00+08:00",
+  "scenario_start": "REPLACE_WITH_SCENARIO_START_ISO8601_WITH_TIMEZONE",
   "telemetry": {
     "timestamp": "REPLACE_WITH_LATEST_SENSOR_TIMESTAMP",
     "source_type": "sensor_export",

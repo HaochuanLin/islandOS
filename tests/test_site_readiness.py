@@ -87,6 +87,13 @@ class SiteReadinessTests(unittest.TestCase):
         self.assertIn('14:00)$/.test(off)', html)
         self.assertIn("maxAge<=0", html)
 
+    def test_staff_form_does_not_assume_a_stale_scenario_date_or_sensor_provenance(self):
+        form = Path(__file__).resolve().parents[1] / "tools" / "site_readiness_form.html"
+        html = form.read_text(encoding="utf-8")
+        self.assertIn('id="start" type="datetime-local" required', html)
+        self.assertNotIn('value="2026-10-22T08:00"', html)
+        self.assertIn('<option value="manual" selected>', html)
+
     def test_bad_values_block(self):
         self.payload["telemetry"]["pv_kw"] = float("nan")
         report = evaluate_readiness(self.payload, now=self.now)
