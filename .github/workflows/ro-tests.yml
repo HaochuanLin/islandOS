@@ -109,6 +109,10 @@ jobs:
           assert result["water_demand_input"]["forecast_column_used"] == "forecast_water_demand_m3"
           assert result["water_demand_input"]["actual_demand_is_used_for_execution"] is True
           assert result["water_demand_input"]["forecast_demand_is_used_for_planning"] is True
+          water_baseline = result["water_demand_input"]["persistence_baseline_comparison"]
+          assert water_baseline["status"] == "evaluated"
+          assert water_baseline["aligned_hours"] == joined["matched_rows"] - 1
+          assert water_baseline["forecast_metrics"]["persistence_baseline"]["evaluated_hours"] == joined["matched_rows"] - 1
           print("Model-generated water forecast → dispatch integration smoke test passed.")
           PY
       - name: Upload model-generated forecast-to-dispatch report
