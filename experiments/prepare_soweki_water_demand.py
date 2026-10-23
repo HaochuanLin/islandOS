@@ -188,8 +188,10 @@ def prepare_soweki_water_demand(
         "source_value_unit": "m³/h sampled every 15 minutes",
         "output_value_unit": "m³ per hourly interval; mean of four quarter-hour flow-rate samples",
         "missing_data_policy": (
-            "No interpolation. Incomplete hours are excluded; only the longest "
-            "continuous run of complete hours is exported."
+            "No interpolation. Exact duplicate timestamp/value rows are deduplicated; "
+            "conflicting duplicate values are rejected. Invalid numeric rows are excluded, "
+            "which makes their hour incomplete. Incomplete hours are excluded; only the "
+            "longest continuous run of complete hours is exported."
         ),
         "output_csv": str(output_path),
         "limitations": [
