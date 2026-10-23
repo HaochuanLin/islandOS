@@ -32,7 +32,7 @@ Run a local read-only gateway with an explicit mapping file:
 python islandos_gateway_server.py --host 127.0.0.1 --port 8765 --mapping configs/device_mapping.example.json
 ```
 
-Send a vendor-shaped JSON body to `http://127.0.0.1:8765/telemetry` using `Content-Type: application/json`; configure the authorization header if a gateway token is enabled. Do not send commands or setpoints to equipment. This mapping is an example contract, not a claim of compatibility with a particular manufacturer's device. Before adapting any real sensor, verify the protocol, calibration, engineering units, timestamp semantics, update rate, failure modes, and safety limits with its documentation. Test first using a recorded fixture or isolated bench setup.
+Send a vendor-shaped JSON body to `http://127.0.0.1:8765/telemetry` using `Content-Type: application/json`. Optional bearer-token protection is controlled by `ISLANDOS_GATEWAY_TOKEN`; see `docs/TELEMETRY_INTEGRATION_CONTRACT.md`. By default, no authentication is enabled, so keep the server bound to loopback and never expose it to a LAN or public network. Do not send commands or setpoints to equipment. This mapping is an example contract, not a claim of compatibility with a particular manufacturer's device. Before adapting any real sensor, verify the protocol, calibration, engineering units, timestamp semantics, update rate, failure modes, and safety limits with its documentation. Test first using a recorded fixture or isolated bench setup.
 
 ## Five-minute walkthrough
 
