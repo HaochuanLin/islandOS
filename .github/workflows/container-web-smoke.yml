@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Build Streamlit web image
         run: docker build --tag islandos-web:ci .
       - name: Start web app on loopback only
