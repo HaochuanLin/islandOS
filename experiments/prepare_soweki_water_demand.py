@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from collections import defaultdict
@@ -59,6 +60,7 @@ def prepare_soweki_water_demand(
         raise ValueError("min_hours must be at least 43 for the forecast baseline's default chronological split")
 
     input_path = Path(input_csv)
+    source_sha256 = hashlib.sha256(input_path.read_bytes()).hexdigest()
     with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         required = {"timestamp", "value"}
@@ -165,10 +167,13 @@ def prepare_soweki_water_demand(
             })
 
     source_span_hour_bins = int((max(source_hour_bins_seen) - min(source_hour_bins_seen)).total_seconds() // HOUR_SECONDS) + 1
+    output_sha256 = hashlib.sha256(output_path.read_bytes()).hexdigest()
     report = {
         "status": "prepared",
         "source_dataset": "SOWEKI Water Demand Dataset, soweki_wdd_*.csv",
         "source_url": "https://zenodo.org/records/19627517",
+        "source_file_sha256": source_sha256,
+        "prepared_hourly_csv_sha256": output_sha256,
         "license": "CC BY 4.0",
         "source_rows": source_rows,
         "valid_value_rows_before_deduplication": valid_value_rows,
