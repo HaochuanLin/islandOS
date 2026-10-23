@@ -52,6 +52,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.output is None:
             sys.stdout.write(rendered)
         else:
+            protected_paths = {args.metadata_json.resolve()}
+            if args.artifact is not None:
+                protected_paths.add(args.artifact.resolve())
+            if args.output.resolve() in protected_paths:
+                raise DatasetProvenanceError(
+                    "--output must not overwrite the metadata JSON or supplied artifact"
+                )
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(rendered, encoding="utf-8")
     except (OSError, json.JSONDecodeError, DatasetProvenanceError, ValueError) as exc:
