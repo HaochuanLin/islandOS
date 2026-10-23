@@ -1,0 +1,97 @@
+name: Hosted Streamlit app health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/hosted-app-health.yml"
+      - "app.py"
+      - "README.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-hosted-health-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check hosted health endpoint and landing page
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.error import URLError, HTTPError
+          from urllib.request import Request, urlopen
+
+          base = "https://islandos.streamlit.app"
+          health_url = base + "/_stcore/health"
+          report = {
+              "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+              "base_url": base,
+              "health_url": health_url,
+              "status": "failed",
+              "attempts": [],
+          }
+
+          for attempt in range(1, 13):
+              try:
+                  request = Request(health_url, headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
+                  with urlopen(request, timeout=12) as response:
+                      body = response.read(2048).decode("utf-8", errors="replace").strip()
+                      result = {
+                          "attempt": attempt,
+                          "http_status": response.status,
+                          "body_excerpt": body[:200],
+                      }
+                  report["attempts"].append(result)
+                  if result["http_status"] == 200 and body.lower() in {"ok", "healthy"}:
+                      break
+                  raise RuntimeError(f"Unexpected health response: {result}")
+              except (URLError, HTTPError, TimeoutError, RuntimeError) as exc:
+                  report["attempts"].append({"attempt": attempt, "error": str(exc)[:300]})
+                  if attempt < 12:
+                      time.sleep(min(10, attempt))
+          else:
+              Path("hosted-health-report.json").write_text(
+                  json.dumps(report, indent=2) + "\n", encoding="utf-8"
+              )
+              raise SystemExit("Hosted Streamlit health endpoint did not become healthy after 12 attempts")
+
+          request = Request(base + "/", headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
+          with urlopen(request, timeout=15) as response:
+              html = response.read(2_000_000).decode("utf-8", errors="replace")
+              report["landing_page"] = {
+                  "http_status": response.status,
+                  "content_type": response.headers.get("Content-Type", ""),
+                  "response_bytes": len(html.encode("utf-8")),
+                  "contains_islandos_marker": "islandos" in html.lower(),
+              }
+              if response.status != 200:
+                  raise SystemExit(f"Landing page returned HTTP {response.status}")
+              if "text/html" not in report["landing_page"]["content_type"].lower():
+                  raise SystemExit("Landing page did not return HTML")
+              if len(html) < 1000:
+                  raise SystemExit("Landing page response is unexpectedly small")
+          report["status"] = "healthy"
+          Path("hosted-health-report.json").write_text(
+              json.dumps(report, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(report, indent=2))
+          PY
+      - name: Upload hosted health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-hosted-health-report
+          path: hosted-health-report.json
+          if-no-files-found: ignore
+          retention-days: 30
