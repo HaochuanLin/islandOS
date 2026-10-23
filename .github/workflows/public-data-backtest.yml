@@ -124,6 +124,7 @@ jobs:
           root = Path("build/public-data")
           prep = json.loads((root / "preparation.json").read_text(encoding="utf-8"))
           report = json.loads((root / "forecast_report.json").read_text(encoding="utf-8"))
+          ml_report = json.loads((root / "model_comparison.json").read_text(encoding="utf-8"))
           assert prep["status"] == "prepared"
           assert prep["license"] == "CC BY 4.0"
           for key in ("source_file_sha256", "prepared_hourly_csv_sha256"):
@@ -150,6 +151,19 @@ jobs:
           assert report["row_count"] == prep["selected_contiguous_hours"]
           assert report["test_rows"] > 0
           assert report["history_rows"] + report["test_rows"] == report["row_count"]
+          assert ml_report["status"] == "models_compared"
+          assert ml_report["input_csv_sha256"] == prep["prepared_hourly_csv_sha256"]
+          assert ml_report["model"]["library_version"]
+          expected_ml_models = {
+              "persistence_previous_hour", "seasonal_naive_previous_day",
+              "seasonal_naive_previous_week", "hist_gradient_boosting",
+          }
+          assert expected_ml_models == set(ml_report["test_metrics"])
+          for model_name, metrics in ml_report["test_metrics"].items():
+              assert all(math.isfinite(metrics[key]) for key in (
+                  "mae_m3_per_hour", "rmse_m3_per_hour",
+                  "bias_predicted_minus_actual_m3_per_hour",
+              )), model_name
           required_models = {"persistence", "seasonal_naive_24h", "seasonal_bias_corrected"}
           assert required_models == set(report["test_metrics"])
           for model, metrics in report["test_metrics"].items():
@@ -193,6 +207,12 @@ jobs:
 
           summary = {
               "status": "measured_public_data_backtest_completed",
+              "ml_comparison": {
+                  "input_csv_sha256": ml_report["input_csv_sha256"],
+                  "model": ml_report["model"],
+                  "test_metrics": ml_report["test_metrics"],
+                  "lowest_mae_model_on_this_holdout": ml_report["lowest_mae_model_on_this_holdout"],
+              },
               "execution": {
                   "github_sha": __import__("os").environ.get("GITHUB_SHA"),
                   "github_run_id": __import__("os").environ.get("GITHUB_RUN_ID"),
@@ -244,6 +264,7 @@ jobs:
               "rows": report["row_count"],
               "test_rows": report["test_rows"],
               "test_metrics": report["test_metrics"],
+              "ml_comparison": summary["ml_comparison"],
               "peak_risk": peak_metrics,
           }, indent=2, ensure_ascii=False))
           PY
@@ -256,6 +277,7 @@ jobs:
             build/public-data/soweki_hourly.csv
             build/public-data/preparation.json
             build/public-data/forecast_report.json
+            build/public-data/model_comparison.json
             build/public-data/measured_data_summary.json
           if-no-files-found: error
           retention-days: 90
