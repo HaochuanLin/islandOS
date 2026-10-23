@@ -44,7 +44,7 @@ def test_optimizer_result_from_different_input_is_cleared():
     app.run()
     assert not app.exception
     assert "islandos_optimizer_result" not in app.session_state
-    assert any("input data changed" in element.value for element in app.info)
+    assert any("input data" in element.value and "cleared" in element.value for element in app.info)
     labels = [element.label for element in app.get("download_button")]
     assert not any("NSGA-II Pareto solutions" in label for label in labels)
 
