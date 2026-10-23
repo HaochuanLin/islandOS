@@ -373,10 +373,20 @@ elif page == "Strategy simulator":
                 st.session_state["islandos_optimizer_result"] = {
                     "summary": pareto_summaries, "detail": pareto_details,
                     "meta": optimizer_meta, "source": source_label,
+                    "provenance": input_provenance,
                 }
             except Exception as exc:
                 st.error(f"NSGA-II optimization failed: {exc}")
         optimizer_result = st.session_state.get("islandos_optimizer_result")
+        if optimizer_result and (
+            optimizer_result.get("provenance", {}).get("input_sha256")
+            != input_provenance["input_sha256"]
+        ):
+            # A Streamlit session can outlive input changes. Never show or export
+            # optimizer results computed from a different exact input byte stream.
+            st.session_state.pop("islandos_optimizer_result", None)
+            optimizer_result = None
+            st.info("Previous NSGA-II results were cleared because the input data changed. Run the optimizer again.")
         if optimizer_result:
             meta = optimizer_result["meta"]
             # Never present stale or incompatible session-state output as a successful
@@ -460,8 +470,8 @@ elif page == "Strategy simulator":
                         _delta_text("Grid electricity cost", "grid_energy_cost", reference),
                     ]))
                 st.download_button(
-                    "Download NSGA-II Pareto solutions",
-                    dataframe_csv(pareto_rows),
+                    "Download NSGA-II Pareto solutions (with provenance)",
+                    dataframe_csv(pareto_rows, optimizer_result["provenance"]),
                     file_name="islandos_nsga2_pareto_solutions.csv",
                     mime="text/csv",
                     use_container_width=True,
