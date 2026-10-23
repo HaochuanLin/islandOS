@@ -1,0 +1,8 @@
+services:
+  islandos-web:
+    build: .
+    image: islandos-web:local
+    container_name: islandos-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8501:8501"
