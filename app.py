@@ -856,6 +856,68 @@ elif page == "Telemetry gateway":
                 }
                 for item in audited
             ]), use_container_width=True, hide_index=True)
+            if valid_count == len(audited):
+                dispatch_rows = []
+                parsed_times = []
+                previous_surplus = None
+                previous_water = None
+                for item in audited:
+                    stamp_text = item["timestamp_utc"]
+                    parsed_times.append(datetime.fromisoformat(stamp_text.replace("Z", "+00:00")))
+                hourly_aligned = all(
+                    parsed_times[index] - parsed_times[index - 1] == timedelta(hours=1)
+                    for index in range(1, len(parsed_times))
+                )
+                if hourly_aligned:
+                    for index, item in enumerate(audited):
+                        values = item["values"]
+                        actual_surplus = values["renewable_surplus_kw"]
+                        water_demand = values["water_demand_m3"]
+                        forecast_surplus = values.get(
+                            "forecast_surplus_kw",
+                            actual_surplus if previous_surplus is None else previous_surplus,
+                        )
+                        forecast_water = values.get(
+                            "forecast_water_demand_m3",
+                            water_demand if previous_water is None else previous_water,
+                        )
+                        dispatch_rows.append({
+                            "timestamp_utc": item["timestamp_utc"],
+                            "actual_surplus_kw": actual_surplus,
+                            "forecast_surplus_kw": forecast_surplus,
+                            "water_demand_m3": water_demand,
+                            "cooling_demand_kw_th": values["cooling_demand_kw_th"],
+                            "forecast_water_demand_m3": forecast_water,
+                        })
+                        previous_surplus = actual_surplus
+                        previous_water = water_demand
+                    st.info(
+                        "Dispatch export uses supplied forecast fields when present. Otherwise it uses a "
+                        "persistence baseline (previous observed value); the first row is cold-start seeded "
+                        "from its own observation and must not be counted as an out-of-sample forecast."
+                    )
+                    dispatch_buffer = io.StringIO()
+                    dispatch_writer = csv.DictWriter(
+                        dispatch_buffer,
+                        fieldnames=[
+                            "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+                            "water_demand_m3", "cooling_demand_kw_th", "forecast_water_demand_m3",
+                        ],
+                    )
+                    dispatch_writer.writeheader()
+                    dispatch_writer.writerows(dispatch_rows)
+                    st.download_button(
+                        "Download dispatch-ready hourly CSV",
+                        data=dispatch_buffer.getvalue().encode("utf-8"),
+                        file_name="islandos_validated_dispatch_input.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+                else:
+                    st.warning(
+                        "Telemetry rows passed basic validation but are not exactly one hour apart. "
+                        "The rolling dispatcher requires hourly-aligned rows, so no dispatch-input shortcut is offered."
+                    )
             st.download_button(
                 "Download telemetry validation audit",
                 data=("\n".join(json.dumps(item, sort_keys=True) for item in audited) + "\n").encode("utf-8"),
