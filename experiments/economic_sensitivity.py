@@ -105,6 +105,16 @@ def _summarize(values: list[float]) -> dict[str, float]:
     }
 
 
+def _summarize_deltas(values: list[float | None]) -> dict[str, float | int | None]:
+    defined = [value for value in values if value is not None]
+    return {
+        "min": min(defined) if defined else None,
+        "median": statistics.median(defined) if defined else None,
+        "max": max(defined) if defined else None,
+        "undefined_baseline_count": len(values) - len(defined),
+    }
+
+
 def run_economic_sensitivity(
     candidate_report_json: str | Path,
     output_json: str | Path,
@@ -222,7 +232,7 @@ def run_economic_sensitivity(
                 _annual_cost(item["breakdown"], variant) for item in candidate_records
             ]
             deltas = [
-                ((new - old_cost) / old_cost * 100.0) if old_cost > 0 else 0.0
+                ((new - old_cost) / old_cost * 100.0) if old_cost > 0 else None
                 for old_cost, new in zip(baseline_costs, variant_costs)
             ]
             scenarios.append({
@@ -234,7 +244,7 @@ def run_economic_sensitivity(
                 "currency": economics["currency"],
                 "candidate_count": len(variant_costs),
                 "annual_cost": _summarize(variant_costs),
-                "delta_percent_from_baseline": _summarize(deltas),
+                "delta_percent_from_baseline": _summarize_deltas(deltas),
                 "candidate_costs": [
                     {
                         "candidate_index": item["candidate_index"],
