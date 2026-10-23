@@ -78,6 +78,8 @@ For a compact reference to the other experiments, see [Experiments and workflows
 
 ## Documentation
 
+- **Engineering maturity and delivery gates:** [scored targets, acceptance criteria, and evidence requirements](docs/ENGINEERING_MATURITY_ROADMAP.md)
+
 | Topic | Guide |
 |---|---|
 | Interactive app inputs and strategy assumptions | [Energy–water strategy comparison](docs/ENERGY_WATER_STRATEGY_COMPARISON.md) |
