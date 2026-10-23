@@ -59,7 +59,7 @@ class TestWaterDemandUncertaintyDispatch(unittest.TestCase):
             )
             self.assertIn("water_unmet_m3", report["change_upper_minus_point"])
             self.assertIn("cooling_unmet_kwh_th", report["change_upper_minus_point"])
-            self.assertIn("same realized demand", report["interpretation"])
+            self.assertIn("same realized demand", report["upper_bound_stress_planning"]["interpretation"])
             saved = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(saved["time_basis"]["matched_rows"], 48)
 
