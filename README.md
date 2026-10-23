@@ -46,6 +46,8 @@ streamlit run app.py
 
 The app opens in your browser on your own machine. It is a local Streamlit application; this repository alone does not mean a public hosted website is available.
 
+For a judge-ready walkthrough, see the [competition demo runbook](docs/COMPETITION_DEMO_RUNBOOK.md). It includes a repeatable short demo path, what outputs to inspect, and what the prototype cannot claim.
+
 In the app, you can:
 1. Use the clearly labeled synthetic demo or upload an hourly CSV.
 2. Set RO power, specific energy, water-tank capacity and initial inventory, minimum run time, and optional cost assumptions.
