@@ -7,6 +7,7 @@ Uploaded site data is used as supplied; the built-in demo is synthetic.
 """
 
 import csv
+import hashlib
 import io
 import math
 from datetime import datetime, timedelta
@@ -103,8 +104,13 @@ def parse_uploaded_csv(raw: bytes) -> list[SiteStep]:
         temp_path.unlink(missing_ok=True)
 
 
-def dataframe_csv(rows: list[dict]) -> bytes:
-    return pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
+def dataframe_csv(rows: list[dict], provenance: dict | None = None) -> bytes:
+    """Serialize report rows and optionally repeat their input provenance on each row."""
+    frame = pd.DataFrame(rows)
+    if provenance:
+        for key in ("source_type", "source_label", "input_sha256"):
+            frame[key] = provenance[key]
+    return frame.to_csv(index=False).encode("utf-8")
 
 
 with st.sidebar:
@@ -207,9 +213,16 @@ elif page == "Strategy simulator":
             st.stop()
         raw = uploaded.getvalue()
         source_label = f"User-uploaded file: {uploaded.name}"
+        source_type = "user_uploaded_unverified"
     else:
         raw = demo_csv_bytes()
         source_label = "Synthetic demo data — not measured site data"
+        source_type = "synthetic"
+    input_provenance = {
+        "source_type": source_type,
+        "source_label": source_label,
+        "input_sha256": hashlib.sha256(raw).hexdigest(),
+    }
 
     with st.expander("Model assumptions", expanded=True):
         a, b, c = st.columns(3)
@@ -248,6 +261,7 @@ elif page == "Strategy simulator":
                 "detail": detail,
                 "summary": summary,
                 "source": source_label,
+                "provenance": input_provenance,
             }
             st.session_state.pop("islandos_optimizer_result", None)
         except Exception as exc:
@@ -257,6 +271,16 @@ elif page == "Strategy simulator":
     result = st.session_state.get("islandos_result")
     if result:
         st.caption(f"Data provenance: **{result['source']}**")
+        st.caption(
+            f"Source type: `{result['provenance']['source_type']}` · "
+            f"Input SHA-256: `{result['provenance']['input_sha256']}`"
+        )
+        with st.expander("Input provenance details", expanded=False):
+            st.write(
+                "The digest identifies the exact input bytes used for this run. "
+                "It does not certify measurement accuracy, completeness, licensing, or trust."
+            )
+            st.code(result["provenance"]["input_sha256"], language=None)
         summaries = pd.DataFrame(result["summary"])
         details = pd.DataFrame(result["detail"])
         st.subheader("Results at a glance")
@@ -297,16 +321,16 @@ elif page == "Strategy simulator":
         d1, d2 = st.columns(2)
         with d1:
             st.download_button(
-                "⬇ Download strategy summary",
-                dataframe_csv(result["summary"]),
+                "⬇ Download strategy summary (with provenance)",
+                dataframe_csv(result["summary"], result["provenance"]),
                 file_name="islandos_strategy_summary.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
         with d2:
             st.download_button(
-                "⬇ Download timestep audit",
-                dataframe_csv(result["detail"]),
+                "⬇ Download timestep audit (with provenance)",
+                dataframe_csv(result["detail"], result["provenance"]),
                 file_name="islandos_timestep_audit.csv",
                 mime="text/csv",
                 use_container_width=True,
