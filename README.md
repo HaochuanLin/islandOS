@@ -18,6 +18,18 @@
 </p>
 <p align="center"><em>Illustrative synthetic simulation only—not field measurements or evidence of real-island performance.</em></p>
 
+## Nan'ao scenario pilot (separate branch)
+
+The original 24-hour demo is a **generic synthetic example**, not the Nan'ao Island scenario and not measured site data. The Nan'ao annual scenario model is maintained separately on the [nan-ao-scenario-pilot branch](https://github.com/HaochuanLin/islandOS/tree/nan-ao-scenario-pilot). It is an assumption-based event-energy simulation, not a grid power-flow model or a reconstruction of measured Nan'ao curtailment. Outputs are scenario-based simulation assumptions, not measured real-world data.
+
+To run the Nan'ao scenario from that branch, use the following command from the repository root:
+
+```bash
+python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir outputs/nan_ao
+```
+
+See [the Nan'ao scenario documentation](https://github.com/HaochuanLin/islandOS/blob/nan-ao-scenario-pilot/docs/NAN_AO_SCENARIO.md) for assumptions and limitations.
+
 ## What it can do today
 
 - **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results.
