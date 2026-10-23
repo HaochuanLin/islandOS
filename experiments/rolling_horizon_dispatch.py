@@ -195,6 +195,35 @@ def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
     }
 
 
+def generate_synthetic_scenario_csv(hours: int = 24) -> str:
+    """Return a deterministic, explicitly synthetic paired hourly dispatch CSV."""
+    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 1 or hours > 168:
+        raise ValueError("hours must be an integer from 1 to 168")
+    output = io.StringIO(newline="")
+    fields = [
+        "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
+        "water_demand_m3", "cooling_demand_kw_th", "forecast_water_demand_m3",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for index in range(hours):
+        actual_surplus = 0.0 if index % 6 == 3 else float(15 + (index % 8) * 4)
+        forecast_surplus = max(0.0, actual_surplus + (8.0 if index % 4 == 0 else -5.0))
+        water_demand = float(4 + index % 4)
+        cooling_demand = float(6 + index % 5)
+        forecast_water = max(0.0, water_demand + (1.0 if index % 3 == 0 else -0.5))
+        writer.writerow({
+            "timestamp_utc": (start + timedelta(hours=index)).isoformat().replace("+00:00", "Z"),
+            "actual_surplus_kw": actual_surplus,
+            "forecast_surplus_kw": forecast_surplus,
+            "water_demand_m3": water_demand,
+            "cooling_demand_kw_th": cooling_demand,
+            "forecast_water_demand_m3": forecast_water,
+        })
+    return output.getvalue()
+
+
 def simulate_rolling(
     scenario: Scenario,
     forecast_surplus,
@@ -411,6 +440,14 @@ def summarize_experiment(rows=None):
             "best_fixed_score": round(best_fixed_score, 6),
             "rolling_minus_best_fixed": round(rolling_score - best_fixed_score, 6),
             "perfect_information_score": round(score(policies["perfect_information"]), 6),
+            "rolling_water_unmet_m3": round(policies["rolling"]["water_unmet_m3"], 3),
+            "best_fixed_water_unmet_m3": round(policies[best_fixed_name]["water_unmet_m3"], 3),
+            "rolling_cooling_unmet_kwh_th": round(policies["rolling"]["cooling_unmet_kwh_th"], 3),
+            "best_fixed_cooling_unmet_kwh_th": round(policies[best_fixed_name]["cooling_unmet_kwh_th"], 3),
+            "rolling_remaining_surplus_kwh": round(policies["rolling"]["remaining_surplus_kwh"], 3),
+            "best_fixed_remaining_surplus_kwh": round(policies[best_fixed_name]["remaining_surplus_kwh"], 3),
+            "rolling_constraint_violation_hours": int(policies["rolling"]["constraint_violation_hours"]),
+            "best_fixed_constraint_violation_hours": int(policies[best_fixed_name]["constraint_violation_hours"]),
             "interpretation": "case-specific comparison; no universal winner assumed",
         })
     return summaries
