@@ -47,3 +47,23 @@ def test_optimizer_result_from_different_input_is_cleared():
     assert any("input data changed" in element.value for element in app.info)
     labels = [element.label for element in app.get("download_button")]
     assert not any("NSGA-II Pareto solutions" in label for label in labels)
+
+
+def test_strategy_result_is_cleared_when_model_assumptions_change():
+    app = AppTest.from_file(str(APP), default_timeout=60).run()
+    assert not app.exception
+    app.radio[0].set_value("Strategy simulator").run()
+    app.button[0].click().run()
+    assert not app.exception
+    assert "islandos_result" in app.session_state
+
+    ro_power = next(
+        element for element in app.number_input if element.label == "RO rated power (kW)"
+    )
+    ro_power.set_value(11.0).run()
+    assert not app.exception
+    assert "islandos_result" not in app.session_state
+    assert "islandos_optimizer_result" not in app.session_state
+    assert any("model assumptions changed" in element.value for element in app.info)
+    labels = [element.label for element in app.get("download_button")]
+    assert not any("strategy summary" in label for label in labels)
