@@ -6,6 +6,7 @@ from islandos_io import (
     ControlRequest,
     SafetyContext,
     authorize_control,
+    build_dispatch_input_rows,
     build_recommendation,
     validate_telemetry,
 )
@@ -78,6 +79,49 @@ class TestTelemetryValidation(unittest.TestCase):
         invalid = validate_telemetry(payload, "gateway", received_at=NOW)
         self.assertFalse(invalid.valid)
         self.assertTrue(any("forecast_surplus_kw" in error for error in invalid.errors))
+
+    def _valid_dispatch_records(self):
+        records = []
+        for index, surplus in enumerate((20.0, 35.0, 15.0)):
+            stamp = NOW + timedelta(hours=index)
+            records.append({
+                "timestamp_utc": stamp.isoformat().replace("+00:00", "Z"),
+                "valid": True,
+                "values": {
+                    "renewable_surplus_kw": surplus,
+                    "water_demand_m3": 4.0 + index,
+                    "cooling_demand_kw_th": 7.0 + index,
+                },
+            })
+        return records
+
+    def test_dispatch_input_uses_previous_value_persistence_baseline(self):
+        rows = build_dispatch_input_rows(self._valid_dispatch_records())
+        self.assertEqual([row["forecast_surplus_kw"] for row in rows], [20.0, 20.0, 35.0])
+        self.assertEqual([row["forecast_water_demand_m3"] for row in rows], [4.0, 4.0, 5.0])
+        self.assertEqual(rows[1]["actual_surplus_kw"], 35.0)
+
+    def test_dispatch_input_preserves_supplied_forecasts(self):
+        records = self._valid_dispatch_records()
+        records[1]["values"]["forecast_surplus_kw"] = 29.0
+        records[1]["values"]["forecast_water_demand_m3"] = 4.8
+        rows = build_dispatch_input_rows(records)
+        self.assertEqual(rows[1]["forecast_surplus_kw"], 29.0)
+        self.assertEqual(rows[1]["forecast_water_demand_m3"], 4.8)
+
+    def test_dispatch_input_rejects_irregular_intervals_and_bad_rows(self):
+        records = self._valid_dispatch_records()
+        records[2]["timestamp_utc"] = (NOW + timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+        with self.assertRaisesRegex(ValueError, "exactly one-hour intervals"):
+            build_dispatch_input_rows(records)
+        records = self._valid_dispatch_records()
+        records[1]["valid"] = False
+        with self.assertRaisesRegex(ValueError, "all telemetry rows must pass validation"):
+            build_dispatch_input_rows(records)
+
+    def test_dispatch_input_requires_at_least_two_rows(self):
+        with self.assertRaisesRegex(ValueError, "at least two hourly telemetry rows"):
+            build_dispatch_input_rows(self._valid_dispatch_records()[:1])
 
     def test_rejects_bad_device_quality_flag(self):
         payload = good_payload()
