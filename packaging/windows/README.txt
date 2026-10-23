@@ -25,7 +25,11 @@ Local device/gateway integration
    sample. Accepted records append to live-telemetry-audit.jsonl.
 4. Required canonical fields: timestamp_utc, renewable_surplus_kw,
    water_demand_m3, cooling_demand_kw_th. Timestamp must be fresh (default 300 s).
-5. This endpoint is local-only and ingest-only. It does not speak Modbus/MQTT,
+5. Optional: start the server with --mapping path-to-your-device-map.json to map
+   vendor keys and units to the canonical schema.
+6. GET /advice returns a recommendation-only report only after at least two
+   valid hourly-aligned samples have arrived and the latest sample is fresh.
+7. This endpoint is local-only and ingest-only. It does not speak Modbus/MQTT,
    write PLC setpoints, or control actuators. Use a site-approved local bridge
    for the device's actual protocol; do not expose this HTTP server to a LAN.
 
