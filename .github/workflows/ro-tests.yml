@@ -42,6 +42,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_islandos_gateway_server.py' -v
       - name: Compile read-only HTTP telemetry gateway
         run: python -m py_compile islandos_gateway_server.py
+      - name: Test synthetic telemetry demo sender
+        run: python -m unittest discover -s tests -p 'test_islandos_telemetry_demo.py' -v
+      - name: Compile synthetic telemetry demo sender
+        run: python -m py_compile islandos_telemetry_demo.py
       - name: Test end-to-end dispatch advisor
         run: python -m unittest discover -s tests -p 'test_islandos_advisor.py' -v
       - name: Compile dispatch advisor CLI
