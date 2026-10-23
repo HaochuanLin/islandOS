@@ -1,0 +1,133 @@
+name: Hosted Streamlit app health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/hosted-app-health.yml"
+      - "app.py"
+      - "README.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-hosted-health-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check hosted health endpoint and landing page
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          opener = build_opener(NoRedirect)
+          base = "https://islandos.streamlit.app"
+          health_url = base + "/_stcore/health"
+          report = {
+              "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+              "base_url": base,
+              "health_url": health_url,
+              "status": "failed",
+              "attempts": [],
+          }
+
+          def probe(url, body_limit):
+              request = Request(url, headers={"User-Agent": "islandOS-hosted-health-check/1.0"})
+              try:
+                  with opener.open(request, timeout=12) as response:
+                      body = response.read(body_limit).decode("utf-8", errors="replace")
+                      return {
+                          "http_status": response.status,
+                          "content_type": response.headers.get("Content-Type", ""),
+                          "location": response.headers.get("Location"),
+                          "body": body,
+                      }
+              except HTTPError as exc:
+                  body = exc.read(body_limit).decode("utf-8", errors="replace")
+                  return {
+                      "http_status": exc.code,
+                      "content_type": exc.headers.get("Content-Type", ""),
+                      "location": exc.headers.get("Location"),
+                      "body": body,
+                  }
+              except (URLError, TimeoutError, OSError) as exc:
+                  return {"error": str(exc)[:300]}
+
+          for attempt in range(1, 13):
+              root = probe(base + "/", 2_000_000)
+              health = probe(health_url, 2048)
+              report["attempts"].append({
+                  "attempt": attempt,
+                  "landing_page": {
+                      key: value for key, value in root.items() if key != "body"
+                  },
+                  "health_endpoint": {
+                      key: value for key, value in health.items() if key != "body"
+                  },
+                  "health_body_excerpt": health.get("body", "")[:200],
+              })
+              redirect_locations = [
+                  item.get("location", "")
+                  for item in (root, health)
+                  if item.get("location")
+              ]
+              if any("share.streamlit.io/-/auth/app" in location for location in redirect_locations):
+                  report["status"] = "requires_authentication"
+                  report["diagnosis"] = (
+                      "The hosted app redirects unauthenticated requests to Streamlit Cloud sign-in; "
+                      "make the deployment public in Streamlit Cloud settings if public access is intended."
+                  )
+                  break
+              root_ok = (
+                  root.get("http_status") == 200
+                  and "text/html" in root.get("content_type", "").lower()
+                  and len(root.get("body", "")) >= 1000
+              )
+              health_ok = (
+                  health.get("http_status") == 200
+                  and health.get("body", "").strip().lower() in {"ok", "healthy"}
+              )
+              if root_ok and health_ok:
+                  report["landing_page"] = {
+                      "http_status": root["http_status"],
+                      "content_type": root["content_type"],
+                      "response_bytes": len(root["body"].encode("utf-8")),
+                      "contains_islandos_marker": "islandos" in root["body"].lower(),
+                  }
+                  report["status"] = "healthy"
+                  break
+              if attempt < 12:
+                  time.sleep(min(10, attempt))
+          Path("hosted-health-report.json").write_text(
+              json.dumps(report, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(report, indent=2))
+          if report["status"] != "healthy":
+              raise SystemExit("Hosted Streamlit landing page and health endpoint did not both pass")
+
+          PY
+      - name: Upload hosted health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-hosted-health-report
+          path: hosted-health-report.json
+          if-no-files-found: ignore
+          retention-days: 30
