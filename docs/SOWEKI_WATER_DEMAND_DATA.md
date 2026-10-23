@@ -46,7 +46,7 @@ has the same numerical value as the volume in m³ over a one-hour interval.
 
 ### Missing data and time boundaries
 
-The source intentionally retains some real-world data-quality issues. The adapter sorts records by timezone-normalized timestamp, deduplicates only rows with the exact same timestamp and numeric value, and rejects conflicting values for one timestamp rather than silently averaging them. The preparation report records raw row count, duplicate rows removed, and source-order anomalies. The
+The source intentionally retains some real-world data-quality issues. The adapter sorts records by timezone-normalized timestamp, deduplicates only rows with the exact same timestamp and numeric value, and rejects conflicting values for one timestamp rather than silently averaging them. The preparation report records raw row count, duplicate rows removed, source-order anomalies, and up to ten examples of invalid numeric values. Rows with blank, non-numeric, non-finite, or negative demand are excluded; any hour missing one or more valid quarter-hour samples is excluded as a whole. Conflicting duplicate timestamps remain a hard error. The
 adapter does **not** interpolate missing quarter-hours. It excludes incomplete
 hourly bins, then exports only the longest continuous run of complete hours,
 because the forecast baseline rejects gaps. The JSON report records how many
