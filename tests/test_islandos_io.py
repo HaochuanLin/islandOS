@@ -137,6 +137,20 @@ class TestControlAuthorization(unittest.TestCase):
         context = SafetyContext(telemetry_valid=True, write_enabled=True, operator_confirmed=True)
         self.assertFalse(authorize_control(request, context).allowed)
 
+    def test_malformed_request_values_are_denied_without_exception(self):
+        for requested, minimum, maximum in (("bad", 0.0, 20.0), (float("nan"), 0.0, 20.0), (12.0, 30.0, 20.0)):
+            with self.subTest(requested=requested, minimum=minimum, maximum=maximum):
+                request = ControlRequest("ro_power", requested, minimum, maximum)
+                decision = authorize_control(request, self.safe)
+                self.assertFalse(decision.allowed)
+                self.assertIsNone(decision.approved_value)
+
+    def test_invalid_ramp_limit_is_denied(self):
+        request = ControlRequest("ro_power", 12.0, 0.0, 20.0, max_change_per_step=float("nan"))
+        decision = authorize_control(request, self.safe)
+        self.assertFalse(decision.allowed)
+        self.assertIn("maximum change per step must be finite and non-negative", decision.reasons)
+
     def test_recommendation_never_claims_hardware_write(self):
         record = build_recommendation(
             "ro_power_setpoint_kw", 12.0, "kW", "renewable surplus available",
