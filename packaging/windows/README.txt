@@ -9,10 +9,25 @@ IslandOS Windows portable demo
 Files
 -----
 islandos-advisor.exe       Validates telemetry and produces dispatch advice.
-islandos-gateway.exe       Validates/normalizes telemetry records.
+islandos-gateway.exe       Validates/normalizes telemetry records from files.
+islandos-gateway-server.exe Accepts read-only JSON telemetry on loopback HTTP.
+run-gateway-server.bat     Starts the local HTTP ingress at 127.0.0.1:8765.
 telemetry_replay_demo.csv  Included example input; not site data.
 device_map.example.json    Example vendor field mapping template.
 run-demo.bat               Runs the included sample and saves a JSON report.
+
+Local device/gateway integration
+--------------------------------
+1. Double-click run-gateway-server.bat to start the local HTTP receiver.
+2. A device bridge on this same computer can POST one JSON object per sample to
+   http://127.0.0.1:8765/telemetry with Content-Type: application/json.
+3. GET /health checks process health; GET /latest returns the latest accepted
+   sample. Accepted records append to live-telemetry-audit.jsonl.
+4. Required canonical fields: timestamp_utc, renewable_surplus_kw,
+   water_demand_m3, cooling_demand_kw_th. Timestamp must be fresh (default 300 s).
+5. This endpoint is local-only and ingest-only. It does not speak Modbus/MQTT,
+   write PLC setpoints, or control actuators. Use a site-approved local bridge
+   for the device's actual protocol; do not expose this HTTP server to a LAN.
 
 Important limitations
 ---------------------
