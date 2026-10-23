@@ -271,3 +271,5 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - The CLI rejects a declared digest that does not match the supplied file and exits non-zero for malformed JSON or invalid metadata; regression coverage is in `tests/test_validate_dataset_provenance_cli.py`.
 - Added [Dataset provenance validation](DATASET_PROVENANCE.md) with the schema, commands, and limits. This makes the contract directly usable in offline workflows; it does not yet automatically attach metadata to every importer or prove source accuracy/licence compliance.
 - Score impact remains pending until the full CI workflow completes successfully for the exact main commit. Do not increase real-world validation scores based on this software-only change.
+- Added a subprocess integration test for the documented `python -m experiments.validate_dataset_provenance` entry point, switched the guide to that reproducible invocation, and linked the guide from the README. The subprocess test guards against a CLI that works only when imported by pytest.
+
