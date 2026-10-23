@@ -106,12 +106,48 @@ class TestPrepareSowekiWaterDemand(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "timezone"):
                 prepare_soweki_water_demand(source, Path(directory) / "out.csv")
 
-    def test_rejects_negative_rate(self):
+    def test_excludes_negative_rate_and_incomplete_hour_without_interpolation(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source.csv"
-            source.write_text(
-                "timestamp,value\n2025-01-01T00:00:00Z,-1\n",
-                encoding="utf-8",
+            output = Path(directory) / "hourly.csv"
+            self._write_quarter_hourly(source, hours=60)
+            with source.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[0]["value"] = "-1"
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "value"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            report = prepare_soweki_water_demand(source, output)
+            with output.open(encoding="utf-8", newline="") as handle:
+                hourly = list(csv.DictReader(handle))
+
+            self.assertEqual(report["invalid_value_rows_excluded"], 1)
+            self.assertEqual(report["invalid_value_examples"][0]["reason"], "negative")
+            self.assertEqual(report["partially_observed_hour_bins_excluded"], 1)
+            self.assertEqual(report["selected_contiguous_hours"], 59)
+            self.assertEqual(len(hourly), 59)
+            self.assertEqual(hourly[0]["timestamp"], "2025-01-01T01:00:00Z")
+
+    def test_excludes_non_numeric_and_non_finite_rates_with_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.csv"
+            self._write_quarter_hourly(source, hours=60)
+            with source.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[0]["value"] = "not-a-number"
+            rows[1]["value"] = "NaN"
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "value"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            report = prepare_soweki_water_demand(source, Path(directory) / "hourly.csv")
+            self.assertEqual(report["invalid_value_rows_excluded"], 2)
+            self.assertEqual(
+                {row["reason"] for row in report["invalid_value_examples"]},
+                {"not_numeric", "non_finite"},
             )
-            with self.assertRaisesRegex(ValueError, "finite and non-negative"):
-                prepare_soweki_water_demand(source, Path(directory) / "out.csv")
+            self.assertEqual(report["partially_observed_hour_bins_excluded"], 1)
+            self.assertEqual(report["selected_contiguous_hours"], 59)
