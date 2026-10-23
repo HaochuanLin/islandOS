@@ -1,5 +1,5 @@
 """Integration tests for the loopback-only read-only HTTP telemetry gateway."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import socket
@@ -29,7 +29,7 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
             audit = Path(tmp) / "audit.jsonl"
             process = subprocess.Popen(
                 [sys.executable, str(SERVER), "--host", "127.0.0.1",
-                 "--port", str(port), "--audit-file", str(audit)],
+                 "--port", str(port), "--max-age-seconds", "7200", "--audit-file", str(audit)],
                 cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             )
             base = "http://127.0.0.1:%d" % port
@@ -49,8 +49,9 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertEqual(health["status"], "ok")
                 self.assertFalse(health["physical_write_performed"])
 
+                now = datetime.now(timezone.utc)
                 payload = {
-                    "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "timestamp_utc": (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
                     "renewable_surplus_kw": 18.5,
                     "water_demand_m3": 3.2,
                     "cooling_demand_kw_th": 6.5,
@@ -73,10 +74,32 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertTrue(latest["valid"])
                 self.assertEqual(latest["values"]["renewable_surplus_kw"], 18.5)
                 self.assertFalse(latest["physical_write_performed"])
-                records = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines()]
-                self.assertEqual(len(records), 1)
-                self.assertTrue(records[0]["valid"])
 
+                second_payload = dict(payload)
+                second_payload["timestamp_utc"] = now.isoformat().replace("+00:00", "Z")
+                second_payload["renewable_surplus_kw"] = 21.0
+                second_payload["water_demand_m3"] = 3.6
+                request = Request(
+                    base + "/telemetry",
+                    data=json.dumps(second_payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=2) as response:
+                    self.assertEqual(response.status, 202)
+                with urlopen(base + "/advice", timeout=5) as response:
+                    advice = json.loads(response.read().decode("utf-8"))
+                self.assertIn(advice["status"], {"advice_ready", "operator_review_required"})
+                self.assertEqual(len(advice["policy_comparison"]), 4)
+                self.assertEqual(len(advice["weight_sensitivity"]), 4)
+                self.assertTrue(advice["operator_action_required"])
+                self.assertFalse(advice["physical_write_performed"])
+
+                records = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines()]
+                self.assertEqual(len(records), 2)
+                self.assertTrue(all(record["valid"] for record in records))
+
+                payload["timestamp_utc"] = now.isoformat().replace("+00:00", "Z")
                 payload["renewable_surplus_kw"] = -1
                 request = Request(
                     base + "/telemetry",
@@ -89,7 +112,7 @@ class TestReadOnlyHTTPGateway(unittest.TestCase):
                 self.assertEqual(rejected.exception.code, 422)
                 rejected_body = json.loads(rejected.exception.read().decode("utf-8"))
                 self.assertFalse(rejected_body["valid"])
-                self.assertEqual(len(audit.read_text(encoding="utf-8").splitlines()), 1)
+                self.assertEqual(len(audit.read_text(encoding="utf-8").splitlines()), 2)
             finally:
                 process.terminate()
                 try:
