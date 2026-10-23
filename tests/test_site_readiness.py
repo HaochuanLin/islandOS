@@ -87,6 +87,30 @@ class SiteReadinessTests(unittest.TestCase):
         self.assertFalse(report["can_start"])
         self.assertIn("invalid_number", [x["code"] for x in report["blockers"]])
 
+    def test_boolean_physics_values_are_rejected(self):
+        self.payload["telemetry"]["pv_kw"] = True
+        report = evaluate_readiness(self.payload, now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("invalid_number", [x["code"] for x in report["blockers"]])
+
+    def test_non_text_site_identity_is_rejected(self):
+        self.payload["site_name"] = 123
+        report = evaluate_readiness(self.payload, now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("invalid_text", [x["code"] for x in report["blockers"]])
+
+    def test_invalid_freshness_limit_is_rejected(self):
+        for value in (0, -1, 1.5, True, "60"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    evaluate_readiness(self.payload, now=self.now, max_telemetry_age_minutes=value)
+
+    def test_boolean_capex_is_rejected_in_economic_mode(self):
+        self.payload["capex"]["ro_plant_rmb"] = True
+        report = evaluate_readiness(self.payload, "economic", now=self.now)
+        self.assertFalse(report["can_start"])
+        self.assertIn("invalid_number", [x["code"] for x in report["blockers"]])
+
 
 if __name__ == "__main__":
     unittest.main()
