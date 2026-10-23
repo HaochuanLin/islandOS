@@ -75,6 +75,7 @@ The command-line adapter can replay either CSV or newline-delimited JSON through
 \`\`\`bash
 python islandos_gateway.py data/examples/telemetry.csv --format csv --output build/telemetry/audit.jsonl
 python islandos_gateway.py data/examples/telemetry.jsonl --format jsonl --output build/telemetry/audit.jsonl
+python islandos_gateway.py vendor-export.jsonl --mapping config/device_map.example.json --output build/telemetry/mapped-audit.jsonl
 \`\`\`
 
 For deterministic recorded-data tests, supply \`--received-at 2026-10-23T05:00:00Z\`. Invalid rows are still written to the audit output, but the process exits with code 2 so a scheduler or integration harness can detect a rejected batch. The gateway does not issue control commands.
