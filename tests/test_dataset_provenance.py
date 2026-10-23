@@ -45,9 +45,12 @@ def test_valid_metadata_is_json_compatible_and_labels_data_status(metadata):
     ("field", "value", "message"),
     [
         ("source_url", "http://example.com/data.csv", "HTTPS"),
+        ("source_url", "https://[invalid-ipv6/data.csv", "HTTPS"),
+        ("source_url", "https://", "HTTPS"),
         ("retrieved_at", "2026-10-23T12:00:00", "timezone"),
         ("time_end", "2019-12-31T00:00:00Z", "earlier"),
         ("data_status", "real", "data_status"),
+        ("data_status", ["synthetic"], "data_status"),
         ("variables", [], "non-empty"),
         ("sha256", "abc", "SHA-256"),
     ],
@@ -56,6 +59,12 @@ def test_invalid_metadata_fails_closed(metadata, field, value, message):
     metadata[field] = value
     with pytest.raises(DatasetProvenanceError, match=message):
         validate_dataset_provenance(metadata)
+
+
+@pytest.mark.parametrize("invalid_metadata", [None, [], "metadata", 42])
+def test_non_mapping_metadata_raises_domain_error(invalid_metadata):
+    with pytest.raises(DatasetProvenanceError, match="metadata must be a mapping"):
+        validate_dataset_provenance(invalid_metadata)
 
 
 def test_missing_fields_are_reported(metadata):
@@ -73,3 +82,8 @@ def test_duplicate_variable_names_are_rejected(metadata):
 def test_sha256_is_deterministic_and_matches_exact_bytes():
     assert sha256_file_bytes(b"data\n") == sha256_file_bytes(b"data\n")
     assert sha256_file_bytes(b"data\n") != sha256_file_bytes(b"data")
+
+
+def test_sha256_rejects_non_bytes_input():
+    with pytest.raises(TypeError, match="content must be bytes"):
+        sha256_file_bytes("data")
