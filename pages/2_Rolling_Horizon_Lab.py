@@ -48,10 +48,13 @@ if source == "Upload paired hourly CSV":
         st.stop()
     raw = uploaded.getvalue()
     source_label = f"Uploaded file: {uploaded.name}"
+    source_type = "user_uploaded_unverified"
 else:
     raw = generate_synthetic_scenario_csv(24).encode("utf-8")
     source_label = "Synthetic demo (illustrative)"
+    source_type = "synthetic"
 
+input_sha256 = hashlib.sha256(raw).hexdigest()
 signature = hashlib.sha256(source_label.encode("utf-8") + b"\0" + raw).hexdigest()
 previous_signature = st.session_state.get("rolling_lab_signature")
 if previous_signature != signature:
@@ -126,9 +129,14 @@ if results:
     summary = pd.DataFrame(summary_rows)
     st.subheader("Policy comparison")
     st.dataframe(summary, use_container_width=True, hide_index=True)
+    summary_export = summary.assign(
+        source_type=source_type,
+        source_label=source_label,
+        input_sha256=input_sha256,
+    )
     st.download_button(
-        "Download policy comparison CSV",
-        data=summary.to_csv(index=False).encode("utf-8"),
+        "Download policy comparison CSV (with provenance)",
+        data=summary_export.to_csv(index=False).encode("utf-8"),
         file_name="islandos_rolling_policy_comparison.csv",
         mime="text/csv",
     )
@@ -142,9 +150,14 @@ if results:
     audit = pd.DataFrame(results[selected_policy]["hourly_audit"])
     st.subheader(f"Hourly operating audit — {selected_label}")
     st.dataframe(audit, use_container_width=True, hide_index=True)
+    audit_export = audit.assign(
+        source_type=source_type,
+        source_label=source_label,
+        input_sha256=input_sha256,
+    )
     st.download_button(
-        "Download hourly audit CSV",
-        data=audit.to_csv(index=False).encode("utf-8"),
+        "Download hourly audit CSV (with provenance)",
+        data=audit_export.to_csv(index=False).encode("utf-8"),
         file_name=f"islandos_rolling_audit_{selected_policy}.csv",
         mime="text/csv",
     )
