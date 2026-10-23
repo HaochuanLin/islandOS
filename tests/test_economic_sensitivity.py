@@ -142,6 +142,21 @@ class TestEconomicSensitivity(unittest.TestCase):
             ))
             self.assertEqual(len(report["scenarios"]), 14)
 
+    def test_rejects_unknown_provenance_and_malformed_timestamps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "nsga2_results.json"
+            report = make_report()
+            report["input_summary"]["source_type"] = "invented"
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "valid provenance"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
+            report = make_report()
+            report["input_summary"]["first_timestamp"] = 123
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "parseable first/last timestamps"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
     def test_rejects_negative_cost_assumptions_even_if_totals_could_cancel(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "nsga2_results.json"
