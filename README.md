@@ -82,7 +82,7 @@ Windows x64 standalone `islandos-gateway.exe` and `islandos-advisor.exe` are bui
 
 ## Local HTTP telemetry ingress (read-only)
 
-The optional `islandos_gateway_server.py` service accepts canonical JSON samples at `POST http://127.0.0.1:8765/telemetry`, validates freshness and required measurements, appends accepted records to JSONL, and exposes `GET /health`, `GET /latest`, and `GET /advice`. It binds to loopback only; it has no Modbus/MQTT client and no actuator-write endpoint. A device on the computer needs a local protocol bridge that posts the canonical fields. Do not expose the HTTP service directly to a LAN or public network.
+The optional `islandos_gateway_server.py` service accepts canonical JSON samples at `POST http://127.0.0.1:8765/telemetry`, validates freshness and required measurements, appends accepted records to JSONL, and exposes `GET /health`, `GET /latest`, `GET /advice`, and the same-origin browser dashboard at `http://127.0.0.1:8765/dashboard`. It binds to loopback only; it has no Modbus/MQTT client and no actuator-write endpoint. A device on the computer needs a local protocol bridge that posts the canonical fields. Do not expose the HTTP service directly to a LAN or public network.
 
 Example payload:
 ```json
