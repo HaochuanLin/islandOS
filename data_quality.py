@@ -44,7 +44,11 @@ def validate_csv(path, source_type: str, expected_interval_minutes: int = 60) ->
     """Return a deterministic quality report for a CSV time series."""
     if source_type not in SOURCE_TYPES:
         raise ValueError(f"source_type must be one of: {', '.join(SOURCE_TYPES)}")
-    if not isinstance(expected_interval_minutes, int) or expected_interval_minutes <= 0:
+    if (
+        isinstance(expected_interval_minutes, bool)
+        or not isinstance(expected_interval_minutes, int)
+        or expected_interval_minutes <= 0
+    ):
         raise ValueError("expected_interval_minutes must be a positive integer")
 
     issues = []
