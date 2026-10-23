@@ -12,7 +12,8 @@ The command writes:
 - `nan_ao_annual_runs.csv`: one row per simulated scenario year;
 - `nan_ao_percentiles.csv`: P5, median, P95 and mean scenario yield;
 - `nan_ao_summary.json`: assumptions, summary and limitations;
-- `nan_ao_sensitivity.csv`: a deterministic grid of 243 combinations covering event count, representative event duration, available surplus power, RO availability, and specific energy consumption.\n- `nan_ao_financial_screen.json`: a capital-only cost-per-m³ screen using the simulated median output and explicit draft CAPEX assumptions.
+- `nan_ao_sensitivity.csv`: a deterministic grid of 243 combinations covering event count, representative event duration, available surplus power, RO availability, and specific energy consumption.
+- `nan_ao_financial_screen.json`: a capital-only cost-per-m³ screen using the simulated median output and explicit draft CAPEX assumptions.
 
 Only the Python standard library is required. Repeating the same command with the same Python version, run count and seed is deterministic.
 
