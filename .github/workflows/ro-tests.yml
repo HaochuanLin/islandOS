@@ -43,7 +43,7 @@ jobs:
       - name: Compile dispatch advisor CLI
         run: python -m py_compile islandos_advisor.py
       - name: Run synthetic telemetry-to-advice example
-        run: python islandos_advisor.py data/examples/telemetry_replay_demo.csv --received-at 2026-10-23T07:00:00Z --output build/telemetry/advisor-report.json
+        run: python islandos_advisor.py data/examples/telemetry_replay_demo.csv --max-age-seconds 7200 --received-at 2026-10-23T07:00:00Z --output build/telemetry/advisor-report.json
       - name: Upload telemetry-to-advice report
         uses: actions/upload-artifact@v4
         with:
@@ -52,7 +52,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Smoke-test synthetic telemetry replay fixture
-        run: python islandos_gateway.py data/examples/telemetry_replay_demo.csv --format csv --received-at 2026-10-23T05:00:00Z --output build/telemetry/replay-audit.jsonl
+        run: python islandos_gateway.py data/examples/telemetry_replay_demo.csv --format csv --max-age-seconds 7200 --received-at 2026-10-23T07:00:00Z --output build/telemetry/replay-audit.jsonl
       - name: Upload telemetry replay audit
         uses: actions/upload-artifact@v4
         with:
