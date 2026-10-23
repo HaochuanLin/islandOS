@@ -9,6 +9,7 @@ Uploaded site data is used as supplied; the built-in demo is synthetic.
 import csv
 import hashlib
 import io
+import json
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -111,6 +112,14 @@ def dataframe_csv(rows: list[dict], provenance: dict | None = None) -> bytes:
         for key in ("source_type", "source_label", "input_sha256"):
             frame[key] = provenance[key]
     return frame.to_csv(index=False).encode("utf-8")
+
+
+def stable_signature(payload: dict) -> str:
+    """Return a deterministic signature for the exact run inputs and settings."""
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 with st.sidebar:
@@ -244,6 +253,17 @@ elif page == "Strategy simulator":
         st.error("Initial tank inventory cannot exceed tank capacity.")
         st.stop()
 
+    simulation_signature = stable_signature({
+        "input_sha256": input_provenance["input_sha256"],
+        "ro_rated_power_kw": float(ro_kw),
+        "specific_energy_kwh_m3": float(sec),
+        "tank_capacity_m3": float(tank),
+        "initial_water_m3": float(initial),
+        "min_run_hours": int(min_run),
+        "dt_hours": float(dt),
+        "diesel_cost_per_kwh": float(diesel_cost) if diesel_cost > 0 else None,
+    })
+
     if st.button("▶ Run strategy comparison", type="primary", use_container_width=True):
         try:
             steps = parse_uploaded_csv(raw)
@@ -262,6 +282,7 @@ elif page == "Strategy simulator":
                 "summary": summary,
                 "source": source_label,
                 "provenance": input_provenance,
+                "run_signature": simulation_signature,
             }
             st.session_state.pop("islandos_optimizer_result", None)
         except Exception as exc:
@@ -269,6 +290,13 @@ elif page == "Strategy simulator":
             st.stop()
 
     result = st.session_state.get("islandos_result")
+    if result and result.get("run_signature") != simulation_signature:
+        # Input data and model settings are part of the result identity. Clear
+        # old output rather than leaving a visually plausible but stale report.
+        st.session_state.pop("islandos_result", None)
+        st.session_state.pop("islandos_optimizer_result", None)
+        result = None
+        st.info("Previous results were cleared because input data or model assumptions changed. Run the comparison again.")
     if result:
         st.caption(f"Data provenance: **{result['source']}**")
         st.caption(
@@ -350,6 +378,13 @@ elif page == "Strategy simulator":
             pop_size = st.number_input("NSGA-II population size", min_value=120, max_value=300, value=120, step=20)
         with p2:
             generations = st.number_input("NSGA-II generations", min_value=60, max_value=300, value=60, step=10)
+        optimizer_signature = stable_signature({
+            "simulation_signature": simulation_signature,
+            "population_size": int(pop_size),
+            "generations": int(generations),
+            "seed": 42,
+            "optimizer_build": "NSGA2-2OBJ-DIAG-v1",
+        })
         if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
             try:
                 # Streamlit reruns the script on every button click. Rebuild the
@@ -374,19 +409,17 @@ elif page == "Strategy simulator":
                     "summary": pareto_summaries, "detail": pareto_details,
                     "meta": optimizer_meta, "source": source_label,
                     "provenance": input_provenance,
+                    "run_signature": optimizer_signature,
                 }
             except Exception as exc:
                 st.error(f"NSGA-II optimization failed: {exc}")
         optimizer_result = st.session_state.get("islandos_optimizer_result")
-        if optimizer_result and (
-            optimizer_result.get("provenance", {}).get("input_sha256")
-            != input_provenance["input_sha256"]
-        ):
-            # A Streamlit session can outlive input changes. Never show or export
-            # optimizer results computed from a different exact input byte stream.
+        if optimizer_result and optimizer_result.get("run_signature") != optimizer_signature:
+            # A Streamlit session can outlive input or settings changes. Never show
+            # optimizer output produced for a different run configuration.
             st.session_state.pop("islandos_optimizer_result", None)
             optimizer_result = None
-            st.info("Previous NSGA-II results were cleared because the input data changed. Run the optimizer again.")
+            st.info("Previous NSGA-II results were cleared because input data, model assumptions, or optimizer settings changed. Run the optimizer again.")
         if optimizer_result:
             meta = optimizer_result["meta"]
             # Never present stale or incompatible session-state output as a successful
