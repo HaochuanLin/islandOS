@@ -109,6 +109,11 @@ jobs:
           assert prep["status"] == "prepared"
           assert prep["license"] == "CC BY 4.0"
           assert prep["source_rows"] > 0
+          assert prep["source_rows"] == (
+              prep["unique_timestamp_samples"] + prep["exact_duplicate_rows_deduplicated"]
+          )
+          assert prep["exact_duplicate_rows_deduplicated"] >= 0
+          assert prep["source_non_increasing_adjacent_pairs"] >= 0
           assert prep["selected_contiguous_hours"] >= prep["minimum_hours_required"] >= 43
           assert prep["partially_observed_hour_bins_excluded"] >= 0
           assert prep["missing_hour_bins_inside_source_span"] >= 0
@@ -166,6 +171,9 @@ jobs:
                   "license": prep["license"],
                   "series_id": int(__import__("os").environ["DATASET_ID"]),
                   "source_rows": prep["source_rows"],
+                  "unique_timestamp_samples": prep["unique_timestamp_samples"],
+                  "exact_duplicate_rows_deduplicated": prep["exact_duplicate_rows_deduplicated"],
+                  "source_non_increasing_adjacent_pairs": prep["source_non_increasing_adjacent_pairs"],
                   "selected_contiguous_hours": prep["selected_contiguous_hours"],
                   "first_timestamp_utc": prep["first_timestamp_utc"],
                   "last_timestamp_utc": prep["last_timestamp_utc"],
