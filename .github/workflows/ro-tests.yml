@@ -50,6 +50,54 @@ jobs:
           path: build/water-demand-forecast/monitor-demo.json
           if-no-files-found: error
           retention-days: 30
+      - name: Run synthetic forecast-candidate review gate
+        run: |
+          python - <<'PY'
+          import csv
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          path = Path("build/water-demand-forecast/candidate-comparison.csv")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          start = datetime(2026, 2, 1, tzinfo=timezone.utc)
+          with path.open("w", encoding="utf-8", newline="") as handle:
+              writer = csv.DictWriter(handle, fieldnames=[
+                  "timestamp", "actual_water_demand_m3",
+                  "incumbent_forecast_m3", "candidate_forecast_m3",
+              ])
+              writer.writeheader()
+              for i in range(48):
+                  actual = 30.0 + (i % 8)
+                  writer.writerow({
+                      "timestamp": (start + timedelta(hours=i)).isoformat(),
+                      "actual_water_demand_m3": actual,
+                      "incumbent_forecast_m3": actual + 1.0,
+                      "candidate_forecast_m3": actual + 0.2,
+                  })
+          PY
+          python experiments/evaluate_forecast_candidate.py \
+            build/water-demand-forecast/candidate-comparison.csv \
+            --high-demand-threshold-m3 37 \
+            --min-mae-improvement-fraction 0.05 \
+            --output build/water-demand-forecast/candidate-review.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("build/water-demand-forecast/candidate-review.json").read_text(encoding="utf-8"))
+          assert report["status"] == "candidate_recommended_for_review"
+          assert report["row_count"] == 48
+          assert report["decision_checks"]["overall_mae_check_passed"] is True
+          assert report["decision_checks"]["high_demand_risk_check_passed"] is True
+          print("Synthetic forecast-candidate review smoke test passed.")
+          PY
+      - name: Upload forecast-candidate review report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-forecast-candidate-review
+          path: build/water-demand-forecast/candidate-review.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Test app NSGA-II feasibility, Pareto quality, and reproducibility
         run: python -m pytest -q tests/test_experiments_nsga2_dispatch_optimizer.py
       - name: Run synthetic water-demand forecast example
