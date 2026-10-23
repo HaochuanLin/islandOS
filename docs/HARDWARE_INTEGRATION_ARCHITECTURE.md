@@ -99,3 +99,8 @@ A separate GitHub Actions workflow builds `islandos-gateway.exe` with PyInstalle
 ## Recommendation feasibility and weight sensitivity
 
 The advisor first excludes operational policies with non-zero reported constraint-violation hours. If all operational policies are infeasible, it emits `operator_review_required` and no selected policy. For feasible candidates, it reports the score winner under four declared weight profiles (balanced, water priority, cooling priority, energy efficiency). Winner counts describe this specific input only and are not statistical confidence. An operator must verify telemetry, forecasts, operating limits, and local procedures before acting.
+
+
+## Portable Windows demo package
+
+The Windows workflow builds both standalone executables, stages them with `telemetry_replay_demo.csv`, `device_map.example.json`, `run-demo.bat`, and `README.txt`, runs the packaged advisor on the included fixture, validates the resulting JSON report, and uploads `islandos-demo-package.zip`. This validates offline replay packaging, not a live device connection or field control loop.
