@@ -18,3 +18,7 @@ def test_rolling_horizon_page_renders_and_runs_synthetic_comparison():
     summary = next(frame for frame in frames if "policy" in frame.columns)
     assert len(summary) == 4
     assert "Rolling horizon" in summary["policy"].tolist()
+
+    exports = app.get("download_button")
+    assert len(exports) == 2
+    assert all("with provenance" in element.label for element in exports)
