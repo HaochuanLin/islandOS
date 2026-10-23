@@ -42,9 +42,11 @@ def make_report(electricity_price=0.12):
             "quality_status": "valid",
             "source_type": "synthetic",
             "row_count": 8760,
+            "interval_minutes": 60,
             "first_timestamp": "2026-01-01T00:00:00Z",
             "last_timestamp": "2026-12-31T23:00:00Z",
         },
+        "data_quality_report": {"status": "valid", "issues": []},
         "parameter_configuration": {
             "economics": economics,
             "economics_completeness": {"complete_for_current_declared_fields": True},
@@ -139,6 +141,56 @@ class TestEconomicSensitivity(unittest.TestCase):
                 for item in report["skipped_scenarios"]
             ))
             self.assertEqual(len(report["scenarios"]), 14)
+
+    def test_rejects_unknown_provenance_and_malformed_timestamps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "nsga2_results.json"
+            report = make_report()
+            report["input_summary"]["source_type"] = "invented"
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "valid provenance"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
+            report = make_report()
+            report["input_summary"]["first_timestamp"] = 123
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "parseable first/last timestamps"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
+    def test_rejects_negative_cost_assumptions_even_if_totals_could_cancel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "nsga2_results.json"
+            report = make_report()
+            report["parameter_configuration"]["economics"]["ro_capex"] = -1.0
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "ro_capex must be a finite non-negative"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
+    def test_rejects_negative_candidate_usage_when_unit_price_is_zero(self):
+        economics = make_report(electricity_price=0.0)["parameter_configuration"]["economics"]
+        with self.assertRaisesRegex(ValueError, "energy and water quantities must be finite and non-negative"):
+            _annual_cost(
+                {
+                    "annual_energy_used_by_flexible_loads_kwh": -1.0,
+                    "annual_water_produced_m3": 0.0,
+                },
+                economics,
+            )
+
+    def test_rejects_non_hourly_or_invalid_quality_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "nsga2_results.json"
+            report = make_report()
+            report["input_summary"]["interval_minutes"] = 15
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "complete-calendar-year hourly"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
+
+            report = make_report()
+            report["data_quality_report"]["status"] = "invalid"
+            source.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "complete-calendar-year hourly"):
+                run_economic_sensitivity(source, Path(directory) / "out.json")
 
     def test_rejects_partial_year_input_report(self):
         with tempfile.TemporaryDirectory() as directory:

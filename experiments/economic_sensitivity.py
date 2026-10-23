@@ -11,7 +11,14 @@ import math
 from datetime import datetime
 from pathlib import Path
 import statistics
+import sys
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from data_quality import SOURCE_TYPES
 
 ECONOMIC_FIELDS = (
     ("electricity_price_per_kwh", "Electricity opportunity price"),
@@ -24,6 +31,32 @@ ECONOMIC_FIELDS = (
     ("discount_rate", "Discount rate"),
 )
 REQUIRED_COST_FIELDS = tuple(field for field, _ in ECONOMIC_FIELDS)
+COST_AMOUNT_FIELDS = (
+    "electricity_price_per_kwh",
+    "ro_capex",
+    "ro_fixed_om_per_year",
+    "ro_variable_om_per_m3",
+    "chiller_capex",
+    "chiller_fixed_om_per_year",
+)
+
+
+def _validate_cost_assumptions(economics: dict[str, Any]) -> None:
+    for field in COST_AMOUNT_FIELDS:
+        try:
+            value = float(economics[field])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"{field} must be a finite non-negative number") from exc
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"{field} must be a finite non-negative number")
+    years = economics.get("analysis_years")
+    if isinstance(years, bool) or not isinstance(years, int) or years < 1:
+        raise ValueError("analysis_years must be a positive integer")
+    try:
+        rate = float(economics["discount_rate"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("discount_rate must be finite and in [0, 1)") from exc
+    _capital_recovery_factor(rate, years)
 
 
 def _capital_recovery_factor(rate: float, years: int) -> float:
@@ -38,11 +71,15 @@ def _capital_recovery_factor(rate: float, years: int) -> float:
 
 
 def _annual_cost(candidate_breakdown: dict[str, Any], economics: dict[str, Any]) -> float:
-    energy = float(candidate_breakdown["annual_energy_used_by_flexible_loads_kwh"])
-    water = float(candidate_breakdown["annual_water_produced_m3"])
+    try:
+        energy = float(candidate_breakdown["annual_energy_used_by_flexible_loads_kwh"])
+        water = float(candidate_breakdown["annual_water_produced_m3"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("candidate energy and water quantities must be numeric") from exc
+    if any(not math.isfinite(value) or value < 0 for value in (energy, water)):
+        raise ValueError("candidate energy and water quantities must be finite and non-negative")
+    _validate_cost_assumptions(economics)
     years_value = economics["analysis_years"]
-    if isinstance(years_value, bool) or not isinstance(years_value, int) or years_value < 1:
-        raise ValueError("analysis_years must be a positive integer")
     rate = float(economics["discount_rate"])
     crf = _capital_recovery_factor(rate, years_value)
     capex = float(economics["ro_capex"]) + float(economics["chiller_capex"])
@@ -90,18 +127,28 @@ def run_economic_sensitivity(
         raise ValueError("base report must have the lifecycle-cost objective enabled")
     if optimization.get("cost_objective_enabled") is not True:
         raise ValueError("base report does not mark the lifecycle-cost objective as enabled")
-    input_summary = report.get("input_summary", {})
+    input_summary = report.get("input_summary")
+    if not isinstance(input_summary, dict):
+        raise ValueError("base report must include an input summary")
     row_count = input_summary.get("row_count")
-    if input_summary.get("quality_status") != "valid" or row_count not in (8760, 8784):
-        raise ValueError("base report must contain a valid complete-calendar-year input summary")
+    quality_report = report.get("data_quality_report")
+    if (
+        input_summary.get("quality_status") != "valid"
+        or input_summary.get("source_type") not in SOURCE_TYPES
+        or not isinstance(quality_report, dict)
+        or quality_report.get("status") != "valid"
+        or input_summary.get("interval_minutes") != 60
+        or row_count not in (8760, 8784)
+    ):
+        raise ValueError("base report must contain valid provenance and a complete-calendar-year hourly input summary")
+    first_raw = input_summary.get("first_timestamp")
+    last_raw = input_summary.get("last_timestamp")
+    if not isinstance(first_raw, str) or not isinstance(last_raw, str):
+        raise ValueError("base report must include parseable first/last timestamps")
     try:
-        first = datetime.fromisoformat(
-            input_summary["first_timestamp"].replace("Z", "+00:00")
-        )
-        last = __import__("datetime").datetime.fromisoformat(
-            input_summary["last_timestamp"].replace("Z", "+00:00")
-        )
-    except (KeyError, TypeError, ValueError) as exc:
+        first = datetime.fromisoformat(first_raw.replace("Z", "+00:00"))
+        last = datetime.fromisoformat(last_raw.replace("Z", "+00:00"))
+    except ValueError as exc:
         raise ValueError("base report must include parseable first/last timestamps") from exc
     leap_year = first.year % 4 == 0 and (first.year % 100 != 0 or first.year % 400 == 0)
     expected_hours = 8784 if leap_year else 8760
@@ -115,6 +162,7 @@ def run_economic_sensitivity(
     missing = [key for key in REQUIRED_COST_FIELDS if economics.get(key) is None]
     if missing:
         raise ValueError("base report has missing economic fields: " + ", ".join(missing))
+    _validate_cost_assumptions(economics)
     if not isinstance(economics.get("currency"), str) or not economics["currency"].strip():
         raise ValueError("economics.currency must be a non-empty label")
 
