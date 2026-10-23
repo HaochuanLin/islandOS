@@ -14,16 +14,16 @@ Current estimates are provisional engineering judgments, not independent certifi
 
 ## Baseline scores and targets
 
-| Category | Baseline | Current estimate after phase 5 | Target | Evidence needed to raise score |
+| Category | Baseline | Current estimate after phase 6 | Target | Evidence needed to raise score |
 |---|---:|---:|---:|---|
 | Core simulation and dispatch | 5.5 | 5.5 | 8.5 | Explicit physical/unit invariants, edge-case tests, conservation checks, benchmarked scenarios and documented model limits |
-| Automated testing and reproducibility | 6.0 | 7.4 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
+| Automated testing and reproducibility | 6.0 | 7.6 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
 | Documentation and evidence audit | 6.5 | 7.8 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
 | Interactive demo and usability | 6.0 | 6.0 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
 | Branch and release management | 5.5 | 5.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
-| Public data / site data validation | 5.5 | 7.5 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
+| Public data / site data validation | 5.5 | 7.8 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
 | Commercialization and deployment readiness | 3.5 | 4.0 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
-| Overall software engineering maturity | 5.5 | 6.2 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
+| Overall software engineering maturity | 5.5 | 6.5 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
 | Real-environment operation validation | 2.0 | 2.0 | 7.0 | Independent site data, hardware-in-the-loop or shadow-mode trials, operational logs, signed engineering review and documented rollback; never infer this from simulation alone |
 
 The baseline values are provisional judgments based on visible repository structure and README statements. The current estimates reflect only documented changes and inspected source evidence, not a completed runtime test campaign. The README explicitly describes the system as a research prototype, notes that synthetic inputs are used, and states that it is not a deployed island control system. It also notes that hosted public access has not been verified and that forecasting is not yet an integrated validated forecast-and-control pipeline.
@@ -80,6 +80,15 @@ The number of phases is a planning estimate; later phases depend on findings fro
 - These 11 time series come from one SOWEKI collection, not 11 independent locations. This is stronger evidence than one synthetic example, but it is not island-specific data and does not prove transfer to desalination demand or improved dispatch.
 - Reproducibility instructions now describe the matrix and aggregate artifact: [guide update](https://github.com/HaochuanLin/islandOS/commit/b1f23387c67d4f1810b36b474cdb691719373bac).
 - Rescore: automated testing/reproducibility 7.1 → 7.4; public-data validation 7.1 → 7.5; overall software engineering maturity 6.0 → 6.2. Other scores remain unchanged because this phase did not add protected releases, site commissioning evidence, or a publicly accessible hosted demo.
+
+
+### Phase 6 — expanding-window validation and final regression pass (2026-10-24)
+
+- Added up to three expanding-window folds to `experiments/compare_water_demand_models.py`. Each fold retrains only on targets before that fold's test window and compares the gradient-boosting candidate against the same three naive baselines. Added regression checks for fold boundaries, coverage, and non-negative finite metrics.
+- The public-data workflow validates the walk-forward report, aggregates per-series fold metrics, and reports both main-holdout and expanding-window reductions. The 11-series workflow passed: [run and aggregate artifact](https://github.com/HaochuanLin/islandOS/actions/runs/39987177812). All 11 series were compared; the model beat the previous-week baseline on all 11 in the main holdout and in expanding-window evaluation. Mean/median MAE reduction was 37.49%/35.24% on the main holdout and 38.59%/36.92% across the expanding-window evaluation.
+- The full RO regression workflow passed on the exact code/workflow revision: [successful run](https://github.com/HaochuanLin/islandOS/actions/runs/39987177934). Dependency audit, Nan'ao scenario validation, container smoke test, and Windows gateway build also passed on that revision.
+- The result remains one public source collection of reservoir-outflow series, not independent island sites. The model is gradient boosting, not deep learning or online learning; one-step forecasts assume the previous hour's observation is available. No score is awarded for field operation or transfer to desalination demand.
+- Rescore: automated testing/reproducibility 7.4 → 7.6; public-data validation 7.5 → 7.8; overall software engineering maturity 6.2 → 6.5. The remaining gap to 8+ is now primarily dependency locking, broader independent datasets/seasons, release controls, and site-specific validation.
 
 ## Evidence ledger
 
