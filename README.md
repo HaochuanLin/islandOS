@@ -82,7 +82,7 @@ Windows x64 standalone `islandos-gateway.exe` and `islandos-advisor.exe` are bui
 
 ## Local HTTP telemetry ingress (read-only)
 
-The optional `islandos_gateway_server.py` service accepts canonical JSON samples at `POST http://127.0.0.1:8765/telemetry`, validates freshness and required measurements, appends accepted records to JSONL, and exposes `GET /health` and `GET /latest`. It binds to loopback only; it has no Modbus/MQTT client and no actuator-write endpoint. A device on the computer needs a local protocol bridge that posts the canonical fields. Do not expose the HTTP service directly to a LAN or public network.
+The optional `islandos_gateway_server.py` service accepts canonical JSON samples at `POST http://127.0.0.1:8765/telemetry`, validates freshness and required measurements, appends accepted records to JSONL, and exposes `GET /health`, `GET /latest`, and `GET /advice`. It binds to loopback only; it has no Modbus/MQTT client and no actuator-write endpoint. A device on the computer needs a local protocol bridge that posts the canonical fields. Do not expose the HTTP service directly to a LAN or public network.
 
 Example payload:
 ```json
@@ -95,7 +95,7 @@ Example payload:
 }
 ```
 
-Run locally with `python islandos_gateway_server.py`. The Windows portable package includes `islandos-gateway-server.exe` and `run-gateway-server.bat`. The HTTP server is an ingress adapter only; validated hourly data must still be reviewed through the dispatch advisor, and hardware control remains out of scope.
+Run locally with `python islandos_gateway_server.py`. The Windows portable package includes `islandos-gateway-server.exe` and `run-gateway-server.bat`. `GET /advice` requires at least two valid hourly-aligned rows and a fresh latest sample; it runs the shared policy evaluator and returns a recommendation-only JSON report. Pass `--mapping config/device_map.example.json` after adapting the source keys to the device export. The HTTP server remains an ingress adapter only; hardware control remains out of scope.
 
 ## Run the web model in Docker
 
