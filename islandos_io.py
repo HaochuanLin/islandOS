@@ -48,16 +48,42 @@ def load_device_mapping(path: str) -> dict:
     fields = mapping.get("fields")
     if not isinstance(fields, dict) or not fields:
         raise ValueError("device mapping must define a non-empty fields object")
+    canonical_units = {
+        "timestamp_utc": "ISO-8601",
+        "renewable_surplus_kw": "kW",
+        "forecast_surplus_kw": "kW",
+        "water_demand_m3": "m3",
+        "forecast_water_demand_m3": "m3",
+        "cooling_demand_kw_th": "kW_th",
+    }
+    required = {"timestamp_utc", *DEFAULT_REQUIRED_FIELDS}
+    missing = sorted(required - set(fields))
+    if missing:
+        raise ValueError("device mapping missing required canonical fields: " + ", ".join(missing))
+    source_keys = []
     for canonical, spec in fields.items():
-        if not isinstance(canonical, str) or not isinstance(spec, dict):
+        if not isinstance(canonical, str) or canonical not in canonical_units:
+            raise ValueError("unsupported canonical field in device mapping: %s" % canonical)
+        if not isinstance(spec, dict):
             raise ValueError("each mapped field must have a name and object definition")
-        if not isinstance(spec.get("source_key"), str) or not spec["source_key"]:
+        if not isinstance(spec.get("source_key"), str) or not spec["source_key"].strip():
             raise ValueError("mapped field %s needs a non-empty source_key" % canonical)
+        source_keys.append(spec["source_key"])
+        if spec.get("canonical_unit") != canonical_units[canonical]:
+            raise ValueError(
+                "mapped field %s canonical_unit must be %s" % (canonical, canonical_units[canonical])
+            )
+        if not isinstance(spec.get("source_unit"), str) or not spec["source_unit"].strip():
+            raise ValueError("mapped field %s needs a documented source_unit" % canonical)
         for option in ("scale", "offset"):
             if option in spec:
                 value = spec[option]
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                     raise ValueError("mapped field %s %s must be finite numeric" % (canonical, option))
+        if canonical == "timestamp_utc" and ("scale" in spec or "offset" in spec):
+            raise ValueError("timestamp_utc cannot use numeric scale or offset")
+    if len(source_keys) != len(set(source_keys)):
+        raise ValueError("each source_key may map to only one canonical field")
     return mapping
 
 
