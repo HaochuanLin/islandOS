@@ -55,6 +55,47 @@ class TestPrepareSowekiWaterDemand(unittest.TestCase):
             # The longest-run requirement must fail rather than stitch over the gap.
             self.assertGreaterEqual(report["selected_contiguous_hours"], 48)
 
+    def test_sorts_out_of_order_rows_and_deduplicates_exact_duplicates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.csv"
+            output = Path(directory) / "hourly.csv"
+            self._write_quarter_hourly(source, hours=60)
+            with source.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            rows.insert(20, dict(rows[19]))  # exact duplicate record
+            rows[50], rows[51] = rows[51], rows[50]  # out-of-order but recoverable
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "value"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            report = prepare_soweki_water_demand(source, output)
+            with output.open(encoding="utf-8", newline="") as handle:
+                hourly = list(csv.DictReader(handle))
+
+            self.assertEqual(len(hourly), 60)
+            self.assertEqual(report["source_rows"], 241)
+            self.assertEqual(report["unique_timestamp_samples"], 240)
+            self.assertEqual(report["exact_duplicate_rows_deduplicated"], 1)
+            self.assertGreaterEqual(report["source_non_increasing_adjacent_pairs"], 2)
+
+    def test_rejects_conflicting_duplicate_timestamp_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.csv"
+            self._write_quarter_hourly(source, hours=60)
+            with source.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            conflicting = dict(rows[0])
+            conflicting["value"] = "999"
+            rows.insert(1, conflicting)
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "value"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            with self.assertRaisesRegex(ValueError, "Conflicting values for duplicate timestamp"):
+                prepare_soweki_water_demand(source, Path(directory) / "hourly.csv")
+
     def test_rejects_naive_timestamp(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source.csv"
