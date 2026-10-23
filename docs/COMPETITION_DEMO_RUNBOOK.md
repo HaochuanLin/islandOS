@@ -22,6 +22,18 @@ streamlit run app.py
 
 The Streamlit application runs locally and opens in a browser. Confirm that the regression suite finishes successfully before a judged demonstration. If dependency installation or tests fail, do not present the run as verified; use the command-line reports as a fallback and disclose the issue.
 
+## Device adapter contract (read-only prototype)
+
+The gateway accepts a JSON object at `POST /telemetry`. For vendor-specific field names and units, start with `configs/device_mapping.example.json` and edit it only after checking the sensor/vendor documentation. Each mapping declares the vendor `source_key`, its documented `source_unit`, the required canonical unit, and an explicit numeric scale/offset where appropriate. Required canonical fields are timestamp, renewable surplus (kW), water demand (m3), and cooling demand (kW_th). The loader rejects missing required fields, unsupported canonical names, missing/mismatched units, duplicate source keys, and numeric transforms on timestamps.
+
+Run a local read-only gateway with an explicit mapping file:
+
+```bash
+python islandos_gateway_server.py --host 127.0.0.1 --port 8765 --mapping configs/device_mapping.example.json
+```
+
+Send a vendor-shaped JSON body to `http://127.0.0.1:8765/telemetry` using `Content-Type: application/json`; configure the authorization header if a gateway token is enabled. Do not send commands or setpoints to equipment. This mapping is an example contract, not a claim of compatibility with a particular manufacturer's device. Before adapting any real sensor, verify the protocol, calibration, engineering units, timestamp semantics, update rate, failure modes, and safety limits with its documentation. Test first using a recorded fixture or isolated bench setup.
+
 ## Five-minute walkthrough
 
 1. **Establish the boundary.** On Overview, point out that this is a research prototype, not a live controller, and that the built-in profile is synthetic.
