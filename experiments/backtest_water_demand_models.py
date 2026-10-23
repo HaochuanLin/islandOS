@@ -59,6 +59,8 @@ def _high_demand_metrics(
     threshold: float,
 ) -> dict[str, Any]:
     """Score forecasts only on hours exceeding a training-history threshold."""
+    if len(actual) != len(predicted):
+        raise ValueError("High-demand metric inputs must be aligned")
     selected = [
         (observed, forecast)
         for observed, forecast in zip(actual, predicted)
@@ -68,15 +70,18 @@ def _high_demand_metrics(
         return {
             "event_count": 0,
             "mae_m3_per_hour": None,
+            "rmse_m3_per_hour": None,
             "bias_predicted_minus_actual_m3_per_hour": None,
             "underforecast_rate": None,
         }
-    errors = [forecast - observed for observed, forecast in selected]
+    selected_actual = [observed for observed, _ in selected]
+    selected_predictions = [forecast for _, forecast in selected]
     return {
         "event_count": len(selected),
-        "mae_m3_per_hour": sum(abs(error) for error in errors) / len(errors),
-        "bias_predicted_minus_actual_m3_per_hour": sum(errors) / len(errors),
-        "underforecast_rate": sum(error < 0 for error in errors) / len(errors),
+        **_metrics(selected_actual, selected_predictions),
+        "underforecast_rate": sum(
+            forecast < observed for observed, forecast in selected
+        ) / len(selected),
     }
 
 
@@ -215,25 +220,18 @@ def backtest_water_demand_models(
         for name, values in aggregate_predictions.items()
     }
     aggregate_high_demand_metrics = {
-        name: _high_demand_metrics(
-            aggregate_high_demand_actual,
-            values,
-            threshold=math.inf,
-        ) if not aggregate_high_demand_actual else {
-            "event_count": len(aggregate_high_demand_actual),
-            "mae_m3_per_hour": sum(
-                abs(predicted - observed)
-                for observed, predicted in zip(aggregate_high_demand_actual, values)
-            ) / len(aggregate_high_demand_actual),
-            "bias_predicted_minus_actual_m3_per_hour": sum(
-                predicted - observed
-                for observed, predicted in zip(aggregate_high_demand_actual, values)
-            ) / len(aggregate_high_demand_actual),
-            "underforecast_rate": sum(
-                predicted < observed
-                for observed, predicted in zip(aggregate_high_demand_actual, values)
-            ) / len(aggregate_high_demand_actual),
-        }
+        name: (
+            {
+                "event_count": len(aggregate_high_demand_actual),
+                **_metrics(aggregate_high_demand_actual, values),
+                "underforecast_rate": sum(
+                    predicted < observed
+                    for observed, predicted in zip(aggregate_high_demand_actual, values)
+                ) / len(aggregate_high_demand_actual),
+            }
+            if aggregate_high_demand_actual
+            else _high_demand_metrics([], [], threshold=math.inf)
+        )
         for name, values in aggregate_high_demand_predictions.items()
     }
     report: dict[str, Any] = {
