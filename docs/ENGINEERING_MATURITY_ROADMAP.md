@@ -255,3 +255,11 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - The UI displays the strategy run signature, and [the primary app guide](PRIMARY_APP_GUIDE.md) documents the export schema and cautions that neither the input hash nor run signature proves data accuracy or trustworthiness.
 - All five workflows passed on exact PR head `2f15d1056a01b6f637688fe06dd86431b3c38fb0`: full pytest suite (39964732123), Nan'ao scenario (39964732246), container smoke (39964732128), Windows package (39964732098), and hosted app health (39964732099).
 - Interactive demo/usability rises 89→90. After the PR-head checks passed, all four push-triggered workflows also passed on exact post-merge main head `147cffc1af077d2cf146ec143c436d04106b5f4a`: full pytest (39965249365), Nan'ao scenario (39965249471), container smoke (39965249321), and Windows packaging (39965249326). This closes the post-merge CI evidence gate for this change; no real-world-validation score is changed.
+
+
+### 2026-10-23 — Dataset provenance validation hardening
+
+- Merged PR #89, adding a dependency-free provenance metadata contract and tests for source URL, timezone-aware timestamps, data-status labels, variable metadata, optional SHA-256 digests, and deterministic hashing ([merge commit](https://github.com/HaochuanLin/islandOS/commit/58756b1f0c8278bf98e816df9e949748b29754b4)).
+- Hardened the validator to reject non-mapping top-level input, non-string data-status values, empty/malformed HTTPS URLs, and URL parser errors with the documented `DatasetProvenanceError` instead of leaking incidental implementation exceptions ([validator commit](https://github.com/HaochuanLin/islandOS/commit/b1fd1d864b8cebba16586c33bd66631f887802b2)).
+- Added regression cases for malformed IPv6 URLs, empty HTTPS hosts, list-valued status, non-mapping metadata, and non-bytes hash input ([test commit](https://github.com/HaochuanLin/islandOS/commit/6bb1e978d4082d3913732ef178e6bab850049eb3)).
+- Score impact: no maturity score is raised solely because code was committed. Wait for CI against the exact `main` SHA, then reassess data-validation and overall engineering evidence. This metadata contract does not establish dataset licensing, accuracy, site relevance, or field validity.
