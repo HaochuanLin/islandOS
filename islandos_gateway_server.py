@@ -11,13 +11,12 @@ from datetime import datetime, timezone
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import os
 from pathlib import Path
 import threading
 from urllib.parse import urlparse
 
 from islandos_advisor import evaluate_dispatch_rows
-from islandos_io import build_dispatch_input_rows, validate_telemetry
+from islandos_io import apply_device_mapping, build_dispatch_input_rows, load_device_mapping, validate_telemetry
 
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
@@ -27,7 +26,7 @@ def _json_bytes(payload):
     return (json.dumps(payload, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
 
 
-def make_handler(audit_path, source, max_age_seconds):
+def make_handler(audit_path, source, max_age_seconds, mapping=None):
     audit_path = Path(audit_path)
     lock = threading.Lock()
     latest = {"record": None}
@@ -149,8 +148,9 @@ def make_handler(audit_path, source, max_age_seconds):
                 self._send(400, {"error": "body must be a JSON object"})
                 return
             try:
+                canonical_payload = apply_device_mapping(payload, mapping) if mapping else payload
                 frame = validate_telemetry(
-                    payload,
+                    canonical_payload,
                     source=source,
                     received_at=datetime.now(timezone.utc),
                     max_age_seconds=max_age_seconds,
@@ -200,6 +200,7 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--source", default="http-gateway")
     parser.add_argument("--audit-file", default="build/telemetry/http-ingest-audit.jsonl")
+    parser.add_argument("--mapping", help="Optional vendor field/unit mapping JSON")
     parser.add_argument("--max-age-seconds", type=float, default=300.0)
     args = parser.parse_args(argv)
 
@@ -213,7 +214,12 @@ def main(argv=None):
             "or local device adapter for remote clients"
         )
 
-    handler = make_handler(args.audit_file, args.source, args.max_age_seconds)
+    try:
+        mapping = load_device_mapping(args.mapping) if args.mapping else None
+    except (OSError, ValueError) as exc:
+        parser.error("could not load device mapping: %s" % exc)
+
+    handler = make_handler(args.audit_file, args.source, args.max_age_seconds, mapping)
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print("IslandOS read-only telemetry gateway listening on http://%s:%d" % (args.host, args.port), flush=True)
     print("No PLC commands or actuator writes are supported.", flush=True)
