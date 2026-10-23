@@ -20,13 +20,23 @@ except ImportError as exc:  # pragma: no cover - depends on optional installatio
         "python -m pip install -r requirements-ml.txt"
     ) from exc
 
-from experiments.compare_water_demand_models import (
-    DAY_LAG_HOURS,
-    WEEK_LAG_HOURS,
-    _features,
-    _load_series,
-    _metrics,
-)
+# Support direct CLI execution and imports from unit tests.
+try:
+    from experiments.compare_water_demand_models import (
+        DAY_LAG_HOURS,
+        WEEK_LAG_HOURS,
+        _features,
+        _load_series,
+        _metrics,
+    )
+except ModuleNotFoundError:  # pragma: no cover - exercised by direct CLI execution
+    from compare_water_demand_models import (
+        DAY_LAG_HOURS,
+        WEEK_LAG_HOURS,
+        _features,
+        _load_series,
+        _metrics,
+    )
 
 
 def backtest_water_demand_models(
@@ -168,7 +178,7 @@ def backtest_water_demand_models(
         "folds": folds,
         "forecast_rows": forecast_rows,
         "limitations": [
-            "Repeated windows are stronger than a single split but do not prove transfer to another site or season.",
+            "Repeated windows are stronger than a single holdout but do not prove transfer to another site or season.",
             "The machine-learning model is gradient boosting, not deep learning or online learning.",
             "The evaluation is one-step-ahead and assumes each previous-hour measurement is available before the next forecast.",
             "No weather, occupancy, holiday, leakage, or plant-operation features are included.",
