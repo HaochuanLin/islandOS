@@ -10,7 +10,7 @@ import csv
 import io
 import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 
@@ -761,7 +761,7 @@ elif page == "Telemetry gateway":
         "Prototype boundary: no Modbus/MQTT socket is opened here and no hardware command is sent. "
         "For historical files, replay mode skips live freshness checks and must not be used as proof of live sensor health."
     )
-    now_utc = datetime.now().astimezone().astimezone(__import__("datetime").timezone.utc)
+    now_utc = datetime.now(timezone.utc)
     sample_rows = []
     for sample_index, (surplus, water, cooling) in enumerate(((30, 4, 7), (24, 5, 8), (0, 6, 9))):
         sample_time = now_utc - timedelta(minutes=2 - sample_index)
@@ -825,7 +825,7 @@ elif page == "Telemetry gateway":
                     except (TypeError, ValueError):
                         replay_received_at = None
                     if replay_received_at is None:
-                        replay_received_at = datetime.now().astimezone()
+                        replay_received_at = datetime.now(timezone.utc)
                 frame = validate_telemetry(
                     row, source=telemetry_file.name, received_at=replay_received_at,
                     max_age_seconds=float(max_age),
