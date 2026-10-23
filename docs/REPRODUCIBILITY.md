@@ -14,7 +14,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The CI workflow installs `requirements-ci.lock`, an exact version lock captured from a successful Python 3.11 run, and checks that every declared runtime/ML requirement is covered by that lock. `requirements-ml.lock` pins the smaller optional forecasting dependency set and is used by the measured-data workflow. The workflow records commit SHA, runner platform, Python version, and resolved installed distributions in an `environment.json` artifact. The lock pins package versions but does not use package hashes; the Docker build still uses the range-based `requirements.txt`, so production-image pinning remains a gap.
+The CI workflow installs `requirements-ci.lock`, an exact version lock captured from a successful Python 3.11 run, and checks that every declared runtime/ML requirement is covered by that lock. `requirements-ml.lock` pins the smaller optional forecasting dependency set and is used by the measured-data workflow. The workflow records commit SHA, runner platform, Python version, and resolved installed distributions in an `environment.json` artifact. The lock pins package versions but does not use package hashes; the Docker build still uses the range-based `requirements.txt`, so production-image pinning remains a gap. The dependency-audit workflow scans both exact locks. Its first run caught vulnerable `setuptools==79.0.1` (PYSEC-2026-3447); the CI lock now uses the fixed `setuptools==83.0.0`, and the follow-up audit passed.
 
 ## Reproduce the public SOWEKI demand baseline
 

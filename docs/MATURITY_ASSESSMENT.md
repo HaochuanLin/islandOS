@@ -14,16 +14,16 @@ Current estimates are provisional engineering judgments, not independent certifi
 
 ## Baseline scores and targets
 
-| Category | Baseline | Current estimate after phase 6 | Target | Evidence needed to raise score |
+| Category | Baseline | Current estimate after phase 7 | Target | Evidence needed to raise score |
 |---|---:|---:|---:|---|
 | Core simulation and dispatch | 5.5 | 5.5 | 8.5 | Explicit physical/unit invariants, edge-case tests, conservation checks, benchmarked scenarios and documented model limits |
-| Automated testing and reproducibility | 6.0 | 7.6 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
+| Automated testing and reproducibility | 6.0 | 7.9 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
 | Documentation and evidence audit | 6.5 | 7.8 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
 | Interactive demo and usability | 6.0 | 6.0 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
 | Branch and release management | 5.5 | 5.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
 | Public data / site data validation | 5.5 | 7.8 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
 | Commercialization and deployment readiness | 3.5 | 4.0 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
-| Overall software engineering maturity | 5.5 | 6.5 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
+| Overall software engineering maturity | 5.5 | 6.7 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
 | Real-environment operation validation | 2.0 | 2.0 | 7.0 | Independent site data, hardware-in-the-loop or shadow-mode trials, operational logs, signed engineering review and documented rollback; never infer this from simulation alone |
 
 The baseline values are provisional judgments based on visible repository structure and README statements. The current estimates reflect only documented changes and inspected source evidence, not a completed runtime test campaign. The README explicitly describes the system as a research prototype, notes that synthetic inputs are used, and states that it is not a deployed island control system. It also notes that hosted public access has not been verified and that forecasting is not yet an integrated validated forecast-and-control pipeline.
@@ -89,6 +89,15 @@ The number of phases is a planning estimate; later phases depend on findings fro
 - The full RO regression workflow passed on the exact code/workflow revision: [successful run](https://github.com/HaochuanLin/islandOS/actions/runs/39987177934). Dependency audit, Nan'ao scenario validation, container smoke test, and Windows gateway build also passed on that revision.
 - The result remains one public source collection of reservoir-outflow series, not independent island sites. The model is gradient boosting, not deep learning or online learning; one-step forecasts assume the previous hour's observation is available. No score is awarded for field operation or transfer to desalination demand.
 - Rescore: automated testing/reproducibility 7.4 → 7.6; public-data validation 7.5 → 7.8; overall software engineering maturity 6.2 → 6.5. The remaining gap to 8+ is now primarily dependency locking, broader independent datasets/seasons, release controls, and site-specific validation.
+
+
+### Phase 7 — exact dependency locks and vulnerability audit (2026-10-24)
+
+- Added `requirements-ci.lock` with exact Python 3.11 package versions and `requirements-ml.lock` for the smaller measured-data ML environment. The main CI installs the exact lock, checks that `requirements.txt` and `requirements-ml.txt` are covered, verifies the two locks agree on ML pins, runs `pip check`, compiles all Python sources, and executes the full regression suite.
+- The lock audit caught a real vulnerability: `setuptools==79.0.1` was flagged as PYSEC-2026-3447. Upgraded it to the auditor's fixed version `83.0.0` and reran both lock audits successfully: [successful dependency audit](https://github.com/HaochuanLin/islandOS/actions/runs/39988578745).
+- The full RO simulation and regression workflow passed with the pinned environment: [successful full CI](https://github.com/HaochuanLin/islandOS/actions/runs/39988578753). The 11-series measured-data workflow also passed using the pinned ML lock: [public-data run](https://github.com/HaochuanLin/islandOS/actions/runs/39987808598).
+- Remaining reproducibility gaps: package hashes are not pinned, the Docker build still installs from range-based `requirements.txt`, and the tested Python patch version is recorded rather than fully containerized.
+- Rescore: automated testing/reproducibility 7.6 → 7.9; overall software engineering maturity 6.5 → 6.7. No score increase for field operation, protected releases, or island-site transfer.
 
 ## Evidence ledger
 
