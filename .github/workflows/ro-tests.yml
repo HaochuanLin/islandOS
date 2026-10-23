@@ -383,6 +383,44 @@ jobs:
           path: build/forecast-dispatch/uncertainty-comparison.json
           if-no-files-found: error
           retention-days: 30
+      - name: Generate rolling-horizon policy comparison evidence
+        run: |
+          mkdir -p build/rolling-horizon-dispatch
+          python experiments/rolling_horizon_dispatch.py --json > build/rolling-horizon-dispatch/report.json
+          python - <<'PY'
+          import json
+          import math
+          from pathlib import Path
+
+          report = json.loads(Path("build/rolling-horizon-dispatch/report.json").read_text(encoding="utf-8"))
+          assert report["case_count"] == 48, report["case_count"]
+          assert report["summary_case_count"] == 12, report["summary_case_count"]
+          assert len(report["rows"]) == report["case_count"]
+          assert len(report["summary"]) == report["summary_case_count"]
+          aggregate = report["aggregate_summary"]
+          assert aggregate["comparison_count"] == report["summary_case_count"]
+          assert aggregate["rolling_better_count"] + aggregate["rolling_tied_count"] + aggregate["rolling_worse_count"] == aggregate["comparison_count"]
+          assert math.isfinite(aggregate["mean_score_delta"])
+          assert math.isfinite(aggregate["median_score_delta"])
+          for row in report["rows"]:
+              result = row["result"]
+              assert result["constraint_violation_hours"] == len(result["constraint_violation_hour_indices"])
+              for hour in result["hourly_audit"]:
+                  assert hour["ro_power_kw"] + hour["ice_power_kw"] <= hour["actual_surplus_kw"] + 1e-6
+                  water_residual = (hour["water_inventory_before_m3"] + hour["water_produced_m3"] - hour["water_spill_m3"] - hour["water_served_m3"] - hour["water_inventory_m3"])
+                  cold_residual = (hour["cold_inventory_before_kwh_th"] + hour["cooling_produced_kwh_th"] - hour["cooling_spill_kwh_th"] - hour["cooling_served_kwh_th"] - hour["cold_inventory_kwh_th"])
+                  assert abs(water_residual) <= 2e-5, (row["scenario"], hour["hour_index"], water_residual)
+                  assert abs(cold_residual) <= 2e-5, (row["scenario"], hour["hour_index"], cold_residual)
+          assert "not field validation" in aggregate["interpretation"]
+          print("Rolling-horizon evidence checks passed: 48 runs, 12 paired comparisons, inventory and power balances closed.")
+          PY
+      - name: Upload rolling-horizon evidence report
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-rolling-horizon-evidence
+          path: build/rolling-horizon-dispatch/report.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload dispatch report
         uses: actions/upload-artifact@v4
         with:
