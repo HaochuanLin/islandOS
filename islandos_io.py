@@ -219,25 +219,41 @@ class AuthorizationDecision:
 def authorize_control(request: ControlRequest, context: SafetyContext) -> AuthorizationDecision:
     """Fail-closed interlock evaluation; it never performs a hardware write."""
     reasons = []
-    values = (request.requested_value, request.minimum, request.maximum)
-    if not request.command or not request.command.strip():
+
+    def finite_number(value):
+        if isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(float(value))
+        except (TypeError, ValueError, OverflowError):
+            return False
+
+    command_ok = isinstance(request.command, str) and bool(request.command.strip())
+    if not command_ok:
         reasons.append("command identifier is required")
-    if not all(math.isfinite(float(v)) for v in values):
-        reasons.append("requested value and limits must be finite")
-    if request.minimum > request.maximum:
+
+    request_numbers_ok = all(finite_number(v) for v in (
+        request.requested_value, request.minimum, request.maximum
+    ))
+    if not request_numbers_ok:
+        reasons.append("requested value and limits must be finite numbers")
+
+    requested = float(request.requested_value) if finite_number(request.requested_value) else None
+    minimum = float(request.minimum) if finite_number(request.minimum) else None
+    maximum = float(request.maximum) if finite_number(request.maximum) else None
+    if request_numbers_ok and minimum > maximum:
         reasons.append("minimum exceeds maximum")
-    if math.isfinite(float(request.requested_value)) and (
-        request.requested_value < request.minimum or request.requested_value > request.maximum
-    ):
+    if request_numbers_ok and not (minimum <= requested <= maximum):
         reasons.append("requested value is outside configured operating limits")
+
     if request.max_change_per_step is not None:
-        if not math.isfinite(float(request.max_change_per_step)) or request.max_change_per_step < 0:
+        if not finite_number(request.max_change_per_step) or float(request.max_change_per_step) < 0:
             reasons.append("maximum change per step must be finite and non-negative")
-        elif context.previous_value is not None and math.isfinite(float(context.previous_value)):
-            if abs(request.requested_value - context.previous_value) > request.max_change_per_step:
-                reasons.append("requested change exceeds configured ramp limit")
-        elif context.previous_value is None:
+        elif context.previous_value is None or not finite_number(context.previous_value):
             reasons.append("previous value unavailable for ramp-limit check")
+        elif requested is not None and abs(requested - float(context.previous_value)) > float(request.max_change_per_step):
+            reasons.append("requested change exceeds configured ramp limit")
+
     if not context.telemetry_valid:
         reasons.append("telemetry has not passed quality validation")
     if not context.write_enabled:
@@ -253,10 +269,9 @@ def authorize_control(request: ControlRequest, context: SafetyContext) -> Author
     return AuthorizationDecision(
         allowed=allowed,
         reasons=tuple(reasons),
-        requested_value=float(request.requested_value),
-        approved_value=float(request.requested_value) if allowed else None,
+        requested_value=requested,
+        approved_value=requested if allowed else None,
     )
-
 
 def build_recommendation(
     command: str,
