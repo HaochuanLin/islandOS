@@ -87,6 +87,30 @@ def run_economic_sensitivity(
         raise ValueError("input must be a run_nsga2_from_csv report with a non-empty Pareto front")
     if configuration.get("economics_completeness", {}).get("complete_for_current_declared_fields") is not True:
         raise ValueError("base report must have the lifecycle-cost objective enabled")
+    if optimization.get("cost_objective_enabled") is not True:
+        raise ValueError("base report does not mark the lifecycle-cost objective as enabled")
+    input_summary = report.get("input_summary", {})
+    row_count = input_summary.get("row_count")
+    if input_summary.get("quality_status") != "valid" or row_count not in (8760, 8784):
+        raise ValueError("base report must contain a valid complete-calendar-year input summary")
+    try:
+        first = __import__("datetime").datetime.fromisoformat(
+            input_summary["first_timestamp"].replace("Z", "+00:00")
+        )
+        last = __import__("datetime").datetime.fromisoformat(
+            input_summary["last_timestamp"].replace("Z", "+00:00")
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("base report must include parseable first/last timestamps") from exc
+    leap_year = first.year % 4 == 0 and (first.year % 100 != 0 or first.year % 400 == 0)
+    expected_hours = 8784 if leap_year else 8760
+    if (
+        row_count != expected_hours
+        or last.year != first.year
+        or (first.month, first.day, first.hour, first.minute) != (1, 1, 0, 0)
+        or (last.month, last.day, last.hour, last.minute) != (12, 31, 23, 0)
+    ):
+        raise ValueError("base report does not span one complete calendar year")
     missing = [key for key in REQUIRED_COST_FIELDS if economics.get(key) is None]
     if missing:
         raise ValueError("base report has missing economic fields: " + ", ".join(missing))
