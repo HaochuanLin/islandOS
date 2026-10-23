@@ -55,6 +55,7 @@ else:
     source_type = "synthetic"
 
 input_sha256 = hashlib.sha256(raw).hexdigest()
+source_type = "synthetic" if source == "Synthetic demo (illustrative)" else "user_uploaded_unverified"
 signature = hashlib.sha256(source_label.encode("utf-8") + b"\0" + raw).hexdigest()
 previous_signature = st.session_state.get("rolling_lab_signature")
 if previous_signature != signature:
@@ -79,7 +80,20 @@ input_frame = pd.DataFrame({
 if parsed["forecast_water_demand_m3_per_hour"] is not None:
     input_frame["forecast_water_demand_m3"] = list(parsed["forecast_water_demand_m3_per_hour"])
 
-st.caption(f"Validated source: **{source_label}** · {len(input_frame)} continuous hourly rows")
+st.caption(
+    f"Validated source: **{source_label}** · {len(input_frame)} continuous hourly rows"
+)
+st.caption(
+    f"Source type: `{source_type}` · UTC coverage: "
+    f"{timestamps[0]} to {timestamps[-1]}"
+)
+with st.expander("Input provenance and reproducibility", expanded=False):
+    st.write(
+        "SHA-256 is calculated from the exact uploaded/template bytes before parsing. "
+        "It identifies the input file content; it does not establish that uploaded data "
+        "are measured, accurate, licensed, or trusted."
+    )
+    st.code(input_sha256, language=None)
 with st.expander("Preview validated input", expanded=False):
     st.dataframe(input_frame.head(24), use_container_width=True, hide_index=True)
     chart_input = input_frame.set_index("timestamp_utc")
