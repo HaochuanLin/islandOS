@@ -80,6 +80,23 @@ python islandos_advisor.py data/examples/telemetry_replay_demo.csv \
 
 Windows x64 standalone `islandos-gateway.exe` and `islandos-advisor.exe` are built by the [Windows gateway workflow](.github/workflows/windows-gateway-build.yml). The workflow also assembles and executes a portable `islandos-demo-package.zip` containing both programs, example telemetry, a field-mapping template, a double-click launcher, and usage/safety notes; it validates the generated JSON report before uploading the `islandos-gateway-windows-x64` artifact. The executable is an offline telemetry validator/replay tool, not a hardware driver. Real deployment still requires a site-approved point map, protocol adapter, authentication/network configuration, PLC interlocks, and hardware-in-the-loop validation. See [hardware integration architecture](docs/HARDWARE_INTEGRATION_ARCHITECTURE.md).
 
+## Local HTTP telemetry ingress (read-only)
+
+The optional `islandos_gateway_server.py` service accepts canonical JSON samples at `POST http://127.0.0.1:8765/telemetry`, validates freshness and required measurements, appends accepted records to JSONL, and exposes `GET /health` and `GET /latest`. It binds to loopback only; it has no Modbus/MQTT client and no actuator-write endpoint. A device on the computer needs a local protocol bridge that posts the canonical fields. Do not expose the HTTP service directly to a LAN or public network.
+
+Example payload:
+```json
+{
+  "timestamp_utc": "2026-10-23T07:00:00Z",
+  "renewable_surplus_kw": 18.5,
+  "water_demand_m3": 3.2,
+  "cooling_demand_kw_th": 6.5,
+  "quality_flag": "good"
+}
+```
+
+Run locally with `python islandos_gateway_server.py`. The Windows portable package includes `islandos-gateway-server.exe` and `run-gateway-server.bat`. The HTTP server is an ingress adapter only; validated hourly data must still be reviewed through the dispatch advisor, and hardware control remains out of scope.
+
 ## Run the web model in Docker
 
 With Docker installed, run `docker compose up --build` and open `http://127.0.0.1:8501`. The supplied Compose file binds to loopback only. Do not expose the app to a LAN or public network without adding authentication, network restrictions, and a site-approved security review. A separate CI workflow builds the image and probes Streamlit's health endpoint.
