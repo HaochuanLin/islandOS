@@ -209,7 +209,7 @@ def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
         summary["scenario_water_produced_m3_per_year"]["p50_median"]
     )
     (output_dir / "nan_ao_financial_screen.json").write_text(
-        json.dumps(financial_screen, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+        json.dumps(financial_screen, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     sensitivity_rows = run_sensitivity_analysis()
     with (output_dir / "nan_ao_sensitivity.csv").open("w", newline="", encoding="utf-8") as f:
