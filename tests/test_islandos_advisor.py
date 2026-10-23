@@ -21,8 +21,8 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
                  "--max-age-seconds", "7200", "--received-at", RECEIVED, "--output", str(output)],
                 text=True, capture_output=True, check=False,
             )
+            report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "advice_ready")
         self.assertEqual(report["row_count"], 3)
         self.assertEqual(len(report["policy_comparison"]), 4)
@@ -45,11 +45,11 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
             output = Path(tmp) / "report.json"
             result = subprocess.run(
                 [sys.executable, str(ROOT / "islandos_advisor.py"), str(source),
-                 "--received-at", "2026-10-23T06:00:00Z", "--output", str(output)],
+                 "--max-age-seconds", "3600", "--received-at", "2026-10-23T06:00:00Z", "--output", str(output)],
                 text=True, capture_output=True, check=False,
             )
+            report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(result.returncode, 2)
-        report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "rejected")
         self.assertNotIn("policy_comparison", report)
         self.assertFalse(report["physical_write_performed"])
@@ -65,7 +65,7 @@ class TestIslandOSAdvisorCLI(unittest.TestCase):
             )
             result = subprocess.run(
                 [sys.executable, str(ROOT / "islandos_advisor.py"), str(source),
-                 "--received-at", "2026-10-23T06:30:00Z"],
+                 "--max-age-seconds", "5400", "--received-at", "2026-10-23T06:30:00Z"],
                 text=True, capture_output=True, check=False,
             )
         self.assertEqual(result.returncode, 2)
