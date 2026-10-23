@@ -27,7 +27,8 @@ from experiments.compare_energy_water_strategies import (
 )
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
-from islandos_core import SiteConfiguration, make_virtual_reading, recommend_ro_screening
+from islandos_core import SiteConfiguration, recommend_ro_screening
+from islandos_core.virtual_instrument import make_virtual_reading
 
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
