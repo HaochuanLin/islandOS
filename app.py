@@ -11,7 +11,7 @@ import hashlib
 import io
 import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 
@@ -476,30 +476,23 @@ elif page == "Strategy simulator":
                 initial_storage_m3=float(screen_row["water_inventory_before_m3"]),
             )
             # Simulation timestamps in the built-in CSV are timezone-naive. For this
-            # offline demo only, explicitly interpret them as UTC before adapting them.
+            # offline demo only, explicitly interpret naive timestamps as UTC.
             screen_timestamp_text = str(screen_row["timestamp"])
-            try:
-                parsed_screen_timestamp = datetime.fromisoformat(
-                    screen_timestamp_text.replace("Z", "+00:00")
-                )
-            except ValueError as exc:
-                st.error(f"Cannot screen this row: invalid timestamp ({exc}).")
-                parsed_screen_timestamp = None
-            if parsed_screen_timestamp is not None:
-                if parsed_screen_timestamp.tzinfo is None:
-                    parsed_screen_timestamp = parsed_screen_timestamp.replace(
-                        tzinfo=datetime.now().astimezone().tzinfo
-                    )
-                virtual_signals = simulation_row_to_screening_signals({
-                    "timestamp": parsed_screen_timestamp.isoformat(),
-                    "renewable_surplus_available_kw": screen_row["renewable_surplus_available_kw"],
-                    "water_inventory_before_m3": screen_row["water_inventory_before_m3"],
-                })
-                screen_result = recommend_ro_screening(
-                    screen_config,
-                    renewable_surplus=virtual_signals[0],
-                    water_inventory=virtual_signals[1],
-                )
+            parsed_screen_timestamp = datetime.fromisoformat(
+                screen_timestamp_text.replace("Z", "+00:00")
+            )
+            if parsed_screen_timestamp.tzinfo is None:
+                parsed_screen_timestamp = parsed_screen_timestamp.replace(tzinfo=timezone.utc)
+            virtual_signals = simulation_row_to_screening_signals({
+                "timestamp": parsed_screen_timestamp.isoformat(),
+                "renewable_surplus_available_kw": screen_row["renewable_surplus_available_kw"],
+                "water_inventory_before_m3": screen_row["water_inventory_before_m3"],
+            })
+            screen_result = recommend_ro_screening(
+                screen_config,
+                renewable_surplus=virtual_signals[0],
+                water_inventory=virtual_signals[1],
+            )
             st.markdown(f"**Screening outcome:** `{screen_result.action}`")
             st.write(screen_result.reason)
             st.caption(
