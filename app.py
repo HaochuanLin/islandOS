@@ -874,6 +874,135 @@ elif page == "Telemetry gateway":
                     )
                     dispatch_writer.writeheader()
                     dispatch_writer.writerows(dispatch_rows)
+
+                    parsed_dispatch = parse_rolling_scenario_csv(
+                        dispatch_buffer.getvalue(), name=telemetry_file.name
+                    )
+                    dispatch_scenario = parsed_dispatch["scenario"]
+                    dispatch_policies = ("rolling", "ro_first", "ice_first", "perfect_information")
+                    dispatch_results = {}
+                    for policy in dispatch_policies:
+                        dispatch_results[policy] = simulate_rolling_dispatch(
+                            dispatch_scenario,
+                            parsed_dispatch["forecast_surplus_kw"],
+                            policy,
+                            forecast_water_demand_m3_per_hour=parsed_dispatch["forecast_water_demand_m3_per_hour"],
+                        )
+
+                    def normalized_dispatch_score(result, weights):
+                        water_total = max(sum(dispatch_scenario.water_demand_m3_per_hour), 1e-9)
+                        cooling_total = max(sum(dispatch_scenario.cooling_demand_kw_th), 1e-9)
+                        surplus_total = max(sum(dispatch_scenario.available_surplus_kw), 1e-9)
+                        return (
+                            weights["unmet_water"] * result["water_unmet_m3"] / water_total
+                            + weights["unmet_cooling"] * result["cooling_unmet_kwh_th"] / cooling_total
+                            + weights["remaining_surplus"] * result["remaining_surplus_kwh"] / surplus_total
+                        )
+
+                    weight_profiles = {
+                        "balanced": {"unmet_water": 0.45, "unmet_cooling": 0.45, "remaining_surplus": 0.10},
+                        "water_priority": {"unmet_water": 0.60, "unmet_cooling": 0.30, "remaining_surplus": 0.10},
+                        "cooling_priority": {"unmet_water": 0.30, "unmet_cooling": 0.60, "remaining_surplus": 0.10},
+                        "energy_efficiency": {"unmet_water": 0.40, "unmet_cooling": 0.40, "remaining_surplus": 0.20},
+                    }
+                    operational_policies = ("rolling", "ro_first", "ice_first")
+                    eligible_policies = [
+                        policy for policy in operational_policies
+                        if dispatch_results[policy]["constraint_violation_hours"] == 0
+                    ]
+                    policy_scores = {
+                        policy: round(normalized_dispatch_score(
+                            dispatch_results[policy], weight_profiles["balanced"]
+                        ), 6)
+                        for policy in dispatch_policies
+                    }
+                    recommended_policy = (
+                        min(eligible_policies, key=lambda policy: (policy_scores[policy], policy))
+                        if eligible_policies else None
+                    )
+                    policy_rows = []
+                    for policy in dispatch_policies:
+                        result = dispatch_results[policy]
+                        policy_rows.append({
+                            "policy": policy,
+                            "normalized_score": policy_scores[policy],
+                            "eligible_for_recommendation": policy in eligible_policies,
+                            "water_unmet_m3": result["water_unmet_m3"],
+                            "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
+                            "remaining_surplus_kwh": result["remaining_surplus_kwh"],
+                            "constraint_violation_hours": result["constraint_violation_hours"],
+                            "final_water_inventory_m3": result["final_water_inventory_m3"],
+                            "final_cold_inventory_kwh_th": result["final_cold_inventory_kwh_th"],
+                        })
+                    sensitivity_rows = []
+                    for profile_name, weights in weight_profiles.items():
+                        profile_scores = {
+                            policy: round(normalized_dispatch_score(dispatch_results[policy], weights), 6)
+                            for policy in operational_policies
+                        }
+                        winner = (
+                            min(eligible_policies, key=lambda policy: (profile_scores[policy], policy))
+                            if eligible_policies else None
+                        )
+                        sensitivity_rows.append({
+                            "weight_profile": profile_name,
+                            "weights": weights,
+                            "policy_scores": profile_scores,
+                            "winner_for_this_input": winner,
+                        })
+
+                    st.subheader("Read-only dispatch advice")
+                    st.caption(
+                        "This is a model recommendation for operator review, not a hardware command. "
+                        "The first persistence-baseline forecast row is cold-start seeded and is not an "
+                        "out-of-sample forecast."
+                    )
+                    if recommended_policy is None:
+                        st.warning(
+                            "No operational policy has zero reported constraint-violation hours. "
+                            "No policy is recommended; review inputs and operating limits."
+                        )
+                    else:
+                        st.success(
+                            f"Recommended for operator review: {recommended_policy}. "
+                            "This is the lowest balanced score among policies with zero reported constraint violations."
+                        )
+                    st.dataframe(pd.DataFrame(policy_rows), use_container_width=True, hide_index=True)
+                    st.markdown("**Objective-weight sensitivity**")
+                    st.dataframe(pd.DataFrame([
+                        {
+                            "weight_profile": item["weight_profile"],
+                            "winner_for_this_input": item["winner_for_this_input"] or "operator review required",
+                            **item["weights"],
+                        }
+                        for item in sensitivity_rows
+                    ]), use_container_width=True, hide_index=True)
+
+                    advice_report = {
+                        "status": "advice_ready" if recommended_policy else "operator_review_required",
+                        "mode": "uploaded_telemetry_replay",
+                        "data_status": "software-validated upload; not site-validated",
+                        "row_count": len(dispatch_rows),
+                        "forecast_method": "supplied forecast when present; otherwise persistence baseline; first row cold-start seeded",
+                        "score_weights": weight_profiles["balanced"],
+                        "policy_comparison": policy_rows,
+                        "eligible_policies": eligible_policies,
+                        "recommended_policy_for_operator_review": recommended_policy,
+                        "weight_sensitivity": sensitivity_rows,
+                        "hourly_audit_by_policy": {
+                            policy: dispatch_results[policy]["hourly_audit"]
+                            for policy in dispatch_policies
+                        },
+                        "operator_action_required": True,
+                        "physical_write_performed": False,
+                    }
+                    st.download_button(
+                        "Download dispatch advice report (JSON)",
+                        data=(json.dumps(advice_report, indent=2, sort_keys=True) + "\\n").encode("utf-8"),
+                        file_name="islandos_dispatch_advice.json",
+                        mime="application/json",
+                        use_container_width=True,
+                    )
                     st.download_button(
                         "Download dispatch-ready hourly CSV",
                         data=dispatch_buffer.getvalue().encode("utf-8"),
