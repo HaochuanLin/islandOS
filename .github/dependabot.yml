@@ -8,6 +8,14 @@ updates:
       time: "09:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
+    # Keep core numerical-stack major upgrades out of routine grouped PRs.
+    # Major upgrades require a deliberate compatibility review before updating
+    # the minimum supported versions used by the simulator and forecasting code.
+    ignore:
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
     groups:
       python-dependencies:
         patterns:
