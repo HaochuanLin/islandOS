@@ -89,8 +89,10 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("attestations: write", workflow)
         self.assertIn("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8", workflow)
         self.assertIn('subject-path: "dist/*"', workflow)
+        self.assertIn("gh attestation verify", workflow)
         self.assertIn("gh attestation verify", checklist)
-        self.assertLess(workflow.index("Attest release bundle files"), workflow.index("Upload release candidate bundle"))
+        self.assertLess(workflow.index("Attest release bundle files"), workflow.index("Verify source archive provenance attestation"))
+        self.assertLess(workflow.index("Verify source archive provenance attestation"), workflow.index("Upload release candidate bundle"))
 
     def test_deployment_preflight_passes_for_repository_configuration(self):
         import sys
