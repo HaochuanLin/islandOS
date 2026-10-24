@@ -22,9 +22,15 @@ The Streamlit app is intended to be deployed from this repository's `app.py`. **
 </p>
 <p align="center"><em>Illustrative synthetic simulation only—not field measurements or evidence of real-island performance.</em></p>
 
-## Experimental pilot scenario (Schneider Go Green 2026)
+## Experimental pilot scenario: Nan'ao emergency desalination case
 
-A separate Nan'ao-type scenario is documented in the [Nan'ao scenario guide](docs/NAN_AO_SCENARIO.md) and implemented in `nan_ao_scenario.py`. It uses a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021. Its outputs are synthetic scenario assumptions, not measured real-world data. The main-branch interactive app remains the generic product demo; the scenario does not replace it.
+A frozen snapshot of this Nan'ao pilot case is available on branch: `nan-ao-scenario-pilot`.
+
+It is implemented in `nan_ao_scenario.py`, using a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021.
+
+All outputs are synthetic scenario assumptions, not measured real-world data.
+
+The interactive `app.py` on main is a generic conceptual demo only, and does not generate the quantitative results from this pilot case.
 
 ## What it can do today
 
@@ -101,7 +107,6 @@ For a compact reference to the other experiments, see [Experiments and workflows
 | Site-specific validation gates and sign-offs | [Supervised pilot acceptance plan](docs/SUPERVISED_PILOT_ACCEPTANCE_PLAN.md) |
 | Read-only telemetry validation and device mapping | [Telemetry integration contract](docs/TELEMETRY_INTEGRATION_CONTRACT.md) |
 | Deployment boundaries and future hardware adapters | [Hardware integration architecture](docs/HARDWARE_INTEGRATION_ARCHITECTURE.md) |
-| Competition demo and operator-review procedure | [Competition demo runbook](docs/COMPETITION_DEMO_RUNBOOK.md) |
 | Interactive app inputs and strategy assumptions | [Energy–water strategy comparison](docs/ENERGY_WATER_STRATEGY_COMPARISON.md) |
 | Primary Streamlit app upload schema, exports, provenance, and result invalidation | [Primary app guide](docs/PRIMARY_APP_GUIDE.md) |
 | Forecast evaluation connected to dispatch experiments | [Forecast-to-dispatch evaluation](docs/FORECAST_DISPATCH_EVALUATION.md) |
