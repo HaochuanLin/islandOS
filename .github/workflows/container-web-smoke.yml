@@ -43,6 +43,8 @@ jobs:
         run: |
           echo "::warning::Buildx initialization failed; falling back to Docker's local builder."
           DOCKER_BUILDKIT=1 docker build --tag islandos-web:ci .
+      - name: Prepare SBOM output directory
+        run: mkdir -p build/sbom
       - name: Generate CycloneDX SBOM for the built container image
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
         with:
