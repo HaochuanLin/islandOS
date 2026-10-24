@@ -82,6 +82,38 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("output-file: build/sbom/islandos-web-image.cdx.json", workflow)
         self.assertIn("upload-artifact-retention: 30", workflow)
 
+    def test_deployment_preflight_passes_for_repository_configuration(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from deployment_preflight import run_checks
+        checks = run_checks(ROOT)
+        self.assertTrue(checks)
+        self.assertTrue(
+            all(check["status"] == "pass" for check in checks),
+            "\\n".join(f"{c['name']}: {c['detail']}" for c in checks if c["status"] != "pass"),
+        )
+        self.assertFalse(any("production_authorized" in check for check in checks))
+
+    def test_deployment_preflight_fails_closed_on_public_compose_binding(self):
+        import shutil
+        import tempfile
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from deployment_preflight import run_checks
+        with tempfile.TemporaryDirectory() as tmp:
+            temp_root = Path(tmp)
+            for relative in ("Dockerfile", "docker-compose.yml", "requirements-runtime.lock", "SECURITY.md"):
+                shutil.copy2(ROOT / relative, temp_root / relative)
+            for relative in ("docs/DEMO_DEPLOYMENT.md", ".github/workflows/container-web-smoke.yml"):
+                target = temp_root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, target)
+            compose = temp_root / "docker-compose.yml"
+            compose.write_text(compose.read_text(encoding="utf-8").replace("127.0.0.1:8501:8501", "0.0.0.0:8501:8501"), encoding="utf-8")
+            checks = run_checks(temp_root)
+            result = next(check for check in checks if check["name"] == "compose_loopback_only")
+            self.assertEqual(result["status"], "fail")
+
 
 if __name__ == "__main__":
     unittest.main()
