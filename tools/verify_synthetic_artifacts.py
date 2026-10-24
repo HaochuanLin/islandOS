@@ -92,21 +92,23 @@ def verify_artifacts(csv_path: Path, manifest_path: Path) -> list[str]:
                     )
 
     awareness = [stamp.utcoffset() is not None for _, stamp in parsed_timestamps]
-    if any(awareness) and not all(awareness):
+    mixed_awareness = any(awareness) and not all(awareness)
+    if mixed_awareness:
         errors.append("CSV timestamps mix timezone-aware and timezone-naive values")
-    for (previous_row, previous), (row_number, current) in zip(
-        parsed_timestamps, parsed_timestamps[1:]
-    ):
-        if previous.utcoffset() is not None and current.utcoffset() is not None:
-            previous_compare = previous.astimezone().timestamp()
-            current_compare = current.astimezone().timestamp()
-        else:
-            previous_compare = previous
-            current_compare = current
-        if current_compare <= previous_compare:
-            errors.append(
-                f"CSV row {row_number} timestamp must be strictly later than row {previous_row}"
-            )
+    else:
+        for (previous_row, previous), (row_number, current) in zip(
+            parsed_timestamps, parsed_timestamps[1:]
+        ):
+            if all(awareness):
+                previous_compare = previous.timestamp()
+                current_compare = current.timestamp()
+            else:
+                previous_compare = previous
+                current_compare = current
+            if current_compare <= previous_compare:
+                errors.append(
+                    f"CSV row {row_number} timestamp must be strictly later than row {previous_row}"
+                )
 
     time_range = manifest.get("time_range")
     if not isinstance(time_range, dict):
