@@ -84,6 +84,7 @@ jobs:
           python tools/run_forecast_dispatch_demo.py --hours 48 --seed 20261024 --output-dir build/ci-forecast-dispatch-demo
           python - <<'PY'
           import csv
+          import hashlib
           import json
           import math
           from pathlib import Path
@@ -96,6 +97,10 @@ jobs:
           assert report["time_alignment"]["forecast_rows_compared"] == 24
           assert report["forecast"]["model_id"] == "trailing-day-mean"
           assert math.isfinite(report["forecast"]["mae_m3_per_hour"])
+          for artifact in report["artifacts"].values():
+              path = out / artifact["file"]
+              assert path.stat().st_size == artifact["bytes"]
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == artifact["sha256"]
           with (out / "strategy_comparison.csv").open(newline="", encoding="utf-8") as handle:
               summaries = list(csv.DictReader(handle))
           assert len(summaries) == 10, f"expected 5 strategies x 2 demand bases, got {len(summaries)}"
