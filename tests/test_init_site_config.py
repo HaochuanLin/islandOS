@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -27,6 +28,50 @@ class SiteConfigBootstrapTests(unittest.TestCase):
         self.assertEqual(config["metadata"]["name"], "Demo island")
         self.assertEqual(config["metadata"]["status"], "illustrative_bootstrap_not_site_data")
         self.assertIn("not measured site data", config["metadata"]["notes"])
+
+    def test_bootstrapped_config_passes_all_first_run_auditors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "site.json"
+            audit_path = Path(directory) / "audit.json"
+            created = self.run_cli("--site-name", "Pilot sandbox", "--output", str(output))
+            self.assertEqual(created.returncode, 0, created.stderr)
+
+            validate = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "validate_site_config.py"),
+                 str(output), "--json"],
+                cwd=ROOT, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(validate.returncode, 0, validate.stderr + validate.stdout)
+            validated = json.loads(validate.stdout)
+            self.assertTrue(validated["valid"])
+            self.assertEqual(validated["name"], "Pilot sandbox")
+
+            doctor = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "islandos_doctor.py"),
+                 "--json", "--config", str(output)],
+                cwd=ROOT, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(doctor.returncode, 0, doctor.stderr + doctor.stdout)
+            diagnosed = json.loads(doctor.stdout)
+            self.assertEqual(diagnosed["status"], "ready_for_local_smoke_tests")
+            config_check = next(item for item in diagnosed["checks"]
+                                if item["id"] == "site_configuration")
+            self.assertEqual(config_check["status"], "pass")
+
+            audit = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "audit_site_config.py"),
+                 str(output), "--output", str(audit_path)],
+                cwd=ROOT, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(audit.returncode, 0, audit.stderr + audit.stdout)
+            audited = json.loads(audit_path.read_text(encoding="utf-8"))
+            self.assertEqual(audited["metadata"]["name"], "Pilot sandbox")
+            self.assertEqual(audited["metadata"]["status"], "illustrative_bootstrap_not_site_data")
+            self.assertTrue(audited["provenance_review"]["appears_illustrative_or_assumed"])
+            self.assertEqual(
+                audited["configuration_sha256"],
+                hashlib.sha256(output.read_bytes()).hexdigest(),
+            )
 
     def test_refuses_to_overwrite_without_force(self):
         with tempfile.TemporaryDirectory() as directory:
