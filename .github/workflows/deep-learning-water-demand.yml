@@ -38,7 +38,8 @@ permissions:
 
 concurrency:
   group: islandos-deep-learning-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # This CPU-heavy run must finish and upload its evidence even if another commit arrives.
+  cancel-in-progress: false
 
 jobs:
   lstm-measured-series:
