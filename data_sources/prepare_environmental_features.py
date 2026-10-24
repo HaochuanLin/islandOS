@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import io
 import json
 import math
 from datetime import datetime
@@ -32,7 +34,9 @@ def prepare_features(input_csv: str | Path, output_csv: str | Path) -> dict:
     metadata_path = input_path.with_suffix(input_path.suffix + ".metadata.json")
     if not metadata_path.exists():
         raise ValueError(f"Missing provenance sidecar: {metadata_path}")
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata_bytes = metadata_path.read_bytes()
+    metadata = json.loads(metadata_bytes.decode("utf-8"))
+    source_metadata_sha256 = hashlib.sha256(metadata_bytes).hexdigest()
     source_parameters = metadata.get("response_metadata", {}).get("parameters", {})
     missing_units = [
         name for name in PARAMETERS
@@ -44,7 +48,11 @@ def prepare_features(input_csv: str | Path, output_csv: str | Path) -> dict:
             "Missing source units in metadata for: " + ", ".join(missing_units)
         )
 
-    with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
+    input_bytes = input_path.read_bytes()
+    input_csv_sha256 = hashlib.sha256(input_bytes).hexdigest()
+    # Hash and parse the exact same byte snapshot so provenance cannot drift
+    # if the source file changes while this job is running.
+    with io.StringIO(input_bytes.decode("utf-8-sig"), newline="") as handle:
         reader = csv.DictReader(handle)
         headers = reader.fieldnames or []
         duplicates = sorted({name for name in headers if headers.count(name) > 1})
@@ -125,8 +133,12 @@ def prepare_features(input_csv: str | Path, output_csv: str | Path) -> dict:
         writer.writeheader()
         writer.writerows(output_rows)
 
+    output_csv_sha256 = hashlib.sha256(output_path.read_bytes()).hexdigest()
     result = {
         "source": "NASA POWER raw hourly CSV",
+        "input_csv_sha256": input_csv_sha256,
+        "source_metadata_sha256": source_metadata_sha256,
+        "output_csv_sha256": output_csv_sha256,
         "input_csv": str(input_path),
         "output_csv": str(output_path),
         "source_metadata": str(metadata_path),
