@@ -85,3 +85,16 @@ For a quick, deterministic telemetry ingest demo, run `python islandos_gateway.p
 ## One-click synthetic demo
 
 The Windows package contains `run-synthetic-demo.bat`, which starts the loopback gateway with a 90,000-second freshness window and posts a generated 24-hour hourly-aligned telemetry window. This exists solely so a reviewer can see telemetry validation, policy comparison, and the browser dashboard without real equipment. The synthetic source ID is explicit. Real device bridges must use the normal gateway launcher and a site-appropriate freshness threshold; never carry the replay threshold into a live deployment.
+
+
+## Preflight a supplied CSV before simulation
+
+Run the standard-library checker against a site export before interpreting any simulation output:
+
+```bash
+python tools/validate_site_csv.py path/to/site_hourly.csv --json
+```
+
+The default expected interval is 60 minutes; pass `--interval-minutes 30` for a documented half-hour series. The checker rejects malformed ISO-8601 timestamps, mixed timezone-aware and timezone-naive timestamps, and intervals that do not match the declared cadence. It also reuses the strategy loader's required-column, numeric, and flag checks and reports the exact file SHA-256. A nonzero exit code means the input should be corrected or deliberately reviewed before simulation; do not silently interpolate gaps.
+
+A valid report means the file is structurally consistent only. It does not establish sensor provenance, calibration, or that the data describes the claimed site.
