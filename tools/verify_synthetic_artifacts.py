@@ -23,9 +23,12 @@ def verify_artifacts(csv_path: Path, manifest_path: Path) -> list[str]:
     except OSError as exc:
         return [f"cannot read CSV: {exc}"]
     try:
-        manifest: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_value = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         return [f"cannot read manifest JSON: {exc}"]
+    if not isinstance(manifest_value, dict):
+        return ["manifest root must be a JSON object"]
+    manifest: dict[str, Any] = manifest_value
 
     digest = hashlib.sha256(raw).hexdigest()
     if manifest.get("dataset_type") != "synthetic":
@@ -50,8 +53,21 @@ def verify_artifacts(csv_path: Path, manifest_path: Path) -> list[str]:
         errors.append("CSV contains duplicate column names")
     if manifest.get("columns") != columns:
         errors.append("manifest columns do not match CSV header")
+    if not rows:
+        errors.append("CSV must contain at least one data row")
     if manifest.get("row_count") != len(rows):
         errors.append(f"row count mismatch: manifest={manifest.get('row_count')!r}, actual={len(rows)}")
+
+    for row_number, row in enumerate(rows, start=2):
+        if None in row:
+            errors.append(f"CSV row {row_number} contains extra fields beyond the header")
+        missing_fields = [column for column in columns if row.get(column) is None]
+        if missing_fields:
+            errors.append(
+                f"CSV row {row_number} is missing field(s): " + ", ".join(missing_fields)
+            )
+        if "timestamp" in columns and not str(row.get("timestamp") or "").strip():
+            errors.append(f"CSV row {row_number} has an empty timestamp")
 
     time_range = manifest.get("time_range")
     if not isinstance(time_range, dict):
