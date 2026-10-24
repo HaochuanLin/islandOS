@@ -138,6 +138,7 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 | Import the Philippines DIB workbook | [DIB import guide](docs/PHILIPPINES_DIB_IMPORT.md) |
 | Equipment and economic assumptions | [Parameter configuration](docs/PARAMETER_CONFIGURATION.md) |
 | Fixed-candidate lifecycle-cost sensitivity | [Economic sensitivity guide](docs/ECONOMIC_SENSITIVITY.md) |
+| Site pilot scope, acceptance thresholds, abort criteria, and sign-off template | [Pilot acceptance template](docs/PILOT_ACCEPTANCE_TEMPLATE.md) |
 | Synthetic benchmark protocol | [End-to-end benchmark](docs/END_TO_END_BENCHMARK.md) |
 | Optimizer comparison methodology | [Pareto benchmark](docs/PARETO_BENCHMARK.md) |
 | More runnable commands | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) |
