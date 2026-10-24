@@ -25,8 +25,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v3
+        # Docker Hub outages should not block the fallback image build and smoke checks.
+        continue-on-error: true
       - name: Build Streamlit web image with GitHub Actions cache
+        if: steps.buildx.outcome == 'success'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -34,6 +38,11 @@ jobs:
           tags: islandos-web:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build Streamlit web image without remote BuildKit cache
+        if: steps.buildx.outcome != 'success'
+        run: |
+          echo "::warning::Buildx initialization failed; falling back to Docker's local builder."
+          DOCKER_BUILDKIT=1 docker build --tag islandos-web:ci .
       - name: Start web app on loopback only
         run: docker run --detach --name islandos-web-ci --publish 127.0.0.1:8501:8501 islandos-web:ci
       - name: Verify container does not run as root
