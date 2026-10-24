@@ -74,6 +74,24 @@ class TestForecastDispatchInputBuilder(unittest.TestCase):
             self.assertEqual(saved_report["matched_rows"], 2)
             self.assertTrue(saved_report["actual_water_demand_preserved_for_execution"])
 
+    def test_auto_selects_lstm_when_it_is_the_only_forecast_column(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            power, model, output = root / "power.csv", root / "lstm.json", root / "joined.csv"
+            self._write_power_csv(power)
+            start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+            report = {"status": "models_compared", "forecast_rows": [
+                {"timestamp": (start + timedelta(hours=i + 1)).isoformat(),
+                 "actual_water_demand_m3": [11.0, 12.0][i],
+                 "lstm_deep_learning": [10.8, 12.2][i]} for i in range(2)]}
+            model.write_text(json.dumps(report), encoding="utf-8")
+            result = build_forecast_dispatch_input(power, model, output)
+            self.assertEqual(result["forecast_column_used"], "lstm_deep_learning")
+            with output.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(float(rows[0]["forecast_water_demand_m3"]), 10.8)
+            self.assertEqual(float(rows[1]["forecast_water_demand_m3"]), 12.2)
+
     def test_rejects_actual_demand_mismatch(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
