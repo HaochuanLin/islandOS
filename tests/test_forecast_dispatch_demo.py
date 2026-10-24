@@ -148,11 +148,11 @@ def test_plugin_non_finite_prediction_is_rejected(tmp_path: Path, monkeypatch) -
 def test_plugin_runtime_error_fails_with_cli_error_not_partial_report(tmp_path: Path, monkeypatch) -> None:
     plugin_module = tmp_path / "raising_forecast_plugin.py"
     plugin_module.write_text(
-        "class RaisingForecast:\\n"
-        "    model_id = 'raising-forecast'\\n"
-        "    version = '0.0.1'\\n"
-        "    def predict(self, history, target_timestamps):\\n"
-        "        raise RuntimeError('plugin unavailable')\\n",
+        "class RaisingForecast:\n"
+        "    model_id = 'raising-forecast'\n"
+        "    version = '0.0.1'\n"
+        "    def predict(self, history, target_timestamps):\n"
+        "        raise RuntimeError('plugin unavailable')\n",
         encoding="utf-8",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
