@@ -105,15 +105,6 @@ jobs:
 
           root = Path("dist")
           tag = os.environ["RELEASE_TAG"]
-          tracked = sorted(path for path in root.iterdir() if path.is_file())
-          checksums = {
-              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-              for path in tracked
-          }
-          (root / "SHA256SUMS.json").write_text(
-              json.dumps(checksums, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
           manifest = {
               "artifact_type": "IslandOS release candidate",
               "tag_or_candidate": tag,
@@ -145,8 +136,17 @@ jobs:
           (root / "release-manifest.json").write_text(
               json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
           )
+          checksums = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(root.iterdir())
+              if path.is_file() and path.name not in {"SHA256SUMS.json", "SHA256SUMS.txt"}
+          }
+          (root / "SHA256SUMS.json").write_text(
+              json.dumps(checksums, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
           PY
-          (cd dist && sha256sum * > SHA256SUMS.txt)
+          (cd dist && find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
       - name: Upload release candidate bundle
         uses: actions/upload-artifact@v7
         with:
