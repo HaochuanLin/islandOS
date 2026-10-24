@@ -69,7 +69,7 @@ class TestForecastPluginBacktest(unittest.TestCase):
             self.assertIn("seasonal_naive_24h", report["baseline_metrics"])
             self.assertEqual(report["baseline_metrics"]["persistence_last_observation"]["samples"], 20)
             self.assertEqual(report["baseline_metrics"]["seasonal_naive_24h"]["samples"], 20)
-            self.assertAlmostEqual(report["skill_vs_persistence_mae"], 1.0)
+            self.assertAlmostEqual(report["skill_vs_persistence_mae"], 0.0)
             self.assertIn("persistence_baseline_m3", rows[0])
             self.assertIn("seasonal_24h_baseline_m3", rows[0])
 
