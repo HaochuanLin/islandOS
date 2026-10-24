@@ -17,6 +17,16 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("pip install --no-cache-dir -r requirements-runtime.lock", dockerfile)
         self.assertNotIn("pip install --no-cache-dir -r requirements.txt", dockerfile)
 
+    def test_docker_base_image_uses_versioned_python_and_debian_release(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("FROM python:3.11.17-slim-trixie", dockerfile)
+        self.assertNotIn("FROM python:3.11-slim", dockerfile)
+
+    def test_dependabot_checks_docker_base_image_updates(self):
+        dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
+        self.assertIn("package-ecosystem: docker", dependabot)
+        self.assertIn("interval: weekly", dependabot)
+
     def test_container_drops_root_privileges(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertRegex(dockerfile, r"(?m)^USER\s+islandos\s*$")
