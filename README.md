@@ -53,7 +53,7 @@ These tools are **not yet one fully integrated, validated forecast-and-control p
 python tools/generate_synthetic_site_csv.py --output build/synthetic_site_hourly.csv --hours 168 --seed 20261023
 ```
 
-Then open the hosted app or run it locally and upload `build/synthetic_site_hourly.csv`. The command also writes `build/synthetic_site_hourly.manifest.json`, recording the seed, row count, time range, schema, and SHA-256 digest so downstream results can identify the exact input file. This is synthetic onboarding data only—not a forecast, measured site data, or an operational recommendation. The seed makes the CSV repeatable.
+Then open the hosted app or run it locally and upload `build/synthetic_site_hourly.csv`. This is synthetic onboarding data only—not a forecast, measured site data, or an operational recommendation. The seed makes it repeatable.
 
 From the repository root:
 
