@@ -52,7 +52,8 @@ Stage B exit evidence:
 - Pilot acceptance thresholds remain owner-approved fields. Missing approvals mean no-go; synthetic data cannot authorize a pilot.
 - The dependency-audit workflow retains a CycloneDX JSON audit/SBOM artifact for each Python lock for 30 days. This does not cover the complete container image or OS packages.
 - The Docker base is pinned by immutable manifest digest, with weekly Dependabot Docker update proposals for reviewed refreshes.
-- Residual release engineering gaps (full container-image SBOM/signing, production auth/TLS/network controls) remain listed rather than marked solved.
+- The container smoke workflow now generates a CycloneDX SBOM from the built image; it must pass CI and produce an artifact before this gate is counted as verified.
+- Residual release engineering gaps (image signing, production auth/TLS/network controls, and site-specific deployment authorization) remain listed rather than marked solved.
 
 Do not increase the commercial/deployment score until the new tests and documentation are merged and verified on the exact main source tree.
 
@@ -113,6 +114,15 @@ Do not increase the commercial/deployment score until the new tests and document
 6. If a target depends on access to site measurements, operator decisions, credentials, or physical equipment, mark it blocked and document the dependency instead of fabricating evidence.
 
 ## Progress log
+
+### 2026-10-24 — Container image SBOM generation (in progress)
+
+- Added the pinned Anchore SBOM action to scan the already-built local web image and emit a CycloneDX JSON artifact with 30-day retention.
+- Added a regression check for the exact action revision, image reference, output format/path, and retention.
+- The image SBOM complements (rather than replaces) the five Python lock SBOM artifacts. Image signing and production security controls remain unresolved.
+- First CI run successfully scanned the image but failed when writing the report because the output directory did not exist. The workflow now creates the directory explicitly and the regression test guards that setup; rerun required before counting the gate as passed.
+- Score change deferred until CI proves the image scan works against the actual built image and the artifact is available.
+
 
 ### 2026-10-24 — Versioned Docker base and update cadence (in progress)
 
