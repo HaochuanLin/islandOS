@@ -124,8 +124,8 @@ def _fit_with_chronological_early_stopping(
     patience: int = 4,
 ) -> tuple[DemandLSTM, dict[str, Any]]:
     """Choose an epoch count on a chronological validation tail, then refit all history."""
-    if len(x) < 80:
-        raise ValueError("Need at least 80 training examples for chronological early stopping")
+    if len(x) < 64:
+        raise ValueError("Need at least 64 training examples for chronological early stopping")
     validation_count = max(24, int(len(x) * 0.15))
     fit_count = len(x) - validation_count
     x_fit, y_fit = x[:fit_count], y[:fit_count]
