@@ -115,6 +115,13 @@ Do not increase the commercial/deployment score until the new tests and document
 
 ## Progress log
 
+### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
+
+- Merged [PR #165](https://github.com/HaochuanLin/islandOS/pull/165), adding a reusable pilot acceptance template for source permissions/provenance, chronological holdouts, baseline comparisons, owner-approved thresholds, hard-stop conditions, security/rollback, economics, and named reviews. The document is explicitly **not approved** and cannot authorize live control. Its test run passed **550 tests, 2 skipped, 430 subtests**.
+- Merged [PR #166](https://github.com/HaochuanLin/islandOS/pull/166), adding previous-hour and previous-day water-demand baselines to `tools/run_forecast_dispatch_demo.py`. The plugin and both baselines are scored on the same rolling-origin timestamps with MAE, RMSE, bias, and sample count; the JSON report and tests make the comparison reproducible. The PR's full suite passed **551 tests, 2 skipped, 430 subtests**; container smoke, Windows packaging, dependency audit, Nan'ao scenario, hosted health, and integration workflow runs also passed.
+- Main contains merge commit [7c06454](https://github.com/HaochuanLin/islandOS/commit/7c06454cdbdbfc44b8f5a41ca20496aac996d1fe). These changes improve the quality of engineering evidence and future pilot preparation, but no maturity score is raised solely for adding a template or benchmark code. Public/site-data validation remains **60/100**, commercial/deployment readiness remains **62/100**, overall software-engineering maturity remains **94/100**, and real-world operational validation remains **38/100** until independent data and site-specific approvals exist.
+
+
 ### 2026-10-24 — Least-privilege local Compose defaults (verified)
 
 - Merged [PR #163](https://github.com/HaochuanLin/islandOS/pull/163): the local web service now drops all Linux capabilities, enables `no-new-privileges`, and runs with an init process. CI validates the actual Compose configuration using `docker compose config --quiet` before building and smoke-testing the image.
