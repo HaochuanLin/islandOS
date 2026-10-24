@@ -173,6 +173,32 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing field"):
                 load_site_steps(path)
 
+    def test_csv_loader_rejects_duplicate_instants_with_different_offsets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "same-instant.csv"
+            path.write_text(
+                "timestamp,renewable_surplus_kw,diesel_displacement_potential_kw,"
+                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\\n"
+                "2026-01-01T00:00:00+00:00,1,0,0.1,true,true,1\\n"
+                "2026-01-01T01:00:00+01:00,1,0,0.1,true,true,1\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "strictly increasing in time"):
+                load_site_steps(path)
+
+    def test_csv_loader_rejects_mixed_timezone_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mixed-timezone.csv"
+            path.write_text(
+                "timestamp,renewable_surplus_kw,diesel_displacement_potential_kw,"
+                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\\n"
+                "2026-01-01T00:00:00+00:00,1,0,0.1,true,true,1\\n"
+                "2026-01-01T01:00:00,1,0,0.1,true,true,1\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "mix timezone-aware"):
+                load_site_steps(path)
+
     def test_csv_loader_rejects_negative_physical_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.csv"
