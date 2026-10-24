@@ -90,7 +90,7 @@ class VerifySyntheticArtifactsTests(unittest.TestCase):
     def test_duplicate_timestamps_are_rejected_even_with_matching_manifest(self) -> None:
         rows = list(csv.DictReader(self.csv_path.open(encoding="utf-8", newline="")))
         with self.csv_path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\\n")
+            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\n")
             writer.writeheader()
             writer.writerow(rows[0])
             writer.writerow({**rows[1], "timestamp": rows[0]["timestamp"]})
@@ -101,7 +101,7 @@ class VerifySyntheticArtifactsTests(unittest.TestCase):
     def test_invalid_timestamp_is_rejected(self) -> None:
         rows = list(csv.DictReader(self.csv_path.open(encoding="utf-8", newline="")))
         with self.csv_path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\\n")
+            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\n")
             writer.writeheader()
             writer.writerow({**rows[0], "timestamp": "not-a-date"})
             writer.writerow(rows[1])
@@ -112,7 +112,7 @@ class VerifySyntheticArtifactsTests(unittest.TestCase):
     def test_mixed_timezone_timestamps_are_rejected_without_crashing(self) -> None:
         rows = list(csv.DictReader(self.csv_path.open(encoding="utf-8", newline="")))
         with self.csv_path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\\n")
+            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\n")
             writer.writeheader()
             writer.writerow({**rows[0], "timestamp": "2026-01-01T00:00:00Z"})
             writer.writerow({**rows[1], "timestamp": "2026-01-01T01:00:00"})
