@@ -52,11 +52,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements-ci.lock
+            requirements-deep-learning.txt
       - name: Install reproducible base and optional neural-network dependency
         run: |
           python -m pip install --upgrade "pip==26.2.2"
           python -m pip install -r requirements-ci.lock
-          python -m pip install -r requirements-deep-learning.txt
+          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-deep-learning.txt
           python -m pip check
       - name: Download and prepare measured SOWEKI series
         run: |
