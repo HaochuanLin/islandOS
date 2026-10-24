@@ -44,6 +44,22 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
     assert all(len(row["input_history_sha256"]) == 64 for row in audit)
 
 
+def test_fixed_seed_reproduces_input_and_csv_artifact_hashes(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    args = ["--hours", "30", "--seed", "41"]
+    assert main([*args, "--output-dir", str(first)]) == 0
+    assert main([*args, "--output-dir", str(second)]) == 0
+    left = json.loads((first / "run_report.json").read_text(encoding="utf-8"))
+    right = json.loads((second / "run_report.json").read_text(encoding="utf-8"))
+    assert left["input"]["sha256"] == right["input"]["sha256"]
+    assert {
+        name: item["sha256"] for name, item in left["artifacts"].items()
+    } == {
+        name: item["sha256"] for name, item in right["artifacts"].items()
+    }
+
+
 def test_non_empty_output_directory_is_preserved_by_default(tmp_path: Path) -> None:
     out = tmp_path / "existing"
     out.mkdir()
