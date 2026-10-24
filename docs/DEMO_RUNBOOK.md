@@ -1,4 +1,4 @@
-# islandOS competition demo runbook
+# IslandOS demonstration runbook
 
 ## Purpose and guardrails
 
@@ -20,7 +20,7 @@ python -m unittest discover -s tests -v
 streamlit run app.py
 ```
 
-The Streamlit application runs locally and opens in a browser. Confirm that the regression suite finishes successfully before a judged demonstration. If dependency installation or tests fail, do not present the run as verified; use the command-line reports as a fallback and disclose the issue.
+The Streamlit application runs locally and opens in a browser. Confirm that the regression suite finishes successfully before a demonstration. If dependency installation or tests fail, do not present the run as verified; use the command-line reports as a fallback and disclose the issue.
 
 ## Device adapter contract (read-only prototype)
 
@@ -45,7 +45,7 @@ Send a vendor-shaped JSON body to `http://127.0.0.1:8765/telemetry` using `Conte
 7. **Optionally show optimization.** Run NSGA-II only if time permits. Explain that it searches feasible candidate schedules under the current model and constraints; it is not a trained AI model. The search may return no feasible candidate for some inputs, which is a legitimate result rather than something to conceal.
 8. **Close with validation gaps.** Explain that local measured data, site calibration, complete system constraints, equipment interlocks, and field trials remain future work.
 
-## What to point judges to
+## Useful implementation and evidence references
 
 - `experiments/compare_dispatch_policies.py`: transparent fixed-policy baseline comparison.
 - `Rolling dispatch lab` in the app: 48 synthetic rolling-horizon runs, case-matched policy comparisons, objective-weight sensitivity, and downloadable hourly audits.
