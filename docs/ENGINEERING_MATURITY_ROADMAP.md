@@ -120,6 +120,7 @@ Do not increase the commercial/deployment score until the new tests and document
 - Added the pinned Anchore SBOM action to scan the already-built local web image and emit a CycloneDX JSON artifact with 30-day retention.
 - Added a regression check for the exact action revision, image reference, output format/path, and retention.
 - The image SBOM complements (rather than replaces) the five Python lock SBOM artifacts. Image signing and production security controls remain unresolved.
+- First CI run successfully scanned the image but failed when writing the report because the output directory did not exist. The workflow now creates the directory explicitly and the regression test guards that setup; rerun required before counting the gate as passed.
 - Score change deferred until CI proves the image scan works against the actual built image and the artifact is available.
 
 
