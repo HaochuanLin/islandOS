@@ -46,6 +46,24 @@ class SyntheticSiteDemoTests(unittest.TestCase):
                 audit = list(csv.DictReader(handle))
             self.assertGreaterEqual(len(audit), 24)
 
+    def test_optional_site_config_is_loaded_and_fingerprinted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "demo"
+            config_path = ROOT / "config" / "site_parameters.example.json"
+            result = subprocess.run(
+                [sys.executable, str(CLI), "--output-dir", str(output),
+                 "--hours", "3", "--config", str(config_path)],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads((output / "run_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["assumptions"]["tank_capacity_m3"], 500.0)
+            self.assertEqual(report["assumptions"]["initial_water_m3"], 150.0)
+            self.assertEqual(
+                report["assumptions"]["site_config_sha256"],
+                hashlib.sha256(config_path.read_bytes()).hexdigest(),
+            )
+
     def test_invalid_physical_configuration_fails_cleanly(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
