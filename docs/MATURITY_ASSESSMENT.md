@@ -14,19 +14,19 @@ Current estimates are provisional engineering judgments, not independent certifi
 
 ## Baseline scores and targets
 
-| Category | Baseline | Current estimate after phase 7 | Target | Evidence needed to raise score |
+| Category | Baseline | Current estimate after phase 9 | Target | Evidence needed to raise score |
 |---|---:|---:|---:|---|
 | Core simulation and dispatch | 5.5 | 5.5 | 8.5 | Explicit physical/unit invariants, edge-case tests, conservation checks, benchmarked scenarios and documented model limits |
-| Automated testing and reproducibility | 6.0 | 7.9 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
-| Documentation and evidence audit | 6.5 | 7.8 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
+| Automated testing and reproducibility | 6.0 | 8.0 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
+| Documentation and evidence audit | 6.5 | 8.0 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
 | Interactive demo and usability | 6.0 | 6.0 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
 | Branch and release management | 5.5 | 5.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
 | Public data / site data validation | 5.5 | 7.8 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
-| Commercialization and deployment readiness | 3.5 | 4.0 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
-| Overall software engineering maturity | 5.5 | 6.7 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
+| Commercialization and deployment readiness | 3.5 | 4.5 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
+| Overall software engineering maturity | 5.5 | 6.8 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
 | Real-environment operation validation | 2.0 | 2.0 | 7.0 | Independent site data, hardware-in-the-loop or shadow-mode trials, operational logs, signed engineering review and documented rollback; never infer this from simulation alone |
 
-The baseline values are provisional judgments based on visible repository structure and README statements. The current estimates reflect only documented changes and inspected source evidence, not a completed runtime test campaign. The README explicitly describes the system as a research prototype, notes that synthetic inputs are used, and states that it is not a deployed island control system. It also notes that hosted public access has not been verified and that forecasting is not yet an integrated validated forecast-and-control pipeline.
+The baseline values are provisional judgments based on visible repository structure and README statements. The current estimates reflect documented source changes, completed CI runs, and archived public-data experiments. They do not represent site acceptance testing or independent certification. The README explicitly describes the system as a research prototype, notes that synthetic inputs are used in parts of the app, and states that it is not a deployed island control system. The forecast-to-dispatch interface is now exercised by tests, but an end-to-end validated forecast-and-control pipeline and site-specific acceptance remain incomplete.
 
 ## Improvement sequence
 
@@ -132,4 +132,12 @@ islandOS must remain advisory/research software unless and until a site-specific
 - Added a dedicated `.github/workflows/deep-learning-water-demand.yml` workflow for a measured SOWEKI series. It validates finite output metrics and provenance, then archives the raw/prepared inputs and report for 90 days. It runs separately from the default app/CI dependencies.
 - Added `docs/PLUG_AND_PLAY_FORECAST_MODELS.md` to define the replaceable forecast-report interface and connect it to the existing timestamp-validating forecast-to-dispatch adapter.
 - Product positioning is now clearer: plug-in decision/simulation platform architecture, not an already universal plug-and-play plant controller. A passing run establishes execution/report integrity only; no LSTM performance improvement is assumed until the metrics show it.
-- Current score changes are intentionally deferred until the new workflow finishes and its metrics are inspected. The existing 11-series HistGradientBoosting evidence remains separate from neural-network evidence.
+- Product positioning is now clearer: plug-in decision/simulation platform architecture, not an already universal plug-and-play plant controller.
+
+
+### Phase 9 — all-series neural-model comparison and pinned container runtime (2026-10-24)
+
+- The optional PyTorch LSTM workflow now compares LSTM, HistGradientBoosting, and previous-hour/day/week baselines on the same chronological holdout and a second expanding-history window for all 11 SOWEKI series. Successful run and 90-day artifact: [all-series comparison](https://github.com/HaochuanLin/islandOS/actions/runs/40056399106).
+- Results: LSTM beat HistGradientBoosting on 1/11 holdouts and 1/11 secondary windows. Mean LSTM MAE was 10.96% worse than HistGradientBoosting on the main holdouts and 12.78% worse on the secondary windows. LSTM still beat the previous-week baseline on 10/11 main holdouts and 11/11 secondary windows, with mean MAE reductions of 30.88% and 30.00%. This supports retaining LSTM as an optional plug-in candidate, not replacing the incumbent.
+- Added `requirements-runtime.lock`; Docker now installs the pinned runtime lock, pins pip, and runs `pip check`. The dependency audit includes the runtime lock and optional PyTorch dependency closure. The full RO regression suite, container smoke test, Windows gateway build, scenario validation, and dependency audit passed on the latest main revision before this score update: [RO regression](https://github.com/HaochuanLin/islandOS/actions/runs/40056399283), [container smoke](https://github.com/HaochuanLin/islandOS/actions/runs/40056610515), [dependency audit](https://github.com/HaochuanLin/islandOS/actions/runs/40056610511).
+- Rescore with completed evidence: automated testing/reproducibility 7.9 → 8.0; documentation/evidence audit 7.8 → 8.0; commercialization/deployment readiness 4.0 → 4.5; overall software engineering maturity 6.7 → 6.8. Public-data validation remains 7.8 because all 11 series belong to one SOWEKI collection, not independent island sites. Core simulation, release governance, and real-environment validation scores remain unchanged.
