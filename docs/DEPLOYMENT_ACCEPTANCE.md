@@ -87,5 +87,5 @@ Retain together: Git SHA, runtime lock/version, source-data provenance and hash,
 - Repeatable local research-demo deployment: documented in docs/DEMO_DEPLOYMENT.md and guarded by deployment-contract tests.
 - Python dependency audit/SBOM artifacts are retained per lock for 30 days. The container smoke workflow separately generates a CycloneDX SBOM from the built image, including detectable OS packages; this does not sign the image.
 - The Docker base is pinned by immutable manifest digest; weekly Dependabot proposals keep tag/digest changes reviewable.
-- Production security review, full container-image SBOM/signing, authenticated multi-user deployment, site-specific economics, owner-approved acceptance thresholds, and field/pilot authorization: **not established**.
+- Production security review, signed image/release artifacts, authenticated multi-user deployment, site-specific economics, owner-approved acceptance thresholds, and field/pilot authorization: **not established**. The container-image SBOM is generated in CI, but signing and production deployment controls are not.
 - Decision: **offline research/demo only; no operational control authorization**.
