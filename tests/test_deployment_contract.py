@@ -82,6 +82,16 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("output-file: build/sbom/islandos-web-image.cdx.json", workflow)
         self.assertIn("upload-artifact-retention: 30", workflow)
 
+    def test_release_candidate_attests_bundle_with_minimal_permissions(self):
+        workflow = (ROOT / ".github/workflows/release-candidate.yml").read_text(encoding="utf-8")
+        checklist = (ROOT / "docs/RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+        self.assertIn("id-token: write", workflow)
+        self.assertIn("attestations: write", workflow)
+        self.assertIn("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8", workflow)
+        self.assertIn('subject-path: "dist/*"', workflow)
+        self.assertIn("gh attestation verify", checklist)
+        self.assertLess(workflow.index("Attest release bundle files"), workflow.index("Upload release candidate bundle"))
+
     def test_deployment_preflight_passes_for_repository_configuration(self):
         import sys
         sys.path.insert(0, str(ROOT / "tools"))
