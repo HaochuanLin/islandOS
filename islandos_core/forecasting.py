@@ -109,7 +109,9 @@ class ForecastModelRegistry:
     """Register forecast plugins and enforce the shared runtime data contract."""
 
     def __init__(self) -> None:
-        self._plugins: dict[str, WaterDemandForecastPlugin] = {}
+        # Snapshot identity at registration so mutable plugin attributes cannot
+        # silently relabel the provenance of an already-issued forecast.
+        self._plugins: dict[str, tuple[WaterDemandForecastPlugin, str]] = {}
 
     def register(self, plugin: WaterDemandForecastPlugin) -> None:
         model_id = getattr(plugin, "model_id", None)
@@ -123,18 +125,33 @@ class ForecastModelRegistry:
             raise TypeError("Forecast plugin must implement predict(history, target_timestamps)")
         if model_id in self._plugins:
             raise ValueError(f"Forecast plugin already registered: {model_id}")
-        self._plugins[model_id] = plugin
+        self._plugins[model_id] = (plugin, version)
 
     def available_models(self) -> tuple[tuple[str, str], ...]:
-        return tuple(sorted((key, plugin.version) for key, plugin in self._plugins.items()))
+        return tuple(sorted((model_id, version) for model_id, (_, version) in self._plugins.items()))
 
     def forecast(self, model_id: str, request: ForecastRequest) -> ForecastResult:
         try:
-            plugin = self._plugins[model_id]
+            plugin, registered_version = self._plugins[model_id]
         except KeyError as exc:
             raise KeyError(f"Unknown forecast plugin: {model_id}") from exc
+
+        def ensure_registered_identity(phase: str) -> None:
+            current_id = getattr(plugin, "model_id", None)
+            current_version = getattr(plugin, "version", None)
+            if current_id != model_id or current_version != registered_version:
+                raise ValueError(
+                    f"Forecast plugin identity changed {phase} registration: "
+                    f"expected {model_id!r}@{registered_version!r}, "
+                    f"got {current_id!r}@{current_version!r}"
+                )
+
+        ensure_registered_identity("after")
         raw_predictions = plugin.predict(request.history, request.target_timestamps)
         predictions = list(raw_predictions)
+        # Check after materialization as a generator can mutate the plugin while
+        # yielding values, not only during the initial predict() call.
+        ensure_registered_identity("during")
         if len(predictions) != len(request.target_timestamps):
             raise ValueError(
                 f"Plugin {model_id} returned {len(predictions)} predictions for "
@@ -154,8 +171,8 @@ class ForecastModelRegistry:
                 predicted_demand_m3=number,
             ))
         return ForecastResult(
-            model_id=plugin.model_id,
-            model_version=plugin.version,
+            model_id=model_id,
+            model_version=registered_version,
             input_history_sha256=_history_digest(request.history),
             points=tuple(points),
         )
