@@ -72,8 +72,8 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     """Return validation errors; an empty list means structurally valid."""
     errors: list[str] = []
     version = config.get("config_version")
-    if isinstance(version, bool) or version != 1:
-        errors.append("config_version must be 1")
+    if isinstance(version, bool) or not isinstance(version, int) or version != 1:
+        errors.append("config_version must be integer 1")
     metadata = config.get("metadata")
     if not isinstance(metadata, dict):
         errors.append("metadata must be an object")

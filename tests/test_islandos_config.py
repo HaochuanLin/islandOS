@@ -57,11 +57,20 @@ class TestIslandOSConfig(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, message):
                         load_config(path)
 
+    def test_config_version_rejects_float_and_string(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for index, version in enumerate((1.0, "1")):
+                path = Path(tmp) / f"invalid-version-{index}.json"
+                path.write_text(json.dumps({"config_version": version}), encoding="utf-8")
+                with self.subTest(version=version):
+                    with self.assertRaisesRegex(ValueError, "config_version must be integer 1"):
+                        load_config(path)
+
     def test_boolean_config_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "boolean-version.json"
             path.write_text(json.dumps({"config_version": True}), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "config_version must be 1"):
+            with self.assertRaisesRegex(ValueError, "config_version must be integer 1"):
                 load_config(path)
 
     def test_inactive_start_ratio_is_removed_from_default_search(self):
