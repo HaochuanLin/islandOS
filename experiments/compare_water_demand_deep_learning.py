@@ -88,6 +88,21 @@ def sequence_features(index: int, stamps: list[datetime], values: list[float],
     return features
 
 
+def tabular_features(index: int, stamps: list[datetime], values: list[float]) -> list[float]:
+    stamp = stamps[index]
+    recent = values[index - 24:index]
+    return [
+        values[index - 1],
+        values[index - 24],
+        values[index - 168],
+        sum(recent) / 24,
+        math.sin(2 * math.pi * stamp.hour / 24),
+        math.cos(2 * math.pi * stamp.hour / 24),
+        math.sin(2 * math.pi * stamp.weekday() / 7),
+        math.cos(2 * math.pi * stamp.weekday() / 7),
+    ]
+
+
 class DemandLSTM(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -154,6 +169,19 @@ def compare(input_csv: str | Path, output_json: str | Path,
         predictions = (model(x_test).cpu().tolist())
     lstm_predictions = [max(0.0, float(value) * scale + mean) for value in predictions]
     actual = [values[i] for i in test_indices]
+    from sklearn.ensemble import HistGradientBoostingRegressor
+
+    hgb = HistGradientBoostingRegressor(
+        learning_rate=0.08, max_iter=120, max_leaf_nodes=15,
+        l2_regularization=1.0, random_state=2026,
+    )
+    hgb.fit(
+        [tabular_features(i, stamps, values) for i in train_indices],
+        [values[i] for i in train_indices],
+    )
+    hgb_predictions = [max(0.0, float(p)) for p in hgb.predict(
+        [tabular_features(i, stamps, values) for i in test_indices]
+    )]
     prediction_sets = {
         "persistence_previous_hour": [values[i - 1] for i in test_indices],
         "seasonal_naive_previous_day": [values[i - 24] for i in test_indices],
@@ -207,7 +235,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
         })
 
     rows = []
-    for index, actual_value, lstm_value in zip(test_indices, actual, lstm_predictions):
+    for row_index, (index, actual_value, lstm_value, hgb_value) in enumerate(zip(test_indices, actual, lstm_predictions, hgb_predictions)):
         rows.append({
             "timestamp": stamps[index].isoformat(),
             "actual_water_demand_m3": actual_value,
