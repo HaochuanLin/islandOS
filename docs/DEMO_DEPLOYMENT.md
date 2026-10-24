@@ -21,6 +21,17 @@ Check the revision:
 git rev-parse HEAD
 ```
 
+## Preflight before startup
+
+From the repository root, run the static configuration check before starting the demo:
+
+```bash
+python tools/deployment_preflight.py
+python tools/deployment_preflight.py --json > deployment-preflight.json
+```
+
+The check verifies the pinned base-image digest, non-root container user, loopback-only Compose binding, health-check configuration, retained container SBOM workflow, documented security boundary, and current Git revision. The JSON output is suitable for attaching to a demo record. A failure blocks this local preflight; a pass is **not** production authorization and does not test a running container or validate site data.
+
 ## Option A — Docker Compose (recommended for a repeatable local demo)
 
 From the repository root:
@@ -104,7 +115,7 @@ This runbook does not provide the controls needed for a production service. Befo
 - Authentication, authorization, identity lifecycle, and audit logging.
 - TLS termination, network segmentation, firewall policy, vulnerability management, and patch cadence.
 - Data classification, retention/deletion, backup/restore, incident response, and access to uploaded/exported files.
-- Dependency and image pinning, software bill of materials, image scanning, signed release artifacts, and rollback. The repository's dependency audit workflow and Dependabot update configuration provide a baseline check for resolved Python packages and GitHub Actions versions, but they do not replace lockfiles, container-image scanning, an SBOM, or a release-signing process. See [SECURITY.md](../SECURITY.md) for vulnerability reporting guidance.
+- Dependency and image pinning, software bill of materials, image scanning, signed release artifacts, and rollback. CI now retains CycloneDX SBOM artifacts for each Python lock and separately generates a CycloneDX SBOM from the built container image; neither artifact signs the image or proves the image is vulnerability-free. See [SECURITY.md](../SECURITY.md) for vulnerability reporting guidance.
 - Load limits, availability objectives, monitoring/alerting, support ownership, and recovery procedures.
 - Site-specific data permissions, validation, operational sign-off, and a separate safety review for any future integration.
 
