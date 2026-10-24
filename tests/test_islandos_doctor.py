@@ -40,6 +40,48 @@ class TestIslandOSDoctor(unittest.TestCase):
         self.assertEqual(config_check["status"], "fail")
         self.assertIn("reservoir_capacity_m3", config_check["detail"])
 
+    def test_non_object_metadata_does_not_crash_doctor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary) / "metadata-null.json"
+            config.write_text(
+                json.dumps({
+                    "config_version": 1,
+                    "metadata": None,
+                    "equipment": {
+                        "ro": {
+                            "specific_energy_kwh_m3": 3.5,
+                            "reservoir_capacity_m3": 500,
+                            "initial_water_m3": 150,
+                            "dead_storage_m3": 20,
+                            "allow_backup_power": False,
+                        },
+                        "ice": {
+                            "coefficient_of_performance": 2.5,
+                            "storage_capacity_kwh_th": 400,
+                            "initial_storage_kwh_th": 100,
+                        },
+                    },
+                    "search_space": {
+                        "priority": ["ro_first"],
+                        "ro_min_run_hours": [1],
+                        "ro_start_ratio": [0.7],
+                        "ro_rated_power_kw": [250],
+                        "ice_rated_power_kw": [50],
+                    },
+                    "economics": {},
+                }),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [sys.executable, str(DOCTOR), "--json", "--config", str(config)],
+                cwd=ROOT, capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        report = json.loads(result.stdout)
+        config_check = next(item for item in report["checks"] if item["id"] == "site_configuration")
+        self.assertEqual(config_check["status"], "pass")
+        self.assertIn("'unnamed'", config_check["detail"])
+
     def test_unsupported_python_version_is_a_failure(self):
         # Import the script directly so the runtime check can be tested without
         # running the interpreter itself under an unsupported Python version.
