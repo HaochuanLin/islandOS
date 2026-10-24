@@ -125,6 +125,41 @@ def test_invalid_dispatch_parameters_fail_closed(tmp_path: Path) -> None:
     assert not (out / "run_report.json").exists()
 
 
+def test_custom_plugin_runs_through_dispatch_and_records_identity(tmp_path: Path, monkeypatch) -> None:
+    plugin_module = tmp_path / "constant_forecast_plugin.py"
+    plugin_module.write_text(
+        "class ConstantForecast:\\n"
+        "    model_id = 'constant-forecast'\\n"
+        "    version = '2.1.0'\\n"
+        "    def predict(self, history, target_timestamps):\\n"
+        "        return [5.0 for _ in target_timestamps]\\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    source_rows = generate_rows(27, 23, datetime(2026, 5, 1))
+    for row in source_rows:
+        row["timestamp"] += "+00:00"
+    source = write_input(tmp_path / "plugin-source.csv", source_rows)
+    out = tmp_path / "plugin-success-run"
+
+    assert main([
+        "--input", str(source), "--output-dir", str(out),
+        "--plugin", "constant_forecast_plugin:ConstantForecast",
+    ]) == 0
+
+    report = json.loads((out / "run_report.json").read_text(encoding="utf-8"))
+    assert report["forecast"]["model_id"] == "constant-forecast"
+    assert report["forecast"]["model_version"] == "2.1.0"
+    assert report["time_alignment"]["forecast_rows_compared"] == 3
+    assert report["forecast"]["mae_m3_per_hour"] >= 0
+    with (out / "forecast_audit.csv").open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 3
+    assert {row["forecast_model_id"] for row in rows} == {"constant-forecast"}
+    assert {row["forecast_model_version"] for row in rows} == {"2.1.0"}
+    assert {row["predicted_water_demand_m3"] for row in rows} == {"5.000000000"}
+
+
 def test_plugin_non_finite_prediction_is_rejected(tmp_path: Path, monkeypatch) -> None:
     plugin_module = tmp_path / "bad_forecast_plugin.py"
     plugin_module.write_text(
