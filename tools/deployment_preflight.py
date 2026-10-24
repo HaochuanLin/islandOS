@@ -41,6 +41,10 @@ def run_checks(root: Path) -> list[dict[str, str]]:
     loopback = bool(re.search(r'(?m)^\s*-\s*"127\.0\.0\.1:8501:8501"\s*$', compose))
     wildcard = bool(re.search(r'(?m)^\s*-\s*"(?:0\.0\.0\.0|:::):8501:8501"\s*$', compose))
     add("compose_loopback_only", loopback and not wildcard, "web port binds to loopback only" if loopback and not wildcard else "Compose must bind 127.0.0.1:8501:8501 only")
+    least_privilege = all(token in compose for token in ("init: true", "no-new-privileges:true", "cap_drop:", "- ALL"))
+    add("compose_least_privilege", least_privilege, "Compose drops Linux capabilities and disables privilege escalation" if least_privilege else "Compose must set init: true, no-new-privileges:true, and cap_drop: [ALL]")
+    compose_ci = "docker compose config --quiet" in workflow
+    add("compose_schema_checked_in_ci", compose_ci, "CI validates the Compose configuration" if compose_ci else "container smoke workflow must run docker compose config --quiet")
     health = "HEALTHCHECK" in docker and "/_stcore/health" in docker
     add("container_healthcheck", health, "Streamlit health check is configured" if health else "Docker health check missing")
     sbom = all(x in workflow for x in ("anchore/sbom-action@", "image: islandos-web:ci", "format: cyclonedx-json", "output-file: build/sbom/islandos-web-image.cdx.json", "upload-artifact-retention: 30"))
