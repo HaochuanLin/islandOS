@@ -28,7 +28,7 @@ jobs:
         run: docker compose config --quiet
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         # Docker Hub outages should not block the fallback image build and smoke checks.
         continue-on-error: true
       - name: Build Streamlit web image with GitHub Actions cache
