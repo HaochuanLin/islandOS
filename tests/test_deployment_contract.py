@@ -78,6 +78,7 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c", workflow)
         self.assertIn("image: islandos-web:ci", workflow)
         self.assertIn("format: cyclonedx-json", workflow)
+        self.assertIn("mkdir -p build/sbom", workflow)
         self.assertIn("output-file: build/sbom/islandos-web-image.cdx.json", workflow)
         self.assertIn("upload-artifact-retention: 30", workflow)
 
