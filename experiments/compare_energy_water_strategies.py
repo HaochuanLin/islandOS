@@ -77,13 +77,29 @@ def load_site_steps(path: str | Path) -> list[SiteStep]:
     """Load a user-supplied CSV; no synthetic or missing values are imputed."""
     with Path(path).open("r", newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
-        columns = set(reader.fieldnames or [])
+        fieldnames = reader.fieldnames or []
+        if not fieldnames:
+            raise ValueError("Input CSV is missing a header")
+        if any(not name.strip() for name in fieldnames):
+            raise ValueError("Input CSV contains an empty column name")
+        if len(fieldnames) != len(set(fieldnames)):
+            raise ValueError("Input CSV contains duplicate column names")
+        columns = set(fieldnames)
         missing = [name for name in REQUIRED_COLUMNS if name not in columns]
         if missing:
             raise ValueError("Input CSV is missing required columns: " + ", ".join(missing))
         steps: list[SiteStep] = []
         previous_timestamp: str | None = None
         for row_number, row in enumerate(reader, start=2):
+            if None in row:
+                raise ValueError(
+                    f"Row {row_number}: contains extra fields beyond the header"
+                )
+            missing_fields = [name for name in fieldnames if row.get(name) is None]
+            if missing_fields:
+                raise ValueError(
+                    f"Row {row_number}: missing field(s): " + ", ".join(missing_fields)
+                )
             timestamp = (row.get("timestamp") or "").strip()
             if not timestamp:
                 raise ValueError(f"Row {row_number}: timestamp is required")
