@@ -91,21 +91,53 @@ def backtest_plugin(input_csv: str | Path, plugin: Any, output_json: str | Path,
     registry = ForecastModelRegistry()
     registry.register(plugin)
     rows, actuals, predictions = [], [], []
+    persistence_actuals, persistence_predictions = [], []
+    seasonal_actuals, seasonal_predictions = [], []
     for index in range(split, len(values)):
         start = max(0, index - history_hours)
         history = tuple(WaterObservation(timestamps[j], values[j]) for j in range(start, index))
         request = ForecastRequest(history=history, target_timestamps=(timestamps[index],))
         result = registry.forecast(plugin.model_id, request)
         predicted, actual = result.points[0].predicted_demand_m3, values[index]
+        persistence = values[index - 1]
+        # Only score the 24-hour seasonal baseline where the corresponding
+        # prior-day observation exists; do not silently substitute another lag.
+        seasonal = values[index - 24] if index >= 24 else None
         rows.append({
             "timestamp": timestamps[index].isoformat().replace("+00:00", "Z"),
             "actual_water_demand_m3": actual,
             "plugin_forecast_m3": predicted,
+            "persistence_baseline_m3": persistence,
+            "seasonal_24h_baseline_m3": seasonal,
             "fold": 0,
         })
         actuals.append(actual)
         predictions.append(predicted)
+        persistence_actuals.append(actual)
+        persistence_predictions.append(persistence)
+        if seasonal is not None:
+            seasonal_actuals.append(actual)
+            seasonal_predictions.append(seasonal)
     errors = [prediction - actual for actual, prediction in zip(actuals, predictions)]
+
+    def summarize(actual_series: list[float], forecast_series: list[float]) -> dict[str, float | int]:
+        baseline_errors = [forecast - actual for actual, forecast in zip(actual_series, forecast_series)]
+        return {
+            "samples": len(baseline_errors),
+            "mae_m3_per_hour": mean(abs(error) for error in baseline_errors),
+            "rmse_m3_per_hour": math.sqrt(mean(error * error for error in baseline_errors)),
+            "bias_predicted_minus_actual_m3_per_hour": mean(baseline_errors),
+            "underforecast_rate": sum(error < 0 for error in baseline_errors) / len(baseline_errors),
+        }
+
+    model_metrics = summarize(actuals, predictions)
+    persistence_metrics = summarize(persistence_actuals, persistence_predictions)
+    seasonal_metrics = summarize(seasonal_actuals, seasonal_predictions) if seasonal_actuals else None
+    persistence_mae = persistence_metrics["mae_m3_per_hour"]
+    skill_vs_persistence = (
+        1.0 - model_metrics["mae_m3_per_hour"] / persistence_mae
+        if persistence_mae > 0 else None
+    )
     report = {
         "status": "rolling_backtest_completed",
         "model_family": "IslandOS forecast plugin",
@@ -123,12 +155,13 @@ def backtest_plugin(input_csv: str | Path, plugin: Any, output_json: str | Path,
             "one_step_ahead": True,
             "only_prior_observations_passed_to_plugin": True,
         },
-        "test_metrics": {
-            "mae_m3_per_hour": mean(abs(error) for error in errors),
-            "rmse_m3_per_hour": math.sqrt(mean(error * error for error in errors)),
-            "bias_predicted_minus_actual_m3_per_hour": mean(errors),
-            "underforecast_rate": sum(error < 0 for error in errors) / len(errors),
+        "test_metrics": model_metrics,
+        "baseline_metrics": {
+            "persistence_last_observation": persistence_metrics,
+            "seasonal_naive_24h": seasonal_metrics,
         },
+        "skill_vs_persistence_mae": skill_vs_persistence,
+        "skill_score_interpretation": "positive means plugin MAE is lower than persistence baseline; negative means worse; null means persistence MAE is zero",
         "forecast_rows": rows,
         "limitations": [
             "Only prior observations are passed to each prediction; this is a rolling-origin one-step backtest.",
