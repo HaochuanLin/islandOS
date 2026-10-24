@@ -242,6 +242,12 @@ def main(argv: list[str] | None = None) -> int:
             "report_version": 1,
             "artifacts": artifact_manifest,
             "status": "illustrative_forecast_dispatch_screening_only",
+            "assumptions": [
+                "Input rows represent continuous hourly intervals; missing hours are rejected rather than imputed.",
+                "Water-demand forecasts use only the immediately preceding 24 realized demand observations.",
+                "Renewable, grid, tariff, diesel-displacement, and backup signals are supplied timestamp-aligned values, not forecast by this workflow.",
+                "Dispatch results use the stated simplified RO power, specific-energy, and tank assumptions; they do not certify equipment or site safety.",
+            ],
             "dataset_type": input_type,
             "is_measured_site_data": False if input_type == "synthetic" else None,
             "input": {"file": input_path.name, "sha256": sha256_file(input_path), "rows": len(rows)},
