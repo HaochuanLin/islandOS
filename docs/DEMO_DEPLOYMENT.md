@@ -118,6 +118,6 @@ This runbook does not provide the controls needed for a production service. Befo
 - Data classification, retention/deletion, backup/restore, incident response, and access to uploaded/exported files.
 - Dependency and image pinning, software bill of materials, image scanning, signed release artifacts, and rollback. CI now retains CycloneDX SBOM artifacts for each Python lock and separately generates a CycloneDX SBOM from the built container image; neither artifact signs the image or proves the image is vulnerability-free. See [SECURITY.md](../SECURITY.md) for vulnerability reporting guidance.
 - Load limits, availability objectives, monitoring/alerting, support ownership, and recovery procedures.
-- Site-specific data permissions, validation, operational sign-off, and a separate safety review for any future integration.
+- Site-specific data permissions, validation, owner-approved acceptance thresholds, operational sign-off, and a separate safety review for any future integration. Start with the [pilot acceptance template](PILOT_ACCEPTANCE_TEMPLATE.md), which is explicitly unapproved and cannot authorize live control.
 
 Do not describe the current app as production-ready until these controls have been implemented and independently reviewed. A passing Docker smoke test verifies startup in that test environment only.
