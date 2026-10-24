@@ -124,3 +124,12 @@ islandOS must remain advisory/research software unless and until a site-specific
 - Enabled automatic execution on relevant pushes to `main`: [workflow trigger change](https://github.com/HaochuanLin/islandOS/commit/a8a9dba987ad015864b45be813df9663e7de6fc6).
 - The workflow revision also archives the raw source CSV and prepared hourly CSV alongside reports. The exact revision passed: [successful public-data run](https://github.com/HaochuanLin/islandOS/actions/runs/39984656770); the artifact was verified to contain both CSVs and all reports.
 - Rescore based on the completed public-data run: automated testing/reproducibility 6.4 → 6.8; documentation/evidence audit 7.0 → 7.4; public-data validation 5.5 → 6.4. Remaining gaps include fully pinned dependencies, multiple independent datasets/seasons, protected release settings, and site-specific validation.
+
+
+### Phase 8 — plug-in forecast contract and optional neural model (2026-10-24)
+
+- Added `experiments/compare_water_demand_deep_learning.py`, an optional PyTorch LSTM experiment that uses a 168-hour lookback, training-history-only normalization, deterministic seed, chronological holdout, a second expanding-history evaluation window, and persistence/day/week baselines.
+- Added a dedicated `.github/workflows/deep-learning-water-demand.yml` workflow for a measured SOWEKI series. It validates finite output metrics and provenance, then archives the raw/prepared inputs and report for 90 days. It runs separately from the default app/CI dependencies.
+- Added `docs/PLUG_AND_PLAY_FORECAST_MODELS.md` to define the replaceable forecast-report interface and connect it to the existing timestamp-validating forecast-to-dispatch adapter.
+- Product positioning is now clearer: plug-in decision/simulation platform architecture, not an already universal plug-and-play plant controller. A passing run establishes execution/report integrity only; no LSTM performance improvement is assumed until the metrics show it.
+- Current score changes are intentionally deferred until the new workflow finishes and its metrics are inspected. The existing 11-series HistGradientBoosting evidence remains separate from neural-network evidence.

@@ -1,0 +1,125 @@
+name: Optional deep-learning water-demand experiment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deep-learning-water-demand.yml"
+      - "experiments/compare_water_demand_deep_learning.py"
+      - "experiments/prepare_soweki_water_demand.py"
+      - "requirements-deep-learning.txt"
+      - "docs/PLUG_AND_PLAY_FORECAST_MODELS.md"
+  pull_request:
+    paths:
+      - ".github/workflows/deep-learning-water-demand.yml"
+      - "experiments/compare_water_demand_deep_learning.py"
+      - "experiments/prepare_soweki_water_demand.py"
+      - "requirements-deep-learning.txt"
+      - "docs/PLUG_AND_PLAY_FORECAST_MODELS.md"
+  schedule:
+    - cron: "47 5 * * 3"
+  workflow_dispatch:
+    inputs:
+      dataset_id:
+        description: SOWEKI measured series ID (1–11)
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
+      epochs:
+        description: LSTM training epochs (1–30)
+        required: true
+        default: "12"
+        type: choice
+        options: ["6", "12", "20", "30"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-deep-learning-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lstm-measured-series:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATASET_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.dataset_id || '1' }}
+      EPOCHS: ${{ github.event_name == 'workflow_dispatch' && inputs.epochs || '12' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install reproducible base and optional neural-network dependency
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-ci.lock
+          python -m pip install -r requirements-deep-learning.txt
+          python -m pip check
+      - name: Download and prepare measured SOWEKI series
+        run: |
+          python - <<'PY'
+          import csv
+          import os
+          from experiments.prepare_soweki_water_demand import _download_source
+          from pathlib import Path
+
+          raw = _download_source(int(os.environ["DATASET_ID"]), "build/public-data/raw/soweki_source.csv")
+          with raw.open(encoding="utf-8-sig", newline="") as handle:
+              rows = list(csv.DictReader(handle))
+          if not rows:
+              raise SystemExit("Source download returned no rows")
+          print(f"Downloaded {len(rows)} raw measured rows for series {os.environ['DATASET_ID']}")
+          PY
+          python experiments/prepare_soweki_water_demand.py \
+            build/public-data/raw/soweki_source.csv \
+            --output build/public-data/soweki_hourly.csv \
+            --report build/public-data/preparation.json
+      - name: Train and evaluate LSTM against chronological baselines
+        run: |
+          python experiments/compare_water_demand_deep_learning.py \
+            build/public-data/soweki_hourly.csv \
+            --output build/deep-learning/lstm_comparison.json \
+            --epochs "$EPOCHS"
+          python - <<'PY'
+          import csv
+          import json
+          import math
+          from pathlib import Path
+
+          report = json.loads(Path("build/deep-learning/lstm_comparison.json").read_text(encoding="utf-8"))
+          assert report["status"] == "models_compared"
+          assert report["model_family"] == "PyTorch LSTM recurrent neural network"
+          assert report["input_csv_sha256"]
+          assert report["training"]["training_samples"] >= 64
+          assert report["training"]["test_samples"] >= 24
+          assert report["training"]["scaler_fit_on_training_history_only"] is True
+          assert report["forecast_rows"]
+          for name, values in report["test_metrics"].items():
+              assert all(math.isfinite(values[key]) for key in (
+                  "mae_m3_per_hour", "rmse_m3_per_hour",
+                  "bias_predicted_minus_actual_m3_per_hour"
+              )), name
+          for row in report["forecast_rows"]:
+              assert math.isfinite(row["lstm_deep_learning"])
+              assert row["lstm_deep_learning"] >= 0
+          print("LSTM report schema, finite metrics, provenance and forecast rows validated.")
+          print(json.dumps({
+              "test_metrics": report["test_metrics"],
+              "walk_forward_summary": report["walk_forward_summary"],
+              "lowest_mae_model_on_this_holdout": report["lowest_mae_model_on_this_holdout"],
+          }, indent=2))
+          PY
+      - name: Upload measured-data deep-learning evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: islandos-lstm-series-${{ env.DATASET_ID }}
+          path: |
+            build/public-data/raw/soweki_source.csv
+            build/public-data/soweki_hourly.csv
+            build/public-data/preparation.json
+            build/deep-learning/lstm_comparison.json
+          if-no-files-found: error
+          retention-days: 90
