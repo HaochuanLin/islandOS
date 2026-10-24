@@ -96,6 +96,34 @@ class MafateImporterTests(unittest.TestCase):
             with self.assertRaisesRegex(FileNotFoundError, "Meteo_dataset.csv"):
                 import_dataset(root, root / "out")
 
+    def test_rejects_headers_that_collide_after_whitespace_normalization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "raw"
+            output = root / "out"
+            source.mkdir()
+            make_dataset(source)
+            path = source / "Meteo_dataset.csv"
+            lines = path.read_text(encoding="utf-8").splitlines()
+            lines[0] = lines[0].replace("Date,Gincl,Ghi", "Date,Gincl, Gincl")
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate columns after whitespace normalization"):
+                import_dataset(source, output)
+
+    def test_rejects_extra_source_csv_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "raw"
+            output = root / "out"
+            source.mkdir()
+            make_dataset(source)
+            path = source / "Meteo_dataset.csv"
+            lines = path.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                import_dataset(source, output)
+
 
 if __name__ == "__main__":
     unittest.main()
