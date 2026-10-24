@@ -15,8 +15,8 @@ permissions:
 
 concurrency:
   group: islandos-ci-${{ github.workflow }}-${{ github.ref }}
-  # Cancel stale PR/feature-branch runs, but never cancel main-branch verification.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+  # Newer main pushes supersede stale push runs; scheduled/manual main verification is preserved.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.ref != 'refs/heads/main' }}
 
 jobs:
   unit-tests:
