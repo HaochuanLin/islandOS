@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from tools.generate_synthetic_site_csv import FIELDS, generate_rows
-from tools.run_forecast_dispatch_demo import load_rows, main
+from tools.run_forecast_dispatch_demo import forecast_metrics, load_rows, main
 
 
 def write_input(path: Path, rows: list[dict]) -> Path:
@@ -34,6 +34,15 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
     assert any("Only water demand is forecast" in item for item in report["limitations"])
     assert any("not be treated as deployable operational schedules" in item for item in report["limitations"])
     assert math.isfinite(report["forecast"]["mae_m3_per_hour"])
+    comparison = report["forecast"]["baseline_comparison"]
+    assert comparison["evaluation"].startswith("same rolling-origin timestamps")
+    assert comparison["model"]["n"] == report["time_alignment"]["forecast_rows_compared"] == 6
+    assert set(comparison["baselines"]) == {"previous_hour", "previous_day"}
+    for metrics in [comparison["model"], *comparison["baselines"].values()]:
+        assert metrics["n"] == 6
+        assert all(math.isfinite(metrics[key]) for key in (
+            "mae_m3_per_hour", "rmse_m3_per_hour", "bias_forecast_minus_actual_m3_per_hour"
+        ))
     assert len(report["input"]["sha256"]) == 64
     for artifact in report["artifacts"].values():
         artifact_path = out / artifact["file"]
@@ -48,6 +57,18 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
         audit = list(csv.DictReader(handle))
     assert len(audit) == 6
     assert all(len(row["input_history_sha256"]) == 64 for row in audit)
+
+
+def test_forecast_metrics_report_mae_rmse_bias_and_reject_mismatched_rows() -> None:
+    metrics = forecast_metrics([2.0, 4.0, 6.0], [1.0, 2.0, 9.0])
+    assert metrics == {
+        "mae_m3_per_hour": pytest.approx(2.0),
+        "rmse_m3_per_hour": pytest.approx(math.sqrt(14.0 / 3.0)),
+        "bias_forecast_minus_actual_m3_per_hour": pytest.approx(0.0),
+        "n": 3,
+    }
+    with pytest.raises(ValueError, match="equally sized, non-empty"):
+        forecast_metrics([1.0], [])
 
 
 def test_fixed_seed_reproduces_input_and_csv_artifact_hashes(tmp_path: Path) -> None:

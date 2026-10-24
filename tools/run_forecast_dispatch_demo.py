@@ -43,6 +43,19 @@ class TrailingDayMean:
         return [value] * len(target_timestamps)
 
 
+def forecast_metrics(predicted: Sequence[float], actual: Sequence[float]) -> dict[str, float]:
+    """Summarize paired out-of-sample forecasts on the same timestamps."""
+    if not predicted or len(predicted) != len(actual):
+        raise ValueError("Forecast metrics require equally sized, non-empty prediction and actual arrays")
+    errors = [float(p) - float(a) for p, a in zip(predicted, actual)]
+    return {
+        "mae_m3_per_hour": mean(abs(error) for error in errors),
+        "rmse_m3_per_hour": math.sqrt(mean(error * error for error in errors)),
+        "bias_forecast_minus_actual_m3_per_hour": mean(errors),
+        "n": len(errors),
+    }
+
+
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -170,6 +183,10 @@ def main(argv: list[str] | None = None) -> int:
         forecast_rows: list[dict] = []
         predicted: list[float] = []
         actual: list[float] = []
+        baseline_predictions: dict[str, list[float]] = {
+            "previous_hour": [],
+            "previous_day": [],
+        }
         warmup = 24
         for i in range(warmup, len(rows)):
             history = tuple(
@@ -180,7 +197,12 @@ def main(argv: list[str] | None = None) -> int:
             result = registry.forecast(plugin.model_id, request)
             value = result.points[0].predicted_demand_m3
             predicted.append(value)
-            actual.append(float(rows[i]["water_demand_m3"]))
+            actual_value = float(rows[i]["water_demand_m3"])
+            actual.append(actual_value)
+            # These simple baselines use only observations available before the target
+            # timestamp and are scored on exactly the same rolling-origin holdout rows.
+            baseline_predictions["previous_hour"].append(float(rows[i - 1]["water_demand_m3"]))
+            baseline_predictions["previous_day"].append(float(rows[i - 24]["water_demand_m3"]))
             row = dict(rows[i])
             row["water_demand_m3"] = f"{value:.9f}"
             row["actual_water_demand_m3"] = rows[i]["water_demand_m3"]
@@ -225,8 +247,13 @@ def main(argv: list[str] | None = None) -> int:
             row["demand_basis"] = "realized_demand_reference"
         write_csv(audit_strategy_path, forecast_detail + actual_detail)
 
-        forecast_mae = mean(abs(p - a) for p, a in zip(predicted, actual))
-        forecast_bias = mean(p - a for p, a in zip(predicted, actual))
+        model_metrics = forecast_metrics(predicted, actual)
+        baseline_metrics = {
+            name: forecast_metrics(values, actual)
+            for name, values in baseline_predictions.items()
+        }
+        forecast_mae = model_metrics["mae_m3_per_hour"]
+        forecast_bias = model_metrics["bias_forecast_minus_actual_m3_per_hour"]
         artifact_paths = {
             "forecast_dispatch_input": forecast_csv,
             "forecast_audit": audit_path,
@@ -269,7 +296,13 @@ def main(argv: list[str] | None = None) -> int:
                     "must not be interpreted as a fully forecast-driven operational dispatch."
                 ),
                 "mae_m3_per_hour": forecast_mae,
+                "rmse_m3_per_hour": model_metrics["rmse_m3_per_hour"],
                 "bias_forecast_minus_actual_m3_per_hour": forecast_bias,
+                "baseline_comparison": {
+                    "evaluation": "same rolling-origin timestamps; only prior demand observations used",
+                    "model": model_metrics,
+                    "baselines": baseline_metrics,
+                },
                 "input_history_hashes_in": audit_path.name,
             },
             "dispatch": {
@@ -291,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             },
             "limitations": [
                 "The built-in trailing-day mean is a baseline, not a trained AI model.",
+            "Previous-hour and previous-day baselines are reported on the same holdout rows; no model is assumed to outperform them.",
                 "Only water demand is forecast here; renewable, grid, price, off-peak, and backup signals are timestamp-aligned input values, not forecasts.",
                 "Dispatch comparisons are not fully forecast-driven and must not be treated as deployable operational schedules.",
                 "Synthetic runs are software fixtures, not measured site evidence.",
