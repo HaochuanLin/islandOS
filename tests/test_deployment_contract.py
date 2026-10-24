@@ -48,6 +48,15 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertRegex(compose, r'(?m)^\s*-\s*"127\.0\.0\.1:8501:8501"\s*$')
         self.assertNotRegex(compose, r'(?m)^\s*-\s*"0\.0\.0\.0:8501:8501"\s*$')
 
+    def test_compose_uses_least_privilege_security_options(self):
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        self.assertIn("init: true", compose)
+        self.assertIn("no-new-privileges:true", compose)
+        self.assertIn("cap_drop:", compose)
+        self.assertIn("      - ALL", compose)
+        workflow = (ROOT / ".github/workflows/container-web-smoke.yml").read_text(encoding="utf-8")
+        self.assertIn("docker compose config --quiet", workflow)
+
     def test_runtime_lock_pins_direct_runtime_packages(self):
         lock = (ROOT / "requirements-runtime.lock").read_text(encoding="utf-8")
         pins = {}
