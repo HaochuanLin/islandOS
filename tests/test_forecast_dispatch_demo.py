@@ -111,3 +111,37 @@ def test_non_finite_demand_is_rejected(tmp_path: Path) -> None:
     path = write_input(tmp_path / "nan.csv", rows)
     with pytest.raises(ValueError, match="finite and non-negative"):
         load_rows(path, "UTC")
+
+def test_invalid_dispatch_parameters_fail_closed(tmp_path: Path) -> None:
+    out = tmp_path / "invalid-config"
+    with pytest.raises(SystemExit):
+        main([
+            "--hours", "25", "--output-dir", str(out),
+            "--ro-rated-power-kw", "0",
+        ])
+    assert not (out / "run_report.json").exists()
+
+
+def test_plugin_non_finite_prediction_is_rejected(tmp_path: Path, monkeypatch) -> None:
+    plugin_module = tmp_path / "bad_forecast_plugin.py"
+    plugin_module.write_text(
+        "class BadForecast:\n"
+        "    model_id = 'bad-forecast'\n"
+        "    version = '0.0.1'\n"
+        "    def predict(self, history, target_timestamps):\n"
+        "        return [float('nan') for _ in target_timestamps]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    source_rows = generate_rows(25, 9, datetime(2026, 3, 1))
+    for row in source_rows:
+        row["timestamp"] += "+00:00"
+    source = write_input(tmp_path / "source.csv", source_rows)
+    out = tmp_path / "bad-plugin-run"
+    with pytest.raises(SystemExit):
+        main([
+            "--input", str(source), "--output-dir", str(out),
+            "--plugin", "bad_forecast_plugin:BadForecast",
+        ])
+    assert not (out / "run_report.json").exists()
+
