@@ -43,9 +43,11 @@ jobs:
   lstm-measured-series:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Keep pull-request feedback fast: validate one measured series with fewer epochs.
+    # Full 11-series benchmarking remains enabled for main pushes, schedules, and manual runs.
     env:
-      DATASET_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.dataset_id || 'all' }}
-      EPOCHS: ${{ github.event_name == 'workflow_dispatch' && inputs.epochs || '12' }}
+      DATASET_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.dataset_id || (github.event_name == 'pull_request' && '1' || 'all') }}
+      EPOCHS: ${{ github.event_name == 'workflow_dispatch' && inputs.epochs || (github.event_name == 'pull_request' && '6' || '12') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
