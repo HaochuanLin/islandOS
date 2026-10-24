@@ -13,6 +13,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Direct execution sets sys.path[0] to tools/, so expose the repository root
+# before importing the shared top-level configuration module.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from islandos_config import economics_completeness, load_config
 
 
