@@ -22,6 +22,8 @@ class SiteConfigAuditTests(unittest.TestCase):
         self.assertTrue(report["provenance_review"]["appears_illustrative_or_assumed"])
         self.assertFalse(report["economics_completeness"]["complete_for_current_declared_fields"])
         self.assertIn("The configuration SHA-256", " ".join(report["limitations"]))
+        self.assertTrue(report["configuration_resolution"]["defaults_merged"])
+        self.assertIn("not necessarily all explicitly declared", report["configuration_resolution"]["note"])
 
     def test_missing_provenance_labels_are_not_inherited_from_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
