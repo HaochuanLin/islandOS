@@ -273,3 +273,22 @@ Baseline scores are provisional engineering assessments, not measured scientific
 - Score impact remains pending until the full CI workflow completes successfully for the exact main commit. Do not increase real-world validation scores based on this software-only change.
 - Added a subprocess integration test for the documented `python -m experiments.validate_dataset_provenance` entry point, switched the guide to that reproducible invocation, and linked the guide from the README. The subprocess test guards against a CLI that works only when imported by pytest.
 
+
+
+## Plug-and-play maturity scorecard (no private site data available)
+
+The user-facing goal is that a new operator can install IslandOS, launch a demo, configure a hypothetical site, and evaluate the full input-to-report workflow before receiving measurements. Scores below are provisional engineering judgments on a 0–10 scale, not scientific performance metrics. They must only rise when corresponding repository evidence and exact-SHA checks support the change.
+
+| Capability | Baseline before no-data bootstrap | Target | Midpoint checkpoint | Evidence required at midpoint |
+|---|---:|---:|---:|---|
+| No-data first-run onboarding | 6.0 | 8.0 | 7.0 | One documented command creates a deterministic synthetic CSV accepted by the app parser; hosted and local quickstarts identify synthetic data honestly. |
+| Site configuration portability | 5.5 | 8.0 | 6.75 | One documented configuration contract, field units/defaults, actionable validation errors, and a working example profile. |
+| Input validation and provenance | 6.5 | 8.5 | 7.5 | Valid/invalid upload integration tests, deterministic input/run signatures, and visible source status in exported artifacts. |
+| Replaceable forecasting / dispatch interfaces | 6.5 | 8.0 | 7.25 | A minimal example plugin runs through the documented interface and produces a report consumed by the evaluation/dispatch path. |
+| Local installation and deployment portability | 6.5 | 8.0 | 7.25 | Clean-environment install, health check, documented shutdown, and reproducible smoke test. |
+| Real-site operational evidence | 2.0 | 4.0 | 3.0 | Without site measurements, only testability and evidence collection can improve; no synthetic-only work can prove field accuracy or equipment safety. |
+| **Overall plug-and-play readiness** | **6.0** | **8.0** | **7.0** | At least half the baseline-to-target gap closed in each software-controlled area, with green CI and no claim that synthetic inputs represent real sites. |
+
+### Midpoint rule
+
+For each software-controlled capability, the midpoint is `baseline + (target - baseline) / 2`. The overall score is not raised merely because documentation or code was added: require a runnable path and passing tests on the exact candidate commit. Real-site evidence is tracked separately because it cannot be manufactured from synthetic data. A system can be easy to install and useful for planning without being certified for live control.
