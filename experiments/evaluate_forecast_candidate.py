@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import io
 import json
 import math
 from datetime import datetime
@@ -72,12 +74,19 @@ def evaluate_candidate(
     if isinstance(min_high_demand_samples, bool) or not isinstance(min_high_demand_samples, int) or min_high_demand_samples < 1:
         raise ValueError("min_high_demand_samples must be a positive integer")
 
-    with Path(input_csv).open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        missing = set(REQUIRED_COLUMNS) - set(reader.fieldnames or [])
-        if missing:
-            raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
-        rows = list(reader)
+    # Hash and parse the same immutable byte snapshot so the provenance digest
+    # identifies exactly the data evaluated, even if the source file changes later.
+    input_bytes = Path(input_csv).read_bytes()
+    input_sha256 = hashlib.sha256(input_bytes).hexdigest()
+    reader = csv.DictReader(io.StringIO(input_bytes.decode("utf-8-sig"), newline=""))
+    headers = reader.fieldnames or []
+    duplicates = sorted({header for header in headers if headers.count(header) > 1})
+    if duplicates:
+        raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
+    missing = set(REQUIRED_COLUMNS) - set(headers)
+    if missing:
+        raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
+    rows = list(reader)
 
     if len(rows) < 24:
         raise ValueError("Need at least 24 aligned hourly rows for candidate review")
@@ -153,6 +162,7 @@ def evaluate_candidate(
         "status": status,
         "decision_scope": "offline comparison only; human review required before any model change",
         "input_csv": str(input_csv),
+        "input_csv_sha256": input_sha256,
         "target": "freshwater demand",
         "units": "m3 per hourly interval",
         "row_count": len(rows),
