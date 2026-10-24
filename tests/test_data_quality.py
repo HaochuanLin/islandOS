@@ -79,6 +79,39 @@ class TestDataQuality(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_csv(path, "public", invalid_interval)
 
+    def test_duplicate_headers_make_csv_invalid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "duplicate.csv"
+            path.write_text(
+                "timestamp,wind_kw,pv_kw,critical_load_kw,water_demand_m3,"
+                "cooling_demand_kw_th,wind_kw\n"
+                "2026-01-01T00:00:00+00:00,10,20,30,4,5,99\n",
+                encoding="utf-8",
+            )
+            report = validate_csv(path, "public")
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("duplicate_columns", report["issue_codes"])
+
+    def test_empty_header_name_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "blank-header.csv"
+            path.write_text(
+                "timestamp,wind_kw,pv_kw,critical_load_kw,water_demand_m3,,cooling_demand_kw_th\n"
+                "2026-01-01T00:00:00+00:00,10,20,30,4,5,6\n",
+                encoding="utf-8",
+            )
+            report = validate_csv(path, "public")
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("empty_column_names", report["issue_codes"])
+
+    def test_headerless_csv_is_reported_cleanly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "no-header.csv"
+            path.write_text("", encoding="utf-8")
+            report = validate_csv(path, "public")
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("missing_header", report["issue_codes"])
+
     def test_extra_fields_make_csv_invalid(self):
         path = Path(self.write_csv([self.row()]))
         lines = path.read_text(encoding="utf-8").splitlines()
