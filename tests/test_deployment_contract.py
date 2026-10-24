@@ -22,6 +22,13 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("FROM python:3.11.17-slim-trixie", dockerfile)
         self.assertNotIn("FROM python:3.11-slim", dockerfile)
 
+    def test_docker_base_image_is_pinned_to_an_immutable_digest(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertRegex(
+            dockerfile,
+            r"(?m)^FROM python:3\.11\.17-slim-trixie@sha256:[0-9a-f]{64}$",
+        )
+
     def test_dependabot_checks_docker_base_image_updates(self):
         dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
         self.assertIn("package-ecosystem: docker", dependabot)
