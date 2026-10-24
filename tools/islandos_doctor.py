@@ -52,7 +52,8 @@ def run_doctor(config_path: str | Path | None = None, *, root: Path = ROOT,
             from islandos_config import load_config
             selected = Path(config_path) if config_path is not None else root / "config/site_parameters.example.json"
             config = load_config(selected)
-            name = config.get("metadata", {}).get("name", "unnamed")
+            metadata = config.get("metadata")
+            name = metadata.get("name", "unnamed") if isinstance(metadata, dict) else "unnamed"
             checks.append({
                 "id": "site_configuration",
                 "status": "pass",
