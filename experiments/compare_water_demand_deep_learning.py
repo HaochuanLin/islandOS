@@ -32,10 +32,17 @@ def load_series(path: str | Path) -> tuple[list[datetime], list[float]]:
     source = Path(path)
     with source.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        missing = {"timestamp", "water_demand_m3"} - set(reader.fieldnames or [])
+        headers = reader.fieldnames or []
+        duplicates = sorted({name for name in headers if headers.count(name) > 1})
+        if duplicates:
+            raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
+        missing = {"timestamp", "water_demand_m3"} - set(headers)
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
     if len(rows) < LAG_HOURS + 100:
         raise ValueError(f"Need at least {LAG_HOURS + 100} continuous hourly rows")
 
