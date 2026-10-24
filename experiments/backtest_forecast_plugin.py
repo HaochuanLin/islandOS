@@ -210,6 +210,9 @@ def main() -> None:
         "model_version": report["model_version"],
         "test_samples": report["training"]["test_samples"],
         "mae_m3_per_hour": report["test_metrics"]["mae_m3_per_hour"],
+        "persistence_baseline_mae_m3_per_hour": report["baseline_metrics"]["persistence_last_observation"]["mae_m3_per_hour"],
+        "skill_vs_persistence_mae": report["skill_vs_persistence_mae"],
+        "skill_vs_seasonal_naive_24h_mae": report["skill_vs_seasonal_naive_24h_mae"],
         "report": args.output,
     }, indent=2))
 
