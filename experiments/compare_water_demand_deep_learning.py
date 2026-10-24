@@ -259,31 +259,31 @@ def compare(input_csv: str | Path, output_json: str | Path,
     wf_summary: dict[str, Any] = {"method": "second chronological window; fit uses only earlier targets"}
     if len(wf_indices) >= 24:
         wf_train_indices = list(range(LAG_HOURS, second_start))
+        wf_history = values[:second_start]
+        wf_mean = sum(wf_history) / len(wf_history)
+        wf_variance = sum((value - wf_mean) ** 2 for value in wf_history) / len(wf_history)
+        wf_scale = max(math.sqrt(wf_variance), 1e-6)
         wf_x = torch.tensor(
-            [sequence_features(i, stamps, values, mean, scale) for i in wf_train_indices],
+            [sequence_features(i, stamps, values, wf_mean, wf_scale) for i in wf_train_indices],
             dtype=torch.float32,
         )
-        wf_y = torch.tensor([(values[i] - mean) / scale for i in wf_train_indices], dtype=torch.float32)
-        torch.manual_seed(seed)
-        wf_model = DemandLSTM()
-        wf_optimizer = torch.optim.Adam(wf_model.parameters(), lr=0.003, weight_decay=1e-4)
-        wf_model.train()
-        for _ in range(epochs):
-            permutation = torch.randperm(len(wf_x))
-            for start in range(0, len(permutation), batch_size):
-                indices = permutation[start:start + batch_size]
-                wf_optimizer.zero_grad(set_to_none=True)
-                loss = loss_fn(wf_model(wf_x[indices]), wf_y[indices])
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(wf_model.parameters(), max_norm=1.0)
-                wf_optimizer.step()
+        wf_y = torch.tensor(
+            [(values[i] - wf_mean) / wf_scale for i in wf_train_indices],
+            dtype=torch.float32,
+        )
+        wf_model, wf_early_stopping = _fit_with_chronological_early_stopping(
+            wf_x, wf_y, epochs, seed, wf_scale
+        )
         wf_model.eval()
         wf_test_x = torch.tensor(
-            [sequence_features(i, stamps, values, mean, scale) for i in wf_indices],
+            [sequence_features(i, stamps, values, wf_mean, wf_scale) for i in wf_indices],
             dtype=torch.float32,
         )
         with torch.no_grad():
-            wf_pred = [max(0.0, float(p) * scale + mean) for p in wf_model(wf_test_x).tolist()]
+            wf_pred = [
+                max(0.0, float(p) * wf_scale + wf_mean)
+                for p in wf_model(wf_test_x).tolist()
+            ]
         wf_actual = [values[i] for i in wf_indices]
         wf_hgb = HistGradientBoostingRegressor(
             learning_rate=0.08, max_iter=120, max_leaf_nodes=15,
@@ -305,6 +305,8 @@ def compare(input_csv: str | Path, output_json: str | Path,
         wf_summary.update({
             "training_samples": len(wf_train_indices),
             "test_samples": len(wf_indices),
+            "scaler_fit_on_training_history_only": True,
+            "early_stopping": wf_early_stopping,
             "test_metrics": {name: metrics(wf_actual, pred) for name, pred in wf_sets.items()},
         })
 
@@ -334,6 +336,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "epochs": epochs,
             "features": ["normalized past demand", "hour-of-day sine/cosine", "day-of-week sine/cosine"],
             "scaler_fit_on_training_history_only": True,
+            "early_stopping": early_stopping,
         },
         "test_metrics": test_metrics,
         "walk_forward_summary": wf_summary,
