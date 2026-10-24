@@ -136,6 +136,43 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing required columns"):
                 load_site_steps(path)
 
+    def test_csv_loader_rejects_duplicate_headers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "duplicate.csv"
+            path.write_text(
+                "timestamp,renewable_surplus_kw,renewable_surplus_kw,"
+                "diesel_displacement_potential_kw,grid_price_per_kwh,off_peak,"
+                "grid_available,water_demand_m3\\n"
+                "2026-01-01T00:00,1,2,0,0.1,true,true,1\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate column names"):
+                load_site_steps(path)
+
+    def test_csv_loader_rejects_extra_row_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "extra.csv"
+            path.write_text(
+                "timestamp,renewable_surplus_kw,diesel_displacement_potential_kw,"
+                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\\n"
+                "2026-01-01T00:00,1,0,0.1,true,true,1,unexpected\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                load_site_steps(path)
+
+    def test_csv_loader_rejects_short_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "short.csv"
+            path.write_text(
+                "timestamp,renewable_surplus_kw,diesel_displacement_potential_kw,"
+                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\\n"
+                "2026-01-01T00:00,1,0,0.1,true\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "missing field"):
+                load_site_steps(path)
+
     def test_csv_loader_rejects_negative_physical_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.csv"
