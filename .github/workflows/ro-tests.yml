@@ -29,6 +29,12 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements-ci.lock
+            requirements-runtime.lock
+            requirements-ml.lock
+            requirements-deep-learning.txt
       - name: Install project and test dependencies
         run: |
           python -m pip install --upgrade "pip==26.2.2"
