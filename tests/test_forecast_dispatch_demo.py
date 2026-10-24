@@ -145,7 +145,7 @@ def test_plugin_non_finite_prediction_is_rejected(tmp_path: Path, monkeypatch) -
         ])
     assert not (out / "run_report.json").exists()
 
-def test_plugin_runtime_error_fails_with_cli_error_not_partial_report(tmp_path: Path, monkeypatch) -> None:
+def test_plugin_runtime_error_fails_with_cli_error_not_partial_report(tmp_path: Path, monkeypatch, capsys) -> None:
     plugin_module = tmp_path / "raising_forecast_plugin.py"
     plugin_module.write_text(
         "class RaisingForecast:\n"
@@ -167,5 +167,6 @@ def test_plugin_runtime_error_fails_with_cli_error_not_partial_report(tmp_path: 
             "--plugin", "raising_forecast_plugin:RaisingForecast",
         ])
     assert exc.value.code == 2
+    assert "Workflow failed: RuntimeError: plugin unavailable" in capsys.readouterr().err
     assert not (out / "run_report.json").exists()
 
