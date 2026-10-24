@@ -1,3 +1,3 @@
 # Optional deep-learning experiment only; not installed in the default app/runtime.
 # CPU-compatible PyTorch wheel. Review/audit this optional stack before production use.
-torch==2.13.0
+torch==2.14.1
