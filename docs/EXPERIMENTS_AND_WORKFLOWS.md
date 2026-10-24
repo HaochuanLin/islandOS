@@ -272,7 +272,7 @@ The command refuses to overwrite files in a non-empty output directory. Choose a
 
 This command generates an explicitly synthetic hourly dataset by default, reserves the first 24 observations as forecast warm-up, then predicts each subsequent hour using only the preceding 24 demand observations. It compares all five dispatch strategies using rolling forecasts and separately using realized demand as an **offline reference**. Outputs include:
 
-- `run_report.json`: input SHA-256, time-zone assumption, forecast model/version, MAE and bias, dispatch parameters, and both strategy summaries.
+- `run_report.json`: input SHA-256, time-zone assumption, forecast model/version, MAE and bias, dispatch parameters, both strategy summaries, and a SHA-256/byte-size manifest for the generated CSV artifacts.
 - `forecast_audit.csv`: timestamp-aligned forecast, realized synthetic demand, model identity, and hash of each forecast's input history.
 - `forecast_dispatch_input.csv`: the demand forecast passed into the existing strategy engine.
 - `strategy_comparison.csv` and `strategy_timestep_audit.csv`: strategy summaries and hourly-level audit for both demand bases.
