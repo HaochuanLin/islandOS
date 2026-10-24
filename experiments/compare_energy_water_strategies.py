@@ -10,6 +10,7 @@ import argparse
 import csv
 import math
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -89,7 +90,8 @@ def load_site_steps(path: str | Path) -> list[SiteStep]:
         if missing:
             raise ValueError("Input CSV is missing required columns: " + ", ".join(missing))
         steps: list[SiteStep] = []
-        previous_timestamp: str | None = None
+        previous_timestamp: datetime | None = None
+        previous_timezone_aware: bool | None = None
         for row_number, row in enumerate(reader, start=2):
             if None in row:
                 raise ValueError(
@@ -103,11 +105,24 @@ def load_site_steps(path: str | Path) -> list[SiteStep]:
             timestamp = (row.get("timestamp") or "").strip()
             if not timestamp:
                 raise ValueError(f"Row {row_number}: timestamp is required")
-            # ISO-like timestamps sort lexically; source-specific interval checks
-            # remain the user's responsibility and are called out in the report.
-            if previous_timestamp is not None and timestamp <= previous_timestamp:
-                raise ValueError(f"Row {row_number}: timestamps must be strictly increasing")
-            previous_timestamp = timestamp
+            normalized_timestamp = (
+                timestamp[:-1] + "+00:00" if timestamp.endswith("Z") else timestamp
+            )
+            try:
+                parsed_timestamp = datetime.fromisoformat(normalized_timestamp)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Row {row_number}: timestamp must be ISO-8601, got {timestamp!r}"
+                ) from exc
+            timezone_aware = parsed_timestamp.utcoffset() is not None
+            if previous_timezone_aware is not None and timezone_aware != previous_timezone_aware:
+                raise ValueError("timestamps mix timezone-aware and timezone-naive values")
+            if previous_timestamp is not None and parsed_timestamp <= previous_timestamp:
+                raise ValueError(
+                    f"Row {row_number}: timestamps must be strictly increasing in time"
+                )
+            previous_timestamp = parsed_timestamp
+            previous_timezone_aware = timezone_aware
             backup_raw = row.get("backup_available_kw", "")
             backup_kw = (
                 0.0 if backup_raw is None or not backup_raw.strip()
