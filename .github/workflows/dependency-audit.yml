@@ -49,5 +49,17 @@ jobs:
             requirements-windows-packaging.lock
       - name: Install dependency auditor
         run: python -m pip install --upgrade pip pip-audit
-      - name: Audit dependency file
-        run: pip-audit --requirement "${{ matrix.requirements }}"
+      - name: Audit dependency file and emit CycloneDX SBOM
+        run: |
+          mkdir -p build/sbom
+          pip-audit --requirement "${{ matrix.requirements }}" \
+            --format cyclonedx-json \
+            --output "build/sbom/${{ matrix.requirements }}.cdx.json"
+      - name: Upload Python dependency SBOM and audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sbom-${{ matrix.requirements }}
+          path: build/sbom/${{ matrix.requirements }}.cdx.json
+          if-no-files-found: warn
+          retention-days: 30
