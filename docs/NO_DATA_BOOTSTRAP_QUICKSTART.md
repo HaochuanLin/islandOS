@@ -8,7 +8,7 @@ From the repository root:
 
 ```bash
 python tools/init_site_config.py --site-name "Demo island" --output config/demo-island.json
-python tools/validate_site_config.py config/demo-island.json
+python -c "from islandos_config import load_config; print(load_config('config/demo-island.json')['metadata'])"
 ```
 
 The command refuses to overwrite an existing file unless `--force` is explicitly passed. It starts from the checked-in example configuration, names the study, and marks the values as illustrative defaults.
