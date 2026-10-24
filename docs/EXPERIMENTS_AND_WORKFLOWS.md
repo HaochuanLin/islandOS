@@ -268,6 +268,8 @@ Run a complete, reproducible path from a demand-forecast plug-in through strateg
 python tools/run_forecast_dispatch_demo.py --hours 168 --seed 20261024 --output-dir build/forecast-dispatch-demo
 ```
 
+The command refuses to overwrite files in a non-empty output directory. Choose a fresh output directory for each run, or pass `--overwrite` when replacing existing outputs is intentional.
+
 This command generates an explicitly synthetic hourly dataset by default, reserves the first 24 observations as forecast warm-up, then predicts each subsequent hour using only the preceding 24 demand observations. It compares all five dispatch strategies using rolling forecasts and separately using realized demand as an **offline reference**. Outputs include:
 
 - `run_report.json`: input SHA-256, time-zone assumption, forecast model/version, MAE and bias, dispatch parameters, and both strategy summaries.
