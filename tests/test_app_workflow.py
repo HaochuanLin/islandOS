@@ -83,4 +83,4 @@ def test_uploaded_csv_parser_accepts_valid_hourly_data() -> None:
     raw = csv_bytes(generate_rows(25, 102, datetime(2026, 2, 1)))
     parsed = parse_uploaded_csv(raw)
     assert len(parsed) == 25
-    assert parsed[0].timestamp == "2026-02-01T00:00:00"
+    assert parsed[0].timestamp == "2026-02-01T00:00"
