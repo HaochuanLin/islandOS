@@ -23,6 +23,8 @@ def inspect_csv(path: Path, interval_minutes: int) -> dict:
     if interval_minutes < 1:
         raise ValueError("interval_minutes must be >= 1")
     steps = load_site_steps(path)
+    if not steps:
+        raise ValueError("CSV must contain at least one data row")
     parsed: list[datetime] = []
     for index, step in enumerate(steps, start=2):
         try:
