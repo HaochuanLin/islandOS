@@ -12,7 +12,8 @@ A candidate is packaged only after these gates pass:
 4. Build the Docker image, verify it runs as non-root, and probe the Streamlit health endpoint on loopback.
 5. Archive the exact Git commit; include dependency locks, a dependency inventory, SHA-256 checksums, and a machine-readable release manifest.
 6. Generate GitHub artifact provenance attestations for every file in the release bundle; the workflow grants only the required OIDC and attestations permissions.
-7. Upload the bundle as a 90-day artifact. A version-tag run creates a **draft** GitHub release, never an automatically published release.
+7. Verify the source archive attestation in CI with `gh attestation verify` before uploading the bundle. Reviewers should also verify each downloaded release asset independently.
+8. Upload the bundle as a 90-day artifact. A version-tag run creates a **draft** GitHub release, never an automatically published release.
 
 A manually dispatched run from a branch produces a verification artifact named `candidate-<commit>` and does not publish a GitHub release.
 
