@@ -54,6 +54,19 @@ def test_non_empty_output_directory_is_preserved_by_default(tmp_path: Path) -> N
     assert sentinel.read_text(encoding="utf-8") == "user data"
 
 
+def test_user_supplied_input_is_not_labeled_as_measured(tmp_path: Path) -> None:
+    rows = generate_rows(27, 12, datetime(2026, 2, 1))
+    for row in rows:
+        row["timestamp"] += "+00:00"
+    source = write_input(tmp_path / "site.csv", rows)
+    out = tmp_path / "user-run"
+    assert main(["--input", str(source), "--output-dir", str(out)]) == 0
+    report = json.loads((out / "run_report.json").read_text(encoding="utf-8"))
+    assert report["dataset_type"] == "user_supplied_unverified"
+    assert report["is_measured_site_data"] is None
+    assert report["input"]["sha256"]
+
+
 def test_short_input_is_rejected(tmp_path: Path) -> None:
     path = write_input(tmp_path / "short.csv", generate_rows(24, 4, datetime(2026, 1, 1)))
     with pytest.raises(ValueError, match="At least 25 hourly rows"):
