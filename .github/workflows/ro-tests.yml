@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.ref != 'refs/heads/main' }}
 
 jobs:
-  unit-tests:
+  integration-examples:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -135,8 +135,6 @@ jobs:
           assert manifest["limitations"], "Manifest must state its interpretation limits"
           print("Reproducibility environment manifest is valid and identifies this commit.")
           PY
-      - name: Run complete pytest suite (including unittest-compatible tests)
-        run: python -m pytest -q
       - name: Run dependency-free plug-in forecast example
         run: python examples/forecast_plugin_example.py
       - name: Run synthetic forecast-monitoring example
@@ -209,7 +207,7 @@ jobs:
           path: build/water-demand-forecast/candidate-review.json
           if-no-files-found: error
           retention-days: 30
-      # NSGA-II correctness tests are already included in the complete pytest suite above.
+      # NSGA-II correctness tests run in parallel in the Python unit-test workflow.
       - name: Run synthetic water-demand forecast example
         run: |
           python experiments/water_demand_forecast.py data/examples/synthetic_water_demand_demo.csv --output build/water-demand-forecast/report.json

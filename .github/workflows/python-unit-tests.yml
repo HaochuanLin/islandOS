@@ -1,0 +1,80 @@
+name: Python unit tests
+
+on:
+  push:
+    branches:
+      - main
+      - "draft/**"
+      - core-product-hardening
+      - water-demand-forecast-demo
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-unit-tests-${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'manual' || 'push' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.ref != 'refs/heads/main' }}
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements-ci.lock
+            requirements-runtime.lock
+            requirements-ml.lock
+            requirements-deep-learning.txt
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-ci.lock
+      - name: Verify dependency lock coverage
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+          from packaging.version import Version
+
+          def pins(path):
+              result = {}
+              for line in Path(path).read_text(encoding="utf-8").splitlines():
+                  stripped = line.strip()
+                  if not stripped or stripped.startswith("#") or stripped.startswith("-r "):
+                      continue
+                  req = Requirement(stripped)
+                  assert req.specifier and "==" in str(req.specifier), f"Lock entry must be pinned: {path}: {stripped}"
+                  result[canonicalize_name(req.name)] = Version(str(req.specifier).split("==", 1)[1])
+              return result
+
+          ci = pins("requirements-ci.lock")
+          ml = pins("requirements-ml.lock")
+          for declared_path in ("requirements.txt", "requirements-ml.txt"):
+              for line in Path(declared_path).read_text(encoding="utf-8").splitlines():
+                  stripped = line.strip()
+                  if not stripped or stripped.startswith("#") or stripped.startswith("-r "):
+                      continue
+                  requirement = Requirement(stripped)
+                  name = canonicalize_name(requirement.name)
+                  assert name in ci, f"{name} missing from requirements-ci.lock"
+                  assert requirement.specifier.contains(ci[name], prereleases=True), f"{name} pin {ci[name]} violates {stripped}"
+          for name, version in ml.items():
+              assert ci.get(name) == version, f"ML lock mismatch for {name}: {version} != {ci.get(name)}"
+          print(f"Validated {len(ci)} exact CI pins and {len(ml)} exact ML pins.")
+          PY
+      - name: Verify installed dependency consistency
+        run: python -m pip check
+      - name: Compile all Python sources
+        run: python -m compileall -q .
+      - name: Run complete pytest suite (including unittest-compatible tests)
+        run: python -m pytest -q
