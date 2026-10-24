@@ -1,7 +1,7 @@
-# IslandOS：Rule-based look-ahead scheduling for island freshwater-resilience
+# IslandOS: Plug-in energy–water decision platform for island freshwater resilience
 
 <p align="center">
-  <strong>A general-purpose prototype for island freshwater resilience using renewable-energy surplus.</strong><br>
+  <strong>A modular, plug-in simulation and decision platform for island energy–water resilience.</strong><br>
   Rule-based look-ahead scheduling explores when surplus wind/solar electricity can drive modular reverse osmosis (RO) and build an emergency freshwater buffer while protecting essential electricity demand.
 </p>
 
@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
 </p>
 
-**islandOS is an early-stage research prototype, not a deployed island control system.** It helps users explore when flexible loads—such as reverse-osmosis (RO) desalination and cold storage—might use renewable surplus while tracking water service, energy use, and simplified equipment constraints.
+**islandOS is an early-stage research prototype, not a deployed island control system.** Its product architecture is designed to be plug-in: normalized data adapters, site configuration, forecast reports, and decision policies can be replaced at documented boundaries without rewriting the dispatch core. It helps users explore when flexible loads—such as reverse-osmosis (RO) desalination and cold storage—might use renewable surplus while tracking water service, energy use, and simplified equipment constraints. Site-specific signal mapping, units, safety limits, and validation are still required; this is not yet a universal drop-in plant controller.
 
 **Try the live interactive demo:** [https://islandos.streamlit.app/](https://islandos.streamlit.app/)  
 The Streamlit app is intended to be deployed from this repository's `app.py`. **Deployment access check (2026-10-23):** unauthenticated requests to the hosted URL redirect to Streamlit Cloud sign-in, so public access is not currently verified. If the demo is intended to be public, its visibility must be changed in Streamlit Cloud settings; GitHub code changes cannot change that account-level setting. The local app remains runnable using the instructions below. All bundled demo inputs are synthetic, not measured island data, and the app is not a live island control system.
