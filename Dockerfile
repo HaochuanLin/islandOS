@@ -9,8 +9,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY requirements-runtime.lock ./requirements-runtime.lock
-RUN python -m pip install --no-cache-dir --upgrade pip && \
-    python -m pip install --no-cache-dir -r requirements-runtime.lock
+RUN python -m pip install --no-cache-dir --upgrade "pip==26.2.2" && \
+    python -m pip install --no-cache-dir -r requirements-runtime.lock && \
+    python -m pip check
 COPY . .
 # Run the web process without root privileges. Keep application files readable
 # and writable by the dedicated runtime account for local report/cache output.
