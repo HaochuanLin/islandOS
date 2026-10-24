@@ -35,6 +35,16 @@ class ValidateSiteConfigCliTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["valid"])
         self.assertIn("Unknown configuration key", json.loads(result.stdout)["error"])
 
+    def test_null_metadata_returns_machine_readable_validation_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "null-metadata.json"
+            path.write_text(json.dumps({"metadata": None}), encoding="utf-8")
+            result = self.run_cli(path, "--json")
+        self.assertEqual(result.returncode, 2)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["valid"])
+        self.assertIn("metadata must be an object", report["error"])
+
     def test_invalid_json_returns_machine_readable_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "broken.json"

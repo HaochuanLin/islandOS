@@ -71,8 +71,24 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
 def validate_config(config: dict[str, Any]) -> list[str]:
     """Return validation errors; an empty list means structurally valid."""
     errors: list[str] = []
-    if config.get("config_version") != 1:
+    version = config.get("config_version")
+    if isinstance(version, bool) or version != 1:
         errors.append("config_version must be 1")
+    metadata = config.get("metadata")
+    if not isinstance(metadata, dict):
+        errors.append("metadata must be an object")
+    else:
+        for key in ("name", "status"):
+            value = metadata.get(key)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"metadata.{key} must be a non-empty string")
+        if not isinstance(metadata.get("notes"), str):
+            errors.append("metadata.notes must be a string")
+    parameter_sources = config.get("parameter_sources")
+    if not isinstance(parameter_sources, dict):
+        errors.append("parameter_sources must be an object")
+    elif not isinstance(parameter_sources.get("default_policy"), str) or not parameter_sources["default_policy"].strip():
+        errors.append("parameter_sources.default_policy must be a non-empty string")
     equipment = config.get("equipment")
     search = config.get("search_space")
     economics = config.get("economics")

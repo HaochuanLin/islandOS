@@ -40,7 +40,7 @@ class TestIslandOSDoctor(unittest.TestCase):
         self.assertEqual(config_check["status"], "fail")
         self.assertIn("reservoir_capacity_m3", config_check["detail"])
 
-    def test_non_object_metadata_does_not_crash_doctor(self):
+    def test_non_object_metadata_is_reported_as_validation_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             config = Path(temporary) / "metadata-null.json"
             config.write_text(
@@ -76,11 +76,11 @@ class TestIslandOSDoctor(unittest.TestCase):
                 [sys.executable, str(DOCTOR), "--json", "--config", str(config)],
                 cwd=ROOT, capture_output=True, text=True, check=False,
             )
-        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
         report = json.loads(result.stdout)
         config_check = next(item for item in report["checks"] if item["id"] == "site_configuration")
-        self.assertEqual(config_check["status"], "pass")
-        self.assertIn("'unnamed'", config_check["detail"])
+        self.assertEqual(config_check["status"], "fail")
+        self.assertIn("metadata must be an object", config_check["detail"])
 
     def test_unsupported_python_version_is_a_failure(self):
         # Import the script directly so the runtime check can be tested without
