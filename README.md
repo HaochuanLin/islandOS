@@ -44,7 +44,7 @@ The interactive `app.py` on main is a generic conceptual demo only, and does not
 - **Site-readiness gate:** fail closed when required site inputs are incomplete or telemetry is stale, and separate input completeness from engineering safety or field approval.
 - **Reproducible checks:** run unit/regression tests and synthetic benchmark workflows through GitHub Actions.
 
-These tools are **not yet one fully integrated, validated forecast-and-control pipeline**. The forecasting experiments do not automatically provide validated island solar/wind generation and demand forecasts to a live controller.
+The new CLI demo connects a replaceable water-demand forecast plug-in to dispatch screening and auditable strategy comparisons. The broader forecasting experiments still do **not** provide validated island solar/wind generation and electricity-demand forecasts to a live controller; no validated or safety-certified end-to-end controller is claimed.
 
 ## Try the interactive app
 
