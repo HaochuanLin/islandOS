@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from statistics import mean
 from typing import Sequence
+
+# Make the repository root importable when this file is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from islandos_core.forecasting import (
     ForecastModelRegistry,
