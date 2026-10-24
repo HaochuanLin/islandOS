@@ -13,7 +13,6 @@ import json
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import tempfile
 
 import pandas as pd
 import streamlit as st
@@ -28,6 +27,11 @@ from experiments.compare_energy_water_strategies import (
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
+from islandos_core.app_workflow import (
+    dataframe_csv,
+    parse_uploaded_csv,
+    run_uploaded_strategy_comparison,
+)
 from islandos_core.simulation_adapter import simulation_row_to_screening_signals
 from islandos_core.virtual_instrument import make_virtual_reading
 
@@ -96,28 +100,6 @@ def csv_template_bytes() -> bytes:
         "2026-01-01T00:00:00", 0, 0, 0.12, "true", "true", 1.0, 0
     ])
     return output.getvalue().encode("utf-8")
-
-
-def parse_uploaded_csv(raw: bytes) -> list[SiteStep]:
-    """Parse uploaded data using the repository's existing validation logic."""
-    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as temp:
-        temp.write(raw)
-        temp_path = Path(temp.name)
-    try:
-        return load_site_steps(temp_path)
-    finally:
-        temp_path.unlink(missing_ok=True)
-
-
-def dataframe_csv(rows: list[dict], provenance: dict | None = None) -> bytes:
-    """Serialize report rows and optionally repeat their input provenance on each row."""
-    frame = pd.DataFrame(rows)
-    if provenance:
-        # Keep every scalar input/configuration field with each exported row so
-        # CSVs remain interpretable outside the live Streamlit session.
-        for key, value in provenance.items():
-            frame[key] = value
-    return frame.to_csv(index=False).encode("utf-8")
 
 
 def stable_signature(payload: dict) -> str:
@@ -358,7 +340,6 @@ elif page == "Strategy simulator":
 
     if st.button("▶ Run strategy comparison", type="primary", use_container_width=True):
         try:
-            steps = parse_uploaded_csv(raw)
             config = Config(
                 ro_rated_power_kw=float(ro_kw),
                 specific_energy_kwh_m3=float(sec),
@@ -368,7 +349,7 @@ elif page == "Strategy simulator":
                 dt_hours=float(dt),
                 diesel_cost_per_kwh=float(diesel_cost) if diesel_cost > 0 else None,
             )
-            detail, summary = compare_strategies(steps, config)
+            steps, detail, summary = run_uploaded_strategy_comparison(raw, config)
             st.session_state["islandos_result"] = {
                 "detail": detail,
                 "summary": summary,
