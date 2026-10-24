@@ -11,10 +11,10 @@ on:
     - cron: "23 6 * * 1"
   workflow_dispatch:
 
-# Supersede stale PR audits while preserving scheduled and main-branch audits.
+# Newer pushes supersede stale runs; scheduled/manual audits on main are preserved.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
