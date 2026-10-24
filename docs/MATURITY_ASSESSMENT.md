@@ -14,19 +14,35 @@ Current estimates are provisional engineering judgments, not independent certifi
 
 ## Baseline scores and targets
 
-| Category | Baseline | Current estimate after phase 9 | Target | Evidence needed to raise score |
+| Category | Baseline | Current estimate after phase 10 | Target | Evidence needed to raise score |
 |---|---:|---:|---:|---|
 | Core simulation and dispatch | 5.5 | 5.5 | 8.5 | Explicit physical/unit invariants, edge-case tests, conservation checks, benchmarked scenarios and documented model limits |
-| Automated testing and reproducibility | 6.0 | 8.0 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
-| Documentation and evidence audit | 6.5 | 8.0 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
-| Interactive demo and usability | 6.0 | 6.0 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
-| Branch and release management | 5.5 | 5.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
-| Public data / site data validation | 5.5 | 7.8 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
-| Commercialization and deployment readiness | 3.5 | 4.5 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
-| Overall software engineering maturity | 5.5 | 6.8 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
+| Automated testing and reproducibility | 6.0 | 8.5 | 9.0 | Required CI checks, pinned/reproducible environment, deterministic seeds, archived run metadata, coverage of critical paths |
+| Documentation and evidence audit | 6.5 | 8.5 | 9.0 | Claim-to-evidence register, data provenance, assumptions, known limitations and machine-readable experiment manifests |
+| Interactive demo and usability | 6.0 | 7.5 | 8.5 | Reproducible local setup, smoke tests, accessible errors, clear synthetic-vs-measured labeling and verified public access |
+| Branch and release management | 5.5 | 7.5 | 8.5 | Protected release path, tagged versioning, changelog, CI-gated releases, rollback and artifact provenance |
+| Public data / site data validation | 5.5 | 8.0 | 8.5 | Source licences, immutable source snapshots, schema/unit/timezone checks, missing/stale-data handling and reproducible backtests |
+| Commercialization and deployment readiness | 3.5 | 5.5 | 7.5 | Deployment guide, secret handling, monitoring, backups, threat model, support boundaries and pilot acceptance criteria |
+| Overall software engineering maturity | 5.5 | 7.4 | 8.5 | Consistent interfaces, lint/type checks, dependency/security policy, architecture documentation and maintained CI |
 | Real-environment operation validation | 2.0 | 2.0 | 7.0 | Independent site data, hardware-in-the-loop or shadow-mode trials, operational logs, signed engineering review and documented rollback; never infer this from simulation alone |
 
 The baseline values are provisional judgments based on visible repository structure and README statements. The current estimates reflect documented source changes, completed CI runs, and archived public-data experiments. They do not represent site acceptance testing or independent certification. The README explicitly describes the system as a research prototype, notes that synthetic inputs are used in parts of the app, and states that it is not a deployed island control system. The forecast-to-dispatch interface is now exercised by tests, but an end-to-end validated forecast-and-control pipeline and site-specific acceptance remain incomplete.
+
+## Plug-and-play product-readiness scorecard
+
+This additional 0–10 scorecard tracks the specific onboarding and portability targets from the product-improvement work. It complements the broader engineering rubric above; the scores remain provisional judgments based on repository evidence, not independent certification.
+
+| Area | Baseline | Current estimate | Target | Evidence and remaining gap |
+|---|---:|---:|---:|---|
+| No-data onboarding | 6.0 | 8.0 | 8.0 | One-command synthetic site demo, deterministic CSV generator, provenance manifest and verifier, plus offline first-run doctor. The workflow is CI-tested; inputs remain synthetic and do not prove site readiness. |
+| Site configuration portability | 5.5 | 7.5 | 8.0 | Shared configuration validation, bootstrap CLI, machine-readable audit, and doctor integration. Not every plant-specific signal, equipment model, and protection setting is represented in one universal schema. |
+| Input validation and provenance | 6.5 | 8.5 | 8.5 | Timestamp/timezone/interval CSV preflight, SHA-256 manifests and verification, configuration audit, dispatch input snapshot checks, and environmental-feature provenance. Hashes prove byte identity, not measurement authenticity. |
+| Replaceable forecasting and dispatch | 6.5 | 7.5 | 8.0 | Forecast plugin contract, chronological backtests, baseline skill metrics, and forecast-to-dispatch integration tests. No validated island-specific forecast/control pipeline or automatic model promotion exists. |
+| Local installation | 6.5 | 8.0 | 8.0 | Offline doctor, documented local setup, Docker health/non-root checks, and Windows portable-package smoke tests. Production authentication, TLS, backup/restore, and support operations remain incomplete. |
+| Real-site evidence | 2.0 | 2.0 | 4.0 | Blocked until authorized site measurements, operator collaboration, and a supervised read-only/shadow-mode study exist. No score increase is possible from synthetic fixtures alone. |
+| Overall plug-and-play readiness | 6.0 | 7.5 | 8.0 | The local synthetic onboarding path is substantially more repeatable, but universal site mapping, end-to-end site-specific validation, and public hosted access remain incomplete. |
+
+The scorecard is based on merged onboarding/audit changes in PRs #108–#116 and CI hardening in PRs #117–#120. All five workflows passed on the exact resulting code tree: [RO suite](https://github.com/HaochuanLin/islandOS/actions/runs/40070382655), [Nan'ao scenario](https://github.com/HaochuanLin/islandOS/actions/runs/40070382659), [container smoke](https://github.com/HaochuanLin/islandOS/actions/runs/40070382687), [Windows packaging](https://github.com/HaochuanLin/islandOS/actions/runs/40070382662), and [dependency audit](https://github.com/HaochuanLin/islandOS/actions/runs/40070382689). The tested PR head and merged main commit have the same Git tree SHA; the commit IDs differ because the PR was squash-merged.
 
 ## Improvement sequence
 
