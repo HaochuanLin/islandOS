@@ -9,6 +9,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools.validate_site_csv import inspect_csv
+from tools.verify_synthetic_artifacts import verify_artifacts
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "tools" / "run_synthetic_site_demo.py"
 
@@ -45,6 +48,16 @@ class SyntheticSiteDemoTests(unittest.TestCase):
             with (output / "timestep_audit.csv").open(newline="", encoding="utf-8") as handle:
                 audit = list(csv.DictReader(handle))
             self.assertGreaterEqual(len(audit), 24)
+
+            # The generated onboarding artifacts must also pass the standalone
+            # validators used for operator-supplied files, not only this demo's
+            # own output assertions.
+            manifest_path = output / "synthetic_site_hourly.manifest.json"
+            self.assertEqual(verify_artifacts(input_path, manifest_path), [])
+            quality = inspect_csv(input_path, interval_minutes=60)
+            self.assertTrue(quality["valid"], quality["irregular_intervals"])
+            self.assertEqual(quality["row_count"], 24)
+            self.assertEqual(quality["sha256"], report["input"]["sha256"])
 
     def test_optional_site_config_is_loaded_and_fingerprinted(self):
         with tempfile.TemporaryDirectory() as directory:
