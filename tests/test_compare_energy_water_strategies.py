@@ -142,8 +142,8 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             path.write_text(
                 "timestamp,renewable_surplus_kw,renewable_surplus_kw,"
                 "diesel_displacement_potential_kw,grid_price_per_kwh,off_peak,"
-                "grid_available,water_demand_m3\\n"
-                "2026-01-01T00:00,1,2,0,0.1,true,true,1\\n",
+                "grid_available,water_demand_m3\n"
+                "2026-01-01T00:00,1,2,0,0.1,true,true,1\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "duplicate column names"):
@@ -154,8 +154,8 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             path = Path(directory) / "extra.csv"
             path.write_text(
                 "timestamp,renewable_surplus_kw,diesel_displacement_potential_kw,"
-                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\\n"
-                "2026-01-01T00:00,1,0,0.1,true,true,1,unexpected\\n",
+                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\n"
+                "2026-01-01T00:00,1,0,0.1,true,true,1,unexpected\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "extra fields"):
@@ -166,8 +166,8 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             path = Path(directory) / "short.csv"
             path.write_text(
                 "timestamp,renewable_surplus_kw,diesel_displacement_potential_kw,"
-                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\\n"
-                "2026-01-01T00:00,1,0,0.1,true\\n",
+                "grid_price_per_kwh,off_peak,grid_available,water_demand_m3\n"
+                "2026-01-01T00:00,1,0,0.1,true\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "missing field"):
