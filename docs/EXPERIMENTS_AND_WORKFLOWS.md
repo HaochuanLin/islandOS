@@ -259,3 +259,23 @@ python site_readiness.py config/site_readiness.example.json --mode dispatch --js
 The example is expected to report blockers until the placeholders and timestamps are replaced with site-confirmed values. A blocked result is the safe default; do not replace missing values with zero or relabel synthetic inputs as measured.
 
 The wrapper `experiments/run_site_scenario.py` requires both a readiness JSON and a separately validated hourly site CSV before it invokes offline optimization. Follow [the site readiness guide](SITE_READINESS_GATE.md) for required fields, source provenance, and the fail-closed behavior. This workflow does not connect to sensors or issue control commands.
+
+### End-to-end rolling forecast → dispatch demo
+
+Run a complete, reproducible path from a demand-forecast plug-in through strategy comparison and auditable exports without needing site measurements:
+
+```bash
+python tools/run_forecast_dispatch_demo.py --hours 168 --seed 20261024 --output-dir build/forecast-dispatch-demo
+```
+
+This command generates an explicitly synthetic hourly dataset by default, reserves the first 24 observations as forecast warm-up, then predicts each subsequent hour using only the preceding 24 demand observations. It compares all five dispatch strategies using rolling forecasts and separately using realized demand as an **offline reference**. Outputs include:
+
+- `run_report.json`: input SHA-256, time-zone assumption, forecast model/version, MAE and bias, dispatch parameters, and both strategy summaries.
+- `forecast_audit.csv`: timestamp-aligned forecast, realized synthetic demand, model identity, and hash of each forecast's input history.
+- `forecast_dispatch_input.csv`: the demand forecast passed into the existing strategy engine.
+- `strategy_comparison.csv` and `strategy_timestep_audit.csv`: strategy summaries and hourly-level audit for both demand bases.
+
+To use a compatible custom forecast model, pass `--plugin package.module:ClassName`. Only load code you trust: a Python plug-in executes with the permissions of the running process. The plug-in must implement `model_id`, `version`, and `predict(history, target_timestamps)` under the contract in `islandos_core/forecasting.py`.
+
+Naive timestamps are explicitly interpreted as UTC by the demo's default `--assume-timezone UTC`; only use that default when it matches the source data. The first 24 hours are excluded from the dispatch comparison because no prior 24-hour history exists. The built-in trailing-day mean is a simple baseline, not a trained AI model. Forecast-vs-realized results remain synthetic or retrospective screening evidence—not site validation, an achievable perfect-foresight policy, safety approval, or equipment commands.
+
