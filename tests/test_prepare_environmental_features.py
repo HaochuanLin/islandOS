@@ -98,6 +98,23 @@ class TestEnvironmentalFeatures(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Non-finite"):
                 prepare_features(source, Path(directory) / "out.csv")
 
+    def test_rejects_duplicate_and_extra_source_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = self._fixture(directory, 30)
+            output = Path(directory) / "features.csv"
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[0] = lines[0].replace("T2M", "ALLSKY_SFC_SW_DWN")
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                prepare_features(source, output)
+
+            source = self._fixture(directory, 30)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                prepare_features(source, output)
+
 
 if __name__ == "__main__":
     unittest.main()
