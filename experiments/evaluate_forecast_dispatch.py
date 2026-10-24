@@ -75,6 +75,10 @@ def load_paired_series(input_csv: str | Path) -> tuple[list[str], Scenario, list
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
 
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
+
     if not rows:
         raise ValueError("Input CSV must contain at least one hourly row")
 
