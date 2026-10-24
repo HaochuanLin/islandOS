@@ -193,6 +193,13 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate columns"):
             load_paired_series(self.input)
 
+    def test_rejects_extra_csv_fields(self):
+        lines = self.input.read_text(encoding="utf-8").splitlines()
+        lines[1] += ",unexpected"
+        self.input.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "extra fields"):
+            load_paired_series(self.input)
+
 
 if __name__ == "__main__":
     unittest.main()

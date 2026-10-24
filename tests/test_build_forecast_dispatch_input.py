@@ -151,6 +151,19 @@ class TestForecastDispatchInputBuilder(unittest.TestCase):
                     power, root / "not-read-before-power-validation.json", root / "joined.csv"
                 )
 
+    def test_rejects_extra_power_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            power, model = root / "power.csv", root / "model.json"
+            self._write_power_csv(power)
+            self._write_forecast_report(model)
+            lines = power.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            power.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                build_forecast_dispatch_input(power, model, root / "joined.csv")
+
 
 if __name__ == "__main__":
     unittest.main()

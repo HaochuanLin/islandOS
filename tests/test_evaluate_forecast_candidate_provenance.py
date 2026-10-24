@@ -58,3 +58,19 @@ def test_duplicate_csv_headers_are_rejected(tmp_path):
             high_demand_threshold_m3=30.0,
             min_high_demand_samples=5,
         )
+
+
+def test_extra_csv_fields_are_rejected(tmp_path):
+    input_csv = tmp_path / "extra-fields.csv"
+    _write_hourly_csv(input_csv)
+    lines = input_csv.read_text(encoding="utf-8").splitlines()
+    lines[1] += ",unexpected"
+    input_csv.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="extra fields"):
+        evaluate_candidate(
+            input_csv,
+            tmp_path / "report.json",
+            high_demand_threshold_m3=30.0,
+            min_high_demand_samples=5,
+        )

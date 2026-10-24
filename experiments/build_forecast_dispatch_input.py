@@ -73,6 +73,10 @@ def _load_power_rows(input_csv: str | Path) -> dict[datetime, dict[str, str]]:
             raise ValueError("Power CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
 
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Power CSV has extra fields at CSV line {line}")
+
     if not rows:
         raise ValueError("Power CSV must contain at least one hourly row")
 
