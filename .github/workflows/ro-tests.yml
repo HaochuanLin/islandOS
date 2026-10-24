@@ -88,11 +88,11 @@ jobs:
           plugin = json.loads(Path("build/forecast-plugin-example.json").read_text(encoding="utf-8"))
           assert plugin["model_id"] == "trailing-day-mean"
           assert len(plugin["forecast"]) == 6
-          assert all(item.get("timestamp") and item.get("value") is not None for item in plugin["forecast"])
+          assert all(item.get("timestamp") and item.get("predicted_demand_m3") is not None for item in plugin["forecast"])
 
           out = Path("build/ci-synthetic-site-demo")
           manifest = json.loads((out / "synthetic_site_hourly.manifest.json").read_text(encoding="utf-8"))
-          report = json.loads((out / "report.json").read_text(encoding="utf-8"))
+          report = json.loads((out / "run_report.json").read_text(encoding="utf-8"))
           assert manifest["dataset_type"] == "synthetic"
           assert manifest["is_measured_site_data"] is False
           assert manifest["row_count"] == 24
