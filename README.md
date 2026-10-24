@@ -47,6 +47,14 @@ These tools are **not yet one fully integrated, validated forecast-and-control p
 
 ## Try the interactive app
 
+**No site data yet?** Generate a reproducible synthetic CSV to exercise the upload-to-report workflow before you have measurements:
+
+```bash
+python tools/generate_synthetic_site_csv.py --output build/synthetic_site_hourly.csv --hours 168 --seed 20261023
+```
+
+Then open the hosted app or run it locally and upload `build/synthetic_site_hourly.csv`. This is synthetic onboarding data only—not a forecast, measured site data, or an operational recommendation. The seed makes it repeatable.
+
 From the repository root:
 
 ```bash
