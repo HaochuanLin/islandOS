@@ -118,6 +118,26 @@ def test_non_finite_demand_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="finite and non-negative"):
         load_rows(path, "UTC")
 
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [
+        ("renewable_surplus_kw", "nan"),
+        ("diesel_displacement_potential_kw", "inf"),
+        ("grid_price_per_kwh", "-0.1"),
+        ("water_demand_m3", "-1"),
+        ("backup_available_kw", "nan"),
+    ],
+)
+def test_invalid_numeric_signal_is_rejected_for_every_input_category(
+    tmp_path: Path, field: str, bad_value: str
+) -> None:
+    rows = generate_rows(25, 17, datetime(2026, 6, 1))
+    rows[4][field] = bad_value
+    path = write_input(tmp_path / f"bad-{field}.csv", rows)
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        load_rows(path, "UTC")
+
+
 def test_invalid_dispatch_parameters_fail_closed(tmp_path: Path) -> None:
     out = tmp_path / "invalid-config"
     with pytest.raises(SystemExit):
