@@ -92,6 +92,26 @@ class VerifySyntheticArtifactsTests(unittest.TestCase):
         errors = verify_artifacts(self.csv_path, self.manifest_path)
         self.assertTrue(any("at least one data row" in error for error in errors))
 
+    def test_csv_blank_header_is_rejected(self) -> None:
+        self.csv_path.write_text(
+            "timestamp, ,water_demand_m3\n2026-01-01T00:00,2.0,1.0\n",
+            encoding="utf-8",
+        )
+        self.write_manifest()
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertTrue(any("empty column name" in error for error in errors))
+
+    def test_manifest_row_count_must_be_an_integer_not_bool_or_float(self) -> None:
+        for invalid_count in (True, 2.0, "2", -1):
+            with self.subTest(row_count=invalid_count):
+                manifest = json.loads(self.manifest_path.read_text())
+                manifest["row_count"] = invalid_count
+                self.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                errors = verify_artifacts(self.csv_path, self.manifest_path)
+                self.assertTrue(
+                    any("row_count must be a non-negative integer" in error for error in errors)
+                )
+
     def test_cli_returns_nonzero_for_missing_manifest(self) -> None:
         result = subprocess.run(
             [sys.executable, "tools/verify_synthetic_artifacts.py", str(self.csv_path),
