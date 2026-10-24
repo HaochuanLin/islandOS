@@ -72,8 +72,8 @@ class TestForecastPluginBacktest(unittest.TestCase):
             self.assertAlmostEqual(report["skill_vs_persistence_mae"], 0.0)
             self.assertEqual(report["seasonal_comparable_plugin_metrics"]["samples"], 20)
             self.assertIn("skill_vs_seasonal_naive_24h_mae", report)
-            self.assertIn("persistence_baseline_m3", rows[0])
-            self.assertIn("seasonal_24h_baseline_m3", rows[0])
+            self.assertIn("persistence_baseline_m3", report["forecast_rows"][0])
+            self.assertIn("seasonal_24h_baseline_m3", report["forecast_rows"][0])
 
     def test_rejects_gapped_series_and_bad_split(self):
         with tempfile.TemporaryDirectory() as directory:
