@@ -128,8 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hours", type=int, default=168, help="synthetic rows, 25–8784")
     parser.add_argument("--seed", type=int, default=20261024)
     parser.add_argument("--start", default="2026-01-01T00:00:00")
-    parser.add_argument("--assume-timezone", choices=["UTC"], default="UTC",
-                        help="timezone attached to naive timestamps; default UTC is explicit in the report")
+    parser.add_argument("--assume-timezone", choices=["UTC"], default=None,
+                        help="explicitly attach UTC to naive input timestamps; required for naive user CSVs")
     parser.add_argument("--plugin", help="trusted plug-in as module.path:ClassName")
     parser.add_argument("--ro-rated-power-kw", type=float, default=10.0)
     parser.add_argument("--specific-energy-kwh-m3", type=float, default=4.0)
@@ -142,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.input:
             input_path = args.input
             rows, stamps = load_rows(input_path, args.assume_timezone)
+            effective_timezone = args.assume_timezone
             input_type = "user_supplied_unverified"
         else:
             if args.hours < 25 or args.hours > 8784:
@@ -153,7 +154,8 @@ def main(argv: list[str] | None = None) -> int:
             input_path = args.output_dir / "synthetic_input.csv"
             input_path.parent.mkdir(parents=True, exist_ok=True)
             write_csv(input_path, rows)
-            rows, stamps = load_rows(input_path, args.assume_timezone)
+            effective_timezone = "UTC"
+            rows, stamps = load_rows(input_path, effective_timezone)
             input_type = "synthetic"
         plugin = load_plugin(args.plugin)
         registry = ForecastModelRegistry()
@@ -227,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
             "is_measured_site_data": False if input_type == "synthetic" else None,
             "input": {"file": input_path.name, "sha256": sha256_file(input_path), "rows": len(rows)},
             "time_alignment": {
-                "timezone_assumption": args.assume_timezone,
+                "timezone_assumption": effective_timezone,
                 "warmup_hours_excluded_from_dispatch_comparison": warmup,
                 "forecast_rows_compared": len(predicted),
                 "first_forecast_timestamp": stamps[warmup].isoformat(),
