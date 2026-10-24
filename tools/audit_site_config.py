@@ -43,6 +43,13 @@ def audit_config(path: Path) -> dict[str, Any]:
             "status": status,
             "notes": notes,
         },
+        "configuration_resolution": {
+            "defaults_merged": True,
+            "note": (
+                "Equipment and economics values below are effective values after the shared loader "
+                "merges defaults; they are not necessarily all explicitly declared in the hashed file."
+            ),
+        },
         "provenance_review": {
             "status_label_present": bool(str(declared_status or "").strip()),
             "appears_illustrative_or_assumed": is_illustrative,
