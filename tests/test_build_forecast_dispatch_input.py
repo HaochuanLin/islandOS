@@ -134,6 +134,23 @@ class TestForecastDispatchInputBuilder(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "finite and non-negative"):
                 build_forecast_dispatch_input(power, model, root / "joined.csv")
 
+    def test_rejects_duplicate_power_csv_headers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            power = root / "power.csv"
+            with power.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow([
+                    "timestamp_utc", "actual_surplus_kw", "actual_surplus_kw",
+                    "forecast_surplus_kw", "water_demand_m3", "cooling_demand_kw_th",
+                ])
+                writer.writerow(["2026-01-01T00:00:00Z", 10, 11, 12, 20, 50])
+
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                build_forecast_dispatch_input(
+                    power, root / "not-read-before-power-validation.json", root / "joined.csv"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

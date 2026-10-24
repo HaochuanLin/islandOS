@@ -66,7 +66,11 @@ def load_paired_series(input_csv: str | Path) -> tuple[list[str], Scenario, list
     input_path = Path(input_csv)
     with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        missing = set(REQUIRED_COLUMNS) - set(reader.fieldnames or [])
+        headers = reader.fieldnames or []
+        duplicates = sorted({header for header in headers if headers.count(header) > 1})
+        if duplicates:
+            raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
+        missing = set(REQUIRED_COLUMNS) - set(headers)
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
