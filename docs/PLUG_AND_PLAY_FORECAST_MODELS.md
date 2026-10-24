@@ -55,3 +55,26 @@ The public-data workflow `deep-learning-water-demand.yml` runs the experiment ag
 The multi-series workflow now emits an explicit machine-readable benchmark decision. The LSTM is only eligible for site-specific review if it beats the incumbent gradient-boosting model on at least 80% of evaluated series in the walk-forward window and achieves at least 5% mean MAE improvement. This is a conservative research gate, not a universal model-selection theorem; a passing result does not deploy the model. The public SOWEKI series are one collection, not independent island sites. Final promotion still requires the existing forecast-candidate review gate, representative local data, high-demand underforecast checks, and human approval.
 
 The model registry is an executable integration boundary; the optional LSTM experiment and the registry are intentionally separate from automatic live dispatch. This allows third-party models to be plugged into a shared contract without confusing interface compatibility with demonstrated predictive quality.
+
+
+## End-to-end third-party plugin workflow
+
+Implement the documented plugin contract, then evaluate it without changing the simulator or the join adapter:
+
+```bash
+python experiments/backtest_forecast_plugin.py \
+  data/processed/your_prepared_hourly.csv \
+  --plugin your_package.forecast:MyForecastPlugin \
+  --history-hours 168 --test-fraction 0.2 \
+  --output build/plugin-backtest/forecast_report.json
+
+python experiments/build_forecast_dispatch_input.py \
+  data/processed/paired_power_dispatch.csv \
+  build/plugin-backtest/forecast_report.json \
+  --forecast-column plugin_forecast_m3 \
+  --output build/plugin-backtest/dispatch_input.csv
+```
+
+The backtest uses a chronological test tail and gives the plugin only the prior `history-hours` observations for each one-step prediction. It records the source CSV SHA-256, plugin identity/version, test window, metrics, and limitations. Its report uses the existing `rolling_backtest_completed` contract accepted by the timestamp-checked dispatch join. The join preserves measured water demand separately from the forecast planning column.
+
+**Security boundary:** `--plugin` imports and executes Python code in the current process. Only load trusted local packages. This harness proves integration compatibility, not forecast skill, plant safety, or field readiness.

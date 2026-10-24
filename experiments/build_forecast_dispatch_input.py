@@ -27,6 +27,7 @@ SUPPORTED_REPORT_STATUSES = {
     "rolling_backtest_completed",
 }
 FORECAST_COLUMN_CANDIDATES = (
+    "plugin_forecast_m3",
     "hist_gradient_boosting",
     "lstm_deep_learning",
     "rolling_origin_bias_corrected_forecast_m3",
