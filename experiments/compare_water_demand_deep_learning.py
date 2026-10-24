@@ -207,7 +207,9 @@ def compare(input_csv: str | Path, output_json: str | Path,
     if len(train_indices) < 64 or len(test_indices) < 24:
         raise ValueError("Not enough train/test samples after lag warm-up")
 
-    history = values[:split]
+    validation_count = max(24, int(len(train_indices) * 0.15))
+    scaler_fit_end = train_indices[len(train_indices) - validation_count]
+    history = values[:scaler_fit_end]
     mean = sum(history) / len(history)
     variance = sum((x - mean) ** 2 for x in history) / len(history)
     scale = max(math.sqrt(variance), 1e-6)
@@ -259,7 +261,9 @@ def compare(input_csv: str | Path, output_json: str | Path,
     wf_summary: dict[str, Any] = {"method": "second chronological window; fit uses only earlier targets"}
     if len(wf_indices) >= 24:
         wf_train_indices = list(range(LAG_HOURS, second_start))
-        wf_history = values[:second_start]
+        wf_validation_count = max(24, int(len(wf_train_indices) * 0.15))
+        wf_scaler_fit_end = wf_train_indices[len(wf_train_indices) - wf_validation_count]
+        wf_history = values[:wf_scaler_fit_end]
         wf_mean = sum(wf_history) / len(wf_history)
         wf_variance = sum((value - wf_mean) ** 2 for value in wf_history) / len(wf_history)
         wf_scale = max(math.sqrt(wf_variance), 1e-6)
@@ -306,6 +310,8 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "training_samples": len(wf_train_indices),
             "test_samples": len(wf_indices),
             "scaler_fit_on_training_history_only": True,
+            "scaler_fit_end_timestamp": stamps[wf_scaler_fit_end - 1].isoformat(),
+            "validation_tail_excluded_from_scaler_fit": True,
             "early_stopping": wf_early_stopping,
             "test_metrics": {name: metrics(wf_actual, pred) for name, pred in wf_sets.items()},
         })
@@ -336,6 +342,8 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "epochs": epochs,
             "features": ["normalized past demand", "hour-of-day sine/cosine", "day-of-week sine/cosine"],
             "scaler_fit_on_training_history_only": True,
+            "scaler_fit_end_timestamp": stamps[scaler_fit_end - 1].isoformat(),
+            "validation_tail_excluded_from_scaler_fit": True,
             "early_stopping": early_stopping,
         },
         "test_metrics": test_metrics,
