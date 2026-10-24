@@ -53,13 +53,7 @@ These tools are **not yet one fully integrated, validated forecast-and-control p
 python tools/generate_synthetic_site_csv.py --output build/synthetic_site_hourly.csv --hours 168 --seed 20261023
 ```
 
-Before uploading a file, optionally run the CSV preflight (default expected interval is one hour):
-
-```bash
-python tools/validate_site_csv.py build/synthetic_site_hourly.csv --json
-```
-
-It checks required columns, numeric/flag values, ISO timestamps, consistent timezone mode, and exact interval spacing, and emits a SHA-256 digest. A gap or malformed timestamp returns exit code `2` instead of being silently treated as a regular hourly series. Then open the hosted app or run it locally and upload `build/synthetic_site_hourly.csv`. This is synthetic onboarding data only—not a forecast, measured site data, or an operational recommendation. The seed makes it repeatable.
+Then open the hosted app or run it locally and upload `build/synthetic_site_hourly.csv`. This is synthetic onboarding data only—not a forecast, measured site data, or an operational recommendation. The seed makes it repeatable.
 
 From the repository root:
 
