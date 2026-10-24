@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -33,22 +35,45 @@ class SyntheticSiteCsvTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             generate_rows(1, 1, datetime.fromisoformat("2026-01-01T00:00:00+00:00"))
 
-    def test_cli_writes_parseable_csv(self):
+    def test_cli_writes_csv_and_a_matching_provenance_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "site.csv"
+            manifest_path = Path(directory) / "site.provenance.json"
             result = subprocess.run(
                 [sys.executable, "tools/generate_synthetic_site_csv.py",
-                 "--output", str(output), "--hours", "24", "--seed", "9"],
+                 "--output", str(output), "--manifest", str(manifest_path),
+                 "--hours", "24", "--seed", "9"],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("SYNTHETIC", result.stdout)
+            self.assertIn("SHA-256:", result.stdout)
             with output.open(newline="", encoding="utf-8") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(len(rows), 24)
             self.assertEqual(list(rows[0]), FIELDS)
-            # Exercise the same parser used by the strategy-comparison workflow.
             parsed = load_site_steps(output)
             self.assertEqual(len(parsed), 24)
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["dataset_type"], "synthetic")
+            self.assertFalse(manifest["is_measured_site_data"])
+            self.assertEqual(manifest["row_count"], 24)
+            self.assertEqual(manifest["generation"]["seed"], 9)
+            self.assertEqual(manifest["sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
+            self.assertEqual(manifest["time_range"]["first_timestamp"], rows[0]["timestamp"])
+            self.assertEqual(manifest["time_range"]["last_timestamp"], rows[-1]["timestamp"])
+
+    def test_default_manifest_name_is_next_to_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "nested" / "site.csv"
+            subprocess.run(
+                [sys.executable, "tools/generate_synthetic_site_csv.py",
+                 "--output", str(output), "--hours", "1"],
+                check=True, capture_output=True, text=True,
+            )
+            manifest_path = output.with_suffix(".manifest.json")
+            self.assertTrue(manifest_path.exists())
+            self.assertEqual(json.loads(manifest_path.read_text())["row_count"], 1)
 
 
 if __name__ == "__main__":
