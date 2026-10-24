@@ -93,6 +93,19 @@ class TestNSGA2DispatchOptimizer(unittest.TestCase):
                 len(summaries),
             )
 
+    def test_optimizer_returns_no_feasible_result_when_demand_is_impossible(self):
+        # A tiny tank and extreme demand make zero unmet water mathematically
+        # impossible regardless of the chosen RO schedule.
+        steps = make_steps(count=4, surplus=10.0, demand=1000.0, off_peak=True)
+        config = make_config(tank=0.1, initial=0.0)
+        summaries, schedules, meta = optimize_dispatch(
+            steps, config, population_size=120, generations=60, seed=42
+        )
+        self.assertEqual(summaries, [])
+        self.assertEqual(schedules, [])
+        self.assertEqual(meta["feasible_count"], 0)
+        self.assertGreater(meta["evaluations"], 0)
+
     def test_optimizer_rejects_population_below_configured_minimum(self):
         with self.assertRaisesRegex(ValueError, "population_size"):
             optimize_dispatch(make_steps(), make_config(), population_size=20, generations=60)
