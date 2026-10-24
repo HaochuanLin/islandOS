@@ -82,6 +82,40 @@ class SiteCsvPreflightTests(unittest.TestCase):
         self.assertFalse(report["valid"])
         self.assertIn("at least one data row", report["error"])
 
+    def test_duplicate_headers_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "duplicate.csv"
+            path.write_text(
+                "timestamp,renewable_surplus_kw,renewable_surplus_kw,grid_price_per_kwh,off_peak,grid_available,water_demand_m3\n"
+                "2026-01-01T00:00,1,2,0.2,true,true,1.1\n",
+                encoding="utf-8",
+            )
+            result = self.run_cli(path, "--json")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("duplicate column names", json.loads(result.stdout)["error"])
+
+    def test_extra_csv_fields_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "extra.csv"
+            write_csv(path, ["2026-01-01T00:00"])
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write("2026-01-01T01:00,1,0,0.2,true,true,1.1,unexpected\n")
+            result = self.run_cli(path, "--json")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("extra field", json.loads(result.stdout)["error"])
+
+    def test_missing_csv_fields_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing.csv"
+            path.write_text(
+                ",".join(FIELDS) + "\n"
+                "2026-01-01T00:00,1,0,0.2,true,true\n",
+                encoding="utf-8",
+            )
+            result = self.run_cli(path, "--json")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("missing", json.loads(result.stdout)["error"])
+
     def test_mixed_timezone_modes_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mixed.csv"

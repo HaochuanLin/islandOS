@@ -6,6 +6,7 @@ This validates file structure and consistency, not sensor authenticity or site a
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import sys
@@ -19,9 +20,37 @@ if str(ROOT) not in sys.path:
 from experiments.compare_energy_water_strategies import load_site_steps
 
 
+def _validate_csv_shape(path: Path) -> None:
+    """Reject duplicate headers and rows whose field count differs from the header."""
+    try:
+        with path.open("r", newline="", encoding="utf-8-sig") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, None)
+            if not header:
+                raise ValueError("CSV is missing a header")
+            if any(not column.strip() for column in header):
+                raise ValueError("CSV header contains an empty column name")
+            if len(header) != len(set(header)):
+                raise ValueError("CSV contains duplicate column names")
+            for row_number, row in enumerate(reader, start=2):
+                if not row:
+                    continue
+                if len(row) > len(header):
+                    raise ValueError(
+                        f"Row {row_number}: contains {len(row) - len(header)} extra field(s) beyond the header"
+                    )
+                if len(row) < len(header):
+                    raise ValueError(
+                        f"Row {row_number}: missing {len(header) - len(row)} field(s) compared with the header"
+                    )
+    except (csv.Error, UnicodeError) as exc:
+        raise ValueError(f"CSV parse error: {exc}") from exc
+
+
 def inspect_csv(path: Path, interval_minutes: int) -> dict:
     if interval_minutes < 1:
         raise ValueError("interval_minutes must be >= 1")
+    _validate_csv_shape(path)
     steps = load_site_steps(path)
     if not steps:
         raise ValueError("CSV must contain at least one data row")
