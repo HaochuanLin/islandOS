@@ -28,7 +28,12 @@ def inspect_csv(path: Path, interval_minutes: int) -> dict:
     parsed: list[datetime] = []
     for index, step in enumerate(steps, start=2):
         try:
-            stamp = datetime.fromisoformat(step.timestamp)
+            # Python 3.10's fromisoformat does not consistently accept the
+            # ISO-8601 UTC designator "Z"; normalize it to an explicit offset.
+            raw_timestamp = step.timestamp.strip()
+            if raw_timestamp.endswith("Z"):
+                raw_timestamp = raw_timestamp[:-1] + "+00:00"
+            stamp = datetime.fromisoformat(raw_timestamp)
         except ValueError as exc:
             raise ValueError(f"Row {index}: timestamp must be ISO-8601, got {step.timestamp!r}") from exc
         parsed.append(stamp)
