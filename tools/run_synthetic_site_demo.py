@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments.compare_energy_water_strategies import Config, compare_strategies, load_site_steps
+from islandos_config import load_config
 from tools.generate_synthetic_site_csv import FIELDS, generate_rows
 from datetime import datetime
 
@@ -41,22 +42,38 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hours", type=int, default=168, help="synthetic hourly rows (1–8784)")
     parser.add_argument("--seed", type=int, default=20261023)
     parser.add_argument("--start", default="2026-01-01T00:00:00", help="naive local ISO timestamp")
-    parser.add_argument("--ro-rated-power-kw", type=float, default=20.0)
-    parser.add_argument("--specific-energy-kwh-m3", type=float, default=3.5)
-    parser.add_argument("--tank-capacity-m3", type=float, default=30.0)
-    parser.add_argument("--initial-water-m3", type=float, default=10.0)
+    parser.add_argument("--config", type=Path, help="optional site-parameter JSON; only RO/ reservoir assumptions are imported")
+    parser.add_argument("--ro-rated-power-kw", type=float, default=20.0,
+                        help="screening RO power (default 20 kW; independent of search-space candidate ratings)")
+    parser.add_argument("--specific-energy-kwh-m3", type=float, default=None)
+    parser.add_argument("--tank-capacity-m3", type=float, default=None)
+    parser.add_argument("--initial-water-m3", type=float, default=None)
     parser.add_argument("--min-run-hours", type=int, default=1)
     args = parser.parse_args(argv)
 
     try:
         start = datetime.fromisoformat(args.start)
         rows = generate_rows(args.hours, args.seed, start)
-        # Validate physical assumptions through the same core configuration contract.
+        # Optional shared config supplies equipment assumptions; CLI flags override it.
+        site_config = load_config(args.config) if args.config else None
+        ro_defaults = site_config["equipment"]["ro"] if site_config else {}
+        specific_energy = (
+            args.specific_energy_kwh_m3 if args.specific_energy_kwh_m3 is not None
+            else ro_defaults.get("specific_energy_kwh_m3", 3.5)
+        )
+        tank_capacity = (
+            args.tank_capacity_m3 if args.tank_capacity_m3 is not None
+            else ro_defaults.get("reservoir_capacity_m3", 30.0)
+        )
+        initial_water = (
+            args.initial_water_m3 if args.initial_water_m3 is not None
+            else ro_defaults.get("initial_water_m3", 10.0)
+        )
         config = Config(
             ro_rated_power_kw=args.ro_rated_power_kw,
-            specific_energy_kwh_m3=args.specific_energy_kwh_m3,
-            tank_capacity_m3=args.tank_capacity_m3,
-            initial_water_m3=args.initial_water_m3,
+            specific_energy_kwh_m3=specific_energy,
+            tank_capacity_m3=tank_capacity,
+            initial_water_m3=initial_water,
             min_run_hours=args.min_run_hours,
         )
         out = args.output_dir
@@ -124,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
                 "tank_capacity_m3": config.tank_capacity_m3,
                 "initial_water_m3": config.initial_water_m3,
                 "min_run_hours": config.min_run_hours,
+                "site_config_file": args.config.name if args.config else None,
+                "site_config_sha256": sha256_file(args.config) if args.config else None,
             },
             "outputs": {
                 "summary_csv": summary_path.name,
