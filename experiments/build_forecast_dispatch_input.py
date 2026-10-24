@@ -28,6 +28,7 @@ SUPPORTED_REPORT_STATUSES = {
 }
 FORECAST_COLUMN_CANDIDATES = (
     "hist_gradient_boosting",
+    "lstm_deep_learning",
     "rolling_origin_bias_corrected_forecast_m3",
     "seasonal_bias_corrected_forecast_m3",
     "seasonal_naive_24h_forecast_m3",
