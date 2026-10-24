@@ -45,6 +45,7 @@ class SiteConfigBootstrapTests(unittest.TestCase):
             validated = json.loads(validate.stdout)
             self.assertTrue(validated["valid"])
             self.assertEqual(validated["name"], "Pilot sandbox")
+            self.assertEqual(validated["status"], "illustrative_bootstrap_not_site_data")
 
             doctor = subprocess.run(
                 [sys.executable, str(ROOT / "tools" / "islandos_doctor.py"),
