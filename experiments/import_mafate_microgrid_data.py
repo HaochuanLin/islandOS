@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from datetime import datetime, timedelta
@@ -173,6 +174,15 @@ def _write_csv(path: Path, columns: list[str], rows: list[dict[str, Any]]) -> No
         writer.writerows(rows)
 
 
+
+def _sha256_file(path: Path) -> str:
+    """Hash a source file incrementally so large raw datasets need not fit in memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 def _hour_range(start: datetime, end: datetime):
     current = start.replace(minute=0, second=0, microsecond=0)
     final = end.replace(minute=0, second=0, microsecond=0)
@@ -291,6 +301,9 @@ def import_dataset(data_dir: str | Path, output_dir: str | Path) -> dict[str, An
         "source_row_counts": {key: series["raw_row_count"] for key, series in {
             "meteo": meteo, "solar": solar, **houses
         }.items()},
+        "source_file_sha256": {
+            key: _sha256_file(paths[key]) for key in DATASET_FILES
+        },
         "hourly_bin_counts": {
             "meteo_hours_with_samples": len(meteo["bins"]),
             "solar_plant_hours_with_samples": len(solar["bins"]),
