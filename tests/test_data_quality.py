@@ -79,6 +79,19 @@ class TestDataQuality(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_csv(path, "public", invalid_interval)
 
+    def test_extra_fields_make_csv_invalid(self):
+        path = Path(tempfile.mkstemp(suffix=".csv")[1])
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        path.write_text(
+            "timestamp,wind_kw,pv_kw,critical_load_kw,water_demand_m3,cooling_demand_kw_th\n"
+            "2026-01-01T00:00:00+00:00,10,20,30,4,5,unexpected\n",
+            encoding="utf-8",
+        )
+        report = validate_csv(path, "public")
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("extra_fields", report["issue_codes"])
+        self.assertIn({"code": "extra_fields", "line": 2}, report["issues"])
+
 
 if __name__ == "__main__":
     unittest.main()
