@@ -85,7 +85,7 @@ Retain together: Git SHA, runtime lock/version, source-data provenance and hash,
 ## 6. Current readiness decision
 
 - Repeatable local research-demo deployment: documented in docs/DEMO_DEPLOYMENT.md and guarded by deployment-contract tests.
-- Python dependency audit/SBOM artifacts are retained per lock for 30 days; this does not cover the complete container image or OS packages.
+- Python dependency audit/SBOM artifacts are retained per lock for 30 days. The container smoke workflow separately generates a CycloneDX SBOM from the built image, including detectable OS packages; this does not sign the image.
 - The Docker base is pinned by immutable manifest digest; weekly Dependabot proposals keep tag/digest changes reviewable.
 - Production security review, full container-image SBOM/signing, authenticated multi-user deployment, site-specific economics, owner-approved acceptance thresholds, and field/pilot authorization: **not established**.
 - Decision: **offline research/demo only; no operational control authorization**.
