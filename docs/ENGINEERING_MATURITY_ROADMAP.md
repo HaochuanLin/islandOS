@@ -18,6 +18,12 @@ Baseline scores are provisional engineering assessments, not measured scientific
 | Overall software-engineering maturity | 82/100 | 94/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
 | Real-world operational validation | 38/100 | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached by code-only work. |
 
+## Current work-in-progress evidence (2026-10-24)
+
+The forecast-to-dispatch CLI, CSV artifact SHA-256 manifest, regression tests in `tests/test_forecast_dispatch_demo.py`, and a dedicated CI test step have been added. The test step is intended to cover synthetic end-to-end output, output-file hash integrity, non-destructive handling of existing output directories, user-supplied-data labeling, insufficient history, timezone assumptions, hourly alignment, and non-finite input rejection.
+
+**These additions are not yet counted as a passing gate:** the latest commit has no verified green CI status available to this audit. Keep Gate 1 open until the exact current main commit has green required checks and the test suite is reproducible from a clean checkout. The hosted Streamlit interface is considered accessible based on the owner's direct verification; an AI-facing redirect is not treated as evidence that users must log in.
+
 ## Delivery order
 
 ### Gate 1 — Main-branch reliability
