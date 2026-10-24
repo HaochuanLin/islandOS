@@ -345,10 +345,19 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
         "forecast_metrics": _forecast_metrics(actual, forecast),
         "water_demand_input": {
             "forecast_column_used": "forecast_water_demand_m3" if has_water_forecast else "actual_demand_fallback",
+            "planning_input_status": (
+                "forecast_supplied" if has_water_forecast else "hindsight_actual_fallback"
+            ),
             "actual_demand_is_used_for_execution": True,
-            "forecast_demand_is_used_for_planning": True,
-            "forecast_demand_metrics": _water_forecast_metrics(
-                list(scenario.water_demand_m3_per_hour), forecast_water
+            "forecast_demand_is_used_for_planning": has_water_forecast,
+            "actual_demand_fallback_is_hindsight": not has_water_forecast,
+            # Do not report zero-error "forecast" metrics when the planner was
+            # given the realized target itself; that is hindsight, not skill.
+            "forecast_demand_metrics": (
+                _water_forecast_metrics(
+                    list(scenario.water_demand_m3_per_hour), forecast_water
+                )
+                if has_water_forecast else None
             ),
             "persistence_baseline_comparison": water_demand_persistence_comparison,
         },
