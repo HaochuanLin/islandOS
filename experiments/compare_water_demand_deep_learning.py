@@ -1,4 +1,4 @@
-"""Evaluate an optional PyTorch LSTM water-demand model against naive baselines.
+"""Evaluate optional PyTorch LSTM/GRU water-demand models against naive baselines.
 
 The model is an experimental plug-in candidate, not a production or online-learning
 service. One-step forecasts use only observations strictly before each target.
@@ -399,7 +399,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
         "forecast_rows": rows,
         "limitations": [
             "Experimental one-step-ahead LSTM/GRU challengers; not an online-learning system.",
-            "The neural architecture is selected using an internal chronological validation tail, not the final holdout."
+            "The neural architecture is selected using an internal chronological validation tail, not the final holdout.",
             "Earlier observed demand in the test window is used as lag input, matching rolling one-step operation.",
             "One source series and one secondary chronological window do not establish cross-site transfer.",
             "Forecast quality does not establish improved dispatch economics or safe plant operation.",
