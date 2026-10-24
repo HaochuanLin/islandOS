@@ -57,6 +57,13 @@ class DeploymentContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/container-web-smoke.yml").read_text(encoding="utf-8")
         self.assertIn("docker compose config --quiet", workflow)
 
+    def test_pilot_acceptance_template_is_explicitly_unapproved_and_auditable(self):
+        template = (ROOT / "docs/PILOT_ACCEPTANCE_TEMPLATE.md").read_text(encoding="utf-8")
+        for phrase in ("NOT APPROVED", "NO-GO UNTIL ALL REQUIRED REVIEWS ARE COMPLETE", "abort criteria", "owner-approved", "SHA-256", "no actuator/control path"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase.lower(), template.lower())
+        self.assertIn("PILOT_ACCEPTANCE_TEMPLATE.md", (ROOT / "docs/DEMO_DEPLOYMENT.md").read_text(encoding="utf-8"))
+
     def test_runtime_lock_pins_direct_runtime_packages(self):
         lock = (ROOT / "requirements-runtime.lock").read_text(encoding="utf-8")
         pins = {}
