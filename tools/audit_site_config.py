@@ -20,11 +20,19 @@ def audit_config(path: Path) -> dict[str, Any]:
     """Build a deterministic, machine-readable audit record for a config file."""
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
+    # Audit declarations from the exact user-supplied document, not the
+    # effective configuration after the loader fills in default values.
+    declared = json.loads(raw.decode("utf-8"))
     config = load_config(path)
     metadata = config.get("metadata", {})
-    status = metadata.get("status", "unspecified") if isinstance(metadata, dict) else "unspecified"
-    notes = metadata.get("notes", "") if isinstance(metadata, dict) else ""
-    is_illustrative = "illustrative" in str(status).lower() or "assum" in str(notes).lower()
+    declared_metadata = declared.get("metadata", {}) if isinstance(declared, dict) else {}
+    if not isinstance(declared_metadata, dict):
+        declared_metadata = {}
+    declared_status = declared_metadata.get("status")
+    declared_notes = declared_metadata.get("notes", "")
+    status = declared_status if declared_status is not None else "unspecified"
+    notes = declared_notes
+    is_illustrative = "illustrative" in str(declared_status or "").lower() or "assum" in str(declared_notes).lower()
     return {
         "audit_version": 1,
         "configuration_file": path.name,
@@ -36,7 +44,7 @@ def audit_config(path: Path) -> dict[str, Any]:
             "notes": notes,
         },
         "provenance_review": {
-            "status_label_present": bool(str(status).strip()),
+            "status_label_present": bool(str(declared_status or "").strip()),
             "appears_illustrative_or_assumed": is_illustrative,
             "warning": (
                 "Configuration labels and notes are self-reported; they do not prove data provenance."
