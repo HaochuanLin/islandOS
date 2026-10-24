@@ -26,7 +26,7 @@ The forecast-to-dispatch CLI, CSV artifact SHA-256 manifest, regression tests in
 
 ## Stage A — plug-and-play readiness without measured site data
 
-**Stage A score: 90/100 — target 90/100.** This is a bounded product-engineering gate for a clean checkout with no measured site data; it is not a claim of site accuracy, commercial production readiness, or operational safety.
+**Stage A score: 90/100 — target 90/100 (exit criteria verified on 2026-10-24).** This is a bounded product-engineering gate for a clean checkout with no measured site data; it is not a claim of site accuracy, commercial production readiness, or operational safety. The tested PR #156 head passed the full pytest suite (**544 passed, 2 skipped; 424 subtests**) plus integration examples, Windows gateway build, all five dependency audits, Nan'ao scenario validation, and container build/SBOM/health smoke. Main merge commit `599ed513c6e15b0884261c082d75f13703f20598` has no file-level diff from that tested head, and the repository open-PR query is empty.
 
 Exit criteria:
 
@@ -115,36 +115,36 @@ Do not increase the commercial/deployment score until the new tests and document
 
 ## Progress log
 
-### 2026-10-24 — Container image SBOM generation (in progress)
+### 2026-10-24 — Container image SBOM generation (verified)
 
 - Added the pinned Anchore SBOM action to scan the already-built local web image and emit a CycloneDX JSON artifact with 30-day retention.
 - Added a regression check for the exact action revision, image reference, output format/path, and retention.
 - The image SBOM complements (rather than replaces) the five Python lock SBOM artifacts. Image signing and production security controls remain unresolved.
-- First CI run successfully scanned the image but failed when writing the report because the output directory did not exist. The workflow now creates the directory explicitly and the regression test guards that setup; rerun required before counting the gate as passed.
-- Score change deferred until CI proves the image scan works against the actual built image and the artifact is available.
+- The first run exposed a missing output-directory setup; the workflow was corrected and the follow-up container smoke run passed. Run [40089031228](https://github.com/HaochuanLin/islandOS/actions/runs/40089031228) scanned the built image, uploaded `islandos-web-image-sbom` (267,458 bytes; 30-day retention), and passed the Streamlit health smoke check.
+- The PR head passed all six relevant workflow families: full pytest (544 passed, 2 skipped), integration examples, Windows gateway build, five-lock dependency audit, Nan'ao scenario, and container smoke. The merge commit [599ed51](https://github.com/HaochuanLin/islandOS/commit/599ed513c6e15b0884261c082d75f13703f20598) has no file-level diff from the tested PR head. Image signing remains open; the SBOM does not prove source correctness or production readiness.
 
 
-### 2026-10-24 — Versioned Docker base and update cadence (in progress)
+### 2026-10-24 — Versioned Docker base and update cadence (verified)
 
 - Replaced the floating `python:3.11-slim` tag with the explicit `python:3.11.17-slim-trixie` tag, reducing accidental Python-patch and Debian-release drift.
 - Added weekly Dependabot Docker update proposals so security updates can be reviewed rather than silently changing on rebuild.
 - Added regression checks for the versioned base tag and Docker update configuration.
-- Follow-up work pins the base tag to the manifest digest observed in the successful container build log and adds a regression check; this is not a signature of the image produced by the project itself.
+- Follow-up PR [#155](https://github.com/HaochuanLin/islandOS/pull/155) pins the base tag to the manifest digest observed in the successful container build log and adds a regression check. The digest pin is not a signature of the image produced by the project itself; weekly Dependabot proposals remain the reviewed update path.
 
 
-### 2026-10-24 — Python dependency SBOM artifacts (in progress)
+### 2026-10-24 — Python dependency SBOM artifacts (verified)
 
 - Extended the dependency-audit matrix to emit and retain CycloneDX JSON audit/SBOM artifacts for each Python lock, with 30-day retention, including when the audit job fails after producing a report.
 - Added a regression check that guards SBOM format, artifact upload, and retention configuration.
 - Updated the security and reproducibility docs to make the scope explicit: these are Python dependency inventories, not a full OS/container image SBOM; immutable base-image digest and image signing remain open.
-- Score change deferred until the PR's exact merge tree passes all required workflows.
+- PR [#147](https://github.com/HaochuanLin/islandOS/pull/147) merged the five-lock SBOM matrix. The exact image-SBOM PR head subsequently passed the dependency audit matrix, and its artifacts complement the separately generated container-image SBOM. Signing and wheel-hash locking remain unresolved.
 
 
 ### 2026-10-24 — Stage B deployment contract hardening (in progress)
 
 - Added regression tests for exact runtime-lock installation, non-root container execution, health-check presence, loopback-only Compose port publication, and explicit research-demo security boundaries.
 - Added a pilot-readiness template defining lifecycle-cost accounting, sensitivity inputs, data governance, shadow-mode stages, owner-approved site acceptance criteria, and explicit no-go conditions. This is a template, not a site-specific business case or deployment authorization.
-- Corrected the reproducibility guide: Docker installs `requirements-runtime.lock`, not the range-based requirements file. Remaining container supply-chain gaps are now stated accurately: package hashes, immutable base-image digest, SBOM, and signing are not all in place.
+- Corrected the reproducibility guide: Docker installs `requirements-runtime.lock`, not the range-based requirements file. The base image is now pinned by immutable manifest digest and both Python-lock and built-container CycloneDX SBOM artifacts are generated in CI. Remaining supply-chain gaps include wheel hashes, image signing, and production access/network controls.
 - **Score change deferred:** wait for clean CI on the exact merge tree; do not treat documentation or source-only checks as production certification.
 
 
