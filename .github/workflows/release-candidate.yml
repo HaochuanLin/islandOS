@@ -135,6 +135,7 @@ jobs:
                   "pip-audit on CI/runtime/ML/deep-learning dependency specifications",
                   "Docker build",
                   "non-root container health smoke test",
+                  "SHA-256 artifact checksum verification",
               ],
               "field_deployment_approved": False,
           }
@@ -151,7 +152,20 @@ jobs:
               encoding="utf-8",
           )
           PY
-          (cd dist && find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
+          (cd dist && find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("dist")
+          checksums = json.loads((root / "SHA256SUMS.json").read_text(encoding="utf-8"))
+          for name, expected in checksums.items():
+              actual = hashlib.sha256((root / name).read_bytes()).hexdigest()
+              if actual != expected:
+                  raise SystemExit(f"SHA-256 mismatch for {name}")
+          print(f"Verified {len(checksums)} artifact hashes in SHA256SUMS.json")
+          PY
       - name: Upload release candidate bundle
         uses: actions/upload-artifact@v7
         with:
