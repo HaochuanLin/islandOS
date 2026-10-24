@@ -27,6 +27,9 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
     assert report["is_measured_site_data"] is False
     assert report["time_alignment"]["forecast_rows_compared"] == 6
     assert report["forecast"]["model_id"] == "trailing-day-mean"
+    assert "does not forecast these signals" in report["forecast"]["dispatch_exogenous_inputs_policy"]
+    assert any("Only water demand is forecast" in item for item in report["limitations"])
+    assert any("not be treated as deployable operational schedules" in item for item in report["limitations"])
     assert math.isfinite(report["forecast"]["mae_m3_per_hour"])
     assert len(report["input"]["sha256"]) == 64
     for artifact in report["artifacts"].values():
