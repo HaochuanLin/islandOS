@@ -9,10 +9,10 @@ on:
       - main
   workflow_dispatch:
 
-# New commits supersede old PR smoke runs; main/release verification is not cancelled.
+# Newer pushes supersede stale runs; scheduled/manual verification on main is preserved.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
