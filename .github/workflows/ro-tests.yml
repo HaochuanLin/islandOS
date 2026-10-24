@@ -77,6 +77,35 @@ jobs:
         run: python -m pip check
       - name: Compile all Python sources
         run: python -m compileall -q .
+      - name: Smoke-test forecast-to-dispatch end-to-end
+        run: |
+          python tools/run_forecast_dispatch_demo.py --hours 48 --seed 20261024 --output-dir build/ci-forecast-dispatch-demo
+          python - <<'PY'
+          import csv
+          import json
+          import math
+          from pathlib import Path
+
+          out = Path("build/ci-forecast-dispatch-demo")
+          report = json.loads((out / "run_report.json").read_text(encoding="utf-8"))
+          assert report["status"] == "illustrative_forecast_dispatch_screening_only"
+          assert report["dataset_type"] == "synthetic"
+          assert report["is_measured_site_data"] is False
+          assert report["time_alignment"]["forecast_rows_compared"] == 24
+          assert report["forecast"]["model_id"] == "trailing-day-mean"
+          assert math.isfinite(report["forecast"]["mae_m3_per_hour"])
+          with (out / "strategy_comparison.csv").open(newline="", encoding="utf-8") as handle:
+              summaries = list(csv.DictReader(handle))
+          assert len(summaries) == 10, f"expected 5 strategies x 2 demand bases, got {len(summaries)}"
+          assert {row["demand_basis"] for row in summaries} == {"rolling_forecast", "realized_demand_reference"}
+          with (out / "forecast_audit.csv").open(newline="", encoding="utf-8") as handle:
+              audit = list(csv.DictReader(handle))
+          assert len(audit) == 24
+          assert all(row["input_history_sha256"] for row in audit)
+          for name in ("forecast_dispatch_input.csv", "forecast_audit.csv", "strategy_timestep_audit.csv"):
+              assert (out / name).is_file() and (out / name).stat().st_size > 0, name
+          print("Forecast-to-dispatch integration smoke test passed.")
+          PY
       - name: Smoke-test plug-in forecasting and synthetic onboarding
         run: |
           # GitHub-hosted runners start from a clean checkout with no build/ directory.
