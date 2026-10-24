@@ -63,7 +63,15 @@ class TestForecastPluginBacktest(unittest.TestCase):
             self.assertEqual(len(rows), 20)
             self.assertEqual(float(rows[0]["water_demand_m3"]), 10 + 80 % 7)
             self.assertEqual(float(rows[0]["forecast_water_demand_m3"]), 10 + 79 % 7)
-            self.assertTrue(json.loads(report_path.read_text())["input_csv_sha256"])
+            report = json.loads(report_path.read_text())
+            self.assertTrue(report["input_csv_sha256"])
+            self.assertIn("persistence_last_observation", report["baseline_metrics"])
+            self.assertIn("seasonal_naive_24h", report["baseline_metrics"])
+            self.assertEqual(report["baseline_metrics"]["persistence_last_observation"]["samples"], 20)
+            self.assertEqual(report["baseline_metrics"]["seasonal_naive_24h"]["samples"], 20)
+            self.assertAlmostEqual(report["skill_vs_persistence_mae"], 1.0)
+            self.assertIn("persistence_baseline_m3", rows[0])
+            self.assertIn("seasonal_24h_baseline_m3", rows[0])
 
     def test_rejects_gapped_series_and_bad_split(self):
         with tempfile.TemporaryDirectory() as directory:
