@@ -29,7 +29,7 @@ A separate Nan'ao-type scenario is documented in the [Nan'ao scenario guide](doc
 ## What it can do today
 
 - **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results.
-- **Energy–water dispatch experiments:** compare priority-based flexible-load policies and run a rolling-horizon prototype.
+- **Energy–water dispatch experiments:** compare priority-based flexible-load policies and run a rolling-horizon prototype. The RO simulator also accepts explicit surplus and water-demand forecasts; `python experiments/evaluate_forecast_driven_ro_sim.py` measures forecast-error impacts against an optimistic perfect-foresight reference.
 - **Multi-objective policy search:** use grid search or an experimental NSGA-II optimizer to inspect trade-offs among unmet water/cooling demand and remaining renewable surplus.
 - **Plug-in forecasting:** register replaceable demand-forecast models through a dependency-free runtime contract with timestamp/value validation and input provenance. Run `python examples/forecast_plugin_example.py` for a minimal example, or `python experiments/backtest_forecast_plugin.py data/processed/your_hourly.csv --plugin your_package.forecast:MyPlugin` to produce a rolling-origin report that the existing forecast-to-dispatch adapter can consume. Only import trusted plugin code. Optional PyTorch LSTM/GRU neural candidates and gradient boosting are compared offline before any review or promotion.
 - **Data preparation:** validate time-series CSVs and import selected public weather, measured microgrid, and monthly planning datasets with provenance notes.
@@ -82,6 +82,7 @@ For a compact reference to the other experiments, see [Experiments and workflows
 ## Documentation
 
 - [Plug-in forecast models and end-to-end backtesting](docs/PLUG_AND_PLAY_FORECAST_MODELS.md)
+- [Forecast-driven RO simulation and forecast-error evaluation](docs/FORECAST_DRIVEN_SIMULATION.md)
 - [Release and deployment checklist](docs/RELEASE_CHECKLIST.md)
 - [Changelog](CHANGELOG.md)
 
