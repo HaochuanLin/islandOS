@@ -85,5 +85,6 @@ Retain together: Git SHA, runtime lock/version, source-data provenance and hash,
 ## 6. Current readiness decision
 
 - Repeatable local research-demo deployment: documented in docs/DEMO_DEPLOYMENT.md and guarded by deployment-contract tests.
-- Production security review, authenticated multi-user deployment, site-specific economics, owner-approved acceptance thresholds, and field/pilot authorization: **not established**.
+- Python dependency audit/SBOM artifacts are retained per lock for 30 days; this does not cover the complete container image or OS packages.
+- Production security review, immutable base-image digest, container-image SBOM/signing, authenticated multi-user deployment, site-specific economics, owner-approved acceptance thresholds, and field/pilot authorization: **not established**.
 - Decision: **offline research/demo only; no operational control authorization**.

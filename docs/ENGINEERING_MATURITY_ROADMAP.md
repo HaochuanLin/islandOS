@@ -50,7 +50,8 @@ Stage B exit evidence:
 - The local demo's security boundary is explicit: no public exposure, authentication, safety certification, or actuator path is implied.
 - Economic scenarios identify source, currency, time basis, uncertainty, and exclusions; unknown site-specific inputs remain unknown rather than invented.
 - Pilot acceptance thresholds remain owner-approved fields. Missing approvals mean no-go; synthetic data cannot authorize a pilot.
-- Residual release engineering gaps (image digest pinning, SBOM/signing, production auth/TLS/network controls) remain listed rather than marked solved.
+- The dependency-audit workflow retains a CycloneDX JSON audit/SBOM artifact for each Python lock for 30 days. This does not cover the complete container image or OS packages.
+- Residual release engineering gaps (immutable base-image digest, container-image SBOM/signing, production auth/TLS/network controls) remain listed rather than marked solved.
 
 Do not increase the commercial/deployment score until the new tests and documentation are merged and verified on the exact main source tree.
 
@@ -111,6 +112,14 @@ Do not increase the commercial/deployment score until the new tests and document
 6. If a target depends on access to site measurements, operator decisions, credentials, or physical equipment, mark it blocked and document the dependency instead of fabricating evidence.
 
 ## Progress log
+
+### 2026-10-24 — Python dependency SBOM artifacts (in progress)
+
+- Extended the dependency-audit matrix to emit and retain CycloneDX JSON audit/SBOM artifacts for each Python lock, with 30-day retention, including when the audit job fails after producing a report.
+- Added a regression check that guards SBOM format, artifact upload, and retention configuration.
+- Updated the security and reproducibility docs to make the scope explicit: these are Python dependency inventories, not a full OS/container image SBOM; immutable base-image digest and image signing remain open.
+- Score change deferred until the PR's exact merge tree passes all required workflows.
+
 
 ### 2026-10-24 — Stage B deployment contract hardening (in progress)
 
