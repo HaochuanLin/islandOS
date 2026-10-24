@@ -39,7 +39,7 @@ def audit_config(path: Path) -> dict[str, Any]:
         "configuration_sha256": digest,
         "config_version": config.get("config_version"),
         "metadata": {
-            "name": metadata.get("name") if isinstance(metadata, dict) else None,
+            "name": declared_metadata.get("name"),
             "status": status,
             "notes": notes,
         },
