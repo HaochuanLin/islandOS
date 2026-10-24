@@ -289,6 +289,11 @@ def main(argv: list[str] | None = None) -> int:
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
     except (OSError, ValueError, TypeError, KeyError, ImportError, AttributeError) as exc:
         parser.error(str(exc))
+    except Exception as exc:
+        # A third-party forecasting plug-in can raise arbitrary exceptions. Keep
+        # this CLI fail-closed and user-readable rather than emitting a traceback
+        # that looks like a partial successful run.
+        parser.error(f"Workflow failed: {type(exc).__name__}: {exc}")
 
     print(f"Completed forecast -> dispatch workflow: {len(predicted)} forecast rows.")
     print(f"Forecast MAE: {forecast_mae:.6f} m3/hour")
