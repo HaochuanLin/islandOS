@@ -174,6 +174,17 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Missing water_demand_m3"):
             load_paired_series(self.input)
 
+    def test_rejects_duplicate_csv_headers(self):
+        with self.input.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow([
+                "timestamp_utc", "actual_surplus_kw", "actual_surplus_kw",
+                "forecast_surplus_kw", "water_demand_m3", "cooling_demand_kw_th",
+            ])
+            writer.writerow(["2026-01-01T00:00:00Z", 10, 11, 12, 20, 50])
+        with self.assertRaisesRegex(ValueError, "duplicate columns"):
+            load_paired_series(self.input)
+
 
 if __name__ == "__main__":
     unittest.main()
