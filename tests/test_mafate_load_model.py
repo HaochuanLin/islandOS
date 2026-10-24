@@ -93,5 +93,23 @@ class MafateLoadModelTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Not enough complete training samples"):
                 train_and_evaluate(source, Path(tmp) / "report.json", "house_1_load_kw")
 
+    def test_rejects_duplicate_and_extra_csv_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "malformed.csv"
+            source.write_text(
+                "timestamp_local,house_1_load_kw,house_1_load_kw\n2020-01-01T00:00:00,1,2\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                train_and_evaluate(source, Path(tmp) / "report.json", "house_1_load_kw")
+
+            source.write_text(
+                "timestamp_local,house_1_load_kw\n2020-01-01T00:00:00,1,unexpected\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                train_and_evaluate(source, Path(tmp) / "report.json", "house_1_load_kw")
+
+
 if __name__ == "__main__":
     unittest.main()

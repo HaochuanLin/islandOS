@@ -50,11 +50,19 @@ def _load_series(path: str | Path, target: str) -> tuple[list[datetime], list[fl
     source = Path(path)
     with source.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
+        headers = reader.fieldnames or []
+        duplicates = sorted({name for name in headers if headers.count(name) > 1})
+        if duplicates:
+            raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
         required = {"timestamp_local", target}
-        missing = required - set(reader.fieldnames or [])
+        missing = required - set(headers)
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
+
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
 
     # A week-lag feature requires 168 prior observations. The number of rows
     # needed for a valid chronological train/test split is larger and depends on

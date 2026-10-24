@@ -74,6 +74,24 @@ class TestForecastPerformanceMonitor(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "two full monitoring windows"):
                 monitor_forecast_performance(source, output, window_hours=12)
 
+    def test_rejects_duplicate_and_extra_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "series.csv"
+            output = Path(directory) / "monitor.json"
+            self._write_series(source)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[0] = lines[0].replace("forecast_water_demand_m3", "actual_water_demand_m3")
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                monitor_forecast_performance(source, output, window_hours=12)
+
+            self._write_series(source)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                monitor_forecast_performance(source, output, window_hours=12)
+
 
 if __name__ == "__main__":
     unittest.main()

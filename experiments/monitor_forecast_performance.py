@@ -68,10 +68,18 @@ def monitor_forecast_performance(
 
     with Path(input_csv).open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        missing = set(REQUIRED_COLUMNS) - set(reader.fieldnames or [])
+        headers = reader.fieldnames or []
+        duplicates = sorted({name for name in headers if headers.count(name) > 1})
+        if duplicates:
+            raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
+        missing = set(REQUIRED_COLUMNS) - set(headers)
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
+
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
 
     if len(rows) < 2 * window_hours:
         raise ValueError(
