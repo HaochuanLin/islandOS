@@ -6,6 +6,7 @@ Status: **local research/demo deployment only**. This guide does not describe a 
 
 - The Streamlit application is a research prototype. It has no application-level authentication or role-based access control in this configuration.
 - Do not expose the app directly to the public internet, bind it to a public interface, or place it in front of real operational systems. The Compose file intentionally publishes port 8501 on `127.0.0.1` only.
+- The Compose demo drops all Linux capabilities, enables `no-new-privileges`, and uses an init process. These are defense-in-depth defaults for the local demo, not a replacement for production isolation or access controls.
 - Do not upload confidential, personal, critical-infrastructure, or otherwise restricted site data unless the data owner has approved the environment, retention, access, and handling arrangements.
 - No app workflow should be treated as a PLC/actuator command path. Simulation feasibility is not equipment safety approval.
 - Use synthetic examples for a first smoke test. Uploaded files are unverified input, not automatically measured or trusted data.
