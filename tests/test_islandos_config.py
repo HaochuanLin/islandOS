@@ -40,6 +40,30 @@ class TestIslandOSConfig(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "initial_water_m3"):
                 load_config(path)
 
+    def test_metadata_and_provenance_policy_must_be_structured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cases = [
+                ({"metadata": None}, "metadata must be an object"),
+                ({"metadata": {"name": None}}, "metadata.name must be a non-empty string"),
+                ({"metadata": {"status": " "}}, "metadata.status must be a non-empty string"),
+                ({"metadata": {"notes": 12}}, "metadata.notes must be a string"),
+                ({"parameter_sources": None}, "parameter_sources must be an object"),
+                ({"parameter_sources": {"default_policy": ""}}, "default_policy must be a non-empty string"),
+            ]
+            for index, (override, message) in enumerate(cases):
+                path = Path(tmp) / f"bad-metadata-{index}.json"
+                path.write_text(json.dumps(override), encoding="utf-8")
+                with self.subTest(override=override):
+                    with self.assertRaisesRegex(ValueError, message):
+                        load_config(path)
+
+    def test_boolean_config_version_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "boolean-version.json"
+            path.write_text(json.dumps({"config_version": True}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "config_version must be 1"):
+                load_config(path)
+
     def test_inactive_start_ratio_is_removed_from_default_search(self):
         config = load_config()
         result = optimize_scenario(
