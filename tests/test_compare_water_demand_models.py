@@ -110,6 +110,24 @@ class TestCompareWaterDemandModels(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "continuous hourly"):
                 compare_water_demand_models(source, Path(directory) / "report.json")
 
+    def test_rejects_duplicate_and_extra_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "series.csv"
+            output = Path(directory) / "report.json"
+            self._write_series(source, count=240)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[0] = "timestamp,timestamp"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                compare_water_demand_models(source, output)
+
+            self._write_series(source, count=240)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                compare_water_demand_models(source, output)
+
 
 if __name__ == "__main__":
     unittest.main()
