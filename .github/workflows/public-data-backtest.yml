@@ -338,7 +338,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Download completed series artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: islandos-soweki-measured-data-backtest-*
           path: build/public-data/series-artifacts
