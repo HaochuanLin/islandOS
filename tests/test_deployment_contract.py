@@ -115,6 +115,26 @@ class DeploymentContractTests(unittest.TestCase):
         )
         self.assertFalse(any("production_authorized" in check for check in checks))
 
+    def test_deployment_preflight_requires_capability_drop(self):
+        import shutil
+        import tempfile
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from deployment_preflight import run_checks
+        with tempfile.TemporaryDirectory() as tmp:
+            temp_root = Path(tmp)
+            for relative in ("Dockerfile", "docker-compose.yml", "requirements-runtime.lock", "SECURITY.md"):
+                shutil.copy2(ROOT / relative, temp_root / relative)
+            for relative in ("docs/DEMO_DEPLOYMENT.md", ".github/workflows/container-web-smoke.yml"):
+                target = temp_root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, target)
+            compose = temp_root / "docker-compose.yml"
+            compose.write_text(compose.read_text(encoding="utf-8").replace("cap_drop:", "capability_drop_removed:"), encoding="utf-8")
+            checks = run_checks(temp_root)
+            result = next(check for check in checks if check["name"] == "compose_least_privilege")
+            self.assertEqual(result["status"], "fail")
+
     def test_deployment_preflight_fails_closed_on_public_compose_binding(self):
         import shutil
         import tempfile
