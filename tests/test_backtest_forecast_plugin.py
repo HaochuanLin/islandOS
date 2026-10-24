@@ -63,7 +63,42 @@ class TestForecastPluginBacktest(unittest.TestCase):
             self.assertEqual(len(rows), 20)
             self.assertEqual(float(rows[0]["water_demand_m3"]), 10 + 80 % 7)
             self.assertEqual(float(rows[0]["forecast_water_demand_m3"]), 10 + 79 % 7)
-            self.assertTrue(json.loads(report_path.read_text())["input_csv_sha256"])
+            report = json.loads(report_path.read_text())
+            self.assertTrue(report["input_csv_sha256"])
+            self.assertIn("persistence_last_observation", report["baseline_metrics"])
+            self.assertIn("seasonal_naive_24h", report["baseline_metrics"])
+            self.assertEqual(report["baseline_metrics"]["persistence_last_observation"]["samples"], 20)
+            self.assertEqual(report["baseline_metrics"]["seasonal_naive_24h"]["samples"], 20)
+            self.assertAlmostEqual(report["skill_vs_persistence_mae"], 0.0)
+            self.assertEqual(report["seasonal_comparable_plugin_metrics"]["samples"], 20)
+            self.assertIn("skill_vs_seasonal_naive_24h_mae", report)
+            self.assertIn("persistence_baseline_m3", report["forecast_rows"][0])
+            self.assertIn("seasonal_24h_baseline_m3", report["forecast_rows"][0])
+
+    def test_zero_error_baselines_and_short_history_are_reported_as_null_skill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "constant.csv"
+            output = root / "report.json"
+            start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp", "water_demand_m3"])
+                writer.writeheader()
+                for i in range(10):
+                    writer.writerow({
+                        "timestamp": (start + timedelta(hours=i)).isoformat().replace("+00:00", "Z"),
+                        "water_demand_m3": 5,
+                    })
+            report = backtest_plugin(
+                source, LastValuePlugin(), output, test_fraction=0.2, history_hours=5
+            )
+            persisted = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["training"]["test_samples"], 2)
+            self.assertIsNone(report["baseline_metrics"]["seasonal_naive_24h"])
+            self.assertIsNone(report["seasonal_comparable_plugin_metrics"])
+            self.assertIsNone(report["skill_vs_persistence_mae"])
+            self.assertIsNone(report["skill_vs_seasonal_naive_24h_mae"])
+            self.assertEqual(persisted["test_metrics"]["mae_m3_per_hour"], 0.0)
 
     def test_rejects_gapped_series_and_bad_split(self):
         with tempfile.TemporaryDirectory() as directory:
