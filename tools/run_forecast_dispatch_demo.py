@@ -256,6 +256,12 @@ def main(argv: list[str] | None = None) -> int:
                 "model_id": plugin.model_id,
                 "model_version": plugin.version,
                 "input_history_policy": "immediately preceding 24 realized demand observations only",
+                "dispatch_exogenous_inputs_policy": (
+                    "Renewable surplus, diesel-displacement potential, grid price, off-peak status, "
+                    "grid availability, and backup availability are taken from timestamp-aligned input "
+                    "rows; this workflow does not forecast these signals. Strategy results therefore "
+                    "must not be interpreted as a fully forecast-driven operational dispatch."
+                ),
                 "mae_m3_per_hour": forecast_mae,
                 "bias_forecast_minus_actual_m3_per_hour": forecast_bias,
                 "input_history_hashes_in": audit_path.name,
@@ -279,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
             },
             "limitations": [
                 "The built-in trailing-day mean is a baseline, not a trained AI model.",
+                "Only water demand is forecast here; renewable, grid, price, off-peak, and backup signals are timestamp-aligned input values, not forecasts.",
+                "Dispatch comparisons are not fully forecast-driven and must not be treated as deployable operational schedules.",
                 "Synthetic runs are software fixtures, not measured site evidence.",
                 "Realized-demand comparison is an offline reference, not a deployable forecast policy.",
                 "This report is not a safety assessment, equipment command, or site performance guarantee.",
