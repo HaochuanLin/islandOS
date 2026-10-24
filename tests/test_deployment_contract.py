@@ -49,6 +49,13 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("authentication", runbook)
         self.assertIn("127.0.0.1", runbook)
 
+    def test_dependency_audit_emits_retained_cyclonedx_sbom_artifacts(self):
+        workflow = (ROOT / ".github/workflows/dependency-audit.yml").read_text(encoding="utf-8")
+        self.assertIn("--format cyclonedx-json", workflow)
+        self.assertIn("actions/upload-artifact@v4", workflow)
+        self.assertIn("retention-days: 30", workflow)
+        self.assertIn("if: always()", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
