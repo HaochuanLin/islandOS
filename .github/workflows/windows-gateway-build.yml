@@ -23,16 +23,21 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Install packager
-        run: python -m pip install --upgrade pip pyinstaller numpy
+          cache: pip
+          cache-dependency-path: requirements-windows-packaging.lock
+      - name: Install locked packager
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-windows-packaging.lock
+      # The runner is fresh and each executable has its own spec/work directory, so reuse PyInstaller's per-job analysis cache.
       - name: Build portable gateway executable
-        run: pyinstaller --clean --onefile --name islandos-gateway islandos_gateway.py
+        run: pyinstaller --onefile --name islandos-gateway islandos_gateway.py
       - name: Build portable dispatch advisor executable
-        run: pyinstaller --clean --onefile --name islandos-advisor islandos_advisor.py
+        run: pyinstaller --onefile --name islandos-advisor islandos_advisor.py
       - name: Build portable HTTP gateway executable
-        run: pyinstaller --clean --onefile --name islandos-gateway-server islandos_gateway_server.py
+        run: pyinstaller --onefile --name islandos-gateway-server islandos_gateway_server.py
       - name: Build synthetic telemetry demo executable
-        run: pyinstaller --clean --onefile --name islandos-telemetry-demo islandos_telemetry_demo.py
+        run: pyinstaller --onefile --name islandos-telemetry-demo islandos_telemetry_demo.py
       - name: Smoke-test gateway executable
         run: .\dist\islandos-gateway.exe --help
       - name: Smoke-test advisor executable
