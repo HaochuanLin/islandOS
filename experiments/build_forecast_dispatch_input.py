@@ -64,7 +64,11 @@ def _load_power_rows(input_csv: str | Path) -> dict[datetime, dict[str, str]]:
     input_path = Path(input_csv)
     with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        missing = set(POWER_COLUMNS) - set(reader.fieldnames or [])
+        headers = reader.fieldnames or []
+        duplicates = sorted({header for header in headers if headers.count(header) > 1})
+        if duplicates:
+            raise ValueError("Power CSV has duplicate columns: " + ", ".join(duplicates))
+        missing = set(POWER_COLUMNS) - set(headers)
         if missing:
             raise ValueError("Power CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
