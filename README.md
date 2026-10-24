@@ -53,7 +53,7 @@ These tools are **not yet one fully integrated, validated forecast-and-control p
 python tools/run_synthetic_site_demo.py --hours 168 --seed 20261023
 ```
 
-Outputs go to `build/synthetic-site-demo/`. The input manifest records the seed, row count, time range, schema, and SHA-256 digest. To generate only a CSV for app upload, use:
+Outputs go to `build/synthetic-site-demo/`. The input manifest records the seed, row count, time range, schema, and SHA-256 digest. To initialize equipment/storage assumptions from a parameter JSON, pass `--config config/site_parameters.example.json`; `--specific-energy-kwh-m3`, `--tank-capacity-m3`, and `--initial-water-m3` override the corresponding values. RO screening power remains an explicit CLI assumption because the configuration's search-space ratings are candidate values, not necessarily the same scale as the synthetic fixture. To generate only a CSV for app upload, use:
 
 ```bash
 python tools/generate_synthetic_site_csv.py --output build/synthetic_site_hourly.csv --hours 168 --seed 20261023
