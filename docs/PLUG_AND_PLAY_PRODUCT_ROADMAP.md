@@ -93,3 +93,17 @@ The first eight dimensions can improve through code, simulated signals, and repr
 6. Add local deployment verification and adapter failure tests.
 
 Prefer small pull requests with regression checks. Avoid a large rewrite or splitting files solely for appearance.
+
+
+## No-real-data onboarding path
+
+A user must be able to evaluate the software before receiving site measurements. The repository therefore provides a clearly labelled, deterministic synthetic bootstrap fixture:
+
+```bash
+python tools/generate_synthetic_site_csv.py --output build/synthetic_site_hourly.csv --hours 168 --seed 20261023
+streamlit run app.py
+```
+
+Upload the generated CSV in the interactive app. It follows the app's hourly input schema and is useful for exercising upload validation, strategy comparison, and report export. The values are deliberately synthetic assumptions, not a site forecast, calibration data, or operational recommendation. A seed makes the generated fixture repeatable. The start timestamp is a naive local label; users must document the intended site timezone and interval semantics separately.
+
+**Plug-and-play acceptance boundary:** no site data should be required to install the package, launch the demo, or test the workflow. Site-specific recommendations must still be blocked or clearly labelled as assumption-driven until equipment ratings, interval semantics, source provenance, units, operational limits, and site-approved safety constraints have been supplied and reviewed. Synthetic mode is for onboarding and software tests only.
