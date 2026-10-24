@@ -79,6 +79,16 @@ class TestDataQuality(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_csv(path, "public", invalid_interval)
 
+    def test_extra_fields_make_csv_invalid(self):
+        path = Path(self.write_csv([self.row()]))
+        lines = path.read_text(encoding="utf-8").splitlines()
+        lines[1] += ",unexpected"
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        report = validate_csv(path, "public")
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("extra_fields", report["issue_codes"])
+        self.assertIn({"code": "extra_fields", "line": 2}, report["issues"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -72,6 +72,8 @@ def validate_csv(path, source_type: str, expected_interval_minutes: int = 60) ->
             }
         for line_number, row in enumerate(reader, start=2):
             row_count += 1
+            if None in row:
+                issues.append({"code": "extra_fields", "line": line_number})
             timestamp = None
             try:
                 timestamp = _parse_timestamp(row.get("timestamp") or "")
