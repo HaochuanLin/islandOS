@@ -32,6 +32,7 @@ jobs:
           - requirements-runtime.lock
           - requirements-ml.lock
           - requirements-deep-learning.txt
+          - requirements-windows-packaging.lock
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -45,6 +46,7 @@ jobs:
             requirements-runtime.lock
             requirements-ml.lock
             requirements-deep-learning.txt
+            requirements-windows-packaging.lock
       - name: Install dependency auditor
         run: python -m pip install --upgrade pip pip-audit
       - name: Audit dependency file
