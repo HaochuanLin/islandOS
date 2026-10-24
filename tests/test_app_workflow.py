@@ -2,7 +2,6 @@
 import csv
 import io
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -80,7 +79,7 @@ def test_invalid_upload_fails_before_strategy_comparison(raw: bytes) -> None:
         run_uploaded_strategy_comparison(raw, config)
 
 
-def test_uploaded_csv_parser_cleans_up_temporary_file(tmp_path: Path, monkeypatch) -> None:
+def test_uploaded_csv_parser_accepts_valid_hourly_data() -> None:
     raw = csv_bytes(generate_rows(25, 102, datetime(2026, 2, 1)))
     parsed = parse_uploaded_csv(raw)
     assert len(parsed) == 25
