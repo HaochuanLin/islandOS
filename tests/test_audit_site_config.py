@@ -31,11 +31,13 @@ class SiteConfigAuditTests(unittest.TestCase):
             config = json.loads(EXAMPLE.read_text(encoding="utf-8"))
             config["metadata"].pop("status", None)
             config["metadata"].pop("notes", None)
+            config["metadata"].pop("name", None)
             config_path.write_text(json.dumps(config), encoding="utf-8")
             report = audit_config(config_path)
         self.assertFalse(report["provenance_review"]["status_label_present"])
         self.assertFalse(report["provenance_review"]["appears_illustrative_or_assumed"])
         self.assertEqual(report["metadata"]["status"], "unspecified")
+        self.assertIsNone(report["metadata"]["name"])
 
     def test_cli_writes_json_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
