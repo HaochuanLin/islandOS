@@ -57,7 +57,12 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             self.assertGreaterEqual(policy["cooling_unmet_kwh_th"], 0)
             self.assertGreaterEqual(policy["remaining_surplus_kwh"], 0)
         self.assertIn(result["comparison"]["best_fixed_policy"], {"ro_first", "ice_first"})
-        water_baseline = result["water_demand_input"]["persistence_baseline_comparison"]
+        water_input = result["water_demand_input"]
+        self.assertEqual(water_input["planning_input_status"], "hindsight_actual_fallback")
+        self.assertFalse(water_input["forecast_demand_is_used_for_planning"])
+        self.assertTrue(water_input["actual_demand_fallback_is_hindsight"])
+        self.assertIsNone(water_input["forecast_demand_metrics"])
+        water_baseline = water_input["persistence_baseline_comparison"]
         self.assertEqual(water_baseline["status"], "not_evaluated")
         self.assertIn("actual-demand fallback is hindsight", water_baseline["reason"])
         baseline = result["persistence_baseline_comparison"]
@@ -89,6 +94,9 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             result["water_demand_input"]["forecast_column_used"],
             "forecast_water_demand_m3",
         )
+        self.assertEqual(result["water_demand_input"]["planning_input_status"], "forecast_supplied")
+        self.assertTrue(result["water_demand_input"]["forecast_demand_is_used_for_planning"])
+        self.assertFalse(result["water_demand_input"]["actual_demand_fallback_is_hindsight"])
         self.assertEqual(
             result["water_demand_input"]["forecast_demand_metrics"]["mae_m3_per_hour"],
             11.5,
