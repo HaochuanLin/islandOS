@@ -7,9 +7,19 @@ IslandOS separates **input data**, **equipment assumptions**, **search ranges**,
 - Time series: `data/templates/site_hourly_input_template.csv`
 - Parameter file: copy `config/site_parameters.example.json` and edit it
 - Configuration validator and defaults: `islandos_config.py`
+- Standalone preflight validator: `tools/validate_site_config.py`
 - Site-data optimizer: `experiments/run_nsga2_from_csv.py`
 
-Example command:
+Validate the example configuration before running any experiment (uses only the Python standard library):
+
+```bash
+python tools/validate_site_config.py config/site_parameters.example.json
+python tools/validate_site_config.py config/site_parameters.example.json --json
+```
+
+The validator exits with status `0` for a structurally valid configuration and `2` for invalid JSON or invalid settings. The JSON mode is suitable for scripts and deployment preflight checks. A successful result only confirms schema and numeric consistency; it does not authenticate data provenance or approve real-world operation.
+
+Example optimization command:
 
 ```bash
 python experiments/run_nsga2_from_csv.py path/to/site_hourly.csv \
