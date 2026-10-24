@@ -125,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, help="hourly CSV; omit to generate a synthetic dataset")
     parser.add_argument("--output-dir", type=Path, default=Path("build/forecast-dispatch-demo"))
+    parser.add_argument("--overwrite", action="store_true", help="allow replacing files in a non-empty output directory")
     parser.add_argument("--hours", type=int, default=168, help="synthetic rows, 25–8784")
     parser.add_argument("--seed", type=int, default=20261024)
     parser.add_argument("--start", default="2026-01-01T00:00:00")
@@ -139,6 +140,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        out = args.output_dir
+        if out.exists() and any(out.iterdir()) and not args.overwrite:
+            raise ValueError(f"Output directory is not empty: {out}. Choose a new directory or pass --overwrite.")
         if args.input:
             input_path = args.input
             rows, stamps = load_rows(input_path, args.assume_timezone)
@@ -151,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             if start.tzinfo is not None:
                 raise ValueError("--start must be a naive local timestamp; use input timestamps with explicit offsets for site data")
             rows = generate_rows(args.hours, args.seed, start)
-            input_path = args.output_dir / "synthetic_input.csv"
+            input_path = out / "synthetic_input.csv"
             input_path.parent.mkdir(parents=True, exist_ok=True)
             write_csv(input_path, rows)
             effective_timezone = "UTC"
@@ -184,7 +188,6 @@ def main(argv: list[str] | None = None) -> int:
             row["input_history_sha256"] = result.input_history_sha256
             forecast_rows.append(row)
 
-        out = args.output_dir
         out.mkdir(parents=True, exist_ok=True)
         forecast_csv = out / "forecast_dispatch_input.csv"
         # Keep the strategy engine's stable input contract; the separate forecast
