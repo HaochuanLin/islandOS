@@ -57,18 +57,44 @@ def validate_csv(path, source_type: str, expected_interval_minutes: int = 60) ->
     with Path(path).open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         headers = reader.fieldnames or []
-        missing_columns = [column for column in REQUIRED_COLUMNS if column not in headers]
-        duplicate_columns = sorted({column for column in headers if headers.count(column) > 1})
-        if duplicate_columns:
-            issues.append({"code": "duplicate_columns", "columns": duplicate_columns})
-        if missing_columns:
+        if not headers:
             return {
                 "file": Path(path).name,
                 "source_type": source_type,
                 "status": "invalid",
                 "row_count": 0,
-                "issues": [{"code": "missing_columns", "columns": missing_columns}],
+                "issue_count": 1,
+                "issue_codes": ["missing_header"],
+                "issues": [{"code": "missing_header"}],
                 "summary": {},
+            }
+        empty_headers = [index + 1 for index, column in enumerate(headers) if not column.strip()]
+        if empty_headers:
+            issues.append({"code": "empty_column_names", "positions": empty_headers})
+        missing_columns = [column for column in REQUIRED_COLUMNS if column not in headers]
+        duplicate_columns = sorted({column for column in headers if headers.count(column) > 1})
+        if duplicate_columns:
+            issues.append({"code": "duplicate_columns", "columns": duplicate_columns})
+        if missing_columns:
+            issues.append({"code": "missing_columns", "columns": missing_columns})
+        if empty_headers or missing_columns or duplicate_columns:
+            codes = sorted({issue["code"] for issue in issues})
+            return {
+                "file": Path(path).name,
+                "source_type": source_type,
+                "status": "invalid",
+                "row_count": 0,
+                "issue_count": len(issues),
+                "issue_codes": codes,
+                "issues": issues,
+                "columns_checked": list(REQUIRED_COLUMNS),
+                "expected_interval_minutes": expected_interval_minutes,
+                "summary": {
+                    "timestamped_rows": 0,
+                    "numeric_columns": list(NUMERIC_COLUMNS),
+                    "data_was_modified": False,
+                    "note": "Header validation failed; no data values were modified.",
+                },
             }
         for line_number, row in enumerate(reader, start=2):
             row_count += 1
