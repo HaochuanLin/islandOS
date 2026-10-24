@@ -23,6 +23,18 @@ class SiteConfigAuditTests(unittest.TestCase):
         self.assertFalse(report["economics_completeness"]["complete_for_current_declared_fields"])
         self.assertIn("The configuration SHA-256", " ".join(report["limitations"]))
 
+    def test_missing_provenance_labels_are_not_inherited_from_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "site.json"
+            config = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+            config["metadata"].pop("status", None)
+            config["metadata"].pop("notes", None)
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            report = audit_config(config_path)
+        self.assertFalse(report["provenance_review"]["status_label_present"])
+        self.assertFalse(report["provenance_review"]["appears_illustrative_or_assumed"])
+        self.assertEqual(report["metadata"]["status"], "unspecified")
+
     def test_cli_writes_json_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "audit" / "config-audit.json"
