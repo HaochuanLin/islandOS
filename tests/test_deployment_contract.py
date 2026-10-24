@@ -73,6 +73,14 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("retention-days: 30", workflow)
         self.assertIn("if: always()", workflow)
 
+    def test_container_smoke_workflow_emits_full_image_sbom(self):
+        workflow = (ROOT / ".github/workflows/container-web-smoke.yml").read_text(encoding="utf-8")
+        self.assertIn("anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c", workflow)
+        self.assertIn("image: islandos-web:ci", workflow)
+        self.assertIn("format: cyclonedx-json", workflow)
+        self.assertIn("output-file: build/sbom/islandos-web-image.cdx.json", workflow)
+        self.assertIn("upload-artifact-retention: 30", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
