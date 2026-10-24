@@ -103,7 +103,7 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
         def mutate_after_read(path, actual_demand):
             result = original_loader(path, actual_demand)
             with Path(path).open("a", encoding="utf-8") as handle:
-                handle.write("\\n")
+                handle.write("\n")
             return result
 
         with patch(
