@@ -8,6 +8,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+from experiments.compare_energy_water_strategies import load_site_steps
 from tools.generate_synthetic_site_csv import FIELDS, generate_rows
 
 
@@ -45,6 +46,9 @@ class SyntheticSiteCsvTests(unittest.TestCase):
                 rows = list(csv.DictReader(handle))
             self.assertEqual(len(rows), 24)
             self.assertEqual(list(rows[0]), FIELDS)
+            # Exercise the same parser used by the strategy-comparison workflow.
+            parsed = load_site_steps(output)
+            self.assertEqual(len(parsed), 24)
 
 
 if __name__ == "__main__":
