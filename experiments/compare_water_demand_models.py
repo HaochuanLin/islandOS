@@ -35,11 +35,19 @@ def _load_series(input_csv: str | Path) -> tuple[list[datetime], list[float]]:
     path = Path(input_csv)
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
+        headers = reader.fieldnames or []
+        duplicates = sorted({name for name in headers if headers.count(name) > 1})
+        if duplicates:
+            raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
         required = {"timestamp", "water_demand_m3"}
-        missing = required - set(reader.fieldnames or [])
+        missing = required - set(headers)
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
         rows = list(reader)
+
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
 
     if len(rows) <= WEEK_LAG_HOURS + 48:
         raise ValueError(
