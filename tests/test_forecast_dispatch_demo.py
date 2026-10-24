@@ -29,6 +29,11 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
     assert report["forecast"]["model_id"] == "trailing-day-mean"
     assert math.isfinite(report["forecast"]["mae_m3_per_hour"])
     assert len(report["input"]["sha256"]) == 64
+    for artifact in report["artifacts"].values():
+        artifact_path = out / artifact["file"]
+        assert artifact_path.stat().st_size == artifact["bytes"]
+        import hashlib
+        assert hashlib.sha256(artifact_path.read_bytes()).hexdigest() == artifact["sha256"]
     with (out / "strategy_comparison.csv").open(newline="", encoding="utf-8") as handle:
         summaries = list(csv.DictReader(handle))
     assert len(summaries) == 10
