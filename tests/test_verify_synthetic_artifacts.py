@@ -87,6 +87,28 @@ class VerifySyntheticArtifactsTests(unittest.TestCase):
         errors = verify_artifacts(self.csv_path, self.manifest_path)
         self.assertTrue(any("missing field(s)" in error for error in errors))
 
+    def test_duplicate_timestamps_are_rejected_even_with_matching_manifest(self) -> None:
+        rows = list(csv.DictReader(self.csv_path.open(encoding="utf-8", newline="")))
+        with self.csv_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\\n")
+            writer.writeheader()
+            writer.writerow(rows[0])
+            writer.writerow({**rows[1], "timestamp": rows[0]["timestamp"]})
+        self.write_manifest()
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertTrue(any("strictly later" in error for error in errors))
+
+    def test_invalid_timestamp_is_rejected(self) -> None:
+        rows = list(csv.DictReader(self.csv_path.open(encoding="utf-8", newline="")))
+        with self.csv_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=self.columns, lineterminator="\\n")
+            writer.writeheader()
+            writer.writerow({**rows[0], "timestamp": "not-a-date"})
+            writer.writerow(rows[1])
+        self.write_manifest()
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertTrue(any("not ISO-8601" in error for error in errors))
+
     def test_header_only_csv_is_rejected(self) -> None:
         self.csv_path.write_text(",".join(self.columns) + "\n", encoding="utf-8")
         errors = verify_artifacts(self.csv_path, self.manifest_path)
