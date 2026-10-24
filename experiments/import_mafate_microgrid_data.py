@@ -120,11 +120,16 @@ def _read_hourly(path: Path, fields: dict[str, str], scale: float = 1.0) -> dict
         if not reader.fieldnames:
             raise ValueError(f"No CSV header in {path.name}")
         reader.fieldnames = [name.strip() for name in reader.fieldnames]
+        duplicates = sorted({name for name in reader.fieldnames if reader.fieldnames.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"{path.name} has duplicate columns after whitespace normalization: {', '.join(duplicates)}")
         required = {"Date", *fields.keys()}
         missing = required - set(reader.fieldnames)
         if missing:
             raise ValueError(f"{path.name} missing columns: {', '.join(sorted(missing))}")
         for line, row in enumerate(reader, start=2):
+            if None in row:
+                raise ValueError(f"{path.name} has extra fields at CSV line {line}")
             row = {(key or "").strip(): value for key, value in row.items()}
             stamp = _parse_timestamp(row.get("Date"), path, line)
             timezone_modes.add(stamp.tzinfo is not None and stamp.utcoffset() is not None)
