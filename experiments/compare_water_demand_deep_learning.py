@@ -222,25 +222,12 @@ def compare(input_csv: str | Path, output_json: str | Path,
         dtype=torch.float32,
     )
 
-    torch.manual_seed(seed)
-    model = DemandLSTM()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=1e-4)
-    loss_fn = nn.MSELoss()
-    model.train()
-    batch_size = 128
-    for _ in range(epochs):
-        permutation = torch.randperm(len(x_train))
-        for start in range(0, len(permutation), batch_size):
-            indices = permutation[start:start + batch_size]
-            optimizer.zero_grad(set_to_none=True)
-            loss = loss_fn(model(x_train[indices]), y_train[indices])
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-
+    model, early_stopping = _fit_with_chronological_early_stopping(
+        x_train, y_train, epochs, seed, scale
+    )
     model.eval()
     with torch.no_grad():
-        predictions = (model(x_test).cpu().tolist())
+        predictions = model(x_test).cpu().tolist()
     lstm_predictions = [max(0.0, float(value) * scale + mean) for value in predictions]
     actual = [values[i] for i in test_indices]
     from sklearn.ensemble import HistGradientBoostingRegressor
