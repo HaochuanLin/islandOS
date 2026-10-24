@@ -97,7 +97,7 @@ python island_microgrid_ro_sim.py
 
 This is the generic demonstration. All outputs are synthetic simulation results, not field measurements.
 
-For a compact reference to the other experiments, see [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md).
+For a concrete definition of plug-in compatibility, reproducibility, forecast evaluation, and release evidence, see the [Plug-in acceptance checklist](docs/PLUGIN_ACCEPTANCE_CHECKLIST.md). For a compact reference to the other experiments, see [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md).
 
 ## Documentation
 
