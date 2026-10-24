@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments.compare_energy_water_strategies import Config, compare_strategies, load_site_steps
-from tools.generate_synthetic_site_csv import build_manifest, generate_rows, write_csv
+from tools.generate_synthetic_site_csv import FIELDS, generate_rows
 from datetime import datetime
 
 
@@ -62,10 +62,44 @@ def main(argv: list[str] | None = None) -> int:
         out = args.output_dir
         out.mkdir(parents=True, exist_ok=True)
         input_csv = out / "synthetic_site_hourly.csv"
-        digest = write_csv(input_csv, rows)
+        with input_csv.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\\n")
+            writer.writeheader()
+            writer.writerows(rows)
+        digest = sha256_file(input_csv)
         manifest_path = out / "synthetic_site_hourly.manifest.json"
-        manifest = build_manifest(input_csv, rows, seed=args.seed, start=start, sha256=digest)
-        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        manifest = {
+            "manifest_version": 1,
+            "dataset_type": "synthetic",
+            "is_measured_site_data": False,
+            "intended_use": "software onboarding, examples, and tests only",
+            "prohibited_use": "operational decisions or claims of real-site performance",
+            "file": input_csv.name,
+            "sha256": digest,
+            "row_count": len(rows),
+            "columns": FIELDS,
+            "generation": {
+                "generator": "tools/run_synthetic_site_demo.py",
+                "seed": args.seed,
+                "start_local_naive": start.isoformat(timespec="seconds"),
+                "hours": len(rows),
+                "time_step": "1 hour",
+            },
+            "time_range": {
+                "first_timestamp": rows[0]["timestamp"],
+                "last_timestamp": rows[-1]["timestamp"],
+                "timezone": "not encoded; timestamps are naive local time",
+            },
+            "limitations": [
+                "Synthetic values are illustrative and not calibrated to a real site.",
+                "A matching SHA-256 proves file identity, not measurement authenticity or physical accuracy.",
+                "Document the intended site timezone before aligning with external data.",
+            ],
+        }
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\\n",
+            encoding="utf-8",
+        )
 
         steps = load_site_steps(input_csv)
         detail, summary = compare_strategies(steps, config)
