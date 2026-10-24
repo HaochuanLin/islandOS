@@ -15,8 +15,8 @@ class DeepLearningInputSchemaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "series.csv"
             source.write_text(
-                "timestamp,water_demand_m3,water_demand_m3\\n"
-                "2025-01-01T00:00:00Z,1,2\\n",
+                "timestamp,water_demand_m3,water_demand_m3\n"
+                "2025-01-01T00:00:00Z,1,2\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "duplicate columns"):
@@ -26,8 +26,8 @@ class DeepLearningInputSchemaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "series.csv"
             source.write_text(
-                "timestamp,water_demand_m3\\n"
-                "2025-01-01T00:00:00Z,1,unexpected\\n",
+                "timestamp,water_demand_m3\n"
+                "2025-01-01T00:00:00Z,1,unexpected\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "extra fields"):
