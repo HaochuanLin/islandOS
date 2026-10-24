@@ -39,6 +39,21 @@ Exit criteria:
 
 Stage A does **not** require real site measurements. Public/site-data validation, commercial/deployment readiness beyond the local research demo, and real-world operational validation remain separate scorecard areas and must not be increased based on synthetic fixtures.
 
+## Stage B — deployment and commercial-readiness hardening
+
+**Target:** improve commercial/deployment readiness from 60/100 toward 70/100 and overall software-engineering maturity from 94/100 toward 95/100, without raising public-data or real-world-validation scores from code-only evidence.
+
+Current work adds regression checks for the local deployment contract: the Docker image must install the exact runtime lock, run as a non-root user, expose a health check, and remain loopback-only in Compose. A pilot-readiness template consolidates cost-accounting boundaries, sensitivity inputs, data governance, staged read-only evaluation, site-owner acceptance criteria, and no-go conditions. The reproducibility guide is corrected to distinguish Python lockfiles from immutable container-image pinning.
+
+Stage B exit evidence:
+- Deployment-contract tests pass in the full suite and the exact merged main tree passes required CI.
+- The local demo's security boundary is explicit: no public exposure, authentication, safety certification, or actuator path is implied.
+- Economic scenarios identify source, currency, time basis, uncertainty, and exclusions; unknown site-specific inputs remain unknown rather than invented.
+- Pilot acceptance thresholds remain owner-approved fields. Missing approvals mean no-go; synthetic data cannot authorize a pilot.
+- Residual release engineering gaps (image digest pinning, SBOM/signing, production auth/TLS/network controls) remain listed rather than marked solved.
+
+Do not increase the commercial/deployment score until the new tests and documentation are merged and verified on the exact main source tree.
+
 ## Delivery order
 
 ### Gate 1 — Main-branch reliability
@@ -96,6 +111,14 @@ Stage A does **not** require real site measurements. Public/site-data validation
 6. If a target depends on access to site measurements, operator decisions, credentials, or physical equipment, mark it blocked and document the dependency instead of fabricating evidence.
 
 ## Progress log
+
+### 2026-10-24 — Stage B deployment contract hardening (in progress)
+
+- Added regression tests for exact runtime-lock installation, non-root container execution, health-check presence, loopback-only Compose port publication, and explicit research-demo security boundaries.
+- Added a pilot-readiness template defining lifecycle-cost accounting, sensitivity inputs, data governance, shadow-mode stages, owner-approved site acceptance criteria, and explicit no-go conditions. This is a template, not a site-specific business case or deployment authorization.
+- Corrected the reproducibility guide: Docker installs `requirements-runtime.lock`, not the range-based requirements file. Remaining container supply-chain gaps are now stated accurately: package hashes, immutable base-image digest, SBOM, and signing are not all in place.
+- **Score change deferred:** wait for clean CI on the exact merge tree; do not treat documentation or source-only checks as production certification.
+
 
 ### 2026-10-23 — CI coverage audit
 
