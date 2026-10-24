@@ -14,7 +14,7 @@ Baseline scores are provisional engineering assessments, not measured scientific
 | Interactive demo and usability | 80/100 | 92/100 | 92/100 | Hosted app health is checked separately from code CI; clean-environment startup is tested; upload validation and user-facing failures have regression tests; demo clearly labels synthetic data, input provenance, run signatures, and exported model/optimizer configuration. |
 | Branch and release management | 55/100 | 90/100 | 90/100 | Reduce stale/diverged branches and PRs; each PR has a bounded scope, current base, passing required checks, and a reviewable diff; no mass merge of divergent product/pilot histories. |
 | Public-data / site-data validation | 25/100 | 60/100 | 60/100 | A documented measured or reputable public dataset with license, provenance, units, missingness audit, chronological holdout, baseline comparison, and reproducible results. This target does not imply Nan'ao field validation. |
-| Commercial / deployment readiness | 38/100 | 61/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. The added static preflight is a small, tested deployment-readiness improvement, not evidence of production deployment or site validation. |
+| Commercial / deployment readiness | 38/100 | 62/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. The static preflight and least-privilege Compose defaults improve repeatable local deployment checks, but do not establish production readiness or site validation. |
 | Overall software-engineering maturity | 82/100 | 94/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
 | Real-world operational validation | 38/100 | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached by code-only work. |
 
@@ -114,6 +114,14 @@ Do not increase the commercial/deployment score until the new tests and document
 6. If a target depends on access to site measurements, operator decisions, credentials, or physical equipment, mark it blocked and document the dependency instead of fabricating evidence.
 
 ## Progress log
+
+### 2026-10-24 — Least-privilege local Compose defaults (verified)
+
+- Merged [PR #163](https://github.com/HaochuanLin/islandOS/pull/163): the local web service now drops all Linux capabilities, enables `no-new-privileges`, and runs with an init process. CI validates the actual Compose configuration using `docker compose config --quiet` before building and smoke-testing the image.
+- Extended `tools/deployment_preflight.py` to fail if those least-privilege settings or Compose schema validation in CI are missing; regression tests cover both the required configuration and rejection of a missing capability-drop setting.
+- The PR head passed all seven workflow families: **549 passed, 2 skipped, 424 subtests**, container build/SBOM/health smoke, Windows gateway packaging, five-lock dependency audit, Nan'ao scenario, and integration examples. The merged main commit [89740ca](https://github.com/HaochuanLin/islandOS/commit/89740cae7f3ef72ca84b9178a95d91e6134efcb0) also passed its post-merge CI.
+- Commercial/deployment readiness moves conservatively from 61 to **62/100**. This is local-demo defense in depth only; application authentication, TLS/network segmentation, production operations, cost model, stakeholder acceptance, and pilot authorization remain unresolved.
+
 
 ### 2026-10-24 — Release bundle provenance attestations (verified on main)
 
