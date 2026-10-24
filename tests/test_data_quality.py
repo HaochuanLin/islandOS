@@ -84,8 +84,8 @@ class TestDataQuality(unittest.TestCase):
             path = Path(directory) / "duplicate.csv"
             path.write_text(
                 "timestamp,wind_kw,pv_kw,critical_load_kw,water_demand_m3,"
-                "cooling_demand_kw_th,wind_kw\\n"
-                "2026-01-01T00:00:00+00:00,10,20,30,4,5,99\\n",
+                "cooling_demand_kw_th,wind_kw\n"
+                "2026-01-01T00:00:00+00:00,10,20,30,4,5,99\n",
                 encoding="utf-8",
             )
             report = validate_csv(path, "public")
@@ -96,8 +96,8 @@ class TestDataQuality(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "blank-header.csv"
             path.write_text(
-                "timestamp,wind_kw,pv_kw,critical_load_kw,water_demand_m3,,cooling_demand_kw_th\\n"
-                "2026-01-01T00:00:00+00:00,10,20,30,4,5,6\\n",
+                "timestamp,wind_kw,pv_kw,critical_load_kw,water_demand_m3,,cooling_demand_kw_th\n"
+                "2026-01-01T00:00:00+00:00,10,20,30,4,5,6\n",
                 encoding="utf-8",
             )
             report = validate_csv(path, "public")
