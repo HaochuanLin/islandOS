@@ -87,6 +87,9 @@ def evaluate_candidate(
     if missing:
         raise ValueError("Input CSV missing columns: " + ", ".join(sorted(missing)))
     rows = list(reader)
+    for line, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
 
     if len(rows) < 24:
         raise ValueError("Need at least 24 aligned hourly rows for candidate review")
