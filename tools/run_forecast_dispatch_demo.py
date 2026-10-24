@@ -222,8 +222,20 @@ def main(argv: list[str] | None = None) -> int:
 
         forecast_mae = mean(abs(p - a) for p, a in zip(predicted, actual))
         forecast_bias = mean(p - a for p, a in zip(predicted, actual))
+        artifact_paths = {
+            "forecast_dispatch_input": forecast_csv,
+            "forecast_audit": audit_path,
+            "strategy_comparison": summary_path,
+            "strategy_timestep_audit": audit_strategy_path,
+            "actual_demand_reference_input": actual_rows_path,
+        }
+        artifact_manifest = {
+            name: {"file": path.name, "sha256": sha256_file(path), "bytes": path.stat().st_size}
+            for name, path in artifact_paths.items()
+        }
         report = {
             "report_version": 1,
+            "artifacts": artifact_manifest,
             "status": "illustrative_forecast_dispatch_screening_only",
             "dataset_type": input_type,
             "is_measured_site_data": False if input_type == "synthetic" else None,
