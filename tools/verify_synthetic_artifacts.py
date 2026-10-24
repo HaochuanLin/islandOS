@@ -11,6 +11,7 @@ import csv
 import hashlib
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,7 @@ def verify_artifacts(csv_path: Path, manifest_path: Path) -> list[str]:
     elif declared_row_count != len(rows):
         errors.append(f"row count mismatch: manifest={declared_row_count!r}, actual={len(rows)}")
 
+    parsed_timestamps: list[tuple[int, datetime]] = []
     for row_number, row in enumerate(rows, start=2):
         if None in row:
             errors.append(f"CSV row {row_number} contains extra fields beyond the header")
@@ -71,8 +73,40 @@ def verify_artifacts(csv_path: Path, manifest_path: Path) -> list[str]:
             errors.append(
                 f"CSV row {row_number} is missing field(s): " + ", ".join(missing_fields)
             )
-        if "timestamp" in columns and not str(row.get("timestamp") or "").strip():
-            errors.append(f"CSV row {row_number} has an empty timestamp")
+        if "timestamp" in columns:
+            raw_timestamp = str(row.get("timestamp") or "").strip()
+            if not raw_timestamp:
+                errors.append(f"CSV row {row_number} has an empty timestamp")
+            else:
+                normalized = (
+                    raw_timestamp[:-1] + "+00:00"
+                    if raw_timestamp.endswith("Z") else raw_timestamp
+                )
+                try:
+                    parsed_timestamps.append(
+                        (row_number, datetime.fromisoformat(normalized))
+                    )
+                except ValueError:
+                    errors.append(
+                        f"CSV row {row_number} timestamp is not ISO-8601: {raw_timestamp!r}"
+                    )
+
+    awareness = [stamp.utcoffset() is not None for _, stamp in parsed_timestamps]
+    if any(awareness) and not all(awareness):
+        errors.append("CSV timestamps mix timezone-aware and timezone-naive values")
+    for (previous_row, previous), (row_number, current) in zip(
+        parsed_timestamps, parsed_timestamps[1:]
+    ):
+        if previous.utcoffset() is not None and current.utcoffset() is not None:
+            previous_compare = previous.astimezone().timestamp()
+            current_compare = current.astimezone().timestamp()
+        else:
+            previous_compare = previous
+            current_compare = current
+        if current_compare <= previous_compare:
+            errors.append(
+                f"CSV row {row_number} timestamp must be strictly later than row {previous_row}"
+            )
 
     time_range = manifest.get("time_range")
     if not isinstance(time_range, dict):
