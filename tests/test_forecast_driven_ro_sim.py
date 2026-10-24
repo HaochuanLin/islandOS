@@ -137,5 +137,24 @@ class TestForecastDrivenROSimulation(unittest.TestCase):
             self.assertEqual(result["perfect_foresight_reference"]["ro_run_hours"], 0)
             self.assertTrue(hourly_path.exists())
 
+    def test_rejects_duplicate_and_extra_input_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / "paired.csv", root / "hourly.csv"
+            self._write(source, [1, 2], [1, 2], [1, 1], [1, 1])
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[0] = lines[0].replace("forecast_surplus_kw", "actual_surplus_kw")
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                evaluate_forecast_driven_ro_sim(source, output)
+
+            self._write(source, [1, 2], [1, 2], [1, 1], [1, 1])
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                evaluate_forecast_driven_ro_sim(source, output)
+
+
 if __name__ == "__main__":
     unittest.main()
