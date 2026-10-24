@@ -31,7 +31,7 @@ A separate Nan'ao-type scenario is documented in the [Nan'ao scenario guide](doc
 - **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results.
 - **Energy–water dispatch experiments:** compare priority-based flexible-load policies and run a rolling-horizon prototype.
 - **Multi-objective policy search:** use grid search or an experimental NSGA-II optimizer to inspect trade-offs among unmet water/cooling demand and remaining renewable surplus.
-- **Forecasting experiments:** evaluate water-demand baselines and optional machine-learning models with chronological holdouts and rolling backtests; an optional PyTorch LSTM candidate now uses a documented forecast-report contract for integration experiments.
+- **Plug-in forecasting:** register replaceable demand-forecast models through a dependency-free runtime contract with timestamp/value validation and input provenance; run `python examples/forecast_plugin_example.py` for a minimal working example. Optional PyTorch LSTM and gradient-boosting candidates are compared offline before any review or promotion.
 - **Data preparation:** validate time-series CSVs and import selected public weather, measured microgrid, and monthly planning datasets with provenance notes.
 - **Read-only telemetry prototype:** validate and normalize recorded sensor/gateway data, run recommendation-only dispatch analysis, and expose a loopback-only HTTP review dashboard. It performs no PLC writes or actuator control.
 - **Site-readiness gate:** fail closed when required site inputs are incomplete or telemetry is stale, and separate input completeness from engineering safety or field approval.

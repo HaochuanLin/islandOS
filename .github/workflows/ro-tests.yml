@@ -131,6 +131,8 @@ jobs:
           PY
       - name: Run complete pytest suite (including unittest-compatible tests)
         run: python -m pytest -q
+      - name: Run dependency-free plug-in forecast example
+        run: python examples/forecast_plugin_example.py
       - name: Run synthetic forecast-monitoring example
         run: |
           python experiments/monitor_forecast_performance.py data/examples/synthetic_forecast_monitor_demo.csv --window-hours 24 --output build/water-demand-forecast/monitor-demo.json
