@@ -43,7 +43,7 @@ def _validate_csv_shape(path: Path) -> None:
                     raise ValueError(
                         f"Row {row_number}: missing {len(header) - len(row)} field(s) compared with the header"
                     )
-    except csv.Error as exc:
+    except (csv.Error, UnicodeError) as exc:
         raise ValueError(f"CSV parse error: {exc}") from exc
 
 
