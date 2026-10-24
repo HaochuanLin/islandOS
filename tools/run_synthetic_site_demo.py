@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         out.mkdir(parents=True, exist_ok=True)
         input_csv = out / "synthetic_site_hourly.csv"
         with input_csv.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\\n")
+            writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
         digest = sha256_file(input_csv)
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             ],
         }
         manifest_path.write_text(
-            json.dumps(manifest, indent=2, ensure_ascii=False) + "\\n",
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
 
