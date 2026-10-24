@@ -25,6 +25,9 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
     report = json.loads((out / "run_report.json").read_text(encoding="utf-8"))
     assert report["dataset_type"] == "synthetic"
     assert report["is_measured_site_data"] is False
+    assert len(report["assumptions"]) >= 4
+    assert any("continuous hourly intervals" in item for item in report["assumptions"])
+    assert any("not forecast by this workflow" in item for item in report["assumptions"])
     assert report["time_alignment"]["forecast_rows_compared"] == 6
     assert report["forecast"]["model_id"] == "trailing-day-mean"
     assert "does not forecast these signals" in report["forecast"]["dispatch_exogenous_inputs_policy"]
