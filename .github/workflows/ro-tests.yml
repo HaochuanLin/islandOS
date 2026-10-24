@@ -209,8 +209,7 @@ jobs:
           path: build/water-demand-forecast/candidate-review.json
           if-no-files-found: error
           retention-days: 30
-      - name: Test app NSGA-II feasibility, Pareto quality, and reproducibility
-        run: python -m pytest -q tests/test_experiments_nsga2_dispatch_optimizer.py
+      # NSGA-II correctness tests are already included in the complete pytest suite above.
       - name: Run synthetic water-demand forecast example
         run: |
           python experiments/water_demand_forecast.py data/examples/synthetic_water_demand_demo.csv --output build/water-demand-forecast/report.json
