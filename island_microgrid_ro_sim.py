@@ -24,13 +24,12 @@ Backup power switch `Params.allow_backup_power` (default True)
     power shortfall nevertheless occurs, the emergency-stop fallback can violate
     the minimum continuous-run constraint, which `check_min_run()` will report.
 
-Key assumption 1: perfect foresight
-  The RO start decision reads the *actual* curtailment of the next `min_run_hours` hours,
-  i.e. wind, PV and load are assumed to be known exactly in advance. A real deployment has
-  to rely on weather / renewable-output / load forecasts, and forecast errors will cause
-  the plant to start when curtailment later turns out to be insufficient (or to miss
-  usable windows). This needs extra backup power, rolling re-planning or conservative
-  margins, so the results of this prototype are optimistic.
+Key assumption 1: perfect foresight is the backward-compatible default
+  Without forecast arrays, look-ahead decisions use realized future curtailment and water
+  demand, which is optimistic. Call simulate(..., forecast_curtailment=..., forecast_water_demand=...)
+  to make start and reservoir-feasibility decisions from forecasts while physical execution
+  and storage updates still use realized wind/PV/load and demand. Forecast errors can cause
+  backup consumption or emergency stops; this prototype does not train forecasts itself.
 
 Key assumption 2: no post-shutdown flushing
   Real RO plants normally flush the membranes with fresh water after shutdown to limit
@@ -138,7 +137,10 @@ def _validated_series(name, values):
     return series
 
 
-def simulate(wind, pv, load, water_demand, p: Params):
+def simulate(
+    wind, pv, load, water_demand, p: Params, *,
+    forecast_curtailment=None, forecast_water_demand=None,
+):
     series = {
         "wind": _validated_series("wind", wind),
         "pv": _validated_series("pv", pv),
@@ -160,7 +162,25 @@ def simulate(wind, pv, load, water_demand, p: Params):
         series["wind"], series["pv"], series["load"], series["water_demand"]
     )
     T = wind.size
-    curtail = np.maximum(0.0, wind + pv - load)          # curtailed power (kW); 1 h step -> kWh
+    curtail = np.maximum(0.0, wind + pv - load)          # realized curtailment (kW)
+    planning_curtail = (
+        curtail.copy() if forecast_curtailment is None
+        else _validated_series("forecast_curtailment", forecast_curtailment)
+    )
+    planning_water_demand = (
+        water_demand.copy() if forecast_water_demand is None
+        else _validated_series("forecast_water_demand", forecast_water_demand)
+    )
+    for name, values in (
+        ("forecast_curtailment", planning_curtail),
+        ("forecast_water_demand", planning_water_demand),
+    ):
+        if values.size != T:
+            raise ValueError(f"{name} must have the same length as the realized input series")
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"{name} must contain only finite values")
+        if np.any(values < 0):
+            raise ValueError(f"{name} must be non-negative")
 
     ro_on = np.zeros(T, dtype=int)
     ro_use = np.zeros(T)        # curtailed energy actually absorbed by RO (kWh)
@@ -177,7 +197,7 @@ def simulate(wind, pv, load, water_demand, p: Params):
         projected = float(V[start])
         production = p.ro_power_kw / p.ro_sec_kwh_m3
         for index in range(start, start + hours):
-            projected += production - water_demand[index]
+            projected += production - planning_water_demand[index]
             if projected > p.res_capacity_m3 + 1e-9:
                 return False
             if projected < p.res_min_m3:
@@ -197,7 +217,7 @@ def simulate(wind, pv, load, water_demand, p: Params):
         else:                                           # currently stopped: look ahead to decide whether to start
             can_finish_in_horizon = (t + p.min_run_hours) <= T
             if can_finish_in_horizon and can_run_without_overflow(t, p.min_run_hours):
-                window = curtail[t:t + p.min_run_hours]
+                window = planning_curtail[t:t + p.min_run_hours]
                 if p.allow_backup_power:
                     # Backup can cover weak hours, so the mean-based threshold is a
                     # dispatch heuristic rather than a guarantee of renewable-only operation.
@@ -210,11 +230,10 @@ def simulate(wind, pv, load, water_demand, p: Params):
             else:
                 on = False
 
-        # Safety fallback for an unexpected power shortfall in no-backup mode. The
-        # perfect-foresight start rule requires every hour in the minimum-run window to
-        # have rated power, so this should remain inactive for a consistent input trace.
-        # If it fires, the run-time hardware constraint may be violated and check_min_run()
-        # will report that violation; real forecast-error behavior is not simulated here.
+        # Safety fallback for an unexpected realized-power shortfall in no-backup mode.
+        # This can occur when forecasts are supplied and prove wrong. The emergency stop
+        # is exposed explicitly; it can violate the minimum-run constraint and must not be
+        # interpreted as a safe plant-control strategy.
         if on and (not p.allow_backup_power) and curtail[t] < p.ro_power_kw:
             on = False
             if 0 < run_len < p.min_run_hours:
@@ -240,9 +259,16 @@ def simulate(wind, pv, load, water_demand, p: Params):
         V[t + 1] = v
 
     level = p.res_base_level_m + V / p.res_area_m2
-    return dict(curtail=curtail, ro_on=ro_on, ro_use=ro_use, ro_backup=ro_backup,
-                water_prod=water_prod, spill=spill, deficit=deficit, V=V, level=level,
-                emergency_stop=emergency_stop)
+    return dict(
+        curtail=curtail,
+        planning_curtailment=planning_curtail,
+        planning_water_demand=planning_water_demand,
+        forecast_curtailment_supplied=forecast_curtailment is not None,
+        forecast_water_demand_supplied=forecast_water_demand is not None,
+        ro_on=ro_on, ro_use=ro_use, ro_backup=ro_backup,
+        water_prod=water_prod, spill=spill, deficit=deficit, V=V, level=level,
+        emergency_stop=emergency_stop,
+    )
 
 
 def check_min_run(ro_on, min_run):

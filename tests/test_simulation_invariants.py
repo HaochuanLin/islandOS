@@ -164,6 +164,60 @@ class SimulationInvariantTests(unittest.TestCase):
         self.assertFalse(ok)
 
 
+    def test_forecasts_drive_lookahead_but_realized_power_drives_execution(self):
+        params = Params(
+            ro_power_kw=100.0, ro_sec_kwh_m3=2.0, min_run_hours=2,
+            start_ratio=0.5, keep_ratio=0.5, allow_backup_power=True,
+            res_capacity_m3=1000.0, res_init_m3=100.0, res_min_m3=0.0,
+        )
+        wind = [0.0, 0.0, 0.0, 0.0]
+        pv = [0.0, 0.0, 0.0, 0.0]
+        load = [0.0, 0.0, 0.0, 0.0]
+        demand = [1.0, 1.0, 1.0, 1.0]
+        forecasts = [120.0, 120.0, 0.0, 0.0]
+
+        legacy = simulate(wind, pv, load, demand, params)
+        forecasted = simulate(
+            wind, pv, load, demand, params,
+            forecast_curtailment=forecasts,
+            forecast_water_demand=demand,
+        )
+        self.assertEqual(legacy["ro_on"].tolist(), [0, 0, 0, 0])
+        self.assertEqual(forecasted["ro_on"].tolist(), [1, 1, 0, 0])
+        self.assertTrue(forecasted["forecast_curtailment_supplied"])
+        self.assertTrue(forecasted["forecast_water_demand_supplied"])
+        self.assertEqual(forecasted["curtail"].tolist(), [0.0] * 4)
+        self.assertEqual(forecasted["ro_use"].tolist(), [0.0, 0.0, 0.0, 0.0])
+        self.assertEqual(forecasted["ro_backup"].tolist(), [100.0, 100.0, 0.0, 0.0])
+
+    def test_forecast_error_is_visible_as_no_backup_emergency_stop(self):
+        params = Params(
+            ro_power_kw=100.0, ro_sec_kwh_m3=2.0, min_run_hours=2,
+            allow_backup_power=False, res_capacity_m3=1000.0,
+            res_init_m3=100.0, res_min_m3=0.0,
+        )
+        result = simulate(
+            [100.0, 0.0, 100.0], [0.0] * 3, [0.0] * 3, [1.0] * 3, params,
+            forecast_curtailment=[100.0, 100.0, 100.0],
+            forecast_water_demand=[1.0, 1.0, 1.0],
+        )
+        self.assertEqual(result["ro_on"].tolist(), [1, 0, 0])
+        self.assertEqual(result["emergency_stop"].tolist(), [0, 1, 0])
+        _, min_run_ok = check_min_run(result["ro_on"], params.min_run_hours)
+        self.assertFalse(min_run_ok)
+
+    def test_forecast_inputs_reject_bad_lengths_negative_and_nonfinite_values(self):
+        params = Params()
+        with self.assertRaisesRegex(ValueError, "same length"):
+            simulate([0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [1.0, 1.0], params,
+                     forecast_curtailment=[0.0])
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            simulate([0.0], [0.0], [0.0], [1.0], params,
+                     forecast_water_demand=[-1.0])
+        with self.assertRaisesRegex(ValueError, "finite"):
+            simulate([0.0], [0.0], [0.0], [1.0], params,
+                     forecast_curtailment=[float("nan")])
+
     def test_seeded_randomized_physical_invariants(self):
         """Stress conservation and storage bounds across varied valid scenarios."""
         rng = np.random.default_rng(20261023)
