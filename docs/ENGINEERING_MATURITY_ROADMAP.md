@@ -115,6 +115,15 @@ Do not increase the commercial/deployment score until the new tests and document
 
 ## Progress log
 
+### 2026-10-24 — Release bundle provenance attestations (verified on main)
+
+- Merged [PR #160](https://github.com/HaochuanLin/islandOS/pull/160). The release-candidate workflow now pins the GitHub build-provenance action by immutable commit, grants job-scoped `id-token: write` and `attestations: write`, and attests the release bundle files after SHA-256 verification.
+- The actual post-merge release workflow [run #40090687112](https://github.com/HaochuanLin/islandOS/actions/runs/40090687112) passed end to end on main commit [c842748](https://github.com/HaochuanLin/islandOS/commit/c842748fbe61f4024f7de395683bdc9b9e930a1a): **547 passed, 2 skipped, 424 subtests**, dependency audits, non-root container startup/health, archive/checksum generation, and artifact attestation.
+- GitHub reported **9 attested subjects**, signed using the public Sigstore instance, with the attestation uploaded to the repository and Rekor transparency log: [attestation 59395771](https://github.com/HaochuanLin/islandOS/attestations/59395771). The release candidate bundle was uploaded as artifact ID `12558213957` (584,285 bytes).
+- Reviewers can independently verify downloaded files with `gh attestation verify <asset-path> --repo HaochuanLin/islandOS`. The workflow does not publish a release automatically; the draft-release step was skipped for this main-branch candidate.
+- This closes the release-bundle provenance gap for files emitted by the candidate workflow. **Docker image signing**, production authentication/network controls, and field/pilot authorization remain open; provenance is not evidence of operational safety or real-site accuracy.
+
+
 ### 2026-10-24 — Fail-closed local deployment preflight (verified)
 
 - Merged [PR #158](https://github.com/HaochuanLin/islandOS/pull/158), adding `tools/deployment_preflight.py` with human-readable and JSON output. It checks the immutable Docker base digest, non-root runtime, loopback-only Compose binding, health check, container SBOM configuration, documented prototype/security boundary, and resolvable Git revision.
