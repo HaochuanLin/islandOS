@@ -1,5 +1,6 @@
 """Tests for auditable environmental feature preparation; no network required."""
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -38,6 +39,12 @@ class TestEnvironmentalFeatures(unittest.TestCase):
             source = self._fixture(directory, 30)
             output = Path(directory) / "features.csv"
             result = prepare_features(source, output)
+            self.assertEqual(result["input_csv_sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+            self.assertEqual(
+                result["source_metadata_sha256"],
+                hashlib.sha256(source.with_suffix(".csv.metadata.json").read_bytes()).hexdigest(),
+            )
+            self.assertEqual(result["output_csv_sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
             with output.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(len(rows), 6)
