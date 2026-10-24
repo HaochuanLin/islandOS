@@ -8,14 +8,12 @@ on:
       - "experiments/compare_water_demand_deep_learning.py"
       - "experiments/prepare_soweki_water_demand.py"
       - "requirements-deep-learning.txt"
-      - "docs/PLUG_AND_PLAY_FORECAST_MODELS.md"
   pull_request:
     paths:
       - ".github/workflows/deep-learning-water-demand.yml"
       - "experiments/compare_water_demand_deep_learning.py"
       - "experiments/prepare_soweki_water_demand.py"
       - "requirements-deep-learning.txt"
-      - "docs/PLUG_AND_PLAY_FORECAST_MODELS.md"
   schedule:
     - cron: "47 5 * * 3"
   workflow_dispatch:
@@ -127,17 +125,21 @@ jobs:
           for path in reports:
               report = json.loads(path.read_text(encoding="utf-8"))
               assert report["status"] == "models_compared"
-              assert report["model_family"] == "PyTorch LSTM recurrent neural network"
+              assert report["model_family"] == "PyTorch LSTM and GRU recurrent neural networks"
               assert len(report["input_csv_sha256"]) == 64
               assert report["training"]["training_samples"] >= 64
               assert report["training"]["test_samples"] >= 24
               assert report["training"]["scaler_fit_on_training_history_only"] is True
               assert report["training"]["validation_tail_excluded_from_scaler_fit"] is True
               assert 1 <= report["training"]["early_stopping"]["selected_epochs"] <= report["training"]["early_stopping"]["max_epochs"]
+              assert 1 <= report["training"]["gru_early_stopping"]["selected_epochs"] <= report["training"]["gru_early_stopping"]["max_epochs"]
+              assert report["selected_neural_model"] in ("lstm_deep_learning", "gru_deep_learning")
               assert report["training"]["early_stopping"]["validation_samples"] >= 24
               assert report["walk_forward_summary"]["scaler_fit_on_training_history_only"] is True
               assert report["walk_forward_summary"]["validation_tail_excluded_from_scaler_fit"] is True
               assert 1 <= report["walk_forward_summary"]["early_stopping"]["selected_epochs"] <= report["walk_forward_summary"]["early_stopping"]["max_epochs"]
+              assert 1 <= report["walk_forward_summary"]["gru_early_stopping"]["selected_epochs"] <= report["walk_forward_summary"]["gru_early_stopping"]["max_epochs"]
+              assert report["walk_forward_summary"]["selected_neural_model"] in ("lstm_deep_learning", "gru_deep_learning")
               assert report["forecast_rows"]
               for name, values in report["test_metrics"].items():
                   assert all(math.isfinite(values[key]) for key in (
@@ -145,68 +147,102 @@ jobs:
                       "bias_predicted_minus_actual_m3_per_hour"
                   )), (path.name, name)
               for row in report["forecast_rows"]:
-                  for column in ("lstm_deep_learning", "hist_gradient_boosting"):
+                  for column in ("lstm_deep_learning", "gru_deep_learning", "hist_gradient_boosting"):
                       assert math.isfinite(row[column]) and row[column] >= 0, (path.name, column)
               test = report["test_metrics"]
               walk = report["walk_forward_summary"]["test_metrics"]
               lstm_mae = test["lstm_deep_learning"]["mae_m3_per_hour"]
+              gru_mae = test["gru_deep_learning"]["mae_m3_per_hour"]
               hgb_mae = test["hist_gradient_boosting"]["mae_m3_per_hour"]
               weekly_mae = test["seasonal_naive_previous_week"]["mae_m3_per_hour"]
+              selected_name = report["selected_neural_model"]
+              selected_mae = test[selected_name]["mae_m3_per_hour"]
               walk_lstm = walk["lstm_deep_learning"]["mae_m3_per_hour"]
+              walk_gru = walk["gru_deep_learning"]["mae_m3_per_hour"]
               walk_hgb = walk["hist_gradient_boosting"]["mae_m3_per_hour"]
               walk_weekly = walk["seasonal_naive_previous_week"]["mae_m3_per_hour"]
+              walk_selected_name = report["walk_forward_summary"]["selected_neural_model"]
+              walk_selected_mae = walk[walk_selected_name]["mae_m3_per_hour"]
               rows.append({
                   "series_id": int(path.stem.rsplit("_", 1)[1]),
                   "input_csv_sha256": report["input_csv_sha256"],
                   "test_rows": report["training"]["test_samples"],
+                  "selected_neural_model": selected_name,
                   "lstm_test_mae": lstm_mae,
+                  "gru_test_mae": gru_mae,
+                  "selected_neural_test_mae": selected_mae,
                   "gradient_boosting_test_mae": hgb_mae,
                   "weekly_baseline_test_mae": weekly_mae,
                   "lstm_mae_reduction_vs_gradient_boosting_pct": (1 - lstm_mae / hgb_mae) * 100 if hgb_mae > 0 else None,
-                  "lstm_mae_reduction_vs_weekly_pct": (1 - lstm_mae / weekly_mae) * 100 if weekly_mae > 0 else None,
+                  "gru_mae_reduction_vs_gradient_boosting_pct": (1 - gru_mae / hgb_mae) * 100 if hgb_mae > 0 else None,
+                  "selected_neural_mae_reduction_vs_gradient_boosting_pct": (1 - selected_mae / hgb_mae) * 100 if hgb_mae > 0 else None,
+                  "selected_neural_mae_reduction_vs_weekly_pct": (1 - selected_mae / weekly_mae) * 100 if weekly_mae > 0 else None,
                   "lstm_walk_forward_mae": walk_lstm,
+                  "gru_walk_forward_mae": walk_gru,
+                  "selected_neural_walk_forward_model": walk_selected_name,
+                  "selected_neural_walk_forward_mae": walk_selected_mae,
                   "gradient_boosting_walk_forward_mae": walk_hgb,
                   "weekly_baseline_walk_forward_mae": walk_weekly,
                   "lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct": (1 - walk_lstm / walk_hgb) * 100 if walk_hgb > 0 else None,
-                  "lstm_walk_forward_mae_reduction_vs_weekly_pct": (1 - walk_lstm / walk_weekly) * 100 if walk_weekly > 0 else None,
+                  "gru_walk_forward_mae_reduction_vs_gradient_boosting_pct": (1 - walk_gru / walk_hgb) * 100 if walk_hgb > 0 else None,
+                  "selected_neural_walk_forward_mae_reduction_vs_gradient_boosting_pct": (1 - walk_selected_mae / walk_hgb) * 100 if walk_hgb > 0 else None,
+                  "selected_neural_walk_forward_mae_reduction_vs_weekly_pct": (1 - walk_selected_mae / walk_weekly) * 100 if walk_weekly > 0 else None,
                   "lowest_mae_model_on_this_holdout": report["lowest_mae_model_on_this_holdout"],
-              "lstm_selected_epochs": report["training"]["early_stopping"]["selected_epochs"],
-              "lstm_walk_forward_selected_epochs": report["walk_forward_summary"]["early_stopping"]["selected_epochs"],
+                  "lstm_selected_epochs": report["training"]["early_stopping"]["selected_epochs"],
+                  "gru_selected_epochs": report["training"]["gru_early_stopping"]["selected_epochs"],
+                  "lstm_walk_forward_selected_epochs": report["walk_forward_summary"]["early_stopping"]["selected_epochs"],
+                  "gru_walk_forward_selected_epochs": report["walk_forward_summary"]["gru_early_stopping"]["selected_epochs"],
               })
-          walk_forward_wins = sum(r["lstm_walk_forward_mae"] < r["gradient_boosting_walk_forward_mae"] for r in rows)
-          mean_walk_forward_gain = mean(r["lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct"] for r in rows)
-          promote_lstm_to_site_review = walk_forward_wins >= max(1, math.ceil(expected * 0.8)) and mean_walk_forward_gain >= 5.0
+          walk_forward_wins = sum(
+              row["selected_neural_walk_forward_mae"] < row["gradient_boosting_walk_forward_mae"]
+              for row in rows
+          )
+          mean_walk_forward_gain = mean(
+              row["selected_neural_walk_forward_mae_reduction_vs_gradient_boosting_pct"]
+              for row in rows
+          )
+          win_threshold = max(1, math.ceil(expected * 0.8))
+          promote_neural_to_site_review = walk_forward_wins >= win_threshold and mean_walk_forward_gain >= 5.0
           summary = {
               "status": "deep_learning_series_comparison_completed",
               "benchmark_decision": {
-                  "status": "lstm_candidate_for_site_specific_review" if promote_lstm_to_site_review else "retain_hist_gradient_boosting_as_benchmark",
+                  "status": "neural_candidate_for_site_specific_review" if promote_neural_to_site_review else "retain_hist_gradient_boosting_as_benchmark",
                   "walk_forward_series_win_count": walk_forward_wins,
-                  "walk_forward_series_win_threshold": max(1, math.ceil(expected * 0.8)),
+                  "walk_forward_series_win_threshold": win_threshold,
                   "mean_walk_forward_mae_gain_threshold_pct": 5.0,
                   "mean_walk_forward_mae_gain_observed_pct": mean_walk_forward_gain,
                   "automatically_deployed": False,
-                  "rule": "LSTM must beat gradient boosting on at least 80% of evaluated series and improve mean walk-forward MAE by at least 5%; passing only permits site-specific review."
+                  "rule": "The neural architecture selected on each series' internal validation tail must beat gradient boosting on at least 80% of evaluated series and improve mean walk-forward MAE by at least 5%; passing only permits site-specific review."
               },
               "expected_series_count": expected,
               "series_count": len(rows),
-              "series_where_lstm_beats_gradient_boosting": sum(r["lstm_test_mae"] < r["gradient_boosting_test_mae"] for r in rows),
-              "series_where_lstm_beats_weekly_baseline": sum(r["lstm_test_mae"] < r["weekly_baseline_test_mae"] for r in rows),
-              "mean_lstm_test_mae_reduction_vs_gradient_boosting_pct": mean(r["lstm_mae_reduction_vs_gradient_boosting_pct"] for r in rows),
-              "median_lstm_test_mae_reduction_vs_gradient_boosting_pct": median(r["lstm_mae_reduction_vs_gradient_boosting_pct"] for r in rows),
-              "mean_lstm_test_mae_reduction_vs_weekly_pct": mean(r["lstm_mae_reduction_vs_weekly_pct"] for r in rows),
-              "median_lstm_test_mae_reduction_vs_weekly_pct": median(r["lstm_mae_reduction_vs_weekly_pct"] for r in rows),
-              "series_where_lstm_beats_gradient_boosting_walk_forward": sum(r["lstm_walk_forward_mae"] < r["gradient_boosting_walk_forward_mae"] for r in rows),
-              "series_where_lstm_beats_weekly_baseline_walk_forward": sum(r["lstm_walk_forward_mae"] < r["weekly_baseline_walk_forward_mae"] for r in rows),
-              "mean_lstm_selected_epochs": mean(r["lstm_selected_epochs"] for r in rows),
-              "mean_lstm_walk_forward_selected_epochs": mean(r["lstm_walk_forward_selected_epochs"] for r in rows),
-              "mean_lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct": mean(r["lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct"] for r in rows),
-              "mean_lstm_walk_forward_mae_reduction_vs_weekly_pct": mean(r["lstm_walk_forward_mae_reduction_vs_weekly_pct"] for r in rows),
+              "series_where_lstm_beats_gradient_boosting": sum(row["lstm_test_mae"] < row["gradient_boosting_test_mae"] for row in rows),
+              "series_where_gru_beats_gradient_boosting": sum(row["gru_test_mae"] < row["gradient_boosting_test_mae"] for row in rows),
+              "series_where_selected_neural_beats_gradient_boosting": sum(row["selected_neural_test_mae"] < row["gradient_boosting_test_mae"] for row in rows),
+              "series_where_selected_neural_beats_weekly_baseline": sum(row["selected_neural_test_mae"] < row["weekly_baseline_test_mae"] for row in rows),
+              "mean_lstm_test_mae_reduction_vs_gradient_boosting_pct": mean(row["lstm_mae_reduction_vs_gradient_boosting_pct"] for row in rows),
+              "mean_gru_test_mae_reduction_vs_gradient_boosting_pct": mean(row["gru_mae_reduction_vs_gradient_boosting_pct"] for row in rows),
+              "mean_selected_neural_test_mae_reduction_vs_gradient_boosting_pct": mean(row["selected_neural_mae_reduction_vs_gradient_boosting_pct"] for row in rows),
+              "mean_selected_neural_test_mae_reduction_vs_weekly_pct": mean(row["selected_neural_mae_reduction_vs_weekly_pct"] for row in rows),
+              "series_where_lstm_beats_gradient_boosting_walk_forward": sum(row["lstm_walk_forward_mae"] < row["gradient_boosting_walk_forward_mae"] for row in rows),
+              "series_where_gru_beats_gradient_boosting_walk_forward": sum(row["gru_walk_forward_mae"] < row["gradient_boosting_walk_forward_mae"] for row in rows),
+              "series_where_selected_neural_beats_gradient_boosting_walk_forward": walk_forward_wins,
+              "series_where_selected_neural_beats_weekly_baseline_walk_forward": sum(row["selected_neural_walk_forward_mae"] < row["weekly_baseline_walk_forward_mae"] for row in rows),
+              "mean_lstm_selected_epochs": mean(row["lstm_selected_epochs"] for row in rows),
+              "mean_gru_selected_epochs": mean(row["gru_selected_epochs"] for row in rows),
+              "mean_lstm_walk_forward_selected_epochs": mean(row["lstm_walk_forward_selected_epochs"] for row in rows),
+              "mean_gru_walk_forward_selected_epochs": mean(row["gru_walk_forward_selected_epochs"] for row in rows),
+              "mean_lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct": mean(row["lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct"] for row in rows),
+              "mean_gru_walk_forward_mae_reduction_vs_gradient_boosting_pct": mean(row["gru_walk_forward_mae_reduction_vs_gradient_boosting_pct"] for row in rows),
+              "mean_selected_neural_walk_forward_mae_reduction_vs_gradient_boosting_pct": mean_walk_forward_gain,
+              "mean_selected_neural_walk_forward_mae_reduction_vs_weekly_pct": mean(row["selected_neural_walk_forward_mae_reduction_vs_weekly_pct"] for row in rows),
               "series": rows,
               "limitations": [
                   "SOWEKI series share one public data source and are not 11 independent islands.",
                   "Each prediction is one-step-ahead and uses earlier observed demand as lag inputs.",
+                  "LSTM versus GRU architecture selection uses an internal chronological validation tail; final holdouts are evaluation-only.",
                   "This experiment does not establish online learning, site transfer, dispatch economics, or field safety.",
-                  "The holdout metrics are evaluation-only; model promotion requires the separate walk-forward gate and site-specific review."
+                  "Passing the model gate only permits site-specific review; it never deploys a model."
               ]
           }
           Path("build/deep-learning/summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8")

@@ -26,9 +26,9 @@ A forecast experiment is a replaceable producer of a chronological JSON report. 
 
 The existing join adapter verifies UTC timestamp alignment and rejects missing/duplicate/gapped timestamps or actual-demand mismatches. It then emits the normalized `forecast_water_demand_m3` column consumed by the dispatch evaluator. A new model can therefore be added without rewriting the dispatch simulator.
 
-## Optional LSTM experiment
+## Optional recurrent-neural-network experiment
 
-The optional PyTorch LSTM consumes a prepared hourly CSV with `timestamp` and `water_demand_m3`, uses the previous 168 hours plus calendar-cycle features, and compares its one-step predictions with previous-hour/day/week baselines and the incumbent HistGradientBoosting model. Training duration is selected using a chronological validation tail with early stopping; scaling parameters exclude that validation tail, and the final model is refit using only pre-test history. The second expanding-window evaluation repeats the same leakage-aware procedure with its own scaler. Reports include input SHA-256, library versions, seed, selected epochs, validation metrics, train/test sizes, and holdout metrics.
+The optional PyTorch experiment now compares two recurrent neural architectures, LSTM and GRU. Both consume a prepared hourly CSV with `timestamp` and `water_demand_m3`, use the previous 168 hours plus calendar-cycle features, and are compared with previous-hour/day/week baselines and the incumbent HistGradientBoosting model. Training duration is selected using a chronological validation tail with early stopping; scaling parameters exclude that validation tail, and the final model is refit using only pre-test history. LSTM versus GRU is selected per series using internal validation MAE, never the final holdout. The second expanding-window evaluation repeats the same leakage-aware procedure with its own scaler. Reports include input SHA-256, library versions, seed, selected epochs for both architectures, validation metrics, train/test sizes, and holdout metrics.
 
 Install and run:
 
@@ -52,9 +52,9 @@ The public-data workflow `deep-learning-water-demand.yml` runs the experiment ag
 
 ## Model promotion policy
 
-The multi-series workflow now emits an explicit machine-readable benchmark decision. The LSTM is only eligible for site-specific review if it beats the incumbent gradient-boosting model on at least 80% of evaluated series in the walk-forward window and achieves at least 5% mean MAE improvement. This is a conservative research gate, not a universal model-selection theorem; a passing result does not deploy the model. The public SOWEKI series are one collection, not independent island sites. Final promotion still requires the existing forecast-candidate review gate, representative local data, high-demand underforecast checks, and human approval.
+The multi-series workflow emits an explicit machine-readable benchmark decision. The neural architecture selected using each series' internal validation tail is only eligible for site-specific review if it beats the incumbent gradient-boosting model on at least 80% of evaluated series in the walk-forward window and achieves at least 5% mean MAE improvement. This is a conservative research gate, not a universal model-selection theorem; a passing result does not deploy the model. The public SOWEKI series are one collection, not independent island sites. Final promotion still requires the existing forecast-candidate review gate, representative local data, high-demand underforecast checks, and human approval.
 
-The model registry is an executable integration boundary; the optional LSTM experiment and the registry are intentionally separate from automatic live dispatch. This allows third-party models to be plugged into a shared contract without confusing interface compatibility with demonstrated predictive quality.
+The model registry is an executable integration boundary; the optional LSTM/GRU experiment and the registry are intentionally separate from automatic live dispatch. This allows third-party models to be plugged into a shared contract without confusing interface compatibility with demonstrated predictive quality.
 
 
 ## End-to-end third-party plugin workflow
@@ -78,3 +78,8 @@ python experiments/build_forecast_dispatch_input.py \
 The backtest uses a chronological test tail and gives the plugin only the prior `history-hours` observations for each one-step prediction. It records the source CSV SHA-256, plugin identity/version, test window, metrics, and limitations. Its report uses the existing `rolling_backtest_completed` contract accepted by the timestamp-checked dispatch join. The join preserves measured water demand separately from the forecast planning column.
 
 **Security boundary:** `--plugin` imports and executes Python code in the current process. Only load trusted local packages. This harness proves integration compatibility, not forecast skill, plant safety, or field readiness.
+
+
+## Minimal runnable plug-in example
+
+Run `python examples/forecast_plugin_example.py` from a clean checkout. The example registers a trailing-day-mean plugin, validates the request and output through the shared registry, and prints timestamped forecasts with the input-history digest. It uses synthetic observations only and demonstrates interface compatibility, not predictive skill.

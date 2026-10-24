@@ -114,6 +114,18 @@ class DemandLSTM(nn.Module):
         return self.head(sequence[:, -1, :]).squeeze(-1)
 
 
+class DemandGRU(nn.Module):
+    """Gated recurrent unit challenger with the same input/output contract."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gru = nn.GRU(input_size=5, hidden_size=16, num_layers=1, batch_first=True)
+        self.head = nn.Sequential(nn.Linear(16, 8), nn.ReLU(), nn.Linear(8, 1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        sequence, _ = self.gru(x)
+        return self.head(sequence[:, -1, :]).squeeze(-1)
+
 
 def _fit_with_chronological_early_stopping(
     x: torch.Tensor,
@@ -122,7 +134,8 @@ def _fit_with_chronological_early_stopping(
     seed: int,
     scale: float,
     patience: int = 4,
-) -> tuple[DemandLSTM, dict[str, Any]]:
+    model_factory: type[nn.Module] = DemandLSTM,
+) -> tuple[nn.Module, dict[str, Any]]:
     """Choose an epoch count on a chronological validation tail, then refit all history."""
     if len(x) < 64:
         raise ValueError("Need at least 64 training examples for chronological early stopping")
@@ -133,7 +146,7 @@ def _fit_with_chronological_early_stopping(
     loss_fn = nn.MSELoss()
     batch_size = 128
     torch.manual_seed(seed)
-    probe = DemandLSTM()
+    probe = model_factory()
     optimizer = torch.optim.Adam(probe.parameters(), lr=0.003, weight_decay=1e-4)
     best_loss = float("inf")
     best_epoch = 1
@@ -166,7 +179,7 @@ def _fit_with_chronological_early_stopping(
     # The validation tail chooses training duration only. Final fit uses all
     # available pre-test history, and the test window is never used for tuning.
     torch.manual_seed(seed)
-    final_model = DemandLSTM()
+    final_model = model_factory()
     final_optimizer = torch.optim.Adam(final_model.parameters(), lr=0.003, weight_decay=1e-4)
     final_model.train()
     for _ in range(best_epoch):
@@ -231,6 +244,19 @@ def compare(input_csv: str | Path, output_json: str | Path,
     with torch.no_grad():
         predictions = model(x_test).cpu().tolist()
     lstm_predictions = [max(0.0, float(value) * scale + mean) for value in predictions]
+
+    gru_model, gru_early_stopping = _fit_with_chronological_early_stopping(
+        x_train, y_train, epochs, seed + 1, scale, model_factory=DemandGRU
+    )
+    gru_model.eval()
+    with torch.no_grad():
+        gru_raw_predictions = gru_model(x_test).cpu().tolist()
+    gru_predictions = [max(0.0, float(value) * scale + mean) for value in gru_raw_predictions]
+    selected_neural_model = (
+        "lstm_deep_learning"
+        if early_stopping["validation_mae_m3_per_hour"] <= gru_early_stopping["validation_mae_m3_per_hour"]
+        else "gru_deep_learning"
+    )
     actual = [values[i] for i in test_indices]
     from sklearn.ensemble import HistGradientBoostingRegressor
 
@@ -250,6 +276,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
         "seasonal_naive_previous_day": [values[i - 24] for i in test_indices],
         "seasonal_naive_previous_week": [values[i - 168] for i in test_indices],
         "lstm_deep_learning": lstm_predictions,
+        "gru_deep_learning": gru_predictions,
         "hist_gradient_boosting": hgb_predictions,
     }
     test_metrics = {name: metrics(actual, pred) for name, pred in prediction_sets.items()}
@@ -288,6 +315,20 @@ def compare(input_csv: str | Path, output_json: str | Path,
                 max(0.0, float(p) * wf_scale + wf_mean)
                 for p in wf_model(wf_test_x).tolist()
             ]
+        wf_gru_model, wf_gru_early_stopping = _fit_with_chronological_early_stopping(
+            wf_x, wf_y, epochs, seed + 1, wf_scale, model_factory=DemandGRU
+        )
+        wf_gru_model.eval()
+        with torch.no_grad():
+            wf_gru_pred = [
+                max(0.0, float(p) * wf_scale + wf_mean)
+                for p in wf_gru_model(wf_test_x).tolist()
+            ]
+        walk_forward_selected_neural_model = (
+            "lstm_deep_learning"
+            if wf_early_stopping["validation_mae_m3_per_hour"] <= wf_gru_early_stopping["validation_mae_m3_per_hour"]
+            else "gru_deep_learning"
+        )
         wf_actual = [values[i] for i in wf_indices]
         wf_hgb = HistGradientBoostingRegressor(
             learning_rate=0.08, max_iter=120, max_leaf_nodes=15,
@@ -304,6 +345,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "persistence_previous_hour": [values[i - 1] for i in wf_indices],
             "seasonal_naive_previous_week": [values[i - 168] for i in wf_indices],
             "lstm_deep_learning": wf_pred,
+            "gru_deep_learning": wf_gru_pred,
             "hist_gradient_boosting": wf_hgb_pred,
         }
         wf_summary.update({
@@ -313,15 +355,18 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "scaler_fit_end_timestamp": stamps[wf_scaler_fit_end - 1].isoformat(),
             "validation_tail_excluded_from_scaler_fit": True,
             "early_stopping": wf_early_stopping,
+            "gru_early_stopping": wf_gru_early_stopping,
+            "selected_neural_model": walk_forward_selected_neural_model,
             "test_metrics": {name: metrics(wf_actual, pred) for name, pred in wf_sets.items()},
         })
 
     rows = []
-    for row_index, (index, actual_value, lstm_value, hgb_value) in enumerate(zip(test_indices, actual, lstm_predictions, hgb_predictions)):
+    for row_index, (index, actual_value, lstm_value, gru_value, hgb_value) in enumerate(zip(test_indices, actual, lstm_predictions, gru_predictions, hgb_predictions)):
         rows.append({
             "timestamp": stamps[index].isoformat(),
             "actual_water_demand_m3": actual_value,
             "lstm_deep_learning": lstm_value,
+            "gru_deep_learning": gru_value,
             "hist_gradient_boosting": hgb_value,
             "persistence_previous_hour": values[index - 1],
             "seasonal_naive_previous_day": values[index - 24],
@@ -329,7 +374,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
         })
     result: dict[str, Any] = {
         "status": "models_compared",
-        "model_family": "PyTorch LSTM recurrent neural network",
+        "model_family": "PyTorch LSTM and GRU recurrent neural networks",
         "input_csv": Path(input_csv).name,
         "input_csv_sha256": hashlib.sha256(Path(input_csv).read_bytes()).hexdigest(),
         "library_versions": {"torch": torch.__version__},
@@ -345,13 +390,16 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "scaler_fit_end_timestamp": stamps[scaler_fit_end - 1].isoformat(),
             "validation_tail_excluded_from_scaler_fit": True,
             "early_stopping": early_stopping,
+            "gru_early_stopping": gru_early_stopping,
         },
+        "selected_neural_model": selected_neural_model,
         "test_metrics": test_metrics,
         "walk_forward_summary": wf_summary,
         "lowest_mae_model_on_this_holdout": min(test_metrics, key=lambda k: test_metrics[k]["mae_m3_per_hour"]),
         "forecast_rows": rows,
         "limitations": [
-            "Experimental one-step-ahead LSTM; not an online-learning system.",
+            "Experimental one-step-ahead LSTM/GRU challengers; not an online-learning system.",
+            "The neural architecture is selected using an internal chronological validation tail, not the final holdout."
             "Earlier observed demand in the test window is used as lag input, matching rolling one-step operation.",
             "One source series and one secondary chronological window do not establish cross-site transfer.",
             "Forecast quality does not establish improved dispatch economics or safe plant operation.",
