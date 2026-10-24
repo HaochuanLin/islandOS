@@ -133,6 +133,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
         dtype=torch.float32,
     )
 
+    torch.manual_seed(seed)
     model = DemandLSTM()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=1e-4)
     loss_fn = nn.MSELoss()
@@ -173,8 +174,8 @@ def compare(input_csv: str | Path, output_json: str | Path,
             dtype=torch.float32,
         )
         wf_y = torch.tensor([(values[i] - mean) / scale for i in wf_train_indices], dtype=torch.float32)
-        wf_model = DemandLSTM()
         torch.manual_seed(seed)
+        wf_model = DemandLSTM()
         wf_optimizer = torch.optim.Adam(wf_model.parameters(), lr=0.003, weight_decay=1e-4)
         wf_model.train()
         for _ in range(epochs):
