@@ -64,7 +64,7 @@ class SiteCsvPreflightTests(unittest.TestCase):
     def test_header_only_csv_fails_cleanly(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "empty.csv"
-            path.write_text(",".join(FIELDS) + "\\n", encoding="utf-8")
+            path.write_text(",".join(FIELDS) + "\n", encoding="utf-8")
             result = self.run_cli(path, "--json")
         self.assertEqual(result.returncode, 2)
         report = json.loads(result.stdout)
