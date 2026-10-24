@@ -44,6 +44,16 @@ def test_synthetic_run_exports_forecast_dispatch_audit(tmp_path: Path) -> None:
     assert all(len(row["input_history_sha256"]) == 64 for row in audit)
 
 
+def test_non_empty_output_directory_is_preserved_by_default(tmp_path: Path) -> None:
+    out = tmp_path / "existing"
+    out.mkdir()
+    sentinel = out / "keep.txt"
+    sentinel.write_text("user data", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        main(["--hours", "30", "--output-dir", str(out)])
+    assert sentinel.read_text(encoding="utf-8") == "user data"
+
+
 def test_short_input_is_rejected(tmp_path: Path) -> None:
     path = write_input(tmp_path / "short.csv", generate_rows(24, 4, datetime(2026, 1, 1)))
     with pytest.raises(ValueError, match="At least 25 hourly rows"):
