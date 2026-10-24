@@ -51,8 +51,8 @@ Stage B exit evidence:
 - Economic scenarios identify source, currency, time basis, uncertainty, and exclusions; unknown site-specific inputs remain unknown rather than invented.
 - Pilot acceptance thresholds remain owner-approved fields. Missing approvals mean no-go; synthetic data cannot authorize a pilot.
 - The dependency-audit workflow retains a CycloneDX JSON audit/SBOM artifact for each Python lock for 30 days. This does not cover the complete container image or OS packages.
-- The Docker base now uses an explicit Python patch and Debian release tag, with weekly Dependabot Docker update proposals; immutable digest pinning remains an open hardening item.
-- Residual release engineering gaps (immutable base-image digest, container-image SBOM/signing, production auth/TLS/network controls) remain listed rather than marked solved.
+- The Docker base is pinned by immutable manifest digest, with weekly Dependabot Docker update proposals for reviewed refreshes.
+- Residual release engineering gaps (full container-image SBOM/signing, production auth/TLS/network controls) remain listed rather than marked solved.
 
 Do not increase the commercial/deployment score until the new tests and documentation are merged and verified on the exact main source tree.
 
@@ -119,7 +119,7 @@ Do not increase the commercial/deployment score until the new tests and document
 - Replaced the floating `python:3.11-slim` tag with the explicit `python:3.11.17-slim-trixie` tag, reducing accidental Python-patch and Debian-release drift.
 - Added weekly Dependabot Docker update proposals so security updates can be reviewed rather than silently changing on rebuild.
 - Added regression checks for the versioned base tag and Docker update configuration.
-- The image is not yet pinned by immutable digest; that residual is explicit and no image reproducibility claim is made beyond the versioned tag.
+- Follow-up work pins the base tag to the manifest digest observed in the successful container build log and adds a regression check; this is not a signature of the image produced by the project itself.
 
 
 ### 2026-10-24 — Python dependency SBOM artifacts (in progress)
