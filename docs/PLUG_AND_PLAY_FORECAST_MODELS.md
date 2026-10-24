@@ -4,6 +4,18 @@
 
 IslandOS is designed as a **plug-in energy/water decision and simulation platform**: data sources, forecast models, and device-protocol adapters should be replaceable at documented boundaries. The current repository has a working experiment-to-dispatch adapter for water-demand forecasts. It is not yet a universal plug-and-play controller: site-specific mapping, units, equipment constraints, data quality, and engineering approval remain required.
 
+## Runtime plug-in contract
+
+The dependency-free runtime interface is implemented in `islandos_core/forecasting.py`:
+
+- `WaterObservation` enforces timezone-aware timestamps and finite, non-negative demand.
+- `ForecastRequest` requires continuous hourly history and strictly future, continuous hourly targets.
+- `WaterDemandForecastPlugin` defines the `model_id`, `version`, and `predict(history, target_timestamps)` contract.
+- `ForecastModelRegistry` registers models, rejects duplicate IDs, checks output length and values, and returns predictions with an input-history SHA-256 digest.
+- `tests/test_forecast_plugin_registry.py` exercises the contract, including malformed timestamps, gaps, negative values, NaN/Infinity and duplicate model IDs.
+
+A new model can implement this small interface without importing PyTorch or changing the dispatch core. The registry does not decide which model is best, silently promote candidates, or connect predictions to a live controller.
+
 ## Forecast model adapter contract
 
 A forecast experiment is a replaceable producer of a chronological JSON report. For dispatch integration, the report must have:
@@ -16,7 +28,7 @@ The existing join adapter verifies UTC timestamp alignment and rejects missing/d
 
 ## Optional LSTM experiment
 
-The optional PyTorch LSTM consumes a prepared hourly CSV with `timestamp` and `water_demand_m3`, uses the previous 168 hours plus calendar-cycle features, and compares its one-step predictions with previous-hour/day/week baselines. It records input SHA-256, library version, seed, train/test sizes, metrics, and a second chronological evaluation window.
+The optional PyTorch LSTM consumes a prepared hourly CSV with `timestamp` and `water_demand_m3`, uses the previous 168 hours plus calendar-cycle features, and compares its one-step predictions with previous-hour/day/week baselines and the incumbent HistGradientBoosting model. Training duration is selected using a chronological validation tail with early stopping; scaling parameters exclude that validation tail, and the final model is refit using only pre-test history. The second expanding-window evaluation repeats the same leakage-aware procedure with its own scaler. Reports include input SHA-256, library versions, seed, selected epochs, validation metrics, train/test sizes, and holdout metrics.
 
 Install and run:
 
@@ -36,3 +48,10 @@ The public-data workflow `deep-learning-water-demand.yml` runs the experiment ag
 - Do not send its output to a live controller without a candidate-review gate, site-specific backtest, uncertainty/risk checks, and human engineering approval.
 - A model trained on one SOWEKI collection does not establish transfer to a different island or utility.
 - PyTorch is an optional, separately installed dependency; the default app and standard CI environment do not require it.
+
+
+## Model promotion policy
+
+The multi-series workflow now emits an explicit machine-readable benchmark decision. The LSTM is only eligible for site-specific review if it beats the incumbent gradient-boosting model on at least 80% of evaluated series in the walk-forward window and achieves at least 5% mean MAE improvement. This is a conservative research gate, not a universal model-selection theorem; a passing result does not deploy the model. The public SOWEKI series are one collection, not independent island sites. Final promotion still requires the existing forecast-candidate review gate, representative local data, high-demand underforecast checks, and human approval.
+
+The model registry is an executable integration boundary; the optional LSTM experiment and the registry are intentionally separate from automatic live dispatch. This allows third-party models to be plugged into a shared contract without confusing interface compatibility with demonstrated predictive quality.
