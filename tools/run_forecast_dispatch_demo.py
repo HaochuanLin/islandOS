@@ -91,6 +91,8 @@ def load_rows(path: Path, assume_timezone: str | None) -> tuple[list[dict[str, s
         if None in row or any(row.get(name) is None for name in FIELDS):
             raise ValueError(f"Malformed CSV row {i}: fields do not match the header")
         stamp = parse_timestamp(row["timestamp"], i, assume_timezone)
+        if stamps and ((stamp.utcoffset() is None) != (stamps[-1].utcoffset() is None)):
+            raise ValueError(f"Timezone format changes within input (row {i})")
         if stamps and (stamp - stamps[-1]).total_seconds() != 3600:
             raise ValueError(f"Input timestamps must be continuous hourly values (row {i})")
         stamps.append(stamp)
