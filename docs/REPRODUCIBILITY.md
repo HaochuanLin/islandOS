@@ -62,3 +62,8 @@ The public-data CI independently recomputes both hashes and fails on a mismatch.
 - [Successful 11-series matrix, expanding-window backtests, and aggregate report](https://github.com/HaochuanLin/islandOS/actions/runs/39987177812)
 - [Earlier single-series measured-data run with SHA-256 checks](https://github.com/HaochuanLin/islandOS/actions/runs/39984656770)
 - [Maturity assessment and remaining gaps](MATURITY_ASSESSMENT.md)
+
+
+## Docker runtime lock
+
+The Docker image installs `requirements-runtime.lock`, a pinned Python 3.11 runtime environment derived from the passing CI environment. It avoids resolving the floating version ranges in `requirements.txt` at image-build time and excludes the direct pytest runner and optional scikit-learn forecasting package. The lock intentionally keeps the conservative runtime dependency closure. The dependency-audit workflow checks this lock as well. Exact package pins improve repeatability but do not guarantee bit-for-bit identical images; base-image digests and wheel hashes remain separate hardening opportunities.
