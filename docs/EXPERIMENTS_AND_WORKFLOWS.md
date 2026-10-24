@@ -106,6 +106,14 @@ The optional annualized lifecycle-cost objective requires a complete calendar-ye
 
 ## Forecasting experiments
 
+### Forecast-to-dispatch demo with fair naive baselines
+
+```bash
+python tools/run_forecast_dispatch_demo.py --hours 168 --seed 20261024 --output-dir build/forecast-dispatch-demo
+```
+
+The run report scores the configured plug-in against previous-hour (persistence) and previous-day demand baselines. All three are evaluated on the same rolling-origin timestamps and the same realized demand targets; the report includes MAE, RMSE, bias, and sample count for each. The baselines use only demand observations available before each target timestamp. This is a diagnostic comparison, not a claim that the built-in model or any plug-in must win. The workflow forecasts water demand only; other dispatch signals remain timestamp-aligned inputs, so the dispatch output is not a fully forecast-driven operational schedule.
+
 ### Water-demand baselines and prediction intervals
 
 ```bash
