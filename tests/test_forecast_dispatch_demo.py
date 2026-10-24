@@ -145,3 +145,27 @@ def test_plugin_non_finite_prediction_is_rejected(tmp_path: Path, monkeypatch) -
         ])
     assert not (out / "run_report.json").exists()
 
+def test_plugin_runtime_error_fails_with_cli_error_not_partial_report(tmp_path: Path, monkeypatch) -> None:
+    plugin_module = tmp_path / "raising_forecast_plugin.py"
+    plugin_module.write_text(
+        "class RaisingForecast:\\n"
+        "    model_id = 'raising-forecast'\\n"
+        "    version = '0.0.1'\\n"
+        "    def predict(self, history, target_timestamps):\\n"
+        "        raise RuntimeError('plugin unavailable')\\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    source_rows = generate_rows(25, 11, datetime(2026, 4, 1))
+    for row in source_rows:
+        row["timestamp"] += "+00:00"
+    source = write_input(tmp_path / "source-runtime-error.csv", source_rows)
+    out = tmp_path / "runtime-error-run"
+    with pytest.raises(SystemExit) as exc:
+        main([
+            "--input", str(source), "--output-dir", str(out),
+            "--plugin", "raising_forecast_plugin:RaisingForecast",
+        ])
+    assert exc.value.code == 2
+    assert not (out / "run_report.json").exists()
+
