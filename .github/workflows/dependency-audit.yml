@@ -31,3 +31,5 @@ jobs:
         run: pip-audit --requirement requirements-ci.lock
       - name: Audit exact ML dependency lock
         run: pip-audit --requirement requirements-ml.lock
+      - name: Audit optional deep-learning dependency closure
+        run: pip-audit --requirement requirements-deep-learning.txt
