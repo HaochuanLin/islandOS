@@ -14,7 +14,7 @@ Baseline scores are provisional engineering assessments, not measured scientific
 | Interactive demo and usability | 80/100 | 92/100 | 92/100 | Hosted app health is checked separately from code CI; clean-environment startup is tested; upload validation and user-facing failures have regression tests; demo clearly labels synthetic data, input provenance, run signatures, and exported model/optimizer configuration. |
 | Branch and release management | 55/100 | 90/100 | 90/100 | Reduce stale/diverged branches and PRs; each PR has a bounded scope, current base, passing required checks, and a reviewable diff; no mass merge of divergent product/pilot histories. |
 | Public-data / site-data validation | 25/100 | 60/100 | 60/100 | A documented measured or reputable public dataset with license, provenance, units, missingness audit, chronological holdout, baseline comparison, and reproducible results. This target does not imply Nan'ao field validation. |
-| Commercial / deployment readiness | 38/100 | 60/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. |
+| Commercial / deployment readiness | 38/100 | 61/100 | 70/100 | Repeatable install/deploy, documented support/security boundaries, explicit cost model and sensitivity analysis, stakeholder-defined acceptance criteria, and a documented pilot plan. No safety-critical control claim. The added static preflight is a small, tested deployment-readiness improvement, not evidence of production deployment or site validation. |
 | Overall software-engineering maturity | 82/100 | 94/100 | 95/100 | The engineering targets above are met with CI evidence, a clean branch/release path, and no unresolved high-severity defects. |
 | Real-world operational validation | 38/100 | 38/100 | 60/100 | Independently sourced site measurements and a reproducible retrospective study with documented limitations. Higher scores require an authorized, supervised pilot and site-specific safety review; they cannot be reached by code-only work. |
 
@@ -114,6 +114,15 @@ Do not increase the commercial/deployment score until the new tests and document
 6. If a target depends on access to site measurements, operator decisions, credentials, or physical equipment, mark it blocked and document the dependency instead of fabricating evidence.
 
 ## Progress log
+
+### 2026-10-24 — Fail-closed local deployment preflight (verified)
+
+- Merged [PR #158](https://github.com/HaochuanLin/islandOS/pull/158), adding `tools/deployment_preflight.py` with human-readable and JSON output. It checks the immutable Docker base digest, non-root runtime, loopback-only Compose binding, health check, container SBOM configuration, documented prototype/security boundary, and resolvable Git revision.
+- Added regression coverage for the passing repository contract and a negative test proving a public `0.0.0.0:8501:8501` Compose binding fails the preflight. The report explicitly sets `production_authorized: false`; this is static configuration verification, not a running-service probe or production approval.
+- Updated the README and local deployment runbook to make the preflight a first-run step and corrected stale wording that said image scanning/SBOM was not yet configured.
+- The tested PR head passed all seven workflow families: **546 passed, 2 skipped, 424 subtests**, integration examples, Windows gateway build, five-lock dependency audit, Nan'ao scenario, container build/SBOM/health smoke, and hosted app health. Merge commit [f70ff1f](https://github.com/HaochuanLin/islandOS/commit/f70ff1fec28f820aa9f30098416786eb7265fd20) has no file-level diff from the tested PR head.
+- Commercial/deployment readiness moves conservatively from 60 to **61/100**: a reproducible preflight and fail-closed regression are useful, but actual production controls, cost model/sensitivity analysis, stakeholder acceptance, and pilot authorization remain unestablished.
+
 
 ### 2026-10-24 — Container image SBOM generation (verified)
 
