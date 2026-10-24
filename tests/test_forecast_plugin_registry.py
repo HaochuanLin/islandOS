@@ -71,14 +71,28 @@ class TestForecastPluginRegistry(unittest.TestCase):
                 (self.history[0], self.history[2]),
                 self.targets,
             )
-        with self.assertRaisesRegex(ValueError, "after the final observed"):
+        with self.assertRaisesRegex(ValueError, "exactly one hour"):
+            ForecastRequest(
+                self.history,
+                (self.history[-1].timestamp + timedelta(hours=2),),
+            )
+        with self.assertRaisesRegex(ValueError, "exactly one hour"):
             ForecastRequest(self.history, (self.history[-1].timestamp,))
+        with self.assertRaisesRegex(ValueError, "exactly one hour"):
+            ForecastRequest(
+                self.history,
+                (self.history[-1].timestamp + timedelta(minutes=30),),
+            )
 
     def test_rejects_invalid_observed_demand(self):
         with self.assertRaisesRegex(ValueError, "finite and non-negative"):
             WaterObservation(self.history[0].timestamp, -1.0)
-        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+        with self.assertRaisesRegex(ValueError, "numeric, finite and non-negative"):
             WaterObservation(self.history[0].timestamp, float("nan"))
+        with self.assertRaisesRegex(ValueError, "numeric, finite and non-negative"):
+            WaterObservation(self.history[0].timestamp, True)
+        with self.assertRaisesRegex(ValueError, "numeric, finite and non-negative"):
+            WaterObservation(self.history[0].timestamp, "12")
 
 
 if __name__ == "__main__":

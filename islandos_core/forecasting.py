@@ -19,10 +19,17 @@ class WaterObservation:
     demand_m3: float
 
     def __post_init__(self) -> None:
+        if not isinstance(self.timestamp, datetime):
+            raise ValueError("Observation timestamp must be a datetime")
         if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
             raise ValueError("Observation timestamps must include a timezone")
-        if not math.isfinite(self.demand_m3) or self.demand_m3 < 0:
-            raise ValueError("Observed demand must be finite and non-negative")
+        if (
+            isinstance(self.demand_m3, bool)
+            or not isinstance(self.demand_m3, (int, float))
+            or not math.isfinite(self.demand_m3)
+            or self.demand_m3 < 0
+        ):
+            raise ValueError("Observed demand must be numeric, finite and non-negative")
 
 
 @dataclass(frozen=True)
@@ -35,7 +42,11 @@ class ForecastRequest:
             raise ValueError("Forecast history cannot be empty")
         if not self.target_timestamps:
             raise ValueError("At least one forecast target is required")
+        if any(not isinstance(item, WaterObservation) for item in self.history):
+            raise ValueError("Forecast history must contain WaterObservation instances")
         for stamp in self.target_timestamps:
+            if not isinstance(stamp, datetime):
+                raise ValueError("Forecast targets must be datetime instances")
             if stamp.tzinfo is None or stamp.utcoffset() is None:
                 raise ValueError("Forecast target timestamps must include a timezone")
         for left, right in zip(self.history, self.history[1:]):
@@ -47,8 +58,13 @@ class ForecastRequest:
             for left, right in zip(self.target_timestamps, self.target_timestamps[1:])
         ):
             raise ValueError("Forecast targets must be strictly ordered hourly timestamps")
-        if self.target_timestamps[0] <= self.history[-1].timestamp:
-            raise ValueError("Forecast targets must be after the final observed timestamp")
+        lead_seconds = (
+            self.target_timestamps[0] - self.history[-1].timestamp
+        ).total_seconds()
+        if lead_seconds != 3600:
+            raise ValueError(
+                "The first forecast target must be exactly one hour after the final observation"
+            )
 
 
 class WaterDemandForecastPlugin(Protocol):
@@ -99,10 +115,10 @@ class ForecastModelRegistry:
         model_id = getattr(plugin, "model_id", None)
         version = getattr(plugin, "version", None)
         predict = getattr(plugin, "predict", None)
-        if not isinstance(model_id, str) or not model_id.strip():
-            raise ValueError("Forecast plugin model_id must be a non-empty string")
-        if not isinstance(version, str) or not version.strip():
-            raise ValueError("Forecast plugin version must be a non-empty string")
+        if not isinstance(model_id, str) or not model_id.strip() or model_id != model_id.strip():
+            raise ValueError("Forecast plugin model_id must be a non-empty, trimmed string")
+        if not isinstance(version, str) or not version.strip() or version != version.strip():
+            raise ValueError("Forecast plugin version must be a non-empty, trimmed string")
         if not callable(predict):
             raise TypeError("Forecast plugin must implement predict(history, target_timestamps)")
         if model_id in self._plugins:
