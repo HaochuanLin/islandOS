@@ -13,8 +13,8 @@
 
 **islandOS is an early-stage research prototype, not a deployed island control system.** Its product architecture is designed to be plug-in: normalized data adapters, site configuration, forecast reports, and decision policies can be replaced at documented boundaries without rewriting the dispatch core. It helps users explore when flexible loads—such as reverse-osmosis (RO) desalination and cold storage—might use renewable surplus while tracking water service, energy use, and simplified equipment constraints. Site-specific signal mapping, units, safety limits, and validation are still required; this is not yet a universal drop-in plant controller.
 
-**Try the live interactive demo:** [https://islandos.streamlit.app/](https://islandos.streamlit.app/)  
-The Streamlit app is intended to be deployed from this repository's `app.py`. **Deployment access check (2026-10-23):** unauthenticated requests to the hosted URL redirect to Streamlit Cloud sign-in, so public access is not currently verified. If the demo is intended to be public, its visibility must be changed in Streamlit Cloud settings; GitHub code changes cannot change that account-level setting. The local app remains runnable using the instructions below. All bundled demo inputs are synthetic, not measured island data, and the app is not a live island control system.
+**Try the live interactive demo:** [Open IslandOS](https://islandos.streamlit.app/) — it opens directly in your browser; no account or local installation is required.  
+Use the interactive app to explore energy–water dispatch strategies, adjust RO and storage assumptions, compare water and energy outcomes, and export results. You can start with the built-in synthetic example or upload an hourly CSV for your own scenario. The built-in example is illustrative, not measured island data; uploaded data is analyzed as supplied. IslandOS is a planning and simulation prototype, not a live island control system.
 
 
 <p align="center">
