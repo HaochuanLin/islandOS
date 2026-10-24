@@ -49,14 +49,19 @@ def verify_artifacts(csv_path: Path, manifest_path: Path) -> list[str]:
     if not columns:
         errors.append("CSV is missing a header")
         return errors
+    if any(not isinstance(column, str) or not column.strip() for column in columns):
+        errors.append("CSV header contains an empty column name")
     if len(columns) != len(set(columns)):
         errors.append("CSV contains duplicate column names")
     if manifest.get("columns") != columns:
         errors.append("manifest columns do not match CSV header")
     if not rows:
         errors.append("CSV must contain at least one data row")
-    if manifest.get("row_count") != len(rows):
-        errors.append(f"row count mismatch: manifest={manifest.get('row_count')!r}, actual={len(rows)}")
+    declared_row_count = manifest.get("row_count")
+    if isinstance(declared_row_count, bool) or not isinstance(declared_row_count, int) or declared_row_count < 0:
+        errors.append("manifest row_count must be a non-negative integer")
+    elif declared_row_count != len(rows):
+        errors.append(f"row count mismatch: manifest={declared_row_count!r}, actual={len(rows)}")
 
     for row_number, row in enumerate(rows, start=2):
         if None in row:
