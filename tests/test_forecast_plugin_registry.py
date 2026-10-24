@@ -20,6 +20,12 @@ class ConstantPlugin:
         return self.predictions
 
 
+class MutatingVersionPlugin(ConstantPlugin):
+    def predict(self, history, target_timestamps):
+        self.version = "2.0"
+        return self.predictions
+
+
 class TestForecastPluginRegistry(unittest.TestCase):
     def setUp(self):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -41,6 +47,29 @@ class TestForecastPluginRegistry(unittest.TestCase):
         self.assertEqual([p.timestamp for p in result.points], list(self.targets))
         self.assertEqual([p.predicted_demand_m3 for p in result.points], [12.0, 13.0, 14.0])
         self.assertEqual(len(result.input_history_sha256), 64)
+        self.assertEqual(registry.available_models(), (("constant", "1.0"),))
+
+    def test_registered_identity_cannot_change_during_prediction(self):
+        registry = ForecastModelRegistry()
+        plugin = MutatingVersionPlugin([12, 13, 14])
+        registry.register(plugin)
+        self.assertEqual(registry.available_models(), (("constant", "1.0"),))
+
+        with self.assertRaisesRegex(ValueError, "identity changed during registration"):
+            registry.forecast("constant", self.request)
+
+        # The registry's public inventory is based on the registration snapshot,
+        # not the mutable version attribute changed by plugin code.
+        self.assertEqual(registry.available_models(), (("constant", "1.0"),))
+
+    def test_rejects_identity_changed_after_registration(self):
+        registry = ForecastModelRegistry()
+        plugin = ConstantPlugin([12, 13, 14])
+        registry.register(plugin)
+        plugin.model_id = "renamed-after-registration"
+
+        with self.assertRaisesRegex(ValueError, "identity changed after registration"):
+            registry.forecast("constant", self.request)
         self.assertEqual(registry.available_models(), (("constant", "1.0"),))
 
     def test_rejects_duplicate_plugin_id_and_unknown_model(self):
