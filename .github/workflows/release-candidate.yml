@@ -173,6 +173,11 @@ jobs:
         with:
           subject-path: "dist/*"
           show-summary: true
+      - name: Verify source archive provenance attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "dist/islandos-${{ steps.metadata.outputs.tag }}-source.tar.gz" --repo "$GITHUB_REPOSITORY"
       - name: Upload release candidate bundle
         uses: actions/upload-artifact@v7
         with:
