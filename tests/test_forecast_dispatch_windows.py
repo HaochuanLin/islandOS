@@ -64,6 +64,20 @@ class ForecastDispatchWindowsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "two or more hourly rows"):
             evaluate_windows(self.input, window_hours=8)
 
+    def test_rejects_duplicate_and_extra_csv_fields(self):
+        lines = self.input.read_text(encoding="utf-8").splitlines()
+        lines[0] = lines[0].replace("forecast_surplus_kw", "actual_surplus_kw")
+        self.input.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "duplicate columns"):
+            evaluate_windows(self.input, window_hours=8)
+
+        with self.input.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw", "water_demand_m3", "cooling_demand_kw_th"])
+            writer.writerow(["2026-01-01T00:00:00Z", 10, 12, 5, 10, "unexpected"])
+        with self.assertRaisesRegex(ValueError, "extra fields"):
+            evaluate_windows(self.input, window_hours=8)
+
 
 if __name__ == "__main__":
     unittest.main()
