@@ -21,11 +21,11 @@ on:
   workflow_dispatch:
     inputs:
       dataset_id:
-        description: SOWEKI measured series ID (1–11)
+        description: Evaluate one SOWEKI series or all 11 series
         required: true
-        default: "1"
+        default: "all"
         type: choice
-        options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
+        options: ["all", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
       epochs:
         description: LSTM training epochs (1–30)
         required: true
@@ -43,9 +43,9 @@ concurrency:
 jobs:
   lstm-measured-series:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
-      DATASET_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.dataset_id || '1' }}
+      DATASET_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.dataset_id || 'all' }}
       EPOCHS: ${{ github.event_name == 'workflow_dispatch' && inputs.epochs || '12' }}
     steps:
       - uses: actions/checkout@v7
@@ -56,74 +56,147 @@ jobs:
           cache-dependency-path: |
             requirements-ci.lock
             requirements-deep-learning.txt
-      - name: Install reproducible base and optional neural-network dependency
+      - name: Install reproducible base and CPU-only neural-network dependency
         run: |
           python -m pip install --upgrade "pip==26.2.2"
           python -m pip install -r requirements-ci.lock
           python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-deep-learning.txt
           python -m pip check
-      - name: Download and prepare measured SOWEKI series
+      - name: Download and prepare selected measured SOWEKI series
+        shell: bash
         run: |
-          python - <<'PY'
-          import csv
-          import os
-          from experiments.prepare_soweki_water_demand import _download_source
-          from pathlib import Path
+          if [ "$DATASET_ID" = "all" ]; then
+            IDS="1 2 3 4 5 6 7 8 9 10 11"
+          else
+            IDS="$DATASET_ID"
+          fi
+          for id in $IDS; do
+            echo "::group::Prepare SOWEKI series $id"
+            export CURRENT_DATASET_ID="$id"
+            python - <<'PY'
+            import csv
+            import os
+            from pathlib import Path
+            from experiments.prepare_soweki_water_demand import _download_source
 
-          raw = _download_source(int(os.environ["DATASET_ID"]), "build/public-data/raw/soweki_source.csv")
-          with raw.open(encoding="utf-8-sig", newline="") as handle:
-              rows = list(csv.DictReader(handle))
-          if not rows:
-              raise SystemExit("Source download returned no rows")
-          print(f"Downloaded {len(rows)} raw measured rows for series {os.environ['DATASET_ID']}")
-          PY
-          python experiments/prepare_soweki_water_demand.py \
-            build/public-data/raw/soweki_source.csv \
-            --output build/public-data/soweki_hourly.csv \
-            --report build/public-data/preparation.json
-      - name: Train and evaluate LSTM against chronological baselines
+            series_id = int(os.environ["CURRENT_DATASET_ID"])
+            raw_path = Path(f"build/public-data/raw/soweki_series_{series_id}.csv")
+            raw = _download_source(series_id, raw_path)
+            with raw.open(encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            if not rows:
+                raise SystemExit(f"SOWEKI series {series_id} returned no rows")
+            print(f"Downloaded {len(rows)} raw measured rows for series {series_id}")
+            PY
+            python experiments/prepare_soweki_water_demand.py \
+              "build/public-data/raw/soweki_series_${id}.csv" \
+              --output "build/public-data/soweki_hourly_${id}.csv" \
+              --report "build/public-data/preparation_${id}.json"
+            echo "::endgroup::"
+          done
+      - name: Train and compare LSTM, gradient boosting, and naive baselines
+        shell: bash
         run: |
-          python experiments/compare_water_demand_deep_learning.py \
-            build/public-data/soweki_hourly.csv \
-            --output build/deep-learning/lstm_comparison.json \
-            --epochs "$EPOCHS"
+          if [ "$DATASET_ID" = "all" ]; then
+            IDS="1 2 3 4 5 6 7 8 9 10 11"
+          else
+            IDS="$DATASET_ID"
+          fi
+          for id in $IDS; do
+            echo "::group::Train models for SOWEKI series $id"
+            python experiments/compare_water_demand_deep_learning.py \
+              "build/public-data/soweki_hourly_${id}.csv" \
+              --output "build/deep-learning/lstm_comparison_series_${id}.json" \
+              --epochs "$EPOCHS"
+            echo "::endgroup::"
+          done
           python - <<'PY'
-          import csv
           import json
           import math
+          import os
           from pathlib import Path
+          from statistics import mean, median
 
-          report = json.loads(Path("build/deep-learning/lstm_comparison.json").read_text(encoding="utf-8"))
-          assert report["status"] == "models_compared"
-          assert report["model_family"] == "PyTorch LSTM recurrent neural network"
-          assert report["input_csv_sha256"]
-          assert report["training"]["training_samples"] >= 64
-          assert report["training"]["test_samples"] >= 24
-          assert report["training"]["scaler_fit_on_training_history_only"] is True
-          assert report["forecast_rows"]
-          for name, values in report["test_metrics"].items():
-              assert all(math.isfinite(values[key]) for key in (
-                  "mae_m3_per_hour", "rmse_m3_per_hour",
-                  "bias_predicted_minus_actual_m3_per_hour"
-              )), name
-          for row in report["forecast_rows"]:
-              assert math.isfinite(row["lstm_deep_learning"])
-              assert row["lstm_deep_learning"] >= 0
-          print("LSTM report schema, finite metrics, provenance and forecast rows validated.")
-          print(json.dumps({
-              "test_metrics": report["test_metrics"],
-              "walk_forward_summary": report["walk_forward_summary"],
-              "lowest_mae_model_on_this_holdout": report["lowest_mae_model_on_this_holdout"],
-          }, indent=2))
+          root = Path("build/deep-learning")
+          reports = sorted(root.glob("lstm_comparison_series_*.json"))
+          expected = 11 if os.environ["DATASET_ID"] == "all" else 1
+          assert len(reports) == expected, f"Expected {expected} reports, found {len(reports)}"
+          rows = []
+          for path in reports:
+              report = json.loads(path.read_text(encoding="utf-8"))
+              assert report["status"] == "models_compared"
+              assert report["model_family"] == "PyTorch LSTM recurrent neural network"
+              assert len(report["input_csv_sha256"]) == 64
+              assert report["training"]["training_samples"] >= 64
+              assert report["training"]["test_samples"] >= 24
+              assert report["training"]["scaler_fit_on_training_history_only"] is True
+              assert report["forecast_rows"]
+              for name, values in report["test_metrics"].items():
+                  assert all(math.isfinite(values[key]) for key in (
+                      "mae_m3_per_hour", "rmse_m3_per_hour",
+                      "bias_predicted_minus_actual_m3_per_hour"
+                  )), (path.name, name)
+              for row in report["forecast_rows"]:
+                  for column in ("lstm_deep_learning", "hist_gradient_boosting"):
+                      assert math.isfinite(row[column]) and row[column] >= 0, (path.name, column)
+              test = report["test_metrics"]
+              walk = report["walk_forward_summary"]["test_metrics"]
+              lstm_mae = test["lstm_deep_learning"]["mae_m3_per_hour"]
+              hgb_mae = test["hist_gradient_boosting"]["mae_m3_per_hour"]
+              weekly_mae = test["seasonal_naive_previous_week"]["mae_m3_per_hour"]
+              walk_lstm = walk["lstm_deep_learning"]["mae_m3_per_hour"]
+              walk_hgb = walk["hist_gradient_boosting"]["mae_m3_per_hour"]
+              walk_weekly = walk["seasonal_naive_previous_week"]["mae_m3_per_hour"]
+              rows.append({
+                  "series_id": int(path.stem.rsplit("_", 1)[1]),
+                  "input_csv_sha256": report["input_csv_sha256"],
+                  "test_rows": report["training"]["test_samples"],
+                  "lstm_test_mae": lstm_mae,
+                  "gradient_boosting_test_mae": hgb_mae,
+                  "weekly_baseline_test_mae": weekly_mae,
+                  "lstm_mae_reduction_vs_gradient_boosting_pct": (1 - lstm_mae / hgb_mae) * 100 if hgb_mae > 0 else None,
+                  "lstm_mae_reduction_vs_weekly_pct": (1 - lstm_mae / weekly_mae) * 100 if weekly_mae > 0 else None,
+                  "lstm_walk_forward_mae": walk_lstm,
+                  "gradient_boosting_walk_forward_mae": walk_hgb,
+                  "weekly_baseline_walk_forward_mae": walk_weekly,
+                  "lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct": (1 - walk_lstm / walk_hgb) * 100 if walk_hgb > 0 else None,
+                  "lstm_walk_forward_mae_reduction_vs_weekly_pct": (1 - walk_lstm / walk_weekly) * 100 if walk_weekly > 0 else None,
+                  "lowest_mae_model_on_this_holdout": report["lowest_mae_model_on_this_holdout"],
+              })
+          summary = {
+              "status": "deep_learning_series_comparison_completed",
+              "expected_series_count": expected,
+              "series_count": len(rows),
+              "series_where_lstm_beats_gradient_boosting": sum(r["lstm_test_mae"] < r["gradient_boosting_test_mae"] for r in rows),
+              "series_where_lstm_beats_weekly_baseline": sum(r["lstm_test_mae"] < r["weekly_baseline_test_mae"] for r in rows),
+              "mean_lstm_test_mae_reduction_vs_gradient_boosting_pct": mean(r["lstm_mae_reduction_vs_gradient_boosting_pct"] for r in rows),
+              "median_lstm_test_mae_reduction_vs_gradient_boosting_pct": median(r["lstm_mae_reduction_vs_gradient_boosting_pct"] for r in rows),
+              "mean_lstm_test_mae_reduction_vs_weekly_pct": mean(r["lstm_mae_reduction_vs_weekly_pct"] for r in rows),
+              "median_lstm_test_mae_reduction_vs_weekly_pct": median(r["lstm_mae_reduction_vs_weekly_pct"] for r in rows),
+              "series_where_lstm_beats_gradient_boosting_walk_forward": sum(r["lstm_walk_forward_mae"] < r["gradient_boosting_walk_forward_mae"] for r in rows),
+              "series_where_lstm_beats_weekly_baseline_walk_forward": sum(r["lstm_walk_forward_mae"] < r["weekly_baseline_walk_forward_mae"] for r in rows),
+              "mean_lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct": mean(r["lstm_walk_forward_mae_reduction_vs_gradient_boosting_pct"] for r in rows),
+              "mean_lstm_walk_forward_mae_reduction_vs_weekly_pct": mean(r["lstm_walk_forward_mae_reduction_vs_weekly_pct"] for r in rows),
+              "series": rows,
+              "limitations": [
+                  "SOWEKI series share one public data source and are not 11 independent islands.",
+                  "Each prediction is one-step-ahead and uses earlier observed demand as lag inputs.",
+                  "This experiment does not establish online learning, site transfer, dispatch economics, or field safety.",
+                  "The incumbent is selected by same-window metrics; LSTM is not automatically promoted."
+              ]
+          }
+          Path("build/deep-learning/summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+          print(json.dumps(summary, indent=2))
           PY
       - name: Upload measured-data deep-learning evidence
         uses: actions/upload-artifact@v7
         with:
           name: islandos-lstm-series-${{ env.DATASET_ID }}
           path: |
-            build/public-data/raw/soweki_source.csv
-            build/public-data/soweki_hourly.csv
-            build/public-data/preparation.json
-            build/deep-learning/lstm_comparison.json
+            build/public-data/raw/soweki_series_*.csv
+            build/public-data/soweki_hourly_*.csv
+            build/public-data/preparation_*.json
+            build/deep-learning/lstm_comparison_series_*.json
+            build/deep-learning/summary.json
           if-no-files-found: error
           retention-days: 90
