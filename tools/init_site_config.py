@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Site/study label: {site_name}")
     print("Status: illustrative defaults only; not measured site data.")
     print("Next: edit equipment/search values and document source, units, and uncertainty.")
-    print(f"Preflight: python tools/validate_site_config.py {args.output}")
+    print("Validation: passed through islandos_config.load_config; provenance still requires human review.")
     return 0
 
 
