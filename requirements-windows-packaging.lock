@@ -1,0 +1,10 @@
+# Exact build-tool environment used for the portable Windows executables.
+# Versions captured from a successful Windows gateway build and pinned for reproducibility.
+pip==26.2.2
+altgraph==0.17.5
+numpy==2.4.6
+packaging==26.3
+pefile==2024.8.26
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.9
+pywin32-ctypes==0.2.3
