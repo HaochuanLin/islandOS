@@ -83,5 +83,24 @@ class TestForecastPluginBacktest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Need more than"):
                 backtest_plugin(source, LastValuePlugin(), root / "out.json", history_hours=20)
 
+    def test_rejects_duplicate_and_extra_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "series.csv"
+            output = root / "report.json"
+            self._write_series(source, count=10)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[0] = "timestamp,timestamp"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                backtest_plugin(source, LastValuePlugin(), output, history_hours=5)
+
+            self._write_series(source, count=10)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                backtest_plugin(source, LastValuePlugin(), output, history_hours=5)
+
 if __name__ == "__main__":
     unittest.main()
