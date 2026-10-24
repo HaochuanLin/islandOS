@@ -114,6 +114,80 @@ class DemandLSTM(nn.Module):
         return self.head(sequence[:, -1, :]).squeeze(-1)
 
 
+
+def _fit_with_chronological_early_stopping(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    max_epochs: int,
+    seed: int,
+    scale: float,
+    patience: int = 4,
+) -> tuple[DemandLSTM, dict[str, Any]]:
+    """Choose an epoch count on a chronological validation tail, then refit all history."""
+    if len(x) < 80:
+        raise ValueError("Need at least 80 training examples for chronological early stopping")
+    validation_count = max(24, int(len(x) * 0.15))
+    fit_count = len(x) - validation_count
+    x_fit, y_fit = x[:fit_count], y[:fit_count]
+    x_validation, y_validation = x[fit_count:], y[fit_count:]
+    loss_fn = nn.MSELoss()
+    batch_size = 128
+    torch.manual_seed(seed)
+    probe = DemandLSTM()
+    optimizer = torch.optim.Adam(probe.parameters(), lr=0.003, weight_decay=1e-4)
+    best_loss = float("inf")
+    best_epoch = 1
+    stale_epochs = 0
+    validation_history: list[float] = []
+    for epoch in range(1, max_epochs + 1):
+        probe.train()
+        permutation = torch.randperm(len(x_fit))
+        for start in range(0, len(permutation), batch_size):
+            indices = permutation[start:start + batch_size]
+            optimizer.zero_grad(set_to_none=True)
+            loss = loss_fn(probe(x_fit[indices]), y_fit[indices])
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(probe.parameters(), max_norm=1.0)
+            optimizer.step()
+        probe.eval()
+        with torch.no_grad():
+            val_predictions = probe(x_validation)
+            val_mae = float(torch.mean(torch.abs(val_predictions - y_validation)).item()) * scale
+        validation_history.append(val_mae)
+        if val_mae < best_loss - 1e-8:
+            best_loss = val_mae
+            best_epoch = epoch
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+        if stale_epochs >= patience:
+            break
+
+    # The validation tail chooses training duration only. Final fit uses all
+    # available pre-test history, and the test window is never used for tuning.
+    torch.manual_seed(seed)
+    final_model = DemandLSTM()
+    final_optimizer = torch.optim.Adam(final_model.parameters(), lr=0.003, weight_decay=1e-4)
+    final_model.train()
+    for _ in range(best_epoch):
+        permutation = torch.randperm(len(x))
+        for start in range(0, len(permutation), batch_size):
+            indices = permutation[start:start + batch_size]
+            final_optimizer.zero_grad(set_to_none=True)
+            loss = loss_fn(final_model(x[indices]), y[indices])
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(final_model.parameters(), max_norm=1.0)
+            final_optimizer.step()
+    return final_model, {
+        "max_epochs": max_epochs,
+        "selected_epochs": best_epoch,
+        "validation_samples": validation_count,
+        "validation_mae_m3_per_hour": best_loss,
+        "validation_history_mae_m3_per_hour": validation_history,
+        "selection_method": "chronological validation tail with early stopping; final refit on all pre-test history",
+    }
+
+
 def compare(input_csv: str | Path, output_json: str | Path,
             train_fraction: float = 0.70, epochs: int = 12,
             seed: int = 20261024) -> dict[str, Any]:
