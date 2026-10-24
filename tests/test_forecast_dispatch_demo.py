@@ -128,11 +128,11 @@ def test_invalid_dispatch_parameters_fail_closed(tmp_path: Path) -> None:
 def test_custom_plugin_runs_through_dispatch_and_records_identity(tmp_path: Path, monkeypatch) -> None:
     plugin_module = tmp_path / "constant_forecast_plugin.py"
     plugin_module.write_text(
-        "class ConstantForecast:\\n"
-        "    model_id = 'constant-forecast'\\n"
-        "    version = '2.1.0'\\n"
-        "    def predict(self, history, target_timestamps):\\n"
-        "        return [5.0 for _ in target_timestamps]\\n",
+        "class ConstantForecast:\n"
+        "    model_id = 'constant-forecast'\n"
+        "    version = '2.1.0'\n"
+        "    def predict(self, history, target_timestamps):\n"
+        "        return [5.0 for _ in target_timestamps]\n",
         encoding="utf-8",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
