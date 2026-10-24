@@ -13,13 +13,13 @@ python -c "from islandos_config import load_config; print(load_config('config/de
 
 The command refuses to overwrite an existing file unless `--force` is explicitly passed. It starts from the checked-in example configuration, names the study, and marks the values as illustrative defaults.
 
-## 2. Run the no-data simulation
+## 2. Generate a synthetic CSV for the interactive app
 
 ```bash
-python tools/run_synthetic_site_demo.py --hours 168 --seed 20261023
+python tools/generate_synthetic_site_csv.py --output build/synthetic_site_hourly.csv --hours 168 --seed 20261023
 ```
 
-The command writes the synthetic hourly input, a provenance manifest, a strategy summary, a timestep audit, and a JSON report to `build/synthetic-site-demo/`. The demo command uses its explicit command-line equipment assumptions; it does not silently read the generated site configuration. This is intentional until a single shared config contract is wired into all simulation entry points.
+Upload `build/synthetic_site_hourly.csv` to the interactive app to exercise the data-ingest path. The generated profile is a software fixture, not a forecast or measured site data. Configuration values and CSV values are separate inputs; do not assume every experiment entry point automatically consumes the JSON configuration.
 
 ## 3. Replace assumptions before site-specific interpretation
 
