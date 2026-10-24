@@ -138,6 +138,19 @@ def backtest_plugin(input_csv: str | Path, plugin: Any, output_json: str | Path,
         1.0 - model_metrics["mae_m3_per_hour"] / persistence_mae
         if persistence_mae > 0 else None
     )
+
+    # Compare seasonal naive and plugin on exactly the same timestamps. The
+    # full plugin test window can be longer than the seasonal baseline window.
+    seasonal_rows = [row for row in rows if row["seasonal_24h_baseline_m3"] is not None]
+    plugin_on_seasonal_window = summarize(
+        [row["actual_water_demand_m3"] for row in seasonal_rows],
+        [row["plugin_forecast_m3"] for row in seasonal_rows],
+    ) if seasonal_rows else None
+    seasonal_skill = None
+    if seasonal_metrics is not None and plugin_on_seasonal_window is not None:
+        seasonal_mae = seasonal_metrics["mae_m3_per_hour"]
+        if seasonal_mae > 0:
+            seasonal_skill = 1.0 - plugin_on_seasonal_window["mae_m3_per_hour"] / seasonal_mae
     report = {
         "status": "rolling_backtest_completed",
         "model_family": "IslandOS forecast plugin",
@@ -161,7 +174,9 @@ def backtest_plugin(input_csv: str | Path, plugin: Any, output_json: str | Path,
             "seasonal_naive_24h": seasonal_metrics,
         },
         "skill_vs_persistence_mae": skill_vs_persistence,
-        "skill_score_interpretation": "positive means plugin MAE is lower than persistence baseline; negative means worse; null means persistence MAE is zero",
+        "seasonal_comparable_plugin_metrics": plugin_on_seasonal_window,
+        "skill_vs_seasonal_naive_24h_mae": seasonal_skill,
+        "skill_score_interpretation": "positive means plugin MAE is lower than the named baseline; negative means worse; null means the baseline MAE is zero or no comparable seasonal window exists",
         "forecast_rows": rows,
         "limitations": [
             "Only prior observations are passed to each prediction; this is a rolling-origin one-step backtest.",
