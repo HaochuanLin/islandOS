@@ -187,6 +187,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
         "seasonal_naive_previous_day": [values[i - 24] for i in test_indices],
         "seasonal_naive_previous_week": [values[i - 168] for i in test_indices],
         "lstm_deep_learning": lstm_predictions,
+        "hist_gradient_boosting": hgb_predictions,
     }
     test_metrics = {name: metrics(actual, pred) for name, pred in prediction_sets.items()}
 
@@ -223,10 +224,22 @@ def compare(input_csv: str | Path, output_json: str | Path,
         with torch.no_grad():
             wf_pred = [max(0.0, float(p) * scale + mean) for p in wf_model(wf_test_x).tolist()]
         wf_actual = [values[i] for i in wf_indices]
+        wf_hgb = HistGradientBoostingRegressor(
+            learning_rate=0.08, max_iter=120, max_leaf_nodes=15,
+            l2_regularization=1.0, random_state=2026,
+        )
+        wf_hgb.fit(
+            [tabular_features(i, stamps, values) for i in wf_train_indices],
+            [values[i] for i in wf_train_indices],
+        )
+        wf_hgb_pred = [max(0.0, float(p)) for p in wf_hgb.predict(
+            [tabular_features(i, stamps, values) for i in wf_indices]
+        )]
         wf_sets = {
             "persistence_previous_hour": [values[i - 1] for i in wf_indices],
             "seasonal_naive_previous_week": [values[i - 168] for i in wf_indices],
             "lstm_deep_learning": wf_pred,
+            "hist_gradient_boosting": wf_hgb_pred,
         }
         wf_summary.update({
             "training_samples": len(wf_train_indices),
@@ -240,6 +253,7 @@ def compare(input_csv: str | Path, output_json: str | Path,
             "timestamp": stamps[index].isoformat(),
             "actual_water_demand_m3": actual_value,
             "lstm_deep_learning": lstm_value,
+            "hist_gradient_boosting": hgb_value,
             "persistence_previous_hour": values[index - 1],
             "seasonal_naive_previous_day": values[index - 24],
             "seasonal_naive_previous_week": values[index - 168],
