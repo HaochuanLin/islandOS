@@ -1,10 +1,13 @@
 """Regression tests for paired forecast-to-dispatch evaluation."""
 import csv
+import hashlib
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
+import experiments.evaluate_forecast_dispatch as dispatch_evaluation
 from experiments.evaluate_forecast_dispatch import evaluate_forecast_dispatch, load_paired_series
 
 
@@ -85,6 +88,30 @@ class ForecastDispatchEvaluationTests(unittest.TestCase):
             baseline["dispatch_comparison"]["supplied_forecast"]["comparison"]["rolling_score"]
             - baseline["dispatch_comparison"]["persistence_baseline"]["comparison"]["rolling_score"],
         )
+
+    def test_report_records_input_csv_sha256(self):
+        result = evaluate_forecast_dispatch(self.input)
+        self.assertEqual(
+            result["input_csv_sha256"],
+            hashlib.sha256(self.input.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(len(result["input_csv_sha256"]), 64)
+
+    def test_refuses_input_mutation_during_evaluation(self):
+        original_loader = dispatch_evaluation.load_forecast_water_demand
+
+        def mutate_after_read(path, actual_demand):
+            result = original_loader(path, actual_demand)
+            with Path(path).open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+            return result
+
+        with patch(
+            "experiments.evaluate_forecast_dispatch.load_forecast_water_demand",
+            side_effect=mutate_after_read,
+        ):
+            with self.assertRaisesRegex(ValueError, "changed during evaluation"):
+                evaluate_forecast_dispatch(self.input)
 
     def test_forecast_water_demand_is_used_for_planning_not_actuals(self):
         rows = [dict(row, forecast_water_demand_m3=28 + i) for i, row in enumerate(self.rows)]

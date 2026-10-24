@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from datetime import datetime, timezone
@@ -194,6 +195,8 @@ def _evaluate_policies(scenario: Scenario, forecast: list[float], forecast_water
 
 
 def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
+    input_path = Path(input_csv)
+    input_sha256 = hashlib.sha256(input_path.read_bytes()).hexdigest()
     timestamps, scenario, forecast = load_paired_series(input_csv)
     actual = list(scenario.available_surplus_kw)
     forecast_water = load_forecast_water_demand(input_csv, list(scenario.water_demand_m3_per_hour))
@@ -261,6 +264,10 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
         }
 
     has_water_forecast = has_forecast_water_demand_column(input_csv)
+    # The loaders currently read the path independently. Refuse to emit a report
+    # if the file changed between those reads, so the digest remains meaningful.
+    if hashlib.sha256(input_path.read_bytes()).hexdigest() != input_sha256:
+        raise ValueError("Input CSV changed during evaluation; refusing to emit a mixed-snapshot report")
     water_demand_persistence_comparison: dict = {
         "status": "not_evaluated",
         "reason": (
@@ -343,7 +350,8 @@ def evaluate_forecast_dispatch(input_csv: str | Path) -> dict:
     return {
         "experiment": "paired forecast-to-dispatch evaluation",
         "input_csv": str(input_csv),
-        "data_status": "user-supplied paired series; provenance and realism are not independently verified",
+        "input_csv_sha256": input_sha256,
+        "data_status": "user-supplied paired series; input bytes are hashed, but provenance and realism are not independently verified",
         "time_basis": {
             "rows": len(timestamps),
             "first_timestamp_utc": timestamps[0],
