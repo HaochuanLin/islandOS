@@ -43,6 +43,17 @@ class SiteCsvPreflightTests(unittest.TestCase):
         self.assertEqual(report["irregular_interval_count"], 0)
         self.assertEqual(len(report["sha256"]), 64)
 
+    def test_utc_z_designator_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "utc-z.csv"
+            write_csv(path, ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"])
+            result = self.run_cli(path, "--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["valid"])
+        self.assertEqual(report["timezone_mode"], "offset-aware")
+        self.assertEqual(report["irregular_interval_count"], 0)
+
     def test_gap_fails_instead_of_silently_treating_it_as_hourly(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "gap.csv"
