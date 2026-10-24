@@ -46,10 +46,18 @@ def prepare_features(input_csv: str | Path, output_csv: str | Path) -> dict:
 
     with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        missing = [name for name in RAW_COLUMNS if name not in (reader.fieldnames or [])]
+        headers = reader.fieldnames or []
+        duplicates = sorted({name for name in headers if headers.count(name) > 1})
+        if duplicates:
+            raise ValueError("Input CSV has duplicate columns: " + ", ".join(duplicates))
+        missing = [name for name in RAW_COLUMNS if name not in headers]
         if missing:
             raise ValueError("Input CSV missing columns: " + ", ".join(missing))
         raw = list(reader)
+
+    for line, row in enumerate(raw, start=2):
+        if None in row:
+            raise ValueError(f"Input CSV has extra fields at CSV line {line}")
 
     if not raw:
         raise ValueError("Input CSV contains no records")
