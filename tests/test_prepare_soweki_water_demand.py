@@ -156,3 +156,21 @@ class TestPrepareSowekiWaterDemand(unittest.TestCase):
             )
             self.assertEqual(report["partially_observed_hour_bins_excluded"], 1)
             self.assertEqual(report["selected_contiguous_hours"], 59)
+
+    def test_rejects_duplicate_and_extra_csv_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.csv"
+            output = Path(directory) / "hourly.csv"
+            source.write_text(
+                "timestamp,timestamp\n2025-01-01T00:00:00Z,1\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate columns"):
+                prepare_soweki_water_demand(source, output)
+
+            self._write_quarter_hourly(source)
+            lines = source.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "extra fields"):
+                prepare_soweki_water_demand(source, output)
