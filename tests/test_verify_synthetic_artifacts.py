@@ -68,6 +68,30 @@ class VerifySyntheticArtifactsTests(unittest.TestCase):
         errors = verify_artifacts(self.csv_path, self.manifest_path)
         self.assertTrue(any("must explicitly set" in error for error in errors))
 
+    def test_non_object_manifest_returns_validation_error(self) -> None:
+        self.manifest_path.write_text("[]", encoding="utf-8")
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertEqual(errors, ["manifest root must be a JSON object"])
+
+    def test_csv_extra_fields_are_rejected(self) -> None:
+        with self.csv_path.open("a", encoding="utf-8") as handle:
+            handle.write("2026-01-01T02:00,4.0,1.3,unexpected\n")
+        self.write_manifest()
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertTrue(any("extra fields beyond the header" in error for error in errors))
+
+    def test_csv_missing_fields_are_rejected(self) -> None:
+        with self.csv_path.open("a", encoding="utf-8") as handle:
+            handle.write("2026-01-01T02:00,4.0\n")
+        self.write_manifest()
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertTrue(any("missing field(s)" in error for error in errors))
+
+    def test_header_only_csv_is_rejected(self) -> None:
+        self.csv_path.write_text(",".join(self.columns) + "\n", encoding="utf-8")
+        errors = verify_artifacts(self.csv_path, self.manifest_path)
+        self.assertTrue(any("at least one data row" in error for error in errors))
+
     def test_cli_returns_nonzero_for_missing_manifest(self) -> None:
         result = subprocess.run(
             [sys.executable, "tools/verify_synthetic_artifacts.py", str(self.csv_path),
