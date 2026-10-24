@@ -70,24 +70,25 @@ jobs:
           else
             IDS="$DATASET_ID"
           fi
+          export SERIES_IDS="$IDS"
+          python - <<'PY'
+          import csv
+          import os
+          from pathlib import Path
+          from experiments.prepare_soweki_water_demand import _download_source
+
+          ids = [int(value) for value in os.environ["SERIES_IDS"].split()]
+          for series_id in ids:
+              raw_path = Path(f"build/public-data/raw/soweki_series_{series_id}.csv")
+              raw = _download_source(series_id, raw_path)
+              with raw.open(encoding="utf-8-sig", newline="") as handle:
+                  rows = list(csv.DictReader(handle))
+              if not rows:
+                  raise SystemExit(f"SOWEKI series {series_id} returned no rows")
+              print(f"Downloaded {len(rows)} raw measured rows for series {series_id}")
+          PY
           for id in $IDS; do
             echo "::group::Prepare SOWEKI series $id"
-            export CURRENT_DATASET_ID="$id"
-            python - <<'PY'
-            import csv
-            import os
-            from pathlib import Path
-            from experiments.prepare_soweki_water_demand import _download_source
-
-            series_id = int(os.environ["CURRENT_DATASET_ID"])
-            raw_path = Path(f"build/public-data/raw/soweki_series_{series_id}.csv")
-            raw = _download_source(series_id, raw_path)
-            with raw.open(encoding="utf-8-sig", newline="") as handle:
-                rows = list(csv.DictReader(handle))
-            if not rows:
-                raise SystemExit(f"SOWEKI series {series_id} returned no rows")
-            print(f"Downloaded {len(rows)} raw measured rows for series {series_id}")
-            PY
             python experiments/prepare_soweki_water_demand.py \
               "build/public-data/raw/soweki_series_${id}.csv" \
               --output "build/public-data/soweki_hourly_${id}.csv" \
