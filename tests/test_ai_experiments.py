@@ -128,3 +128,30 @@ def test_bad_data_routes_to_exact_hold_reason_even_if_numeric_fields_are_missing
 def test_explanation_rejects_invalid_numeric_inputs(field, value):
     with pytest.raises(ValueError):
         evaluate_recommendation(_valid_inputs(**{field: value}))
+
+
+@pytest.mark.parametrize(
+    "overrides, expected_code, expected_recommendation",
+    [
+        ({"hard_constraints_passed": False}, "HOLD_CONSTRAINT_CHECK_FAILED", "HOLD"),
+        ({"water_inventory_m3": 300.0}, "NO_START_WATER_BUFFER_SUFFICIENT", "NO_START"),
+        ({"available_surplus_kw": 100.0}, "NO_START_INSUFFICIENT_SURPLUS", "NO_START"),
+    ],
+)
+def test_explanation_covers_non_start_and_hold_reason_codes(overrides, expected_code, expected_recommendation):
+    result = evaluate_recommendation(_valid_inputs(**overrides))
+    assert result["reason_code"] == expected_code
+    assert result["recommendation"] == expected_recommendation
+    assert result["operator_action_required"] is True
+    assert result["physical_write_performed"] is False
+
+
+def test_anomaly_manifest_hashes_match_written_artifacts(tmp_path):
+    import hashlib
+
+    run_anomaly_experiment(tmp_path, seed=20261021, hours=150)
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    for name, metadata in manifest["artifacts"].items():
+        payload = (tmp_path / name).read_bytes()
+        assert metadata["sha256"] == hashlib.sha256(payload).hexdigest()
+        assert metadata["bytes"] == len(payload)
