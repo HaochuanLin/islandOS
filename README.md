@@ -150,7 +150,7 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 
 ## Methods and AI scope
 
-The submitted Nan'ao numbers come from the rule-based case described above. The following table distinguishes deterministic rules, optimization methods, forecasting, and advisory prototypes. The three AI experiments are exploratory work on the `ai-forecast-experiment` branch; they are not used for the submitted Nan'ao numbers.
+The submitted Nan'ao numbers come from the rule-based case described above. The following table distinguishes deterministic rules, optimization methods, forecasting, and advisory prototypes. The three AI experiments are exploratory research modules in this repository; they are not used for the submitted Nan'ao numbers.
 
 | Module | What it is | Machine learning? | Used for submitted Nan'ao numbers? |
 |---|---|---|---|
@@ -160,9 +160,9 @@ The submitted Nan'ao numbers come from the rule-based case described above. The 
 | NSGA-II / grid search | Evolutionary multi-objective optimization / enumerated parameter search | No | No (experimental) |
 | Water-demand forecasting baselines and optional ML/LSTM comparison | Forecasting | Optional | No (site accuracy not established) |
 | Read-only telemetry prototype | Recommendation-only review dashboard | No | No (no actuator control) |
-| Renewable-surplus forecasting experiment (branch only) | Persistence and seasonal-naive baselines; optional scikit-learn model | Optional | No |
-| Telemetry anomaly-detection experiment (branch only) | Rolling median/MAD baseline; optional IsolationForest | Optional | No |
-| Structured recommendation explanations (branch only) | Rule-derived reason codes and template-generated text | No | No |
+| Renewable-surplus forecasting experiment (exploratory) | Persistence and seasonal-naive baselines; optional scikit-learn model | Optional | No |
+| Telemetry anomaly-detection experiment (exploratory) | Rolling median/MAD baseline; optional IsolationForest | Optional | No |
+| Structured recommendation explanations (exploratory) | Rule-derived reason codes and template-generated text | No | No |
 
 The AI experiments are research modules, not a deployed control system. All synthetic inputs are labeled as scenario assumptions, not measured real-world data. Hard operating constraints remain rule-based; model outputs are advisory and must not bypass input-quality checks or operator approval.
 
