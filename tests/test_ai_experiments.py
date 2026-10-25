@@ -17,6 +17,7 @@ from experiments.telemetry_anomaly_experiment import (
     run as run_anomaly_experiment,
 )
 from experiments.structured_recommendation_explanations import evaluate_recommendation
+from nan_ao_scenario import run_simulation
 
 
 def test_synthetic_surplus_series_is_deterministic_and_marked_by_schema():
@@ -155,3 +156,14 @@ def test_anomaly_manifest_hashes_match_written_artifacts(tmp_path):
         payload = (tmp_path / name).read_bytes()
         assert metadata["sha256"] == hashlib.sha256(payload).hexdigest()
         assert metadata["bytes"] == len(payload)
+
+
+def test_submitted_nanao_percentiles_are_reproducible():
+    _, summary = run_simulation(runs=1000, seed=20261021)
+    values = summary["scenario_water_produced_m3_per_year"]
+    assert values == {
+        "p05": 237.609,
+        "p50_median": 442.734,
+        "p95": 693.16,
+        "mean": 447.814,
+    }
