@@ -194,7 +194,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Local first-run health check
 
-Before installing optional ML tooling or running a long experiment, use the offline doctor to check the Python runtime, core repository layout, and example site configuration:
+Before running the app or a long experiment, use the offline doctor to check the Python runtime, required core files, discoverability of the six required runtime packages, and the example site configuration:
 
 ```bash
 python tools/islandos_doctor.py
@@ -202,4 +202,4 @@ python tools/islandos_doctor.py --json
 python tools/islandos_doctor.py --config path/to/site_parameters.json
 ```
 
-Exit code `0` means these local structural checks passed; exit code `2` means attention is needed. The doctor does not install dependencies, contact external services, validate the truth of site data, or certify operational safety. A passing check is only a starting point for tests and scenario-specific review.
+Exit code `0` means these local structural checks passed; exit code `2` means attention is needed. The doctor does not install dependencies, verify exact installed package versions, contact external services, validate the truth of site data, or certify operational safety. A passing check is only a starting point for tests and scenario-specific review.

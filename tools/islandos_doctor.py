@@ -1,12 +1,13 @@
 """Run a local, offline first-run health check for IslandOS.
 
-This diagnostic checks the Python runtime, core repository files, and shared
-configuration loader. It does not install packages, contact the network, or
-certify site data, model validity, or operational safety.
+This diagnostic checks the Python runtime, required runtime packages, core
+repository files, and shared configuration loader. It does not install
+packages, contact the network, or certify site data, model validity, or safety.
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ REQUIRED_FILES = (
     "islandos_core/forecasting.py",
     "config/site_parameters.example.json",
 )
+REQUIRED_RUNTIME_MODULES = ("numpy", "matplotlib", "openpyxl", "streamlit", "pandas", "pymoo")
 
 
 def run_doctor(config_path: str | Path | None = None, *, root: Path = ROOT,
@@ -41,7 +43,23 @@ def run_doctor(config_path: str | Path | None = None, *, root: Path = ROOT,
                   else "Missing required file(s): " + ", ".join(missing),
     })
 
-    if not missing and runtime_ok:
+    missing_modules: list[str] = []
+    for module_name in REQUIRED_RUNTIME_MODULES:
+        try:
+            available = importlib.util.find_spec(module_name) is not None
+        except (ImportError, ModuleNotFoundError, ValueError):
+            available = False
+        if not available:
+            missing_modules.append(module_name)
+    checks.append({
+        "id": "runtime_dependencies",
+        "status": "pass" if not missing_modules else "fail",
+        "detail": "Required runtime packages are import-discoverable."
+                  if not missing_modules
+                  else "Missing runtime package(s): " + ", ".join(missing_modules),
+    })
+
+    if not missing and runtime_ok and not missing_modules:
         # Import only the standard-library configuration module after placing
         # the repository root on the import path; no optional ML dependencies.
         root_text = str(root.resolve())
@@ -75,7 +93,7 @@ def run_doctor(config_path: str | Path | None = None, *, root: Path = ROOT,
         checks.append({
             "id": "site_configuration",
             "status": "blocked",
-            "detail": "Skipped because runtime or repository-layout checks failed.",
+            "detail": "Skipped because runtime, dependency, or repository-layout checks failed.",
         })
 
     failures = sum(check["status"] == "fail" for check in checks)
