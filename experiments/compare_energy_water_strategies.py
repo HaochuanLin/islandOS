@@ -308,6 +308,8 @@ def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict
 
 def _validate_step_values(steps: list[SiteStep]) -> None:
     """Reject invalid direct API inputs as strictly as the CSV loader does."""
+    if not steps:
+        raise ValueError("steps must contain at least one timestep")
     numeric_fields = (
         "renewable_surplus_kw",
         "diesel_displacement_potential_kw",
