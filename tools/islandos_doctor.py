@@ -1,8 +1,8 @@
 """Run a local, offline first-run health check for IslandOS.
 
-This diagnostic checks the Python runtime, core repository files, and shared
-configuration loader. It does not install packages, contact the network, or
-certify site data, model validity, or operational safety.
+This diagnostic checks the Python runtime, required runtime packages, core
+repository files, and shared configuration loader. It does not install
+packages, contact the network, or certify site data, model validity, or safety.
 """
 from __future__ import annotations
 
