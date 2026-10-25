@@ -213,5 +213,39 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
                 load_site_steps(path)
 
 
+    def test_dispatch_rejects_irregular_timestamp_intervals(self):
+        steps = [
+            step("2026-01-01T00:00", surplus=10),
+            step("2026-01-01T01:00", surplus=10),
+            step("2026-01-01T03:00", surplus=10),
+        ]
+        with self.assertRaisesRegex(ValueError, "timestamp interval is 7200 seconds"):
+            compare_strategies(steps, self.config)
+
+    def test_dispatch_requires_interval_to_match_dt_hours(self):
+        config = Config(
+            ro_rated_power_kw=10,
+            specific_energy_kwh_m3=5,
+            tank_capacity_m3=20,
+            initial_water_m3=0,
+            min_run_hours=1,
+            dt_hours=0.5,
+        )
+        steps = [
+            step("2026-01-01T00:00", surplus=10),
+            step("2026-01-01T01:00", surplus=10),
+        ]
+        with self.assertRaisesRegex(ValueError, "dt_hours=0.5 requires 1800 seconds"):
+            compare_strategies(steps, config)
+
+    def test_dispatch_accepts_consistent_timezone_aware_intervals(self):
+        steps = [
+            step("2026-01-01T00:00:00+00:00", surplus=10),
+            step("2026-01-01T01:00:00+00:00", surplus=10),
+        ]
+        _, summaries = compare_strategies(steps, self.config)
+        self.assertEqual(len(summaries), 5)
+
+
 if __name__ == "__main__":
     unittest.main()
