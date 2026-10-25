@@ -150,7 +150,7 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 
 ## Methods and AI scope
 
-The submitted Nan'ao numbers come from the rule-based case described above. The following table distinguishes deterministic rules, optimization methods, forecasting, and advisory prototypes. The three AI experiments are exploratory research modules in this repository; they are not used for the submitted Nan'ao numbers.
+The submitted Nan'ao numbers come from the assumption-driven Monte Carlo event-energy model described above. The following table distinguishes deterministic rules, optimization methods, forecasting, and advisory prototypes. The three AI experiments are exploratory research modules in this repository; they are not used for the submitted Nan'ao numbers.
 
 | Module | What it is | Machine learning? | Used for submitted Nan'ao numbers? |
 |---|---|---|---|
