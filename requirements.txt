@@ -1,6 +1,6 @@
 # islandOS MVP simulation prototype
 # Python >= 3.10 is required (PEP 604 union type syntax; CI and Docker use Python 3.11)
-numpy>=2.5.4
+numpy>=2.4.6
 matplotlib>=3.11.2
 openpyxl>=3.1.5
 streamlit>=1.66.0
