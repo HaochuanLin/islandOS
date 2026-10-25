@@ -1,5 +1,6 @@
 """Regression tests for the generic energy-to-water strategy comparison."""
 import csv
+from dataclasses import replace
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,18 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             dt_hours=1,
             diesel_cost_per_kwh=0.6,
         )
+
+    def test_config_rejects_boolean_or_non_numeric_physical_parameters(self):
+        invalid_configs = [
+            (replace(self.config, ro_rated_power_kw=True), "ro_rated_power_kw"),
+            (replace(self.config, dt_hours="1"), "dt_hours"),
+            (replace(self.config, initial_water_m3=True), "initial_water_m3"),
+            (replace(self.config, diesel_cost_per_kwh=False), "diesel_cost_per_kwh"),
+        ]
+        for config, field in invalid_configs:
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ValueError, field):
+                    compare_strategies([step("2026-01-01T00:00")], config)
 
     def test_surplus_strategy_uses_only_surplus_and_produces_expected_water(self):
         steps = [
@@ -129,6 +142,52 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
         self.assertEqual(surplus["ro_run_hours"], 2)
         self.assertEqual(surplus["surplus_energy_to_ro_kwh"], 20)
 
+    def test_direct_api_rejects_non_string_timestamp(self):
+        invalid = SiteStep(
+            timestamp=None,
+            renewable_surplus_kw=0,
+            diesel_displacement_potential_kw=0,
+            grid_price_per_kwh=0.2,
+            off_peak=False,
+            grid_available=True,
+            water_demand_m3=0,
+        )
+        with self.assertRaisesRegex(ValueError, "timestamp must be a non-empty ISO-8601 string"):
+            compare_strategies([invalid], self.config)
+
+    def test_direct_api_validates_timestamp_for_single_timestep(self):
+        with self.assertRaisesRegex(ValueError, "timestamp must be ISO-8601"):
+            compare_strategies([step("not-a-timestamp")], self.config)
+
+    def test_direct_api_rejects_empty_timestep_series(self):
+        with self.assertRaisesRegex(ValueError, "at least one timestep"):
+            compare_strategies([], self.config)
+
+    def test_direct_api_rejects_non_finite_and_negative_step_values(self):
+        invalid_steps = [
+            step("2026-01-01T00:00", surplus=float("nan")),
+            step("2026-01-01T00:00", water_demand=-1),
+            step("2026-01-01T00:00", backup=float("inf")),
+            step("2026-01-01T00:00", price=True),
+        ]
+        for invalid in invalid_steps:
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "Step 1:"):
+                    compare_strategies([invalid], self.config)
+
+    def test_direct_api_rejects_non_boolean_dispatch_flags(self):
+        invalid = SiteStep(
+            timestamp="2026-01-01T00:00",
+            renewable_surplus_kw=0,
+            diesel_displacement_potential_kw=0,
+            grid_price_per_kwh=0.2,
+            off_peak=1,
+            grid_available=True,
+            water_demand_m3=0,
+        )
+        with self.assertRaisesRegex(ValueError, "off_peak must be a boolean"):
+            compare_strategies([invalid], self.config)
+
     def test_csv_loader_rejects_missing_columns(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.csv"
@@ -211,6 +270,40 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
                 writer.writerow(["2026-01-01T00:00", "-1", "0", "0.1", "1", "1", "0"])
             with self.assertRaisesRegex(ValueError, "renewable_surplus_kw"):
                 load_site_steps(path)
+
+
+    def test_dispatch_rejects_irregular_timestamp_intervals(self):
+        steps = [
+            step("2026-01-01T00:00", surplus=10),
+            step("2026-01-01T01:00", surplus=10),
+            step("2026-01-01T03:00", surplus=10),
+        ]
+        with self.assertRaisesRegex(ValueError, "timestamp interval is 7200 seconds"):
+            compare_strategies(steps, self.config)
+
+    def test_dispatch_requires_interval_to_match_dt_hours(self):
+        config = Config(
+            ro_rated_power_kw=10,
+            specific_energy_kwh_m3=5,
+            tank_capacity_m3=20,
+            initial_water_m3=0,
+            min_run_hours=1,
+            dt_hours=0.5,
+        )
+        steps = [
+            step("2026-01-01T00:00", surplus=10),
+            step("2026-01-01T01:00", surplus=10),
+        ]
+        with self.assertRaisesRegex(ValueError, "dt_hours=0.5 requires 1800 seconds"):
+            compare_strategies(steps, config)
+
+    def test_dispatch_accepts_consistent_timezone_aware_intervals(self):
+        steps = [
+            step("2026-01-01T00:00:00+00:00", surplus=10),
+            step("2026-01-01T01:00:00+00:00", surplus=10),
+        ]
+        _, summaries = compare_strategies(steps, self.config)
+        self.assertEqual(len(summaries), 5)
 
 
 if __name__ == "__main__":

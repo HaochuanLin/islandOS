@@ -35,7 +35,7 @@ Required CSV columns:
 
 | Column | Meaning / unit | Evidence requirement |
 |---|---|---|
-| `timestamp` | Increasing time label | Keep source timezone and interval convention documented. The script checks lexical ordering, not timezone correctness. |
+| `timestamp` | ISO-8601 timestamp for each row | Timestamps must be strictly increasing, use a consistent timezone-aware/naive mode, and be spaced exactly by `--dt-hours` in elapsed time. Irregular/gapped intervals are rejected rather than silently treated as fixed-duration steps. Preserve the source timezone and interval convention. |
 | `renewable_surplus_kw` | Renewable power genuinely available to a flexible load after essential demand and applicable operating constraints | Do not equate raw wind/PV output with usable surplus. |
 | `diesel_displacement_potential_kw` | Estimated renewable power that could directly displace diesel generation in that time step | Derive from a separate microgrid dispatch calculation or operator data; do not infer from surplus alone. This is reported as potential, not verified fuel savings. |
 | `grid_price_per_kwh` | Applicable import tariff for the time step | Use the actual tariff and unit. |

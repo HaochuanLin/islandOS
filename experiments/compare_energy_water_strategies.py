@@ -295,6 +295,8 @@ def _simulate_strategy(
 def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict], list[dict]]:
     """Return per-timestep audit rows and one summary row per strategy."""
     _validate_config(config)
+    _validate_step_values(steps)
+    _validate_step_intervals(steps, config.dt_hours)
     details: list[dict] = []
     summaries: list[dict] = []
     for strategy in STRATEGIES:
@@ -304,19 +306,99 @@ def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict
     return details, summaries
 
 
+def _validate_step_values(steps: list[SiteStep]) -> None:
+    """Reject invalid direct API inputs as strictly as the CSV loader does."""
+    if not steps:
+        raise ValueError("steps must contain at least one timestep")
+    numeric_fields = (
+        "renewable_surplus_kw",
+        "diesel_displacement_potential_kw",
+        "grid_price_per_kwh",
+        "water_demand_m3",
+        "backup_available_kw",
+    )
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, SiteStep):
+            raise ValueError(f"Step {index}: expected a SiteStep instance")
+        for field in numeric_fields:
+            value = getattr(step, field)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(
+                    f"Step {index}: {field} must be numeric, finite and >= 0"
+                )
+        for field in ("off_peak", "grid_available"):
+            if not isinstance(getattr(step, field), bool):
+                raise ValueError(f"Step {index}: {field} must be a boolean")
+
+
+def _validate_step_intervals(steps: list[SiteStep], dt_hours: float) -> None:
+    """Require timestamps to match the fixed interval assumed by the simulator."""
+    parsed: list[datetime] = []
+    aware_mode: bool | None = None
+    for index, step in enumerate(steps):
+        if not isinstance(step.timestamp, str) or not step.timestamp.strip():
+            raise ValueError(f"Row {index + 1}: timestamp must be a non-empty ISO-8601 string")
+        raw = step.timestamp.strip()
+        normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+        try:
+            stamp = datetime.fromisoformat(normalized)
+        except (ValueError, AttributeError) as exc:
+            raise ValueError(
+                f"Row {index + 1}: timestamp must be ISO-8601, got {step.timestamp!r}"
+            ) from exc
+        aware = stamp.utcoffset() is not None
+        if aware_mode is not None and aware != aware_mode:
+            raise ValueError("timestamps mix timezone-aware and timezone-naive values")
+        aware_mode = aware
+        parsed.append(stamp)
+    expected_seconds = dt_hours * 3600.0
+    for index, (previous, current) in enumerate(zip(parsed, parsed[1:]), start=2):
+        actual_seconds = (current - previous).total_seconds()
+        if actual_seconds <= 0:
+            raise ValueError(
+                f"Row {index + 1}: timestamps must be strictly increasing in time"
+            )
+        if not math.isclose(actual_seconds, expected_seconds, rel_tol=1e-9, abs_tol=1e-6):
+            raise ValueError(
+                f"Row {index + 1}: timestamp interval is {actual_seconds:g} seconds; "
+                f"dt_hours={dt_hours:g} requires {expected_seconds:g} seconds. "
+                "Resample the input or set the matching simulation interval."
+            )
+
+
 def _validate_config(config: Config) -> None:
     for name in ("ro_rated_power_kw", "specific_energy_kwh_m3", "tank_capacity_m3", "dt_hours"):
         value = getattr(config, name)
-        if not math.isfinite(value) or value <= 0:
-            raise ValueError(f"{name} must be finite and > 0")
-    if not math.isfinite(config.initial_water_m3) or not 0 <= config.initial_water_m3 <= config.tank_capacity_m3:
-        raise ValueError("initial_water_m3 must be within [0, tank_capacity_m3]")
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value <= 0
+        ):
+            raise ValueError(f"{name} must be a finite numeric value > 0")
+    initial = config.initial_water_m3
+    if (
+        isinstance(initial, bool)
+        or not isinstance(initial, (int, float))
+        or not math.isfinite(initial)
+        or not 0 <= initial <= config.tank_capacity_m3
+    ):
+        raise ValueError("initial_water_m3 must be numeric and within [0, tank_capacity_m3]")
     if isinstance(config.min_run_hours, bool) or not isinstance(config.min_run_hours, int) or config.min_run_hours < 1:
         raise ValueError("min_run_hours must be an integer >= 1")
-    if config.diesel_cost_per_kwh is not None and (
-        not math.isfinite(config.diesel_cost_per_kwh) or config.diesel_cost_per_kwh < 0
+    diesel_cost = config.diesel_cost_per_kwh
+    if diesel_cost is not None and (
+        isinstance(diesel_cost, bool)
+        or not isinstance(diesel_cost, (int, float))
+        or not math.isfinite(diesel_cost)
+        or diesel_cost < 0
     ):
-        raise ValueError("diesel_cost_per_kwh must be finite and >= 0")
+        raise ValueError("diesel_cost_per_kwh must be a finite numeric value >= 0")
 
 
 def _write_csv(path: Path, rows: list[dict]) -> None:
