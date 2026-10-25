@@ -306,5 +306,70 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
         self.assertEqual(len(summaries), 5)
 
 
+    def test_water_inventory_mass_balance_and_operational_bounds_across_strategies(self):
+        config = Config(
+            ro_rated_power_kw=10,
+            specific_energy_kwh_m3=5,
+            tank_capacity_m3=3,
+            initial_water_m3=1,
+            min_run_hours=1,
+            dt_hours=1,
+            diesel_cost_per_kwh=0.6,
+        )
+        steps = [
+            step("2026-01-01T00:00", surplus=10, water_demand=0.2),
+            step("2026-01-01T01:00", surplus=10, water_demand=0.5),
+            step("2026-01-01T02:00", price=0.1, off_peak=True, grid=True, water_demand=1.0),
+            step("2026-01-01T03:00", backup=10, water_demand=2.0),
+            step("2026-01-01T04:00", surplus=10, water_demand=0.1),
+            step("2026-01-01T05:00", water_demand=1.5),
+        ]
+        detail, summaries = compare_strategies(steps, config)
+        demand_by_timestamp = {item.timestamp: item.water_demand_m3 for item in steps}
+
+        for summary in summaries:
+            strategy = summary["strategy"]
+            rows = [row for row in detail if row["strategy"] == strategy]
+            self.assertEqual(len(rows), len(steps))
+            for row in rows:
+                with self.subTest(strategy=strategy, timestamp=row["timestamp"]):
+                    before = row["water_inventory_before_m3"]
+                    produced = row["water_produced_m3"]
+                    spill = row["water_spill_m3"]
+                    served = row["water_served_m3"]
+                    unmet = row["unmet_water_demand_m3"]
+                    after = row["remaining_water_inventory_m3"]
+                    power = row["ro_power_kw"]
+                    energy = row["ro_energy_kwh"]
+
+                    self.assertAlmostEqual(
+                        before + produced - spill - served, after, places=5
+                    )
+                    self.assertAlmostEqual(
+                        served + unmet, demand_by_timestamp[row["timestamp"]], places=5
+                    )
+                    self.assertAlmostEqual(
+                        energy, power * config.dt_hours, places=5
+                    )
+                    self.assertAlmostEqual(
+                        produced, energy / config.specific_energy_kwh_m3, places=5
+                    )
+                    self.assertGreaterEqual(after, -1e-6)
+                    self.assertLessEqual(after, config.tank_capacity_m3 + 1e-6)
+                    self.assertIn(power, (0, config.ro_rated_power_kw))
+
+            self.assertAlmostEqual(
+                config.initial_water_m3 + summary["water_produced_m3"]
+                - summary["water_spill_m3"] - summary["water_served_m3"],
+                summary["ending_water_inventory_m3"],
+                places=5,
+            )
+            self.assertAlmostEqual(
+                summary["water_produced_m3"],
+                sum(row["water_produced_m3"] for row in rows),
+                places=5,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
