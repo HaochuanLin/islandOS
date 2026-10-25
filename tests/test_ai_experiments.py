@@ -8,6 +8,7 @@ import pytest
 from experiments.renewable_surplus_forecast_experiment import (
     generate_synthetic_series,
     metric,
+    run as run_forecast_experiment,
     walk_forward_forecasts,
 )
 from experiments.telemetry_anomaly_experiment import (
@@ -47,6 +48,17 @@ def test_walk_forward_forecast_baselines_cover_test_window():
 def test_metric_calculation_is_finite_and_aligned():
     result = metric([1.0, 3.0], [2.0, 2.0])
     assert result == {"mae_kw": 1.0, "rmse_kw": 1.0, "bias_kw": 0.0}
+
+
+def test_forecast_experiment_connects_to_existing_ro_simulator(tmp_path):
+    report = run_forecast_experiment(tmp_path / "forecast", seeds=(20261021,))
+    assert report["status"] == "synthetic_forecast_experiment_completed"
+    assert report["data_status"] == "synthetic / scenario assumption, not measured real-world data"
+    assert (tmp_path / "forecast" / "forecast_metrics.csv").is_file()
+    assert (tmp_path / "forecast" / "dispatch_comparison.csv").is_file()
+    manifest = json.loads((tmp_path / "forecast" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["is_measured_site_data"] is False
+    assert manifest["artifacts"]["synthetic_surplus_input_seed_20261021.csv"]["sha256"]
 
 
 def test_rolling_median_mad_flags_missing_and_flatline():
@@ -99,8 +111,10 @@ def test_explanation_start_is_advisory_and_auditable():
     assert result["mode"] == "advisory_recommendation_only"
 
 
-def test_bad_data_routes_to_exact_hold_reason():
-    result = evaluate_recommendation(_valid_inputs(telemetry_quality_passed=False))
+def test_bad_data_routes_to_exact_hold_reason_even_if_numeric_fields_are_missing():
+    inputs = _valid_inputs(telemetry_quality_passed=False)
+    inputs.pop("available_surplus_kw")
+    result = evaluate_recommendation(inputs)
     assert result["reason_code"] == "HOLD_DATA_QUALITY_FAILED"
     assert result["recommendation"] == "HOLD"
     assert result["explanation_en"].startswith("HOLD: data quality check failed.")
