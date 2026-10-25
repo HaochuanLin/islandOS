@@ -129,6 +129,10 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
         self.assertEqual(surplus["ro_run_hours"], 2)
         self.assertEqual(surplus["surplus_energy_to_ro_kwh"], 20)
 
+    def test_direct_api_rejects_empty_timestep_series(self):
+        with self.assertRaisesRegex(ValueError, "at least one timestep"):
+            compare_strategies([], self.config)
+
     def test_direct_api_rejects_non_finite_and_negative_step_values(self):
         invalid_steps = [
             step("2026-01-01T00:00", surplus=float("nan")),
