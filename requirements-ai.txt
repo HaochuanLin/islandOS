@@ -1,0 +1,4 @@
+# Optional dependencies for the exploratory AI experiments.
+# The default application requirements.txt remains unchanged.
+-r requirements.txt
+scikit-learn>=1.9.1
