@@ -51,16 +51,29 @@ def evaluate_recommendation(inputs: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(constraints, bool):
         raise ValueError("hard_constraints_passed must be boolean")
 
-    # Validate numeric fields even for HOLD decisions so malformed telemetry
-    # cannot be silently ignored or accidentally used later.
+    # A failed quality gate must fail closed even when numeric fields are absent
+    # or malformed. Do not inspect/use those values to make a start/no-start decision.
+    if not quality:
+        return {
+            "recommendation": "HOLD",
+            "reason_code": "HOLD_DATA_QUALITY_FAILED",
+            "explanation_en": REASON_TEMPLATES["HOLD_DATA_QUALITY_FAILED"],
+            "evidence": {
+                "telemetry_quality_passed": False,
+                "hard_constraints_passed": constraints,
+            },
+            "mode": "advisory_recommendation_only",
+            "operator_action_required": True,
+            "physical_write_performed": False,
+            "not_a_deployed_control_system": True,
+        }
+
     available = _finite_nonnegative(inputs, "available_surplus_kw")
     required = _finite_nonnegative(inputs, "required_power_kw")
     inventory = _finite_nonnegative(inputs, "water_inventory_m3")
     target = _finite_nonnegative(inputs, "target_water_inventory_m3")
 
-    if not quality:
-        code, recommendation = "HOLD_DATA_QUALITY_FAILED", "HOLD"
-    elif not constraints:
+    if not constraints:
         code, recommendation = "HOLD_CONSTRAINT_CHECK_FAILED", "HOLD"
     elif inventory >= target:
         code, recommendation = "NO_START_WATER_BUFFER_SUFFICIENT", "NO_START"
