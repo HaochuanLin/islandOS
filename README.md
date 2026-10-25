@@ -13,7 +13,6 @@
 
 **islandOS is an early-stage research prototype, not a deployed island control system.** Its product architecture is designed to be plug-in: normalized data adapters, site configuration, forecast reports, and decision policies can be replaced at documented boundaries without rewriting the dispatch core. It helps users explore when flexible loads—such as reverse-osmosis (RO) desalination and cold storage—might use renewable surplus while tracking water service, energy use, and simplified equipment constraints. Site-specific signal mapping, units, safety limits, and validation are still required; this is not yet a universal drop-in plant controller.
 
-**Try the hosted interactive demo:** [Open IslandOS](https://islandos.streamlit.app/). Public access to the hosted demo must be enabled in Streamlit Community Cloud; the latest unauthenticated health probe on 2026-10-25 was redirected to Streamlit sign-in. If the link requests authentication, see the [hosted access troubleshooting and local demo deployment runbook](docs/DEMO_DEPLOYMENT.md) or run the app locally. Before startup, run `python tools/deployment_preflight.py` to check the local demo's loopback binding, pinned container base, non-root user, health check, SBOM configuration, and documented security boundary. The built-in example is synthetic; this is a planning/simulation prototype, not a live island control system.  
 Use the interactive app to explore energy–water dispatch strategies, adjust RO and storage assumptions, compare water and energy outcomes, and export results. You can start with the built-in synthetic example or upload an hourly CSV for your own scenario. The built-in example is illustrative, not measured island data; uploaded data is analyzed as supplied. IslandOS is a planning and simulation prototype, not a live island control system.
 
 
@@ -28,7 +27,11 @@ A frozen snapshot of this Nan'ao pilot case is available on branch: `nan-ao-scen
 
 It is implemented in `nan_ao_scenario.py`, using a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021.
 
-All outputs are synthetic scenario assumptions, not measured real-world data.
+All outputs are synthetic scenario assumptions, not measured real-world data. The 50 kW value is a proposed procurement assumption, not a verified installed rating.
+
+The submitted Nan'ao case uses rule-based look-ahead scheduling in nan_ao_scenario.py. The rolling-horizon, optimization and forecasting modules in this repository are exploratory research and were not used to produce the submitted numbers.
+
+In the proposed Nan'ao pilot, the scheduler would first run in advisory (recommendation-only) mode: same decision logic, with a water-authority operator confirming each start. Closed-loop automation would be considered only after operator approval and safety validation.
 
 The interactive `app.py` on main is a generic conceptual demo only, and does not generate the quantitative results from this pilot case.
 
@@ -47,6 +50,8 @@ The interactive `app.py` on main is a generic conceptual demo only, and does not
 The new CLI demo connects a replaceable water-demand forecast plug-in to dispatch screening and auditable strategy comparisons. The broader forecasting experiments still do **not** provide validated island solar/wind generation and electricity-demand forecasts to a live controller; no validated or safety-certified end-to-end controller is claimed.
 
 ## Try the interactive app
+
+**Try the hosted interactive demo:** [Open IslandOS](https://islandos.streamlit.app/). Public access must be enabled in Streamlit Community Cloud; the latest unauthenticated health probe on 2026-10-25 was redirected to Streamlit sign-in. If the link requests authentication, see the [hosted access troubleshooting and local demo deployment runbook](docs/DEMO_DEPLOYMENT.md) or run the app locally. Before startup, run `python tools/deployment_preflight.py` to check the local demo's loopback binding, pinned container base, non-root user, health check, SBOM configuration, and documented security boundary. The built-in example is synthetic; this is a planning/simulation prototype, not a live island control system.
 
 **No site data yet?** Run the full command-line demonstration in one step; it generates synthetic hourly inputs, compares five strategies, and writes summary, timestep audit, and machine-readable report files:
 
@@ -142,6 +147,24 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 | Synthetic benchmark protocol | [End-to-end benchmark](docs/END_TO_END_BENCHMARK.md) |
 | Optimizer comparison methodology | [Pareto benchmark](docs/PARETO_BENCHMARK.md) |
 | More runnable commands | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) |
+
+## Methods and AI scope
+
+The submitted Nan'ao numbers come from the rule-based case described above. The following table distinguishes deterministic rules, optimization methods, forecasting, and advisory prototypes. The three AI experiments are exploratory work on the `ai-forecast-experiment` branch; they are not used for the submitted Nan'ao numbers.
+
+| Module | What it is | Machine learning? | Used for submitted Nan'ao numbers? |
+|---|---|---|---|
+| Rule-based look-ahead scheduling (`nan_ao_scenario.py`) | Threshold and minimum-run rules | No | Yes |
+| Priority-based flexible-load policies | Fixed-priority rules | No | No |
+| Rolling-horizon dispatch prototype | Receding-horizon planning, re-planned each step | No | No |
+| NSGA-II / grid search | Evolutionary multi-objective optimization / enumerated parameter search | No | No (experimental) |
+| Water-demand forecasting baselines and optional ML/LSTM comparison | Forecasting | Optional | No (site accuracy not established) |
+| Read-only telemetry prototype | Recommendation-only review dashboard | No | No (no actuator control) |
+| Renewable-surplus forecasting experiment (branch only) | Persistence and seasonal-naive baselines; optional scikit-learn model | Optional | No |
+| Telemetry anomaly-detection experiment (branch only) | Rolling median/MAD baseline; optional IsolationForest | Optional | No |
+| Structured recommendation explanations (branch only) | Rule-derived reason codes and template-generated text | No | No |
+
+The AI experiments are research modules, not a deployed control system. All synthetic inputs are labeled as scenario assumptions, not measured real-world data. Hard operating constraints remain rule-based; model outputs are advisory and must not bypass input-quality checks or operator approval.
 
 ## Current maturity
 
