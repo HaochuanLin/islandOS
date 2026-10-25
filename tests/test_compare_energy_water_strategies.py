@@ -129,6 +129,19 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
         self.assertEqual(surplus["ro_run_hours"], 2)
         self.assertEqual(surplus["surplus_energy_to_ro_kwh"], 20)
 
+    def test_direct_api_rejects_non_string_timestamp(self):
+        invalid = SiteStep(
+            timestamp=None,
+            renewable_surplus_kw=0,
+            diesel_displacement_potential_kw=0,
+            grid_price_per_kwh=0.2,
+            off_peak=False,
+            grid_available=True,
+            water_demand_m3=0,
+        )
+        with self.assertRaisesRegex(ValueError, "timestamp must be a non-empty ISO-8601 string"):
+            compare_strategies([invalid], self.config)
+
     def test_direct_api_validates_timestamp_for_single_timestep(self):
         with self.assertRaisesRegex(ValueError, "timestamp must be ISO-8601"):
             compare_strategies([step("not-a-timestamp")], self.config)
