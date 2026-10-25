@@ -338,8 +338,6 @@ def _validate_step_values(steps: list[SiteStep]) -> None:
 
 def _validate_step_intervals(steps: list[SiteStep], dt_hours: float) -> None:
     """Require timestamps to match the fixed interval assumed by the simulator."""
-    if len(steps) < 2:
-        return
     parsed: list[datetime] = []
     aware_mode: bool | None = None
     for index, step in enumerate(steps):
