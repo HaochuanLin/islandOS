@@ -121,3 +121,20 @@ This runbook does not provide the controls needed for a production service. Befo
 - Site-specific data permissions, validation, owner-approved acceptance thresholds, operational sign-off, and a separate safety review for any future integration. Start with the [pilot acceptance template](PILOT_ACCEPTANCE_TEMPLATE.md), which is explicitly unapproved and cannot authorize live control.
 
 Do not describe the current app as production-ready until these controls have been implemented and independently reviewed. A passing Docker smoke test verifies startup in that test environment only.
+
+## Hosted Streamlit Cloud visibility check
+
+The hosted demo URL is `https://islandos.streamlit.app/`. A scheduled GitHub Actions probe checks both the landing page and Streamlit's health endpoint without following redirects. On 2026-10-25, the public probe received HTTP 303 redirects for both endpoints to `share.streamlit.io/-/auth/app`. This is evidence that unauthenticated visitors are being sent to Streamlit Cloud sign-in; it is not evidence of a simulation-code failure.
+
+If the hosted demo is intended to be publicly usable:
+
+1. Sign in to the Streamlit Community Cloud account that owns the deployment.
+2. Open the `islandos` app's deployment settings and inspect its visibility/sharing controls.
+3. Set the app to public access if that is appropriate for the intended audience and data-handling model. Do not publish confidential site data or credentials.
+4. Open the root URL in a private/incognito browser window where you are not signed in.
+5. Confirm that the root page renders and `/_stcore/health` returns HTTP 200 with a healthy response.
+6. Re-run the [hosted app health workflow](https://github.com/HaochuanLin/islandOS/actions/workflows/hosted-app-health.yml) and retain its JSON artifact as evidence.
+
+This repository change cannot change Streamlit Cloud account-level visibility. If the app should remain private, keep the health workflow's authentication diagnosis and update the README/demo messaging to describe the access requirement rather than treating the private deployment as a public demo.
+
+A successful endpoint check proves availability only. It does not validate forecast quality, simulation fidelity, site readiness, or permission to control real equipment.
