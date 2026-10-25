@@ -295,6 +295,7 @@ def _simulate_strategy(
 def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict], list[dict]]:
     """Return per-timestep audit rows and one summary row per strategy."""
     _validate_config(config)
+    _validate_step_values(steps)
     _validate_step_intervals(steps, config.dt_hours)
     details: list[dict] = []
     summaries: list[dict] = []
@@ -303,6 +304,34 @@ def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict
         details.extend(rows)
         summaries.append(summary)
     return details, summaries
+
+
+def _validate_step_values(steps: list[SiteStep]) -> None:
+    """Reject invalid direct API inputs as strictly as the CSV loader does."""
+    numeric_fields = (
+        "renewable_surplus_kw",
+        "diesel_displacement_potential_kw",
+        "grid_price_per_kwh",
+        "water_demand_m3",
+        "backup_available_kw",
+    )
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, SiteStep):
+            raise ValueError(f"Step {index}: expected a SiteStep instance")
+        for field in numeric_fields:
+            value = getattr(step, field)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(
+                    f"Step {index}: {field} must be numeric, finite and >= 0"
+                )
+        for field in ("off_peak", "grid_available"):
+            if not isinstance(getattr(step, field), bool):
+                raise ValueError(f"Step {index}: {field} must be a boolean")
 
 
 def _validate_step_intervals(steps: list[SiteStep], dt_hours: float) -> None:
