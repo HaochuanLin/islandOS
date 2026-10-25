@@ -295,6 +295,7 @@ def _simulate_strategy(
 def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict], list[dict]]:
     """Return per-timestep audit rows and one summary row per strategy."""
     _validate_config(config)
+    _validate_step_intervals(steps, config.dt_hours)
     details: list[dict] = []
     summaries: list[dict] = []
     for strategy in STRATEGIES:
@@ -302,6 +303,41 @@ def compare_strategies(steps: list[SiteStep], config: Config) -> tuple[list[dict
         details.extend(rows)
         summaries.append(summary)
     return details, summaries
+
+
+def _validate_step_intervals(steps: list[SiteStep], dt_hours: float) -> None:
+    """Require timestamps to match the fixed interval assumed by the simulator."""
+    if len(steps) < 2:
+        return
+    parsed: list[datetime] = []
+    aware_mode: bool | None = None
+    for index, step in enumerate(steps):
+        raw = step.timestamp.strip()
+        normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+        try:
+            stamp = datetime.fromisoformat(normalized)
+        except (ValueError, AttributeError) as exc:
+            raise ValueError(
+                f"Row {index + 1}: timestamp must be ISO-8601, got {step.timestamp!r}"
+            ) from exc
+        aware = stamp.utcoffset() is not None
+        if aware_mode is not None and aware != aware_mode:
+            raise ValueError("timestamps mix timezone-aware and timezone-naive values")
+        aware_mode = aware
+        parsed.append(stamp)
+    expected_seconds = dt_hours * 3600.0
+    for index, (previous, current) in enumerate(zip(parsed, parsed[1:]), start=2):
+        actual_seconds = (current - previous).total_seconds()
+        if actual_seconds <= 0:
+            raise ValueError(
+                f"Row {index + 1}: timestamps must be strictly increasing in time"
+            )
+        if not math.isclose(actual_seconds, expected_seconds, rel_tol=1e-9, abs_tol=1e-6):
+            raise ValueError(
+                f"Row {index + 1}: timestamp interval is {actual_seconds:g} seconds; "
+                f"dt_hours={dt_hours:g} requires {expected_seconds:g} seconds. "
+                "Resample the input or set the matching simulation interval."
+            )
 
 
 def _validate_config(config: Config) -> None:
