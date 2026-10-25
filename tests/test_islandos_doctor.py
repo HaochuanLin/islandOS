@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,31 @@ class TestIslandOSDoctor(unittest.TestCase):
         self.assertEqual(report["status"], "ready_for_local_smoke_tests")
         self.assertTrue(all(item["status"] == "pass" for item in report["checks"]))
         self.assertTrue(report["limitations"])
+
+    def test_missing_runtime_dependency_is_reported_as_actionable_failure(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("islandos_doctor_missing_dependency", DOCTOR)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        original_find_spec = importlib.util.find_spec
+
+        def find_spec(name):
+            if name == "streamlit":
+                return None
+            return original_find_spec(name)
+
+        with patch("importlib.util.find_spec", side_effect=find_spec):
+            report = module.run_doctor(root=ROOT)
+
+        self.assertEqual(report["status"], "needs_attention")
+        dependency_check = next(
+            item for item in report["checks"] if item["id"] == "runtime_dependencies"
+        )
+        self.assertEqual(dependency_check["status"], "fail")
+        self.assertIn("streamlit", dependency_check["detail"])
+        config_check = next(item for item in report["checks"] if item["id"] == "site_configuration")
+        self.assertEqual(config_check["status"], "blocked")
 
     def test_invalid_custom_config_returns_actionable_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
