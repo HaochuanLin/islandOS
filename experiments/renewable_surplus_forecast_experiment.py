@@ -289,7 +289,10 @@ def run(output_dir: Path, seeds: tuple[int, ...] = DEFAULT_SEEDS) -> dict[str, A
     }
     report_path = output_dir / "run_report.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
-    artifacts = sorted(p for p in output_dir.iterdir() if p.is_file() and p.name != "manifest.json")
+    artifacts = sorted(
+        p for p in output_dir.iterdir()
+        if p.is_file() and p.name not in {"manifest.json", "run_report.json"}
+    )
     manifest = {
         "dataset_type": "synthetic",
         "is_measured_site_data": False,
