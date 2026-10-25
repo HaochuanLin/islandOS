@@ -1,5 +1,6 @@
 """Regression tests for the generic energy-to-water strategy comparison."""
 import csv
+from dataclasses import replace
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,18 @@ class EnergyWaterStrategyComparisonTests(unittest.TestCase):
             dt_hours=1,
             diesel_cost_per_kwh=0.6,
         )
+
+    def test_config_rejects_boolean_or_non_numeric_physical_parameters(self):
+        invalid_configs = [
+            (replace(self.config, ro_rated_power_kw=True), "ro_rated_power_kw"),
+            (replace(self.config, dt_hours="1"), "dt_hours"),
+            (replace(self.config, initial_water_m3=True), "initial_water_m3"),
+            (replace(self.config, diesel_cost_per_kwh=False), "diesel_cost_per_kwh"),
+        ]
+        for config, field in invalid_configs:
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ValueError, field):
+                    compare_strategies([step("2026-01-01T00:00")], config)
 
     def test_surplus_strategy_uses_only_surplus_and_produces_expected_water(self):
         steps = [
