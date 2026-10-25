@@ -20,7 +20,7 @@ Run:
 python experiments/renewable_surplus_forecast_experiment.py --output-dir build/ai-renewable-forecast
 ```
 
-The default run evaluates ten fixed seeds (`20261021`–`20261030\)). For each seed it generates 21 days of synthetic hourly surplus and water demand, uses the first 14 days as the initial training window, and evaluates the following seven days with expanding-window daily refits and one-step-ahead predictions. The forecast features use prior realized surplus values and calendar cycles. Candidates are persistence, 24-hour seasonal naive, and (when scikit-learn is installed) `HistGradientBoostingRegressor`.
+The default run evaluates ten fixed seeds (`20261021`–`20261030`). For each seed it generates 21 days of synthetic hourly surplus and water demand, uses the first 14 days as the initial training window, and evaluates the following seven days with expanding-window daily refits and one-step-ahead predictions. The forecast features use prior realized surplus values and calendar cycles. Candidates are persistence, 24-hour seasonal naive, and (when scikit-learn is installed) `HistGradientBoostingRegressor`.
 
 Outputs include per-seed forecast metrics (MAE, RMSE, bias), bootstrap intervals for the mean across selected synthetic seeds, dispatch comparison CSV, paired input CSVs, simulator hourly CSV/JSON reports, a forecast plot, and a SHA-256 manifest. Forecasts are passed into the existing `evaluate_forecast_driven_ro_sim` function rather than reimplementing the RO simulator.
 
