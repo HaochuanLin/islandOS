@@ -341,6 +341,8 @@ def _validate_step_intervals(steps: list[SiteStep], dt_hours: float) -> None:
     parsed: list[datetime] = []
     aware_mode: bool | None = None
     for index, step in enumerate(steps):
+        if not isinstance(step.timestamp, str) or not step.timestamp.strip():
+            raise ValueError(f"Row {index + 1}: timestamp must be a non-empty ISO-8601 string")
         raw = step.timestamp.strip()
         normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
         try:
