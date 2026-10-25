@@ -80,8 +80,13 @@ def load_plugin(specification: str) -> Any:
 def backtest_plugin(input_csv: str | Path, plugin: Any, output_json: str | Path, *,
                     test_fraction: float = 0.2, history_hours: int = 168) -> dict[str, Any]:
     """Generate strict one-step rolling-origin predictions and a dispatch-ready report."""
-    if not math.isfinite(test_fraction) or not 0 < test_fraction < 0.5:
-        raise ValueError("test_fraction must be greater than 0 and less than 0.5")
+    if (
+        isinstance(test_fraction, bool)
+        or not isinstance(test_fraction, (int, float))
+        or not math.isfinite(test_fraction)
+        or not 0 < test_fraction < 0.5
+    ):
+        raise ValueError("test_fraction must be a finite number greater than 0 and less than 0.5")
     if isinstance(history_hours, bool) or not isinstance(history_hours, int) or history_hours < 1:
         raise ValueError("history_hours must be a positive integer")
     timestamps, values = _load_series(input_csv)
