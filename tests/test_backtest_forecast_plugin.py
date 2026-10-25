@@ -100,6 +100,19 @@ class TestForecastPluginBacktest(unittest.TestCase):
             self.assertIsNone(report["skill_vs_seasonal_naive_24h_mae"])
             self.assertEqual(persisted["test_metrics"]["mae_m3_per_hour"], 0.0)
 
+    def test_rejects_non_numeric_or_boolean_test_fraction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "hourly.csv"
+            self._write_series(source, count=40)
+            for fraction in (True, "0.2", float("nan"), float("inf"), 0, 0.5):
+                with self.subTest(test_fraction=fraction):
+                    with self.assertRaisesRegex(ValueError, "test_fraction must be a finite number"):
+                        backtest_plugin(
+                            source, LastValuePlugin(), root / "out.json",
+                            test_fraction=fraction, history_hours=5,
+                        )
+
     def test_rejects_gapped_series_and_bad_split(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
