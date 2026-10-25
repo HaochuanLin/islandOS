@@ -21,17 +21,17 @@ Use the interactive app to explore energy–water dispatch strategies, adjust RO
 </p>
 <p align="center"><em>Illustrative synthetic simulation only—not field measurements or evidence of real-island performance.</em></p>
 
-## Experimental pilot scenario: Nan'ao emergency desalination case
+## Nan'ao scenario: emergency desalination case
 
-A frozen snapshot of this Nan'ao pilot case is available on branch: `nan-ao-scenario-pilot`.
+A frozen snapshot of this Nan'ao scenario is available on branch: `nan-ao-scenario-pilot`.
 
 It is implemented in `nan_ao_scenario.py`, using a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021.
 
 All outputs are synthetic scenario assumptions, not measured real-world data. The 50 kW value is a proposed procurement assumption, not a verified installed rating.
 
-The submitted Nan'ao case uses rule-based look-ahead scheduling in nan_ao_scenario.py. The rolling-horizon, optimization and forecasting modules in this repository are exploratory research and were not used to produce the submitted numbers.
+The submitted Nan'ao case uses the assumption-driven Monte Carlo event-energy model in `nan_ao_scenario.py`; that model estimates scenario water yield and is not a dispatch scheduler. The rolling-horizon, optimization and forecasting modules in this repository are exploratory research and were not used to produce the submitted numbers.
 
-In the proposed Nan'ao pilot, the scheduler would first run in advisory (recommendation-only) mode: same decision logic, with a water-authority operator confirming each start. Closed-loop automation would be considered only after operator approval and safety validation.
+In a proposed Nan'ao pilot, any future dispatch scheduler would first be evaluated in advisory (recommendation-only) mode, with a water-authority operator confirming each start. The current Monte Carlo scenario model does not make dispatch recommendations or control equipment. Closed-loop automation would be considered only after operator approval and safety validation.
 
 The interactive `app.py` on main is a generic conceptual demo only, and does not generate the quantitative results from this pilot case.
 
@@ -154,7 +154,7 @@ The submitted Nan'ao numbers come from the rule-based case described above. The 
 
 | Module | What it is | Machine learning? | Used for submitted Nan'ao numbers? |
 |---|---|---|---|
-| Rule-based look-ahead scheduling (`nan_ao_scenario.py`) | Threshold and minimum-run rules | No | Yes |
+| Nan'ao annual event-energy Monte Carlo model (`nan_ao_scenario.py`) | Assumption-driven event sampling and energy-to-water calculation | No | Yes |
 | Priority-based flexible-load policies | Fixed-priority rules | No | No |
 | Rolling-horizon dispatch prototype | Receding-horizon planning, re-planned each step | No | No |
 | NSGA-II / grid search | Evolutionary multi-objective optimization / enumerated parameter search | No | No (experimental) |
