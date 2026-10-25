@@ -80,7 +80,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The app opens in your browser on your own machine. You can also try the hosted version at [islandos.streamlit.app](https://islandos.streamlit.app/); the deployed version may not update until the hosting service finishes redeploying.
+The app opens in your browser on your own machine. The deployed version may not update until the hosting service finishes redeploying.
 
 In the app, you can:
 1. Use the clearly labeled synthetic demo or upload an hourly CSV.
