@@ -14,10 +14,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import mean
 from typing import Any
+import sys
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DEFAULT_SEEDS = tuple(range(20261021, 20261031))
 TRAIN_HOURS = 14 * 24
 TOTAL_HOURS = 21 * 24
