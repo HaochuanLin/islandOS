@@ -47,6 +47,7 @@ The interactive `app.py` on main is a generic conceptual demo only, and does not
 - **End-to-end simulated autonomous gate:** run `python -m experiments.run_simulated_autonomous_dispatch --hours 24` to connect hourly scenario parsing, rolling-horizon dispatch, and a fail-closed ON/OFF/HOLD gate with per-hour evidence. Use `--telemetry-invalid`, `--interlocks-unhealthy`, or `--operator-stop` to reproduce fail-closed behavior. It is simulation-only and never writes to physical equipment; see [the pipeline guide](docs/SIMULATED_AUTONOMOUS_DISPATCH_PIPELINE.md).
 - **No-site-data stress matrix:** run `python -m experiments.run_synthetic_stress_suite --hours 48` to execute ten deterministic cases covering renewable drought, forecast over/under-estimation, water/cooling demand spikes, compound adverse conditions, invalid telemetry, unhealthy interlocks, and operator stop. It exports per-case metrics and hashes; see [the no-site-data testing guide](docs/NO_SITE_DATA_STRESS_TESTING.md).
 - **Seeded policy parameter sweep:** run `python -m experiments.run_policy_parameter_sweep --hours 48 --cases 20 --seed 20261026` to compare rolling dispatch, fixed priorities, and an offline realized-input reference across 21 paired synthetic cases. It reports policy score distributions, worst regressions, service-risk cases, and a reproducibility digest; see [the benchmark guide](docs/SEEDED_POLICY_PARAMETER_SWEEP.md).
+- **CSV input-quality stress suite:** run `python -m experiments.run_input_quality_stress_suite --hours 4` to verify rejection of malformed timestamps, gaps, missing columns, non-finite/negative values, and malformed optional forecasts using synthetic fixtures. It writes a deterministic JSON audit report; see [the input-quality testing guide](docs/CSV_INPUT_QUALITY_STRESS_SUITE.md).
 - **Site-readiness gate:** fail closed when required site inputs are incomplete or telemetry is stale, and separate input completeness from engineering safety or field approval.
 - **Reproducible checks:** run unit/regression tests and synthetic benchmark workflows through GitHub Actions.
 
@@ -127,6 +128,7 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 | End-to-end rolling dispatch and simulated ON/OFF/HOLD gate | [Simulated autonomous dispatch pipeline](docs/SIMULATED_AUTONOMOUS_DISPATCH_PIPELINE.md) |
 | Deterministic stress testing without measured site data | [No-site-data stress testing](docs/NO_SITE_DATA_STRESS_TESTING.md) |
 | Seeded paired policy benchmark and regression analysis | [Seeded policy parameter sweep](docs/SEEDED_POLICY_PARAMETER_SWEEP.md) |
+| CSV schema, timestamp, and numeric input-quality faults | [CSV input-quality stress suite](docs/CSV_INPUT_QUALITY_STRESS_SUITE.md) |
 | Site input completeness and fail-closed scenario gate | [Site readiness gate](docs/SITE_READINESS_GATE.md) |
 | Staff-entered data and provenance workflow | [Staff data-entry guide](docs/STAFF_DATA_ENTRY.md) |
 | Productization milestones and non-goals | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) |
