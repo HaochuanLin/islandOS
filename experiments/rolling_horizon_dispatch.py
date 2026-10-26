@@ -239,16 +239,26 @@ def simulate_rolling(
     forecast_surplus,
     policy: str = "rolling",
     forecast_water_demand_m3_per_hour=None,
+    forecast_cooling_demand_kw_th=None,
 ) -> dict:
-    """Simulate one-hour commits using forecast inputs for planning and realized inputs for execution."""
+    """Simulate one-hour commits with causal forecasts and realized execution.
+
+    If a demand forecast is omitted, use persistence based only on the current
+    observation. Future realized demand is reserved for the offline hindsight
+    reference policy and never leaks into forecast-based planning.
+    """
     actual = np.asarray(scenario.available_surplus_kw, dtype=float)
     forecast = np.asarray(forecast_surplus, dtype=float)
     water_demand = np.asarray(scenario.water_demand_m3_per_hour, dtype=float)
-    planning_water_demand = (
-        water_demand.copy() if forecast_water_demand_m3_per_hour is None
+    cooling_demand = np.asarray(scenario.cooling_demand_kw_th, dtype=float)
+    water_forecast = (
+        None if forecast_water_demand_m3_per_hour is None
         else np.asarray(forecast_water_demand_m3_per_hour, dtype=float)
     )
-    cooling_demand = np.asarray(scenario.cooling_demand_kw_th, dtype=float)
+    cooling_forecast = (
+        None if forecast_cooling_demand_kw_th is None
+        else np.asarray(forecast_cooling_demand_kw_th, dtype=float)
+    )
 
     # Validate the realized scenario at this public entry point as well as
     # validating CSV inputs. Callers may construct Scenario objects directly.
@@ -268,10 +278,15 @@ def simulate_rolling(
         raise ValueError("forecast_surplus must match the one-dimensional scenario horizon")
     if not np.all(np.isfinite(forecast)) or np.any(forecast < 0):
         raise ValueError("forecast_surplus must be finite and non-negative")
-    if planning_water_demand.ndim != 1 or planning_water_demand.shape != water_demand.shape:
-        raise ValueError("forecast_water_demand_m3_per_hour must match the scenario horizon")
-    if not np.all(np.isfinite(planning_water_demand)) or np.any(planning_water_demand < 0):
-        raise ValueError("forecast water demand must be finite and non-negative")
+    for name, values in (
+        ("forecast_water_demand_m3_per_hour", water_forecast),
+        ("forecast_cooling_demand_kw_th", cooling_forecast),
+    ):
+        if values is not None:
+            if values.ndim != 1 or values.shape != actual.shape:
+                raise ValueError(f"{name} must match the scenario horizon")
+            if not np.all(np.isfinite(values)) or np.any(values < 0):
+                raise ValueError(f"{name} must be finite and non-negative")
     if policy not in ("rolling", "ro_first", "ice_first", "perfect_information"):
         raise ValueError("policy must be rolling, ro_first, ice_first, or perfect_information")
 
@@ -288,16 +303,31 @@ def simulate_rolling(
 
     for t in range(len(actual)):
         end = min(len(actual), t + HORIZON_HOURS)
+        horizon_len = end - t
+        # Causal persistence: today's observation is held across the planning
+        # horizon rather than reading future realized demand from the scenario.
+        water_plan = (
+            water_forecast[t:end] if water_forecast is not None
+            else np.full(horizon_len, water_demand[t], dtype=float)
+        )
+        cooling_plan = (
+            cooling_forecast[t:end] if cooling_forecast is not None
+            else np.full(horizon_len, cooling_demand[t], dtype=float)
+        )
+        planning_power = forecast[t:end]
+        effective_water_plan = water_plan
+        effective_cooling_plan = cooling_plan
+        effective_power_plan = planning_power
         if policy == "rolling":
             candidates = []
             for priority in ("ro_first", "ice_first"):
                 predicted = _run_horizon(
-                    forecast[t:end], planning_water_demand[t:end], cooling_demand[t:end],
+                    planning_power, water_plan, cooling_plan,
                     water_inventory, cold_inventory, priority,
                     ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                 )
                 candidates.append((
-                    _score(predicted, planning_water_demand[t:end], cooling_demand[t:end]),
+                    _score(predicted, water_plan, cooling_plan),
                     priority, predicted,
                 ))
             _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -305,15 +335,21 @@ def simulate_rolling(
             start_ro = bool(ro_plan is not None and ro_plan.active[0] and ro_run_hours_remaining == 0)
         elif policy in ("ro_first", "ice_first", "perfect_information"):
             if policy == "perfect_information":
+                # Hindsight upper bound only; this is not a deployable policy.
+                info_water = water_demand[t:end]
+                info_cooling = cooling_demand[t:end]
+                effective_water_plan = info_water
+                effective_cooling_plan = info_cooling
+                effective_power_plan = actual[t:end]
                 candidates = []
                 for priority in ("ro_first", "ice_first"):
                     predicted = _run_horizon(
-                        actual[t:end], planning_water_demand[t:end], cooling_demand[t:end],
+                        actual[t:end], info_water, info_cooling,
                         water_inventory, cold_inventory, priority,
                         ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
-                        _score(predicted, planning_water_demand[t:end], cooling_demand[t:end]),
+                        _score(predicted, info_water, info_cooling),
                         priority, predicted,
                     ))
                 _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -322,7 +358,7 @@ def simulate_rolling(
             else:
                 chosen = policy
                 plan = _run_horizon(
-                    forecast[t:end], planning_water_demand[t:end], cooling_demand[t:end],
+                    planning_power, water_plan, cooling_plan,
                     water_inventory, cold_inventory, chosen, ro_run_hours_remaining,
                     ro_fault_lockout_hours_remaining,
                 )
@@ -344,17 +380,24 @@ def simulate_rolling(
         totals["cooling_unmet_kwh_th"] += step["cooling_unmet"]
         totals["renewable_flexible_load_kwh"] += step["renewable_used"]
         totals["remaining_surplus_kwh"] += step["remaining_surplus"]
-        # Count affected hours, not per-load violation flags. The audit still
-        # preserves the per-step violation count for detailed diagnosis.
         totals["constraint_violation_hours"] += int(step["constraint_violations"] > 0)
         decisions.append(chosen)
         hourly_audit.append({
             "hour_index": t,
             "actual_surplus_kw": float(actual[t]),
             "forecast_surplus_kw": float(forecast[t]),
+            "planning_surplus_kw": float(effective_power_plan[0]),
             "actual_water_demand_m3": float(water_demand[t]),
-            "forecast_water_demand_m3": float(planning_water_demand[t]),
-            "planning_water_demand_m3": float(planning_water_demand[t]),
+            "forecast_water_demand_m3": float(water_plan[0]),
+            "planning_water_demand_m3": float(effective_water_plan[0]),
+            "actual_cooling_demand_kw_th": float(cooling_demand[t]),
+            "forecast_cooling_demand_kw_th": float(cooling_plan[0]),
+            "planning_cooling_demand_kw_th": float(effective_cooling_plan[0]),
+            "demand_forecast_method": (
+                "offline_realized_demand_reference" if policy == "perfect_information"
+                else "explicit_forecast" if water_forecast is not None or cooling_forecast is not None
+                else "causal_persistence_fallback"
+            ),
             "priority": chosen,
             "ro_active": step["ro_active"],
             "ro_operating_state": step["ro_operating_state"],
@@ -380,6 +423,11 @@ def simulate_rolling(
 
     return {
         "policy": policy,
+        "demand_forecast_policy": {
+            "water": "explicit_forecast" if water_forecast is not None else "causal_persistence_fallback",
+            "cooling": "explicit_forecast" if cooling_forecast is not None else "causal_persistence_fallback",
+            "perfect_information_is_offline_reference": policy == "perfect_information",
+        },
         **{key: round(value, 3) for key, value in totals.items()},
         "final_water_inventory_m3": round(water_inventory, 3),
         "final_cold_inventory_kwh_th": round(cold_inventory, 3),
