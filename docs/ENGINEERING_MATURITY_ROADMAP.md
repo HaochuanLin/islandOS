@@ -121,11 +121,16 @@ Do not increase the commercial/deployment score until the new tests and document
 - Added a fail-closed simulation-only ON/OFF/HOLD gate, an end-to-end rolling-dispatch audit pipeline, a 10-case no-site-data stress matrix, and a seeded paired policy sweep comparing rolling, fixed-priority, and offline realized-input reference policies. The sweep reports per-policy score distributions, per-case regressions, normalized unmet-service risk, simulated constraint violations, and a deterministic report digest.
 - **No maturity score is raised by this merge alone.** Synthetic scenario coverage and reproducibility are stronger, but no measured site data, field accuracy, production authorization, or physical safety evidence was created. Public/site-data validation and real-world operational validation remain unchanged.
 
-### 2026-10-26 — Read-only container hardening (verified on PR head; score unchanged)
+### 2026-10-26 — Read-only container hardening (merged and verified; score unchanged)
 
-- The tested PR #177 head `3b34999c827756fd95e1b5e184b6d0f47275f3f8` passed all 11 GitHub Actions checks, including container image build/SBOM/health under a read-only root filesystem, runtime inspection of tmpfs and memory/CPU/PID bounds, full pytest (**610 passed, 2 skipped, 14 warnings, 499 subtests**), integration examples, dependency audits, Windows packaging, hosted health, and Nan'ao scenario validation.
+- Merged [PR #177](https://github.com/HaochuanLin/islandOS/pull/177) as main commit [fe89dd4](https://github.com/HaochuanLin/islandOS/commit/fe89dd41b2d6f0d88919c1428569080a959b2bfb). The tested PR head `3b34999c827756fd95e1b5e184b6d0f47275f3f8` passed all 11 GitHub Actions checks, including container image build/SBOM/health under a read-only root filesystem, runtime inspection of tmpfs and memory/CPU/PID bounds, full pytest (**610 passed, 2 skipped, 14 warnings, 499 subtests**), integration examples, dependency audits, Windows packaging, hosted health, and Nan'ao scenario validation. The merged main tree SHA matched the merge commit tree.
 - Added fail-closed preflight checks and regression tests for read-only rootfs, bounded noexec/nosuid temporary storage, ephemeral cache paths, and runtime resource limits. The container remains loopback-only and non-root.
-- No deployment or overall maturity score is raised automatically: this is local-demo defense in depth. Authentication, TLS/network segmentation, production monitoring, restore/incident response, site-specific authorization, and real-world operational evidence remain unresolved. Any subsequent documentation commit must pass checks on its own exact SHA before merge.
+- No deployment or overall maturity score is raised automatically: this is local-demo defense in depth. Authentication, TLS/network segmentation, production monitoring, restore/incident response, site-specific authorization, and real-world operational evidence remain unresolved.
+
+### 2026-10-26 — Log rotation and graceful shutdown (work in progress)
+
+- A follow-up branch adds a three-file, 10 MB-per-file JSON log cap and a 20-second graceful-stop window to the local Compose profile; the container smoke workflow inspects the actual Docker runtime values. The deployment preflight, regression tests, README, and runbook are updated to keep these operational boundaries explicit.
+- This follow-up is not verified until all checks pass on its exact final SHA. No maturity score change is proposed before that evidence exists.
 
 
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
