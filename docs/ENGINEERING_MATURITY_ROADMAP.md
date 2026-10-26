@@ -138,10 +138,15 @@ Do not increase the commercial/deployment score until the new tests and document
 - Merged [PR #179](https://github.com/HaochuanLin/islandOS/pull/179) as main commit [4c341eb](https://github.com/HaochuanLin/islandOS/commit/4c341ebe54873ad4fee749c282873488d7a14734). The tested head passed all 10 checks triggered for the change; the full suite reported **610 passed, 2 skipped, 14 warnings, and 507 subtests**. The integration workflow generated and uploaded the five-case report as artifact `islandos-seeded-policy-parameter-sweep` (ID 12624051166, 90-day retention).
 - This artifact makes policy score distributions and failure analysis inspectable from CI, rather than relying only on unit tests of the generator. It remains synthetic software evidence, not measured-site validation.
 
-### 2026-10-26 — CSV input-quality fault matrix (work in progress)
+### 2026-10-26 — CSV input-quality fault matrix (merged and verified)
 
-- A new deterministic suite exercises one valid synthetic CSV and 14 malformed variants, including missing columns, timestamp order/gap/timezone faults, non-finite surplus, negative demand, and malformed optional forecasts. The CI workflow is being extended to archive its JSON report.
-- This remains unverified until the exact final head passes the full test and workflow set. Parser rejection evidence does not authenticate data or establish site quality.
+- Merged [PR #180](https://github.com/HaochuanLin/islandOS/pull/180) as main commit [4a692b1](https://github.com/HaochuanLin/islandOS/commit/4a692b187583f4caeedced3a423551eac59f366d). The tested head passed all 11 checks and **614 tests passed, 2 skipped, 14 warnings, and 526 subtests**. CI generated and uploaded `islandos-csv-input-quality-stress` (artifact ID 12624476184) alongside the seeded policy report (artifact ID 12624630641), each with 90-day retention.
+- The suite exercises one valid synthetic CSV and 14 malformed variants, including missing columns, timestamp order/gap/timezone faults, non-finite surplus, negative demand, and malformed optional forecasts. Parser rejection evidence does not authenticate data or establish site quality.
+
+### 2026-10-26 — Dispatch accounting invariant stress suite (work in progress)
+
+- A new seeded suite checks realized power budgets, water/cold inventory conservation, inventory bounds, service accounting, conversion ratios, and numeric finiteness across four policies. CI will archive its report if the invariant suite passes.
+- The exact final head must pass all checks before this is counted as verified. Passing accounting checks is not physical-fidelity or safety evidence.
 
 
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
