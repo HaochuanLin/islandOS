@@ -83,5 +83,18 @@ class TestSimulatedAutonomousDispatchPipeline(unittest.TestCase):
             run_simulated_autonomous_dispatch(hours=0)
 
 
+
+    def test_custom_objective_weights_flow_through_pipeline_report(self):
+        weights = {"water": 0.6, "cooling": 0.3, "surplus": 0.1}
+        report = run_simulated_autonomous_dispatch(hours=4, objective_weights=weights)
+        self.assertEqual(report["inputs"]["objective_weights"], weights)
+
+    def test_invalid_objective_weights_fail_closed(self):
+        with self.assertRaisesRegex(ValueError, "must sum to 1.0"):
+            run_simulated_autonomous_dispatch(
+                hours=4,
+                objective_weights={"water": 0.7, "cooling": 0.2, "surplus": 0.2},
+            )
+
 if __name__ == "__main__":
     unittest.main()
