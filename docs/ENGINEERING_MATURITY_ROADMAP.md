@@ -133,10 +133,15 @@ Do not increase the commercial/deployment score until the new tests and document
 - Added a three-file, 10 MB-per-file JSON log cap and a 20-second graceful-stop window to the local Compose profile. The deployment preflight, regression tests, README, and runbook cover log retention and stop behavior.
 - No maturity score change is proposed automatically. These are local-demo operational safeguards; production monitoring, incident ownership, and site-specific recovery remain unresolved.
 
-### 2026-10-26 — Retained CI evidence for seeded policy sweep (work in progress)
+### 2026-10-26 — Retained CI evidence for seeded policy sweep (merged and verified)
 
-- A follow-up branch adds a five-case seeded policy sweep to the RO simulation workflow and uploads its machine-readable report as a 90-day artifact. This makes the new benchmark's output inspectable from CI, rather than relying only on unit tests of its generator.
-- The exact branch head still needs all required checks before this artifact workflow can be counted as verified. Synthetic benchmark artifacts remain software evidence only, not measured-site validation.
+- Merged [PR #179](https://github.com/HaochuanLin/islandOS/pull/179) as main commit [4c341eb](https://github.com/HaochuanLin/islandOS/commit/4c341ebe54873ad4fee749c282873488d7a14734). The tested head passed all 10 checks triggered for the change; the full suite reported **610 passed, 2 skipped, 14 warnings, and 507 subtests**. The integration workflow generated and uploaded the five-case report as artifact `islandos-seeded-policy-parameter-sweep` (ID 12624051166, 90-day retention).
+- This artifact makes policy score distributions and failure analysis inspectable from CI, rather than relying only on unit tests of the generator. It remains synthetic software evidence, not measured-site validation.
+
+### 2026-10-26 — CSV input-quality fault matrix (work in progress)
+
+- A new deterministic suite exercises one valid synthetic CSV and 14 malformed variants, including missing columns, timestamp order/gap/timezone faults, non-finite surplus, negative demand, and malformed optional forecasts. The CI workflow is being extended to archive its JSON report.
+- This remains unverified until the exact final head passes the full test and workflow set. Parser rejection evidence does not authenticate data or establish site quality.
 
 
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
