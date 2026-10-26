@@ -7,6 +7,7 @@ physical equipment and its default data are synthetic.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -83,6 +84,13 @@ def run_simulated_autonomous_dispatch(
         "physical_write_performed": False,
         "live_control_enabled": False,
         "requires_site_validation_before_deployment": True,
+        "input_provenance": {
+            "sha256": hashlib.sha256(csv_text.encode("utf-8")).hexdigest(),
+            "rows": len(parsed["timestamps_utc"]),
+            "first_timestamp_utc": parsed["timestamps_utc"][0],
+            "last_timestamp_utc": parsed["timestamps_utc"][-1],
+            "integrity_note": "SHA-256 identifies these input bytes; it does not authenticate measurement origin or accuracy.",
+        },
         "inputs": {
             "hours": len(dispatch["hourly_audit"]),
             "forecast_source": "CSV forecast_surplus_kw and optional forecast_water_demand_m3",
