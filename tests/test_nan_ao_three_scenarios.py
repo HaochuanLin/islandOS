@@ -38,6 +38,13 @@ class TestNanAoThreeScenarios(unittest.TestCase):
         )
         self.assertAlmostEqual(scenarios["valley_only"]["runtime_hours_p50"], expected_hours)
 
+    def test_hybrid_uses_emergency_hysteresis_and_reports_water_service(self):
+        diagnostics = self.report["hybrid_diagnostics"]
+        self.assertEqual(diagnostics["assumed_emergency_threshold_m3"], 25.0)
+        self.assertEqual(diagnostics["assumed_recovery_target_m3"], 75.0)
+        self.assertLess(diagnostics["median_unmet_demand_m3_per_year"], 1000.0)
+        self.assertGreater(diagnostics["median_water_served_m3_per_year"], 28000.0)
+
     def test_markdown_table_contains_requested_columns_and_three_rows(self):
         table = render_markdown_table(self.report)
         self.assertIn("年产水量P5", table)
