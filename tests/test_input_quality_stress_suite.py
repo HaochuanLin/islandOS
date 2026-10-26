@@ -15,8 +15,8 @@ class TestInputQualityStressSuite(unittest.TestCase):
     def test_suite_rejects_malformed_inputs_and_accepts_valid_baseline(self):
         first = run_input_quality_stress_suite(hours=4)
         second = run_input_quality_stress_suite(hours=4)
-        self.assertEqual(first["case_count"], 15)
-        self.assertEqual(first["passed_cases"], 15)
+        self.assertEqual(first["case_count"], 18)
+        self.assertEqual(first["passed_cases"], 18)
         self.assertEqual(first["failed_cases"], 0)
         self.assertTrue(first["all_expectations_met"])
         self.assertEqual(first["report_sha256"], second["report_sha256"])
@@ -36,9 +36,9 @@ class TestInputQualityStressSuite(unittest.TestCase):
     def test_case_matrix_contains_timestamp_numeric_and_schema_faults(self):
         cases = build_input_quality_cases(3)
         names = {case["name"] for case in cases}
-        self.assertEqual(len(cases), 15)
+        self.assertEqual(len(cases), 18)
         self.assertTrue({
-            "empty_input", "header_only", "missing_required_column",
+            "duplicate_header", "extra_row_field", "short_row",\n            "empty_input", "header_only", "missing_required_column",
             "blank_timestamp", "malformed_timestamp", "timezone_naive_timestamp",
             "duplicate_timestamp", "non_monotonic_timestamp", "hour_gap",
             "nan_actual_surplus", "infinite_forecast_surplus", "negative_water_demand",
@@ -51,7 +51,7 @@ class TestInputQualityStressSuite(unittest.TestCase):
             code = main(["--hours", "3", "--output", str(output)])
             self.assertEqual(code, 0)
             report = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(report["case_count"], 15)
+            self.assertEqual(report["case_count"], 18)
             self.assertTrue(report["all_expectations_met"])
             self.assertEqual(len(report["report_sha256"]), 64)
 
