@@ -534,3 +534,13 @@ jobs:
           path: build/reproducibility/environment.json
           if-no-files-found: error
           retention-days: 90
+
+      - name: Run seeded dispatch policy parameter sweep
+        run: python -m experiments.run_policy_parameter_sweep --hours 12 --cases 4 --seed 20261026 --output build/policy-parameter-sweep/report.json
+      - name: Upload seeded dispatch policy parameter sweep
+        uses: actions/upload-artifact@v7
+        with:
+          name: islandos-seeded-policy-parameter-sweep
+          path: build/policy-parameter-sweep/report.json
+          if-no-files-found: error
+          retention-days: 90
