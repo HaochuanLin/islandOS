@@ -36,6 +36,7 @@ VALLEY_PRICE_RMB_PER_KWH = 0.272
 VALLEY_HOURS = 8  # local hour 00:00–07:59; no peak/flat-period operation
 RESERVOIR_CAPACITY_M3 = 100.0
 RESERVOIR_EMERGENCY_THRESHOLD_M3 = 25.0
+RESERVOIR_RECOVERY_TARGET_M3 = 75.0  # hysteresis target: continue valley run until this level
 RESERVOIR_INITIAL_M3 = 50.0
 ASSUMED_WATER_DEMAND_M3_PER_DAY = 80.0
 
@@ -149,6 +150,7 @@ def _simulate_hybrid(annual: dict[str, Any], scheduled_events: list[dict[str, fl
     water_served_m3 = 0.0
     unmet_demand_m3 = 0.0
     spilled_water_m3 = 0.0
+    emergency_replenishment_active = False
     demand_per_hour = ASSUMED_WATER_DEMAND_M3_PER_DAY / 24.0
 
     for hour in range(YEAR_HOURS):
@@ -156,6 +158,11 @@ def _simulate_hybrid(annual: dict[str, Any], scheduled_events: list[dict[str, fl
         inventory -= served
         water_served_m3 += served
         unmet_demand_m3 += demand_per_hour - served
+
+        if inventory < RESERVOIR_EMERGENCY_THRESHOLD_M3:
+            emergency_replenishment_active = True
+        elif inventory >= RESERVOIR_RECOVERY_TARGET_M3:
+            emergency_replenishment_active = False
 
         event = event_by_hour.get(hour)
         if event is not None:
@@ -173,10 +180,12 @@ def _simulate_hybrid(annual: dict[str, Any], scheduled_events: list[dict[str, fl
             stored = min(event_water, max(0.0, RESERVOIR_CAPACITY_M3 - inventory))
             inventory += stored
             spilled_water_m3 += event_water - stored
+            if inventory >= RESERVOIR_RECOVERY_TARGET_M3:
+                emergency_replenishment_active = False
             continue
 
         hour_of_day = hour % 24
-        if hour_of_day < VALLEY_HOURS and inventory < RESERVOIR_EMERGENCY_THRESHOLD_M3:
+        if hour_of_day < VALLEY_HOURS and emergency_replenishment_active:
             grid_runtime = RO_AVAILABILITY
             grid_energy = RO_POWER_KW * grid_runtime
             grid_water = grid_energy / SEC_KWH_PER_M3
@@ -187,6 +196,8 @@ def _simulate_hybrid(annual: dict[str, Any], scheduled_events: list[dict[str, fl
             stored = min(grid_water, max(0.0, RESERVOIR_CAPACITY_M3 - inventory))
             inventory += stored
             spilled_water_m3 += grid_water - stored
+            if inventory >= RESERVOIR_RECOVERY_TARGET_M3:
+                emergency_replenishment_active = False
 
     return {
         "annual_water_m3": water_produced_m3,
@@ -304,6 +315,7 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
         "hybrid_diagnostics": {
             "assumed_reservoir_capacity_m3": RESERVOIR_CAPACITY_M3,
             "assumed_emergency_threshold_m3": RESERVOIR_EMERGENCY_THRESHOLD_M3,
+            "assumed_recovery_target_m3": RESERVOIR_RECOVERY_TARGET_M3,
             "assumed_initial_inventory_m3": RESERVOIR_INITIAL_M3,
             "assumed_water_demand_m3_per_day": ASSUMED_WATER_DEMAND_M3_PER_DAY,
             "median_water_served_m3_per_year": median([item["water_served_m3"] for item in hybrid_runs]),
@@ -325,6 +337,7 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
             "valley_period_local_hour": "00:00–07:59",
             "hybrid_reservoir_capacity_m3": RESERVOIR_CAPACITY_M3,
             "hybrid_emergency_threshold_m3": RESERVOIR_EMERGENCY_THRESHOLD_M3,
+            "hybrid_recovery_target_m3": RESERVOIR_RECOVERY_TARGET_M3,
             "hybrid_initial_inventory_m3": RESERVOIR_INITIAL_M3,
             "hybrid_assumed_water_demand_m3_per_day": ASSUMED_WATER_DEMAND_M3_PER_DAY,
             "synthetic_event_start_time_assumption": "uniform integer-hour placement over a 365-day year, without event overlap; timing is not in the frozen baseline",
@@ -339,7 +352,7 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
             "Scenario 2 and scenario 3 are exploratory extensions, not the original pilot-review baseline.",
             "Scenario 1 uses the frozen baseline's event-energy abstraction and does not model event timestamps.",
             "Scenario 2 and scenario 3 are simplified models; no measured Nan'ao data or validated reservoir demand profile was supplied.",
-            "Scenario 3's reservoir capacity, emergency threshold, initial inventory, and 80 m³/day demand are illustrative assumptions because no site reservoir/demand data was supplied.",
+            "Scenario 3's reservoir capacity, emergency threshold, 75 m³ recovery target, initial inventory, and 80 m³/day demand are illustrative assumptions because no site reservoir/demand data was supplied.",
             "Water production percentiles describe assumptions only, not measured performance or a validated forecast.",
         ],
     }
@@ -382,7 +395,7 @@ def main(argv: list[str] | None = None) -> int:
     print("口径限制：仅包含硬件摊销 + 购电电费；不含土建、海水取排水、浓盐水处置、膜与药剂运维、需量电费、设备报废成本。")
     print("本结果仅为筛查测算值，不是全生命周期水成本，不等于实际售水价格。情景2、3为探索拓展分析，不属于原始试点评审基线。")
     print(
-        "情景3水库假设：容量 100 m³、应急阈值 25 m³、初始库存 50 m³、日需求 80 m³；"
+        "情景3水库假设：容量 100 m³、应急阈值 25 m³、恢复目标 75 m³、初始库存 50 m³、日需求 80 m³；"
         "这些参数不是实测数据。成本分母为RO总产水量，包含可能的水库溢流。"
     )
     if args.output_json is not None:
