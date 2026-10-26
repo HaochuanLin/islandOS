@@ -60,7 +60,16 @@ def build_input_quality_cases(hours: int = 4) -> list[dict[str, Any]]:
         "description": "Valid generated CSV should parse successfully.",
         "csv": base,
     }]
+    lines = base.splitlines()
+    duplicate_header = lines[0].replace("forecast_surplus_kw", "actual_surplus_kw", 1) + "\\n" + "\\n".join(lines[1:]) + "\\n"
+    extra_field_lines = list(lines)
+    extra_field_lines[1] += ",unexpected"
+    short_row_lines = list(lines)
+    short_row_lines[1] = ",".join(short_row_lines[1].split(",")[:-1])
     invalid = [
+        ("duplicate_header", "Duplicate column names must be rejected.", duplicate_header),
+        ("extra_row_field", "A row with more fields than the header must be rejected.", "\\n".join(extra_field_lines) + "\\n"),
+        ("short_row", "A row with fewer fields than the header must be rejected.", "\\n".join(short_row_lines) + "\\n"),
         ("empty_input", "Empty text must be rejected.", ""),
         ("header_only", "A header without data rows must be rejected.", base.splitlines()[0] + "\n"),
         ("missing_required_column", "Missing required cooling column must be rejected.",
