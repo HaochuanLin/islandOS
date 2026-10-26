@@ -30,8 +30,6 @@ def run_dispatch_invariant_stress_suite(
     results: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     policy_runs: dict[str, list[dict[str, Any]]] = {policy: [] for policy in POLICIES}
-    checks_per_run = 0
-
     for case in cases:
         scenario = case["scenario"]
         for policy in POLICIES:
@@ -42,6 +40,7 @@ def run_dispatch_invariant_stress_suite(
                 forecast_water_demand_m3_per_hour=case["forecast_water_demand"],
             )
             run_failures = []
+            checks_per_run = 0
             max_power_excess = 0.0
             max_water_balance_error = 0.0
             max_cold_balance_error = 0.0
@@ -161,10 +160,7 @@ def run_dispatch_invariant_stress_suite(
             results.append(run_row)
             policy_runs[policy].append(run_row)
 
-    # Report a stable per-run check count rather than the cumulative counter above.
-    checks_per_run = len(results[0]["hours"] if results else [])
-    checks_per_hour = 9
-    total_expected_checks = sum(row["hours"] for row in results) * checks_per_hour
+    total_expected_checks = sum(row["invariant_checks"] for row in results)
     summary = {}
     for policy, rows in policy_runs.items():
         summary[policy] = {
