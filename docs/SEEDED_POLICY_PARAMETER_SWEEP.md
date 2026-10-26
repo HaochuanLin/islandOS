@@ -32,11 +32,9 @@ The `--cases` count excludes the baseline, so the default evaluates 21 paired ca
 
 The illustrative score is:
 
-\\[
-0.45 \cdot \frac{\\text{unmet water}}{\\text{water demand}}
-+ 0.45 \cdot \frac{\\text{unmet cooling}}{\\text{cooling demand}}
-+ 0.10 \cdot \frac{\\text{remaining surplus}}{\\text{realized surplus}}
-\\]
+`score = 0.45 × unmet_water_fraction + 0.45 × unmet_cooling_fraction + 0.10 × remaining_surplus_fraction`
+
+For the failure-analysis ranking, unmet water and cooling are normalized against their own total demands first, then averaged equally; the raw units (m³ and kWh_th) are never added directly.
 
 Weights are an explicit policy preference, not a universal engineering truth. Change them only with a recorded rationale and compare results across cases. The realized-input reference is an offline comparison, not a deployable forecast policy or a guaranteed mathematical optimum.
 
