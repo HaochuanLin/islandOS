@@ -47,7 +47,7 @@ class TestNanAoThreeScenarios(unittest.TestCase):
         self.assertIn("硬件摊销区间", table)
         self.assertIn("中位数电费", table)
         self.assertIn("合计筛查成本区间", table)
-        self.assertEqual(table.count("| 情景"), 3)
+        self.assertEqual(table.count("| 情景"), 4)  # header plus three scenario rows
 
     def test_fixed_run_count_and_seed_cannot_be_changed_silently(self):
         with self.assertRaises(ValueError):
