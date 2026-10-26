@@ -455,5 +455,59 @@ class TestRollingHorizonDispatch(unittest.TestCase):
             )
 
 
+
+    def test_default_demand_planning_does_not_leak_future_realized_values(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        first = Scenario(
+            name="same_current_demand_low_future",
+            available_surplus_kw=(180.0, 180.0, 180.0),
+            water_demand_m3_per_hour=(5.0, 0.0, 0.0),
+            cooling_demand_kw_th=(8.0, 0.0, 0.0),
+        )
+        changed_future = Scenario(
+            name="same_current_demand_high_future",
+            available_surplus_kw=(180.0, 180.0, 180.0),
+            water_demand_m3_per_hour=(5.0, 1000.0, 1000.0),
+            cooling_demand_kw_th=(8.0, 1000.0, 1000.0),
+        )
+        left = simulate_rolling(first, (180.0,) * 3, "rolling")
+        right = simulate_rolling(changed_future, (180.0,) * 3, "rolling")
+
+        # Hour-zero decisions must not depend on future realized demand that
+        # would not yet be known by a live rolling planner.
+        self.assertEqual(left["hourly_priority_decisions"][0], right["hourly_priority_decisions"][0])
+        for report in (left, right):
+            first_hour = report["hourly_audit"][0]
+            self.assertEqual(first_hour["forecast_water_demand_m3"], 5.0)
+            self.assertEqual(first_hour["forecast_cooling_demand_kw_th"], 8.0)
+            self.assertEqual(first_hour["demand_forecast_method"], "causal_persistence_fallback")
+            self.assertEqual(report["demand_forecast_policy"]["perfect_information_is_offline_reference"], False)
+
+    def test_explicit_cooling_forecast_is_used_and_validated(self):
+        scenario = build_scenarios()[0]
+        forecast = tuple(12.0 + i for i in range(len(scenario.cooling_demand_kw_th)))
+        result = simulate_rolling(
+            scenario,
+            scenario.available_surplus_kw,
+            "ro_first",
+            forecast_cooling_demand_kw_th=forecast,
+        )
+        self.assertEqual(
+            [row["forecast_cooling_demand_kw_th"] for row in result["hourly_audit"]],
+            list(forecast),
+        )
+        self.assertEqual(
+            result["demand_forecast_policy"]["cooling"],
+            "explicit_forecast",
+        )
+        with self.assertRaisesRegex(ValueError, "forecast_cooling_demand_kw_th must match"):
+            simulate_rolling(
+                scenario,
+                scenario.available_surplus_kw,
+                "rolling",
+                forecast_cooling_demand_kw_th=(1.0,),
+            )
+
 if __name__ == "__main__":
     unittest.main()
