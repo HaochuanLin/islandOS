@@ -61,6 +61,11 @@ class TestSimulatedAutonomousDispatchPipeline(unittest.TestCase):
         )
         report = run_simulated_autonomous_dispatch(csv_text)
         self.assertEqual(report["dataset_type"], "user_supplied_unverified")
+        self.assertEqual(
+            report["input_provenance"]["sha256"],
+            hashlib.sha256(csv_text.encode("utf-8")).hexdigest(),
+        )
+        self.assertEqual(report["input_provenance"]["last_timestamp_utc"], "2026-01-01T01:00:00Z")
         self.assertIsNone(report["is_measured_site_data"])
         self.assertEqual(len(report["hourly_results"]), 2)
         first = report["hourly_results"][0]["dispatch"]
