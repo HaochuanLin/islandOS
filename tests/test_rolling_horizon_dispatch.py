@@ -316,6 +316,9 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         for row in reports:
             with self.subTest(profile=row["weight_profile"]):
                 self.assertEqual(row["comparison_count"], 12)
+                self.assertTrue(row["rolling_policy_reoptimized"])
+                self.assertGreaterEqual(row["cases_with_changed_rolling_decisions_vs_default"], 0)
+                self.assertLessEqual(row["cases_with_changed_rolling_decisions_vs_default"], 12)
                 self.assertEqual(
                     row["rolling_better_count"] + row["rolling_tied_count"] + row["rolling_worse_count"],
                     12,
@@ -521,6 +524,48 @@ class TestRollingHorizonDispatch(unittest.TestCase):
                 "rolling",
                 forecast_cooling_demand_kw_th=(1.0,),
             )
+
+
+    def test_objective_weights_change_rolling_priority_and_are_audited(self):
+        from experiments.compare_dispatch_policies import Scenario
+
+        scenario = Scenario(
+            name="competing_water_and_cooling_needs",
+            available_surplus_kw=(400.0, 400.0, 400.0, 400.0),
+            water_demand_m3_per_hour=(100.0, 100.0, 100.0, 100.0),
+            cooling_demand_kw_th=(200.0, 200.0, 200.0, 200.0),
+        )
+        water_priority = simulate_rolling(
+            scenario, scenario.available_surplus_kw, "rolling",
+            objective_weights={"water": 0.80, "cooling": 0.10, "surplus": 0.10},
+        )
+        cooling_priority = simulate_rolling(
+            scenario, scenario.available_surplus_kw, "rolling",
+            objective_weights={"water": 0.10, "cooling": 0.80, "surplus": 0.10},
+        )
+        self.assertEqual(water_priority["objective_weights"]["water"], 0.80)
+        self.assertEqual(cooling_priority["objective_weights"]["cooling"], 0.80)
+        self.assertNotEqual(
+            water_priority["hourly_priority_decisions"],
+            cooling_priority["hourly_priority_decisions"],
+        )
+
+    def test_objective_weights_reject_invalid_shapes_and_normalization(self):
+        scenario = build_scenarios()[0]
+        invalid = (
+            {"water": 1.0, "cooling": 0.0},
+            {"water": -0.1, "cooling": 1.0, "surplus": 0.1},
+            {"water": 0.5, "cooling": 0.5, "surplus": 0.5},
+            {"water": float("nan"), "cooling": 0.0, "surplus": 1.0},
+            {"water": True, "cooling": 0.0, "surplus": 0.0},
+        )
+        for weights in invalid:
+            with self.subTest(weights=weights):
+                with self.assertRaises(ValueError):
+                    simulate_rolling(
+                        scenario, scenario.available_surplus_kw,
+                        objective_weights=weights,
+                    )
 
 if __name__ == "__main__":
     unittest.main()
