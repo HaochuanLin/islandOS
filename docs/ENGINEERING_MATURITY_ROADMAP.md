@@ -138,10 +138,10 @@ Do not increase the commercial/deployment score until the new tests and document
 - Merged [PR #179](https://github.com/HaochuanLin/islandOS/pull/179) as main commit [4c341eb](https://github.com/HaochuanLin/islandOS/commit/4c341ebe54873ad4fee749c282873488d7a14734). The tested head passed all 10 checks triggered for the change; the full suite reported **610 passed, 2 skipped, 14 warnings, and 507 subtests**. The integration workflow generated and uploaded the five-case report as artifact `islandos-seeded-policy-parameter-sweep` (ID 12624051166, 90-day retention).
 - This artifact makes policy score distributions and failure analysis inspectable from CI, rather than relying only on unit tests of the generator. It remains synthetic software evidence, not measured-site validation.
 
-### 2026-10-26 — CSV input-quality fault matrix (work in progress)
+### 2026-10-26 — CSV quality and dispatch accounting stress suites (work in progress)
 
-- A new deterministic suite exercises one valid synthetic CSV and 14 malformed variants, including missing columns, timestamp order/gap/timezone faults, non-finite surplus, negative demand, and malformed optional forecasts. The CI workflow is being extended to archive its JSON report.
-- This remains unverified until the exact final head passes the full test and workflow set. Parser rejection evidence does not authenticate data or establish site quality.
+- The branch now includes a deterministic CSV suite with one valid synthetic fixture and 14 malformed variants, plus a seeded accounting-invariant suite that checks power budgets, water/cold conservation, configured inventory bounds, service accounting, and numeric finiteness across all four dispatch policies.
+- The RO simulation workflow runs both suites and uploads JSON reports with 90-day retention. The exact final head still needs all required checks before the evidence is considered verified. These suites test parser/simulator behavior only; they do not authenticate data or establish site quality, physical fidelity, or safety.
 
 
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
