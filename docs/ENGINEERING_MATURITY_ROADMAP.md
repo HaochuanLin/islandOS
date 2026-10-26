@@ -121,10 +121,11 @@ Do not increase the commercial/deployment score until the new tests and document
 - Added a fail-closed simulation-only ON/OFF/HOLD gate, an end-to-end rolling-dispatch audit pipeline, a 10-case no-site-data stress matrix, and a seeded paired policy sweep comparing rolling, fixed-priority, and offline realized-input reference policies. The sweep reports per-policy score distributions, per-case regressions, normalized unmet-service risk, simulated constraint violations, and a deterministic report digest.
 - **No maturity score is raised by this merge alone.** Synthetic scenario coverage and reproducibility are stronger, but no measured site data, field accuracy, production authorization, or physical safety evidence was created. Public/site-data validation and real-world operational validation remain unchanged.
 
-### 2026-10-26 — Read-only container hardening (work in progress; not yet scored)
+### 2026-10-26 — Read-only container hardening (verified on PR head; score unchanged)
 
-- A follow-up branch adds a read-only container root filesystem, bounded noexec/nosuid tmpfs for transient writes, explicit memory/CPU/PID limits, ephemeral cache paths, and runtime assertions in the container smoke workflow. It also extends the static preflight and regression tests.
-- This change remains unverified until the exact branch head passes the container build/health test, full pytest suite, integration examples, dependency audits, Windows package build, hosted health, and Nan'ao scenario checks. No deployment score changes are proposed before those checks pass.
+- The tested PR #177 head `3b34999c827756fd95e1b5e184b6d0f47275f3f8` passed all 11 GitHub Actions checks, including container image build/SBOM/health under a read-only root filesystem, runtime inspection of tmpfs and memory/CPU/PID bounds, full pytest (**610 passed, 2 skipped, 14 warnings, 499 subtests**), integration examples, dependency audits, Windows packaging, hosted health, and Nan'ao scenario validation.
+- Added fail-closed preflight checks and regression tests for read-only rootfs, bounded noexec/nosuid temporary storage, ephemeral cache paths, and runtime resource limits. The container remains loopback-only and non-root.
+- No deployment or overall maturity score is raised automatically: this is local-demo defense in depth. Authentication, TLS/network segmentation, production monitoring, restore/incident response, site-specific authorization, and real-world operational evidence remain unresolved. Any subsequent documentation commit must pass checks on its own exact SHA before merge.
 
 
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
