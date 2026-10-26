@@ -36,6 +36,8 @@ class TestPolicyParameterSweep(unittest.TestCase):
             self.assertEqual(set(case["scores"]), set(first["policy_names"]))
             self.assertIn(case["best_fixed_policy"], {"ro_first", "ice_first"})
             self.assertIsInstance(case["rolling_constraint_violation_hours"], int)
+            self.assertGreaterEqual(case["rolling_combined_unmet_fraction"], 0.0)
+            self.assertLessEqual(case["rolling_combined_unmet_fraction"], 1.0 + 1e-8)
 
     def test_rejects_invalid_sweep_dimensions_and_seed(self):
         for kwargs in (
