@@ -38,7 +38,8 @@ class TestInputQualityStressSuite(unittest.TestCase):
         names = {case["name"] for case in cases}
         self.assertEqual(len(cases), 18)
         self.assertTrue({
-            "duplicate_header", "extra_row_field", "short_row",\n            "empty_input", "header_only", "missing_required_column",
+            "duplicate_header", "extra_row_field", "short_row",
+            "empty_input", "header_only", "missing_required_column",
             "blank_timestamp", "malformed_timestamp", "timezone_naive_timestamp",
             "duplicate_timestamp", "non_monotonic_timestamp", "hour_gap",
             "nan_actual_surplus", "infinite_forecast_surplus", "negative_water_demand",
