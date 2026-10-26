@@ -59,7 +59,7 @@ jobs:
           dependency-snapshot: false
           upload-release-assets: false
       - name: Start web app on loopback only
-        run: docker run --detach --name islandos-web-ci --read-only --tmpfs /tmp:rw,noexec,nosuid,size=128m --memory=1g --cpus=1 --pids-limit=128 --publish 127.0.0.1:8501:8501 islandos-web:ci
+        run: docker run --detach --name islandos-web-ci --read-only --tmpfs /tmp:rw,noexec,nosuid,size=128m --memory=1g --cpus=1 --pids-limit=128 --stop-timeout 20 --log-opt max-size=10m --log-opt max-file=3 --publish 127.0.0.1:8501:8501 islandos-web:ci
       - name: Verify container does not run as root
         run: test "$(docker exec islandos-web-ci id -u)" -ne 0
       - name: Verify read-only root filesystem and resource bounds
@@ -76,7 +76,10 @@ jobs:
           assert config["NanoCpus"] == 1000000000
           assert config["PidsLimit"] == 128
           assert "/tmp" in config["Tmpfs"]
-          print("Read-only root filesystem, tmpfs, memory, CPU, and PID bounds verified.")
+          assert config["StopTimeout"] == 20
+          assert config["LogConfig"]["Config"]["max-size"] == "10m"
+          assert config["LogConfig"]["Config"]["max-file"] == "3"
+          print("Read-only root filesystem, resource bounds, graceful stop, and log rotation verified.")
           PY
       - name: Wait for Streamlit health endpoint
         run: |
