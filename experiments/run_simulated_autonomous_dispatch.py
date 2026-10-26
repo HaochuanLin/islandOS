@@ -33,6 +33,7 @@ def run_simulated_autonomous_dispatch(
     telemetry_valid: bool = True,
     interlocks_healthy: bool = True,
     operator_stop: bool = False,
+    objective_weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Run one deterministic simulation and gate every hourly dispatch audit row.
 
@@ -56,6 +57,7 @@ def run_simulated_autonomous_dispatch(
         policy="rolling",
         forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
         forecast_cooling_demand_kw_th=parsed["forecast_cooling_demand_kw_th"],
+        objective_weights=objective_weights,
     )
 
     gated_rows = []
@@ -99,6 +101,7 @@ def run_simulated_autonomous_dispatch(
             "interlocks_healthy_fixture": interlocks_healthy,
             "operator_stop_fixture": operator_stop,
             "max_total_power_kw_illustrative": max_total_power_kw,
+            "objective_weights": dispatch["objective_weights"],
         },
         "dispatch_summary": {
             key: dispatch[key] for key in (
@@ -129,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--telemetry-invalid", action="store_true", help="exercise the fail-closed telemetry gate")
     parser.add_argument("--interlocks-unhealthy", action="store_true", help="exercise the fail-closed interlock gate")
     parser.add_argument("--operator-stop", action="store_true", help="exercise the operator-stop gate")
+    parser.add_argument("--water-weight", type=float, default=0.45, help="normalized dispatch objective weight; all three weights must sum to 1")
+    parser.add_argument("--cooling-weight", type=float, default=0.45, help="normalized dispatch objective weight; all three weights must sum to 1")
+    parser.add_argument("--surplus-weight", type=float, default=0.10, help="normalized dispatch objective weight; all three weights must sum to 1")
     parser.add_argument("--output", type=Path, default=Path("build/simulated-autonomous-dispatch/report.json"))
     args = parser.parse_args(argv)
     try:
@@ -140,6 +146,11 @@ def main(argv: list[str] | None = None) -> int:
             telemetry_valid=not args.telemetry_invalid,
             interlocks_healthy=not args.interlocks_unhealthy,
             operator_stop=args.operator_stop,
+            objective_weights={
+                "water": args.water_weight,
+                "cooling": args.cooling_weight,
+                "surplus": args.surplus_weight,
+            },
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
