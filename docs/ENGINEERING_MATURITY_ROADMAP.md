@@ -127,11 +127,16 @@ Do not increase the commercial/deployment score until the new tests and document
 - Added fail-closed preflight checks and regression tests for read-only rootfs, bounded noexec/nosuid temporary storage, ephemeral cache paths, and runtime resource limits. The container remains loopback-only and non-root.
 - No deployment or overall maturity score is raised automatically: this is local-demo defense in depth. Authentication, TLS/network segmentation, production monitoring, restore/incident response, site-specific authorization, and real-world operational evidence remain unresolved.
 
-### 2026-10-26 — Log rotation and graceful shutdown (verified on PR head; score unchanged)
+### 2026-10-26 — Log rotation and graceful shutdown (merged and verified; score unchanged)
 
-- Tested PR head `e762b5ae3270bbf68cf2db22f7c6ceb09ad2d6b9` passed all 11 GitHub Actions checks, including **610 passed, 2 skipped, 14 warnings, and 507 subtests**. The container smoke test confirmed the image builds, the app remains healthy under read-only rootfs/resource bounds, and Docker reports the configured 10 MB × 3-file log rotation. The workflow also asserts the configured 20-second stop-timeout flag; Docker inspect does not expose that setting as a stable field in this runner's output, so the test does not pretend to verify it by inspecting an absent field.
-- Added a three-file, 10 MB-per-file JSON log cap and a 20-second graceful-stop window to the local Compose profile. The deployment preflight, regression tests, README, and runbook now cover log retention and stop behavior.
-- No maturity score change is proposed automatically. These are local-demo operational safeguards; production monitoring, incident ownership, and site-specific recovery remain unresolved. A final documentation-only commit must pass the same checks on its exact SHA before merge.
+- Merged [PR #178](https://github.com/HaochuanLin/islandOS/pull/178) as main commit [3b746c5](https://github.com/HaochuanLin/islandOS/commit/3b746c52a0f6619f9cda9aa272cb14e5b659c910). The tested PR head `43cf431487b488b887876378ca043dd8577b8866` passed all 11 GitHub Actions checks, including **610 passed, 2 skipped, 14 warnings, and 507 subtests**. Container CI confirmed image build, SBOM generation, health under read-only rootfs/resource bounds, and the configured 10 MB × 3-file log rotation. The workflow asserts the configured 20-second stop-timeout flag; Docker inspect did not expose that setting as a stable field in this runner's output, so the workflow does not claim to verify it by inspecting an absent field.
+- Added a three-file, 10 MB-per-file JSON log cap and a 20-second graceful-stop window to the local Compose profile. The deployment preflight, regression tests, README, and runbook cover log retention and stop behavior.
+- No maturity score change is proposed automatically. These are local-demo operational safeguards; production monitoring, incident ownership, and site-specific recovery remain unresolved.
+
+### 2026-10-26 — Retained CI evidence for seeded policy sweep (work in progress)
+
+- A follow-up branch adds a five-case seeded policy sweep to the RO simulation workflow and uploads its machine-readable report as a 90-day artifact. This makes the new benchmark's output inspectable from CI, rather than relying only on unit tests of its generator.
+- The exact branch head still needs all required checks before this artifact workflow can be counted as verified. Synthetic benchmark artifacts remain software evidence only, not measured-site validation.
 
 
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
