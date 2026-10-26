@@ -131,8 +131,10 @@ def _simulate_hybrid(annual: dict[str, Any], scheduled_events: list[dict[str, fl
     Within an hour containing any part of a curtailment event, the model treats
     that hour as a wind-event hour and does not mix in grid power. This is a
     conservative hourly-resolution simplification for the final fractional hour
-    of an event. Grid RO can run only from 00:00 through 07:59 and only when
-    inventory is below the emergency threshold.
+    of an event. The emergency state latches after inventory falls below the
+    threshold and remains active until inventory reaches the 75 m³ recovery
+    target. Grid RO can run only from 00:00 through 07:59 while that state is
+    active, preventing repeated one-hour pulses from under-replenishing storage.
     """
     event_by_hour: dict[int, dict[str, float]] = {}
     for event in scheduled_events:
