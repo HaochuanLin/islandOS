@@ -20,6 +20,36 @@ st.warning(
     "reference, not a forecast-based operating recommendation."
 )
 
+st.subheader("Dispatch objective priorities")
+st.caption(
+    "Illustrative trade-off weights for water service, cooling service, and unused surplus. "
+    "They must sum to 1.0; these are not site-approved priorities."
+)
+weight_cols = st.columns(3)
+with weight_cols[0]:
+    water_weight = st.number_input(
+        "Water priority", min_value=0.0, max_value=1.0, value=0.45, step=0.05,
+        key="rolling_lab_water_weight",
+    )
+with weight_cols[1]:
+    cooling_weight = st.number_input(
+        "Cooling priority", min_value=0.0, max_value=1.0, value=0.45, step=0.05,
+        key="rolling_lab_cooling_weight",
+    )
+with weight_cols[2]:
+    surplus_weight = st.number_input(
+        "Unused-surplus priority", min_value=0.0, max_value=1.0, value=0.10, step=0.05,
+        key="rolling_lab_surplus_weight",
+    )
+objective_weights = {
+    "water": float(water_weight),
+    "cooling": float(cooling_weight),
+    "surplus": float(surplus_weight),
+}
+weights_valid = abs(sum(objective_weights.values()) - 1.0) <= 1e-9
+if not weights_valid:
+    st.error(f"Objective weights currently sum to {sum(objective_weights.values()):.3f}; adjust them to exactly 1.000 before running.")
+
 source = st.radio(
     "Scenario source",
     ["Synthetic demo (illustrative)", "Upload paired hourly CSV"],
@@ -34,7 +64,8 @@ if source == "Upload paired hourly CSV":
         key="rolling_lab_upload",
         help=(
             "Required columns: timestamp_utc, actual_surplus_kw, forecast_surplus_kw, "
-            "water_demand_m3, cooling_demand_kw_th. Optional: forecast_water_demand_m3."
+            "water_demand_m3, cooling_demand_kw_th. Optional: forecast_water_demand_m3, "
+            "forecast_cooling_demand_kw_th."
         ),
     )
     st.download_button(
@@ -79,6 +110,8 @@ input_frame = pd.DataFrame({
 })
 if parsed["forecast_water_demand_m3_per_hour"] is not None:
     input_frame["forecast_water_demand_m3"] = list(parsed["forecast_water_demand_m3_per_hour"])
+if parsed["forecast_cooling_demand_kw_th"] is not None:
+    input_frame["forecast_cooling_demand_kw_th"] = list(parsed["forecast_cooling_demand_kw_th"])
 
 st.caption(
     f"Validated source: **{source_label}** · {len(input_frame)} continuous hourly rows"
@@ -104,7 +137,7 @@ with st.expander("Preview validated input", expanded=False):
     st.subheader("Cooling demand (kW thermal)")
     st.line_chart(chart_input[["cooling_demand_kw_th"]])
 
-if st.button("Run four-policy rolling comparison", type="primary", use_container_width=True):
+if st.button("Run four-policy rolling comparison", type="primary", use_container_width=True, disabled=not weights_valid):
     policies = ("rolling", "ro_first", "ice_first", "perfect_information")
     results = {}
     try:
@@ -114,6 +147,8 @@ if st.button("Run four-policy rolling comparison", type="primary", use_container
                 parsed["forecast_surplus_kw"],
                 policy=policy,
                 forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+                forecast_cooling_demand_kw_th=parsed["forecast_cooling_demand_kw_th"],
+                objective_weights=objective_weights,
             )
         st.session_state["rolling_lab_results"] = results
     except (ValueError, RuntimeError, ArithmeticError) as exc:
@@ -132,6 +167,9 @@ if results:
     for policy, result in results.items():
         summary_rows.append({
             "policy": labels[policy],
+            "water_weight": result["objective_weights"]["water"],
+            "cooling_weight": result["objective_weights"]["cooling"],
+            "surplus_weight": result["objective_weights"]["surplus"],
             "water_unmet_m3": result["water_unmet_m3"],
             "cooling_unmet_kwh_th": result["cooling_unmet_kwh_th"],
             "renewable_flexible_load_kwh": result["renewable_flexible_load_kwh"],
