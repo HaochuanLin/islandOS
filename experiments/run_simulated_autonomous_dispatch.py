@@ -105,7 +105,7 @@ def run_simulated_autonomous_dispatch(
         },
         "dispatch_summary": {
             key: dispatch[key] for key in (
-                "policy", "water_unmet_m3", "cooling_unmet_kwh_th",
+                "policy", "objective_weights", "water_unmet_m3", "cooling_unmet_kwh_th",
                 "renewable_flexible_load_kwh", "remaining_surplus_kwh",
                 "constraint_violation_hours", "final_water_inventory_m3",
                 "final_cold_inventory_kwh_th",
