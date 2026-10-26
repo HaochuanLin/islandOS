@@ -43,6 +43,8 @@ def _rewrite_csv(
 
 def build_input_quality_cases(hours: int = 4) -> list[dict[str, Any]]:
     """Return a baseline plus deterministic invalid CSV fixtures."""
+    if isinstance(hours, bool) or not isinstance(hours, int) or not 2 <= hours <= 168:
+        raise ValueError("hours must be an integer from 2 to 168")
     base = generate_synthetic_scenario_csv(hours)
     rows = list(csv.DictReader(io.StringIO(base)))
 
@@ -92,8 +94,8 @@ def build_input_quality_cases(hours: int = 4) -> list[dict[str, Any]]:
 
 def run_input_quality_stress_suite(hours: int = 4) -> dict[str, Any]:
     """Exercise CSV parser acceptance/rejection and hash every exact fixture."""
-    if isinstance(hours, bool) or not isinstance(hours, int) or not 1 <= hours <= 168:
-        raise ValueError("hours must be an integer from 1 to 168")
+    if isinstance(hours, bool) or not isinstance(hours, int) or not 2 <= hours <= 168:
+        raise ValueError("hours must be an integer from 2 to 168")
     results = []
     for case in build_input_quality_cases(hours):
         csv_text = case["csv"]
@@ -145,7 +147,7 @@ def run_input_quality_stress_suite(hours: int = 4) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--hours", type=int, default=4, help="valid baseline length, 1–168 hours")
+    parser.add_argument("--hours", type=int, default=4, help="valid baseline length, 2–168 hours")
     parser.add_argument("--output", type=Path, default=Path("build/input-quality-stress/report.json"))
     args = parser.parse_args(argv)
     try:
