@@ -49,6 +49,10 @@ def run_checks(root: Path) -> list[dict[str, str]]:
     add("compose_ephemeral_tmpfs", tmpfs, "transient writes are limited to a no-exec tmpfs" if tmpfs else "Compose must mount /tmp as a bounded noexec/nosuid tmpfs")
     resource_limits = all(token in compose for token in ("mem_limit: 1g", "cpus: 1.0", "pids_limit: 128"))
     add("compose_resource_limits", resource_limits, "memory, CPU, and process count are bounded" if resource_limits else "Compose must bound memory, CPU, and PID count")
+    log_rotation = all(token in compose for token in ('max-size: "10m"', 'max-file: "3"'))
+    add("compose_log_rotation", log_rotation, "container logs have bounded size and file count" if log_rotation else "Compose must cap JSON logs at 10 MB x 3 files")
+    graceful_stop = "stop_grace_period: 20s" in compose
+    add("compose_graceful_stop", graceful_stop, "container has a bounded graceful shutdown window" if graceful_stop else "Compose must declare stop_grace_period: 20s")
     ephemeral_caches = all(token in compose for token in (
         "HOME: /tmp/islandos-home", "XDG_CACHE_HOME: /tmp/xdg-cache",
         "MPLCONFIGDIR: /tmp/matplotlib", 'STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"',
@@ -57,8 +61,11 @@ def run_checks(root: Path) -> list[dict[str, str]]:
     runtime_hardening = all(token in workflow for token in (
         "--read-only", "--tmpfs /tmp:rw,noexec,nosuid,size=128m",
         "--memory=1g", "--cpus=1", "--pids-limit=128",
+        "--stop-timeout 20", "--log-opt max-size=10m", "--log-opt max-file=3",
         "config[\"ReadonlyRootfs\"] is True", 'config["Memory"] == 1073741824',
         'config["NanoCpus"] == 1000000000', 'config["PidsLimit"] == 128',
+        'config["LogConfig"]["Config"]["max-size"] == "10m"',
+        'config["LogConfig"]["Config"]["max-file"] == "3"',
     ))
     add("ci_runtime_hardening_verified", runtime_hardening, "CI runs and inspects a read-only, resource-bounded container" if runtime_hardening else "container smoke CI must verify read-only root, tmpfs, memory, CPU, and PID limits")
     compose_ci = "docker compose config --quiet" in workflow

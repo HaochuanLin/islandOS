@@ -66,6 +66,9 @@ class DeploymentContractTests(unittest.TestCase):
             "mem_limit: 1g",
             "cpus: 1.0",
             "pids_limit: 128",
+            "stop_grace_period: 20s",
+            'max-size: "10m"',
+            'max-file: "3"',
             "HOME: /tmp/islandos-home",
             "XDG_CACHE_HOME: /tmp/xdg-cache",
             "MPLCONFIGDIR: /tmp/matplotlib",
@@ -82,10 +85,15 @@ class DeploymentContractTests(unittest.TestCase):
             "--memory=1g",
             "--cpus=1",
             "--pids-limit=128",
+            "--stop-timeout 20",
+            "--log-opt max-size=10m",
+            "--log-opt max-file=3",
             'config["ReadonlyRootfs"] is True',
             'config["Memory"] == 1073741824',
             'config["NanoCpus"] == 1000000000',
             'config["PidsLimit"] == 128',
+            'config["LogConfig"]["Config"]["max-size"] == "10m"',
+            'config["LogConfig"]["Config"]["max-file"] == "3"',
         ):
             with self.subTest(token=token):
                 self.assertIn(token, workflow)
