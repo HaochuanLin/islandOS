@@ -18,6 +18,17 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         self.assertEqual(len(parsed["timestamps_utc"]), 24)
         self.assertIsNotNone(parsed["forecast_water_demand_m3_per_hour"])
         self.assertIsNotNone(parsed["forecast_cooling_demand_kw_th"])
+        actual_water = parsed["scenario"].water_demand_m3_per_hour
+        actual_cooling = parsed["scenario"].cooling_demand_kw_th
+        forecast_water = parsed["forecast_water_demand_m3_per_hour"]
+        forecast_cooling = parsed["forecast_cooling_demand_kw_th"]
+        for index in range(len(actual_water)):
+            prior_water = actual_water[index - 1] if index else 4.0
+            prior_cooling = actual_cooling[index - 1] if index else 6.0
+            expected_water = max(0.0, prior_water + (1.0 if index % 3 == 0 else -0.5))
+            expected_cooling = max(0.0, prior_cooling + (1.5 if index % 4 == 0 else -1.0))
+            self.assertAlmostEqual(forecast_water[index], expected_water)
+            self.assertAlmostEqual(forecast_cooling[index], expected_cooling)
         result = simulate_rolling(
             parsed["scenario"], parsed["forecast_surplus_kw"], "rolling",
             forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
