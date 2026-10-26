@@ -9,5 +9,16 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 128
+    environment:
+      HOME: /tmp/islandos-home
+      XDG_CACHE_HOME: /tmp/xdg-cache
+      MPLCONFIGDIR: /tmp/matplotlib
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
     ports:
       - "127.0.0.1:8501:8501"
