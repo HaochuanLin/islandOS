@@ -15,7 +15,7 @@ python -m experiments.run_simulated_autonomous_dispatch --hours 24 --operator-st
 
 The default report is written to `build/simulated-autonomous-dispatch/report.json`. Choose a different `--output` path if you want to preserve an earlier run. To process a user-provided hourly scenario, pass `--input-csv path/to/scenario.csv`; it must follow the schema accepted by `parse_scenario_csv` in `experiments/rolling_horizon_dispatch.py`.
 
-The report preserves each dispatch audit row beside its gate decision and reason code, summarizes ON/OFF/HOLD counts, and explicitly records the dataset status and non-live mode. `--max-total-power-kw` is a software-test envelope only; it is not an engineering recommendation or site-approved setting.
+The report preserves each dispatch audit row beside its gate decision and reason code, summarizes ON/OFF/HOLD counts, and explicitly records the dataset status and non-live mode. It also records the input CSV's SHA-256 digest, row count, and first/last timestamps so the exact input bytes can be identified and the synthetic run reproduced. `--max-total-power-kw` is a software-test envelope only; it is not an engineering recommendation or site-approved setting.
 
 ## What is integrated
 
