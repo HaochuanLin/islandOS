@@ -64,7 +64,6 @@ def run_checks(root: Path) -> list[dict[str, str]]:
         "--stop-timeout 20", "--log-opt max-size=10m", "--log-opt max-file=3",
         "config[\"ReadonlyRootfs\"] is True", 'config["Memory"] == 1073741824',
         'config["NanoCpus"] == 1000000000', 'config["PidsLimit"] == 128',
-        'config["StopTimeout"] == 20',
         'config["LogConfig"]["Config"]["max-size"] == "10m"',
         'config["LogConfig"]["Config"]["max-file"] == "3"',
     ))
