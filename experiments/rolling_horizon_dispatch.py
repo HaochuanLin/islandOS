@@ -315,6 +315,9 @@ def simulate_rolling(
             else np.full(horizon_len, cooling_demand[t], dtype=float)
         )
         planning_power = forecast[t:end]
+        effective_water_plan = water_plan
+        effective_cooling_plan = cooling_plan
+        effective_power_plan = planning_power
         if policy == "rolling":
             candidates = []
             for priority in ("ro_first", "ice_first"):
@@ -335,6 +338,9 @@ def simulate_rolling(
                 # Hindsight upper bound only; this is not a deployable policy.
                 info_water = water_demand[t:end]
                 info_cooling = cooling_demand[t:end]
+                effective_water_plan = info_water
+                effective_cooling_plan = info_cooling
+                effective_power_plan = actual[t:end]
                 candidates = []
                 for priority in ("ro_first", "ice_first"):
                     predicted = _run_horizon(
@@ -380,14 +386,16 @@ def simulate_rolling(
             "hour_index": t,
             "actual_surplus_kw": float(actual[t]),
             "forecast_surplus_kw": float(forecast[t]),
+            "planning_surplus_kw": float(effective_power_plan[0]),
             "actual_water_demand_m3": float(water_demand[t]),
             "forecast_water_demand_m3": float(water_plan[0]),
-            "planning_water_demand_m3": float(water_plan[0]),
+            "planning_water_demand_m3": float(effective_water_plan[0]),
             "actual_cooling_demand_kw_th": float(cooling_demand[t]),
             "forecast_cooling_demand_kw_th": float(cooling_plan[0]),
-            "planning_cooling_demand_kw_th": float(cooling_plan[0]),
+            "planning_cooling_demand_kw_th": float(effective_cooling_plan[0]),
             "demand_forecast_method": (
-                "explicit_forecast" if water_forecast is not None or cooling_forecast is not None
+                "offline_realized_demand_reference" if policy == "perfect_information"
+                else "explicit_forecast" if water_forecast is not None or cooling_forecast is not None
                 else "causal_persistence_fallback"
             ),
             "priority": chosen,
