@@ -1,8 +1,12 @@
 """Tests for reproducible policy parameter sweeps without measured site data."""
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from experiments.run_policy_parameter_sweep import (
     build_parameter_sweep_cases,
+    main,
     run_parameter_sweep,
 )
 
@@ -38,6 +42,19 @@ class TestPolicyParameterSweep(unittest.TestCase):
             self.assertIsInstance(case["rolling_constraint_violation_hours"], int)
             self.assertGreaterEqual(case["rolling_combined_unmet_fraction"], 0.0)
             self.assertLessEqual(case["rolling_combined_unmet_fraction"], 1.0 + 1e-8)
+
+    def test_cli_writes_machine_readable_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "nested" / "report.json"
+            exit_code = main([
+                "--hours", "3", "--cases", "1", "--seed", "5",
+                "--output", str(output),
+            ])
+            self.assertEqual(exit_code, 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["total_case_count"], 2)
+            self.assertEqual(len(report["report_sha256"]), 64)
+            self.assertFalse(report["physical_write_performed"])
 
     def test_rejects_invalid_sweep_dimensions_and_seed(self):
         for kwargs in (
