@@ -45,6 +45,7 @@ The interactive `app.py` on main is a generic conceptual demo only, and does not
 - **Data preparation:** validate time-series CSVs and import selected public weather, measured microgrid, and monthly planning datasets with provenance notes.
 - **Read-only telemetry prototype:** validate and normalize recorded sensor/gateway data, run recommendation-only dispatch analysis, and expose a loopback-only HTTP review dashboard. It performs no PLC writes or actuator control.
 - **End-to-end simulated autonomous gate:** run `python -m experiments.run_simulated_autonomous_dispatch --hours 24` to connect hourly scenario parsing, rolling-horizon dispatch, and a fail-closed ON/OFF/HOLD gate with per-hour evidence. Use `--telemetry-invalid`, `--interlocks-unhealthy`, or `--operator-stop` to reproduce fail-closed behavior. It is simulation-only and never writes to physical equipment; see [the pipeline guide](docs/SIMULATED_AUTONOMOUS_DISPATCH_PIPELINE.md).
+- **No-site-data stress matrix:** run `python -m experiments.run_synthetic_stress_suite --hours 48` to execute ten deterministic cases covering renewable drought, forecast over/under-estimation, water/cooling demand spikes, compound adverse conditions, invalid telemetry, unhealthy interlocks, and operator stop. It exports per-case metrics and hashes; see [the no-site-data testing guide](docs/NO_SITE_DATA_STRESS_TESTING.md).
 - **Site-readiness gate:** fail closed when required site inputs are incomplete or telemetry is stale, and separate input completeness from engineering safety or field approval.
 - **Reproducible checks:** run unit/regression tests and synthetic benchmark workflows through GitHub Actions.
 
@@ -123,6 +124,7 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 | Local Docker / demo deployment, health checks, and shutdown | [Demo deployment runbook](docs/DEMO_DEPLOYMENT.md) |
 | Sensor message schema and adapter boundary | [Sensor adapter contract](docs/SENSOR_ADAPTER_CONTRACT.md) |
 | End-to-end rolling dispatch and simulated ON/OFF/HOLD gate | [Simulated autonomous dispatch pipeline](docs/SIMULATED_AUTONOMOUS_DISPATCH_PIPELINE.md) |
+| Deterministic stress testing without measured site data | [No-site-data stress testing](docs/NO_SITE_DATA_STRESS_TESTING.md) |
 | Site input completeness and fail-closed scenario gate | [Site readiness gate](docs/SITE_READINESS_GATE.md) |
 | Staff-entered data and provenance workflow | [Staff data-entry guide](docs/STAFF_DATA_ENTRY.md) |
 | Productization milestones and non-goals | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) |
