@@ -115,6 +115,18 @@ Do not increase the commercial/deployment score until the new tests and document
 
 ## Progress log
 
+### 2026-10-26 — Simulation-only dispatch gate and seeded policy benchmark (verified on main)
+
+- Merged [PR #176](https://github.com/HaochuanLin/islandOS/pull/176) as main commit [8fe712f](https://github.com/HaochuanLin/islandOS/commit/8fe712f4c60197fbd99c8af2d2a62df9b091c041). The full Python suite passed **608 tests, 2 skipped, 14 warnings, and 482 subtests**; all 11 checks passed on the tested PR head before merge.
+- Added a fail-closed simulation-only ON/OFF/HOLD gate, an end-to-end rolling-dispatch audit pipeline, a 10-case no-site-data stress matrix, and a seeded paired policy sweep comparing rolling, fixed-priority, and offline realized-input reference policies. The sweep reports per-policy score distributions, per-case regressions, normalized unmet-service risk, simulated constraint violations, and a deterministic report digest.
+- **No maturity score is raised by this merge alone.** Synthetic scenario coverage and reproducibility are stronger, but no measured site data, field accuracy, production authorization, or physical safety evidence was created. Public/site-data validation and real-world operational validation remain unchanged.
+
+### 2026-10-26 — Read-only container hardening (work in progress; not yet scored)
+
+- A follow-up branch adds a read-only container root filesystem, bounded noexec/nosuid tmpfs for transient writes, explicit memory/CPU/PID limits, ephemeral cache paths, and runtime assertions in the container smoke workflow. It also extends the static preflight and regression tests.
+- This change remains unverified until the exact branch head passes the container build/health test, full pytest suite, integration examples, dependency audits, Windows package build, hosted health, and Nan'ao scenario checks. No deployment score changes are proposed before those checks pass.
+
+
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
 
 - Merged [PR #165](https://github.com/HaochuanLin/islandOS/pull/165), adding a reusable pilot acceptance template for source permissions/provenance, chronological holdouts, baseline comparisons, owner-approved thresholds, hard-stop conditions, security/rollback, economics, and named reviews. The document is explicitly **not approved** and cannot authorize live control. Its test run passed **550 tests, 2 skipped, 430 subtests**.
