@@ -275,6 +275,10 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
     valley_runtime = [valley_run_hours for _ in annual_cases]
     valley_cost = [valley_cost_per_m3 for _ in annual_cases]
 
+    # Fair control: same reservoir, demand, availability, tariff, and control
+    # rules, but disable wind events. This isolates the incremental value of
+    # wind-aware dispatch instead of comparing against an over-producing timer.
+    valley_demand_runs = [_simulate_hybrid(annual, []) for annual in annual_cases]
     hybrid_runs = [
         _simulate_hybrid(annual, scheduled)
         for annual, scheduled in zip(annual_cases, scheduled_cases)
@@ -290,6 +294,38 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
         )
         for result in hybrid_runs
     ]
+
+    def served_costs(results: list[dict[str, float]]) -> list[float]:
+        costs = []
+        for result in results:
+            served = result["water_served_m3"]
+            if served <= 0:
+                costs.append(float("inf"))
+            else:
+                annualized_capex = (CAPEX_LOW_RMB + CAPEX_HIGH_RMB) / 2 / AMORTIZATION_YEARS
+                grid_cost = result["valley_energy_kwh"] * VALLEY_PRICE_RMB_PER_KWH
+                costs.append((annualized_capex + grid_cost) / served)
+        return costs
+
+    valley_demand_served = [item["water_served_m3"] for item in valley_demand_runs]
+    hybrid_served = [item["water_served_m3"] for item in hybrid_runs]
+    valley_demand_grid_cost = [item["valley_energy_kwh"] * VALLEY_PRICE_RMB_PER_KWH for item in valley_demand_runs]
+    hybrid_grid_cost = [item["valley_energy_kwh"] * VALLEY_PRICE_RMB_PER_KWH for item in hybrid_runs]
+    fair_comparison = {
+        "method": "paired Monte Carlo: identical annual wind event draws, reservoir, initial inventory, 80 m3/day demand, RO availability, tariff, and emergency/recovery logic; comparator disables wind and uses demand-triggered valley operation instead of the fixed 8-hour timer",
+        "comparator_name": "same reservoir + demand-triggered valley-only control (no wind)",
+        "wind_hybrid_name": "same reservoir + wind-priority / conditional valley control",
+        "median_water_served_valley_only_m3_per_year": median(valley_demand_served),
+        "median_water_served_hybrid_m3_per_year": median(hybrid_served),
+        "median_grid_electricity_cost_valley_only_rmb_per_year": median(valley_demand_grid_cost),
+        "median_grid_electricity_cost_hybrid_rmb_per_year": median(hybrid_grid_cost),
+        "median_grid_cost_savings_rmb_per_year": median(valley_demand_grid_cost) - median(hybrid_grid_cost),
+        "median_total_screening_cost_valley_only_rmb_per_m3_served": median(served_costs(valley_demand_runs)),
+        "median_total_screening_cost_hybrid_rmb_per_m3_served": median(served_costs(hybrid_runs)),
+        "median_total_screening_cost_savings_rmb_per_m3_served": median(served_costs(valley_demand_runs)) - median(served_costs(hybrid_runs)),
+        "median_water_service_difference_m3_per_year": median(hybrid_served) - median(valley_demand_served),
+        "interpretation_guardrail": "Cost advantage is demonstrated only if hybrid served-water cost is lower while delivered water and unmet demand remain comparable; if not, report that honestly. Costs use total annualized CAPEX midpoint plus grid electricity divided by delivered water; all other O&M remains excluded.",
+    }
 
     summaries = [
         _summarize("wind_only", baseline_water, baseline_runtime, baseline_cost),
@@ -314,6 +350,7 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
             "passed": True,
             "method": "same Python random seed, same event distributions, same draw order, and same per-run yield rounding as nan_ao_scenario.py",
         },
+        "fair_economic_comparison": fair_comparison,
         "hybrid_diagnostics": {
             "assumed_reservoir_capacity_m3": RESERVOIR_CAPACITY_M3,
             "assumed_emergency_threshold_m3": RESERVOIR_EMERGENCY_THRESHOLD_M3,
@@ -345,7 +382,7 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
             "synthetic_event_start_time_assumption": "uniform integer-hour placement over a 365-day year, without event overlap; timing is not in the frozen baseline",
             "scenario2_annual_valley_operation": "2920 scheduled hours/year multiplied by 0.925 availability; expected runtime 2701 hours/year",
             "scenario3_energy_costing": "grid electricity charged only for conditional valley operation; modeled curtailment energy cost is zero",
-            "cost_denominator": "total simulated RO production, including any water spilled from the reservoir; not delivered/served water",
+            "cost_denominator": "the three-row legacy table uses total simulated RO production, including spill; fair_economic_comparison instead uses water actually served and compares matched demand-triggered controls",
         },
         "calculation_scope_and_limits": [
             "This screening calculation includes hardware amortization plus purchased-electricity charges only.",
@@ -356,6 +393,7 @@ def run_three_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> d
             "Scenario 2 and scenario 3 are simplified models; no measured Nan'ao data or validated reservoir demand profile was supplied.",
             "Scenario 3's reservoir capacity, emergency threshold, 75 m³ recovery target, initial inventory, and 80 m³/day demand are illustrative assumptions because no site reservoir/demand data was supplied.",
             "Water production percentiles describe assumptions only, not measured performance or a validated forecast.",
+            "The fair economic comparison is a synthetic matched-control experiment, not field-validated savings; the same simplified hourly reservoir model and illustrative demand assumptions apply to both controls.",
         ],
     }
 
