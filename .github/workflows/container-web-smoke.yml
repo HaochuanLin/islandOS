@@ -59,7 +59,7 @@ jobs:
           dependency-snapshot: false
           upload-release-assets: false
       - name: Start web app on loopback only
-        run: docker run --detach --name islandos-web-ci --publish 127.0.0.1:8501:8501 islandos-web:ci
+        run: docker run --detach --name islandos-web-ci --read-only --tmpfs /tmp:rw,noexec,nosuid,size=128m --memory=1g --cpus=1 --pids-limit=128 --publish 127.0.0.1:8501:8501 islandos-web:ci
       - name: Verify container does not run as root
         run: test "$(docker exec islandos-web-ci id -u)" -ne 0
       - name: Wait for Streamlit health endpoint
