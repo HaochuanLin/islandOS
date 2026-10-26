@@ -60,7 +60,34 @@ def _run_horizon(
     )
 
 
-def _score(result, water_demand, cooling_demand) -> float:
+DEFAULT_OBJECTIVE_WEIGHTS = {"water": 0.45, "cooling": 0.45, "surplus": 0.10}
+
+
+def _validate_objective_weights(weights=None) -> dict[str, float]:
+    """Validate normalized user priorities for water, cooling, and surplus."""
+    if weights is None:
+        return dict(DEFAULT_OBJECTIVE_WEIGHTS)
+    if not isinstance(weights, dict) or set(weights) != set(DEFAULT_OBJECTIVE_WEIGHTS):
+        raise ValueError("objective_weights must contain exactly water, cooling, and surplus")
+    parsed = {}
+    for key in DEFAULT_OBJECTIVE_WEIGHTS:
+        value = weights[key]
+        if isinstance(value, bool):
+            raise ValueError(f"objective weight {key} must be numeric")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"objective weight {key} must be numeric") from exc
+        if not np.isfinite(number) or number < 0:
+            raise ValueError(f"objective weight {key} must be finite and non-negative")
+        parsed[key] = number
+    if not np.isclose(sum(parsed.values()), 1.0, rtol=0.0, atol=1e-9):
+        raise ValueError("objective_weights must sum to 1.0")
+    return parsed
+
+
+def _score(result, water_demand, cooling_demand, objective_weights=None) -> float:
+    weights = DEFAULT_OBJECTIVE_WEIGHTS if objective_weights is None else objective_weights
     water_total = max(float(np.sum(water_demand)), 1e-9)
     cooling_total = max(float(np.sum(cooling_demand)), 1e-9)
     ro = result.loads.get("ro_desalination")
@@ -69,7 +96,11 @@ def _score(result, water_demand, cooling_demand) -> float:
     cooling_unmet = float(np.sum(ice.unmet_demand)) if ice else cooling_total
     total_available = max(float(np.sum(result.initial_available_power_kw)), 1e-9)
     surplus_ratio = float(np.sum(result.remaining_power_kw)) / total_available
-    return 0.45 * water_unmet / water_total + 0.45 * cooling_unmet / cooling_total + 0.10 * surplus_ratio
+    return (
+        weights["water"] * water_unmet / water_total
+        + weights["cooling"] * cooling_unmet / cooling_total
+        + weights["surplus"] * surplus_ratio
+    )
 
 
 def _execute_one(
@@ -260,6 +291,7 @@ def simulate_rolling(
     policy: str = "rolling",
     forecast_water_demand_m3_per_hour=None,
     forecast_cooling_demand_kw_th=None,
+    objective_weights=None,
 ) -> dict:
     """Simulate one-hour commits with causal forecasts and realized execution.
 
@@ -307,6 +339,7 @@ def simulate_rolling(
                 raise ValueError(f"{name} must match the scenario horizon")
             if not np.all(np.isfinite(values)) or np.any(values < 0):
                 raise ValueError(f"{name} must be finite and non-negative")
+    weights = _validate_objective_weights(objective_weights)
     if policy not in ("rolling", "ro_first", "ice_first", "perfect_information"):
         raise ValueError("policy must be rolling, ro_first, ice_first, or perfect_information")
 
@@ -347,7 +380,7 @@ def simulate_rolling(
                     ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                 )
                 candidates.append((
-                    _score(predicted, water_plan, cooling_plan),
+                    _score(predicted, water_plan, cooling_plan, weights),
                     priority, predicted,
                 ))
             _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -369,7 +402,7 @@ def simulate_rolling(
                         ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
-                        _score(predicted, info_water, info_cooling),
+                        _score(predicted, info_water, info_cooling, weights),
                         priority, predicted,
                     ))
                 _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -443,6 +476,7 @@ def simulate_rolling(
 
     return {
         "policy": policy,
+        "objective_weights": weights,
         "demand_forecast_policy": {
             "water": "explicit_forecast" if water_forecast is not None else "causal_persistence_fallback",
             "cooling": "explicit_forecast" if cooling_forecast is not None else "causal_persistence_fallback",
