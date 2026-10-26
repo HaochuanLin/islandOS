@@ -54,7 +54,7 @@ The new CLI demo connects a replaceable water-demand forecast plug-in to dispatc
 
 ## Try the interactive app
 
-**Try the hosted interactive demo:** [Open IslandOS](https://islandos.streamlit.app/). The maintainer confirmed that public access is enabled in Streamlit Community Cloud on 2026-10-25. If the link requests authentication, see the [hosted access troubleshooting and local demo deployment runbook](docs/DEMO_DEPLOYMENT.md) or run the app locally. Before startup, run `python tools/deployment_preflight.py` to check the local demo's loopback binding, pinned container base, non-root user, health check, SBOM configuration, and documented security boundary. The built-in example is synthetic; this is a planning/simulation prototype, not a live island control system.
+**Try the hosted interactive demo:** [Open IslandOS](https://islandos.streamlit.app/). The maintainer confirmed that public access is enabled in Streamlit Community Cloud on 2026-10-25. If the link requests authentication, see the [hosted access troubleshooting and local demo deployment runbook](docs/DEMO_DEPLOYMENT.md) or run the app locally. Before startup, run `python tools/deployment_preflight.py` to check the local demo's loopback binding, pinned container base, non-root user, read-only root filesystem, bounded temporary storage and resource limits, health check, SBOM configuration, and documented security boundary. The built-in example is synthetic; this is a planning/simulation prototype, not a live island control system.
 
 **No site data yet?** Run the full command-line demonstration in one step; it generates synthetic hourly inputs, compares five strategies, and writes summary, timestep audit, and machine-readable report files:
 
