@@ -153,7 +153,9 @@ def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
         "actual_surplus_kw", "forecast_surplus_kw", "water_demand_m3", "cooling_demand_kw_th"
     )}
     has_forecast_water = "forecast_water_demand_m3" in reader.fieldnames
+    has_forecast_cooling = "forecast_cooling_demand_kw_th" in reader.fieldnames
     forecast_water = []
+    forecast_cooling = []
     for index, row in enumerate(rows, start=2):
         stamp_text = (row.get("timestamp_utc") or "").strip()
         try:
@@ -191,6 +193,16 @@ def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
                 raise ValueError(f"row {index}: forecast_water_demand_m3 must be finite and non-negative")
             forecast_water.append(value)
 
+        if has_forecast_cooling:
+            raw_value = (row.get("forecast_cooling_demand_kw_th") or "").strip()
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"row {index}: forecast_cooling_demand_kw_th must be numeric") from exc
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"row {index}: forecast_cooling_demand_kw_th must be finite and non-negative")
+            forecast_cooling.append(value)
+
     scenario = Scenario(
         name=str(name),
         available_surplus_kw=tuple(numeric["actual_surplus_kw"]),
@@ -201,6 +213,7 @@ def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
         "scenario": scenario,
         "forecast_surplus_kw": tuple(numeric["forecast_surplus_kw"]),
         "forecast_water_demand_m3_per_hour": tuple(forecast_water) if has_forecast_water else None,
+        "forecast_cooling_demand_kw_th": tuple(forecast_cooling) if has_forecast_cooling else None,
         "timestamps_utc": tuple(stamp.isoformat().replace("+00:00", "Z") for stamp in timestamps),
     }
 
@@ -213,6 +226,7 @@ def generate_synthetic_scenario_csv(hours: int = 24) -> str:
     fields = [
         "timestamp_utc", "actual_surplus_kw", "forecast_surplus_kw",
         "water_demand_m3", "cooling_demand_kw_th", "forecast_water_demand_m3",
+        "forecast_cooling_demand_kw_th",
     ]
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
@@ -222,7 +236,12 @@ def generate_synthetic_scenario_csv(hours: int = 24) -> str:
         forecast_surplus = max(0.0, actual_surplus + (8.0 if index % 4 == 0 else -5.0))
         water_demand = float(4 + index % 4)
         cooling_demand = float(6 + index % 5)
-        forecast_water = max(0.0, water_demand + (1.0 if index % 3 == 0 else -0.5))
+        # Forecasts use only the previous observation (or an explicit initial
+        # seed at t=0), never the target row's realized demand.
+        previous_water = float(4 + (index - 1) % 4) if index > 0 else 4.0
+        previous_cooling = float(6 + (index - 1) % 5) if index > 0 else 6.0
+        forecast_water = max(0.0, previous_water + (1.0 if index % 3 == 0 else -0.5))
+        forecast_cooling = max(0.0, previous_cooling + (1.5 if index % 4 == 0 else -1.0))
         writer.writerow({
             "timestamp_utc": (start + timedelta(hours=index)).isoformat().replace("+00:00", "Z"),
             "actual_surplus_kw": actual_surplus,
@@ -230,6 +249,7 @@ def generate_synthetic_scenario_csv(hours: int = 24) -> str:
             "water_demand_m3": water_demand,
             "cooling_demand_kw_th": cooling_demand,
             "forecast_water_demand_m3": forecast_water,
+            "forecast_cooling_demand_kw_th": forecast_cooling,
         })
     return output.getvalue()
 

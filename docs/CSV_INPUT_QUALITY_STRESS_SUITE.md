@@ -1,6 +1,6 @@
 # CSV input-quality stress suite
 
-The input-quality suite checks the rolling-dispatch CSV parser against one valid synthetic baseline and 17 deliberately malformed fixtures. It is designed for the no-site-data development phase: malformed cases are created from a generated CSV, not from field measurements.
+The input-quality suite checks the rolling-dispatch CSV parser against one valid synthetic baseline and 18 deliberately malformed fixtures. It is designed for the no-site-data development phase: malformed cases are created from a generated CSV, not from field measurements.
 
 ## Run
 
@@ -15,7 +15,7 @@ The default writes `build/input-quality-stress/report.json`. The suite requires 
 - Empty input and header-only CSV.
 - Missing required column, duplicate/blank header names, and rows with too many or too few fields.
 - Blank, malformed, timezone-naive, duplicate, out-of-order, or non-hourly timestamps.
-- NaN/infinite surplus values.
+- NaN/infinite surplus values and blank optional water/cooling forecasts.
 - Negative water demand.
 - Nonnumeric cooling demand.
 - Blank optional forecast-water demand when that column is present.

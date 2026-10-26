@@ -55,9 +55,9 @@ class TestSimulatedAutonomousDispatchPipeline(unittest.TestCase):
     def test_user_csv_is_labeled_unverified_and_keeps_actuals_separate(self):
         csv_text = (
             "timestamp_utc,actual_surplus_kw,forecast_surplus_kw,water_demand_m3,"
-            "cooling_demand_kw_th,forecast_water_demand_m3\n"
-            "2026-01-01T00:00:00Z,400,380,5,8,6\n"
-            "2026-01-01T01:00:00Z,0,20,6,9,7\n"
+            "cooling_demand_kw_th,forecast_water_demand_m3,forecast_cooling_demand_kw_th\n"
+            "2026-01-01T00:00:00Z,400,380,5,8,6,7\n"
+            "2026-01-01T01:00:00Z,0,20,6,9,7,8\n"
         )
         report = run_simulated_autonomous_dispatch(csv_text)
         self.assertEqual(report["dataset_type"], "user_supplied_unverified")
@@ -71,6 +71,8 @@ class TestSimulatedAutonomousDispatchPipeline(unittest.TestCase):
         first = report["hourly_results"][0]["dispatch"]
         self.assertEqual(first["actual_surplus_kw"], 400.0)
         self.assertEqual(first["forecast_surplus_kw"], 380.0)
+        self.assertEqual(first["forecast_water_demand_m3"], 6.0)
+        self.assertEqual(first["forecast_cooling_demand_kw_th"], 7.0)
 
     def test_invalid_csv_is_rejected_not_silently_repaired(self):
         with self.assertRaisesRegex(ValueError, "missing required columns"):
