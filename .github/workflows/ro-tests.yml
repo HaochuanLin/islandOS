@@ -544,3 +544,12 @@ jobs:
           path: build/policy-parameter-sweep/report.json
           if-no-files-found: error
           retention-days: 90
+      - name: Run CSV input-quality stress suite
+        run: python -m experiments.run_input_quality_stress_suite --hours 4 --output build/input-quality-stress/report.json
+      - name: Upload CSV input-quality stress report
+        uses: actions/upload-artifact@v7
+        with:
+          name: islandos-csv-input-quality-stress
+          path: build/input-quality-stress/report.json
+          if-no-files-found: error
+          retention-days: 90
