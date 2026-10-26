@@ -15,7 +15,7 @@ From the repository root:
 python -m experiments.run_policy_parameter_sweep --hours 48 --cases 20 --seed 20261026
 ```
 
-The default writes `build/policy-parameter-sweep/report.json`. For a faster smoke run:
+The default writes `build/policy-parameter-sweep/report.json`. The RO simulation CI workflow also runs a smaller five-case paired sweep and uploads its machine-readable report as the 90-day artifact `islandos-seeded-policy-parameter-sweep`; the artifact is synthetic evidence, not site validation. For a faster local smoke run:
 
 ```bash
 python -m experiments.run_policy_parameter_sweep --hours 12 --cases 4 --seed 7 --output build/policy-sweep-smoke/report.json
