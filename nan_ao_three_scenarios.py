@@ -141,7 +141,7 @@ def build_scenarios() -> list[Scenario]:
         ),
         Scenario(
             "Hypothetical-B",
-            "No capital charge for RO or land; timer-based valley-hour operation for 0–8 h/day at 92.5% availability; annual output fixed at the specified 33,650 m³",
+            "No capital charge for RO or land; timer-based valley-hour operation at approximately 8 scheduled h/day and 92.5% availability; annual output is fixed at 33,650 m³ for this screen, not calculated from the operating-hour assumptions",
             s3_water,
             "No (treated as sunk cost)",
             s3_opex,
@@ -197,6 +197,7 @@ def main() -> int:
     print("- Scenario 3 uses the specified annual output of 33,650 m³/year. SEC multiplied by the valley electricity tariff equals RMB 1.088/m³, before allocated fixed annual O&M.")
     print("- Scenario 4 assumes non-overlapping operating windows and adds valley-power water to curtailment-powered water. Electricity cost is charged only for valley-power production, while fixed O&M is allocated across total output. Occasional overlap may occur in real operation.")
     print("- Scenario 4's displayed annual output uses median curtailment yield plus valley-power production; its cost range is estimated using P5–P95 curtailment yield.")
+    print("- The Scenario 3 and Scenario 4 cost ranges overlap; this assumption-based screen does not establish a robust cost advantage or isolate IslandOS's causal contribution.")
     print("- Scenarios 2–4 are hypothetical exploratory cases. Scenario 4 requires purchasing valley-hour grid electricity and is outside the July 3 submission pilot scope.")
     print("- Scenarios excluding RO capital may still incur membrane replacement, chemicals, civil works, intake/discharge, brine treatment, and demand charges; these costs are outside this screening scope.")
     print()
