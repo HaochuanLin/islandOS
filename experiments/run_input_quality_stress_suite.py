@@ -90,6 +90,8 @@ def build_input_quality_cases(hours: int = 4) -> list[dict[str, Any]]:
         ("nonnumeric_cooling_demand", "Nonnumeric cooling demand must be rejected.", changed(0, "cooling_demand_kw_th", "lots")),
         ("blank_forecast_water_demand", "Blank optional forecast-water value must be rejected when the column is present.",
          changed(0, "forecast_water_demand_m3", "")),
+        ("blank_forecast_cooling_demand", "Blank optional forecast-cooling value must be rejected when the column is present.",
+         changed(0, "forecast_cooling_demand_kw_th", "")),
     ]
     for name, description, csv_text in invalid:
         cases.append({
