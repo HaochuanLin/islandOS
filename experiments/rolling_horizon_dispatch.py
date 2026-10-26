@@ -131,12 +131,22 @@ def parse_scenario_csv(text: str, name: str = "uploaded_csv") -> dict:
     }
     if not reader.fieldnames:
         raise ValueError("CSV must include a header row")
-    missing = sorted(required - set(reader.fieldnames))
+    headers = reader.fieldnames
+    if any(not isinstance(header, str) or not header.strip() for header in headers):
+        raise ValueError("CSV column names must be non-empty")
+    if len(headers) != len(set(headers)):
+        raise ValueError("CSV column names must be unique")
+    missing = sorted(required - set(headers))
     if missing:
         raise ValueError(f"CSV missing required columns: {', '.join(missing)}")
     rows = list(reader)
     if not rows:
         raise ValueError("CSV must contain at least one data row")
+    for index, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValueError(f"row {index}: CSV has extra fields beyond the header")
+        if any(row.get(header) is None for header in headers):
+            raise ValueError(f"row {index}: CSV has fewer fields than the header")
 
     timestamps = []
     numeric = {key: [] for key in (
