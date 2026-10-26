@@ -55,6 +55,7 @@ def run_simulated_autonomous_dispatch(
         parsed["forecast_surplus_kw"],
         policy="rolling",
         forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+        forecast_cooling_demand_kw_th=parsed["forecast_cooling_demand_kw_th"],
     )
 
     gated_rows = []
@@ -93,7 +94,7 @@ def run_simulated_autonomous_dispatch(
         },
         "inputs": {
             "hours": len(dispatch["hourly_audit"]),
-            "forecast_source": "CSV forecast_surplus_kw and optional forecast_water_demand_m3",
+            "forecast_source": "CSV forecast_surplus_kw and optional forecast_water_demand_m3 / forecast_cooling_demand_kw_th",
             "telemetry_valid_fixture": telemetry_valid,
             "interlocks_healthy_fixture": interlocks_healthy,
             "operator_stop_fixture": operator_stop,
