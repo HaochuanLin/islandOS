@@ -2,6 +2,7 @@
 import hashlib
 import unittest
 
+from experiments.rolling_horizon_dispatch import generate_synthetic_scenario_csv
 from experiments.run_simulated_autonomous_dispatch import run_simulated_autonomous_dispatch
 
 
@@ -12,6 +13,8 @@ class TestSimulatedAutonomousDispatchPipeline(unittest.TestCase):
         self.assertEqual(report["dataset_type"], "synthetic")
         self.assertEqual(report["input_provenance"]["rows"], 24)
         self.assertEqual(len(report["input_provenance"]["sha256"]), 64)
+        expected_hash = hashlib.sha256(generate_synthetic_scenario_csv(24).encode("utf-8")).hexdigest()
+        self.assertEqual(report["input_provenance"]["sha256"], expected_hash)
         self.assertEqual(report["input_provenance"]["first_timestamp_utc"], "2026-01-01T00:00:00Z")
         self.assertFalse(report["is_measured_site_data"])
         self.assertEqual(len(report["hourly_results"]), 24)
