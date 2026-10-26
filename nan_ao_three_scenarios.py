@@ -123,25 +123,25 @@ def build_scenarios() -> list[Scenario]:
     return [
         Scenario(
             "Judgement Baseline",
-            "新采购50 kW RO；仅弃风运行；RO资本按10年直线摊销；电费为0",
+            "Newly procured 50 kW RO; curtailment-only operation; RO capital amortized straight-line over 10 years; no electricity cost",
             baseline_water,
-            "是（1.6–3.3百万元，10年摊销）",
+            "Yes (RMB 1.6–3.3 million, amortized over 10 years)",
             s1_opex,
             (0.0, 0.0),
             s1_total,
         ),
         Scenario(
             "Hypothetical-A",
-            "RO与土地视为沉没资产；仅弃风运行；固定年度运维；电费为0",
+            "RO and land treated as sunk costs; curtailment-only operation; fixed annual O&M; no electricity cost",
             baseline_water,
-            "否（沉没资产）",
+            "No (treated as sunk cost)",
             s2_opex,
             (0.0, 0.0),
             s2_opex,
         ),
         Scenario(
             "Hypothetical-B",
-            "RO与土地不计资本；谷电定时器0–8 h/day、可用率92.5%；年产水按指定33,650 m³",
+            "No capital charge for RO or land; timer-based valley-hour operation for 0–8 h/day at 92.5% availability; annual output fixed at the specified 33,650 m³",
             s3_water,
             "否（沉没资产）",
             s3_opex,
@@ -150,7 +150,7 @@ def build_scenarios() -> list[Scenario]:
         ),
         Scenario(
             "Hypothetical-C (IslandOS)",
-            "弃风窗口与谷电窗口完全不重叠；同时利用两套窗口；谷电产水33,650 m³/年，另加弃风产水",
+            "Assumes no overlap between curtailment and valley-power windows; uses both windows; 33,650 m³/year from valley power plus additional curtailment-powered water",
             s4_water_mid,
             "否（沉没资产）",
             s4_opex,
@@ -162,7 +162,7 @@ def build_scenarios() -> list[Scenario]:
 
 def render_markdown_table(scenarios: list[Scenario]) -> str:
     lines = [
-        "| 情景名称 | 说明 | 年产水量(m³) | RO资本是否计入 | 运维分摊(RMB/m³) | 电费(RMB/m³) | 合计筛查成本(RMB/m³) |",
+        "| Scenario | Description | Annual water output (m³) | RO capital included? | Allocated O&M (RMB/m³) | Electricity cost (RMB/m³) | Total screening cost (RMB/m³) |",
         "|---|---|---:|---|---:|---:|---:|",
     ]
     for s in scenarios:
@@ -177,30 +177,30 @@ def render_markdown_table(scenarios: list[Scenario]) -> str:
 
 def main() -> int:
     scenarios = build_scenarios()
-    print("# Nan'ao 四组后处理财务筛查")
+    print("# Nan'ao Four-Scenario Post-Hoc Financial Screening")
     print()
     print(render_markdown_table(scenarios))
     print()
-    print("## 外部应急供水对标（用户提供的参考区间，未经本脚本独立核验）")
-    print("- 运水船：20–35 RMB/m³（灾后，受台风海况限制）")
-    print("- 瓶装矿泉水：2,000–4,000 RMB/m³（灾后，物流受天气制约）")
-    print("- IslandOS混合模式定位为灾前预储备；预先储水可降低灾后对海况和即时物流的依赖，但实际保障能力取决于储水规模与运行条件。")
+    print("## Emergency Water Supply Benchmarks (user-provided ranges; not independently verified by this script)")
+    print("- Water delivery by boat: RMB 20–35/m³ (post-disaster; constrained by typhoon sea conditions)")
+    print("- Bottled mineral water: RMB 2,000–4,000/m³ (post-disaster; logistics are weather-dependent)")
+    print("- IslandOS hybrid operation is positioned for pre-disaster water storage. Pre-stored water can reduce post-disaster dependence on sea conditions and just-in-time logistics; actual resilience depends on storage capacity and operating conditions.")
     print()
-    print("## 口径与重要限制")
+    print("## Methodology and Limitations")
     print(
-        f"- 复用的物理产水统计：P5={WATER_P5_M3_YEAR:.1f}、"
-        f"median={WATER_MEDIAN_M3_YEAR:.1f}、P95={WATER_P95_M3_YEAR:.1f} m³/year；"
-        "本脚本不运行蒙特卡洛。"
+        f"- Reused physical-yield statistics: P5={WATER_P5_M3_YEAR:.1f}, "
+        f"median={WATER_MEDIAN_M3_YEAR:.1f}, P95={WATER_P95_M3_YEAR:.1f} m³/year; "
+        "this script does not run Monte Carlo simulation."
     )
-    print("- 情景1–2单位成本使用中位数产水量442.7 m³/year作共同分母；因此它们是中位数产量下的筛查值，不是P5/P95成本区间。")
-    print("- 固定运维按年度固定金额计算后除以年度总产水量，不按产量线性增加。")
-    print("- 情景3按指定年产水量33,650 m³/year计算。其SEC×电价为1.088 RMB/m³，另加年度固定运维分摊。")
-    print("- 情景4按不重叠假设，将谷电产水与弃风产水相加；电费仅计谷电产水对应电量，固定运维分摊到总产水量。真实现场可能偶有时间重叠。")
-    print("- 情景4年产水量表格显示为谷电产水+弃风产水中位数；成本范围则使用弃风产水P5至P95估算。")
-    print("- 情景2–4均是假设性探索情景；情景4需要购买谷电，不属于7月3日提交试点范围。")
-    print("- 未计入RO资本的情景仍可能存在膜更换、药剂、土建、取排水、浓盐水处理、需量电费等其他成本；这些不在本表筛查口径内。")
+    print("- Scenarios 1–2 use median annual output (442.7 m³/year) as a common denominator. Their costs are screening estimates at median output, not P5/P95 cost ranges.")
+    print("- Fixed annual O&M is divided by annual water output; it is not modeled as a variable cost that scales linearly with production.")
+    print("- Scenario 3 uses the specified annual output of 33,650 m³/year. SEC multiplied by the valley electricity tariff equals RMB 1.088/m³, before allocated fixed annual O&M.")
+    print("- Scenario 4 assumes non-overlapping operating windows and adds valley-power water to curtailment-powered water. Electricity cost is charged only for valley-power production, while fixed O&M is allocated across total output. Occasional overlap may occur in real operation.")
+    print("- Scenario 4's displayed annual output uses median curtailment yield plus valley-power production; its cost range is estimated using P5–P95 curtailment yield.")
+    print("- Scenarios 2–4 are hypothetical exploratory cases. Scenario 4 requires purchasing valley-hour grid electricity and is outside the July 3 submission pilot scope.")
+    print("- Scenarios excluding RO capital may still incur membrane replacement, chemicals, civil works, intake/discharge, brine treatment, and demand charges; these costs are outside this screening scope.")
     print()
-    print("注：输出表格可复制进docs/COST_TRADEOFFS.md、PPT、Word。本脚本不改动原始物理仿真。")
+    print("Note: The output table can be copied into docs/COST_TRADEOFFS.md, a presentation, or a Word document. This script does not modify the original physical simulation.")
     return 0
 
 
