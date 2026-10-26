@@ -610,7 +610,7 @@ def summarize_aggregate(summaries):
 
 
 def summarize_weight_sensitivity(rows=None):
-    """Check whether rolling-vs-fixed conclusions change with objective weights."""
+    """Re-run rolling decisions under alternate objective weights and compare fixed baselines."""
     if rows is None:
         rows = run_experiment()
     scenarios = {scenario.name: scenario for scenario in build_scenarios()}
@@ -627,11 +627,33 @@ def summarize_weight_sensitivity(rows=None):
     reports = []
     for profile_name, weights in weight_profiles.items():
         deltas = []
-        for (scenario_name, _error_name), policies in sorted(grouped.items()):
+        changed_decisions = 0
+        for (scenario_name, error_name), policies in sorted(grouped.items()):
             required = {"rolling", "ro_first", "ice_first"}
             if not required.issubset(policies):
                 raise ValueError(f"incomplete policy group for {scenario_name}: {sorted(policies)}")
             scenario = scenarios[scenario_name]
+            actual = np.asarray(scenario.available_surplus_kw, dtype=float)
+            if error_name == "perfect":
+                forecast = actual
+            elif error_name == "overforecast_20pct":
+                forecast = actual * 1.2
+            elif error_name == "underforecast_20pct":
+                forecast = actual * 0.8
+            elif error_name == "alternating_pm20pct":
+                forecast = actual * np.asarray(
+                    [1.2 if i % 2 == 0 else 0.8 for i in range(len(actual))]
+                )
+            else:
+                raise ValueError(f"unknown forecast error profile: {error_name}")
+
+            # Re-optimize the rolling policy with these weights. Fixed-priority
+            # baselines are unchanged because their priority is not score-selected.
+            rolling_result = simulate_rolling(
+                scenario, forecast, "rolling", objective_weights=weights,
+            )
+            if rolling_result["hourly_priority_decisions"] != policies["rolling"]["hourly_priority_decisions"]:
+                changed_decisions += 1
             water_total = max(float(sum(scenario.water_demand_m3_per_hour)), 1e-9)
             cooling_total = max(float(sum(scenario.cooling_demand_kw_th)), 1e-9)
             power_total = max(float(sum(scenario.available_surplus_kw)), 1e-9)
@@ -644,20 +666,21 @@ def summarize_weight_sensitivity(rows=None):
                 )
 
             best_fixed = min(score(policies[name]) for name in ("ro_first", "ice_first"))
-            deltas.append(score(policies["rolling"]) - best_fixed)
+            deltas.append(score(rolling_result) - best_fixed)
         reports.append({
             "weight_profile": profile_name,
             "weights": weights,
             "comparison_count": len(deltas),
+            "rolling_policy_reoptimized": True,
+            "cases_with_changed_rolling_decisions_vs_default": changed_decisions,
             "rolling_better_count": sum(delta < -1e-9 for delta in deltas),
             "rolling_tied_count": sum(abs(delta) <= 1e-9 for delta in deltas),
             "rolling_worse_count": sum(delta > 1e-9 for delta in deltas),
             "mean_score_delta": round(float(np.mean(deltas)), 6) if deltas else None,
             "median_score_delta": round(float(np.median(deltas)), 6) if deltas else None,
-            "interpretation": "Synthetic case-matched sensitivity only; weights are illustrative, not stakeholder-validated.",
+            "interpretation": "Synthetic case-matched sensitivity with rolling decisions re-optimized; weights are illustrative, not stakeholder-validated.",
         })
     return reports
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
