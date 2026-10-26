@@ -17,9 +17,11 @@ class TestRollingHorizonDispatch(unittest.TestCase):
         parsed = parse_scenario_csv(text, name="generated_fixture")
         self.assertEqual(len(parsed["timestamps_utc"]), 24)
         self.assertIsNotNone(parsed["forecast_water_demand_m3_per_hour"])
+        self.assertIsNotNone(parsed["forecast_cooling_demand_kw_th"])
         result = simulate_rolling(
             parsed["scenario"], parsed["forecast_surplus_kw"], "rolling",
             forecast_water_demand_m3_per_hour=parsed["forecast_water_demand_m3_per_hour"],
+            forecast_cooling_demand_kw_th=parsed["forecast_cooling_demand_kw_th"],
         )
         self.assertEqual(len(result["hourly_audit"]), 24)
         self.assertTrue(all(
