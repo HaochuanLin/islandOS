@@ -43,3 +43,8 @@ Weights are an explicit policy preference, not a universal engineering truth. Ch
 All inputs are generated synthetic profiles and randomized scaling transforms. They are not sampled from a measured island distribution; randomization does not turn synthetic data into field data. The benchmark checks software behavior, reproducibility, trade-offs, and failure visibility only. It does not prove forecast accuracy, site performance, or physical safety. The simulator remains simplified and does not model every plant interlock or equipment dynamic. No physical writes or live control are enabled.
 
 Before claiming site performance, preserve the same evaluation protocol and rerun it on time-aligned measured data with a documented schema, provenance, train/test separation for forecast models, site-approved physical limits, operator review, and independent safety validation.
+
+
+## Causal demand planning boundary
+
+The rolling and fixed-priority policies now use explicit demand forecasts when supplied. If a water or cooling forecast is absent, the planner uses a causal persistence fallback: the current observed demand is held across that planning horizon. It no longer uses future realized demand values as if they were known in advance. The `perfect_information` policy intentionally uses realized future values only as an offline hindsight reference; its audit labels this distinction explicitly. These synthetic fallbacks are not site-trained forecasts and should be replaced with validated forecast inputs before operational evaluation.
