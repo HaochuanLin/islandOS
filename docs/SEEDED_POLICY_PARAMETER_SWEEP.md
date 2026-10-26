@@ -48,3 +48,8 @@ Before claiming site performance, preserve the same evaluation protocol and reru
 ## Causal demand planning boundary
 
 The rolling and fixed-priority policies now use explicit demand forecasts when supplied. If a water or cooling forecast is absent, the planner uses a causal persistence fallback: the current observed demand is held across that planning horizon. It no longer uses future realized demand values as if they were known in advance. The `perfect_information` policy intentionally uses realized future values only as an offline hindsight reference; its audit labels this distinction explicitly. These synthetic fallbacks are not site-trained forecasts and should be replaced with validated forecast inputs before operational evaluation.
+
+
+## Objective-weight sensitivity
+
+The weight-sensitivity analysis now re-runs the rolling-horizon decision process under each illustrative weight profile, instead of only rescoring one fixed set of rolling decisions. It reports how many cases change their rolling priority sequence compared with the default weights, alongside the paired score deltas against fixed-priority policies. This measures algorithm sensitivity under the synthetic profiles; it does not establish the correct priorities for a real community or plant.

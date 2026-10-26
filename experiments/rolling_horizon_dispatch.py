@@ -60,7 +60,34 @@ def _run_horizon(
     )
 
 
-def _score(result, water_demand, cooling_demand) -> float:
+DEFAULT_OBJECTIVE_WEIGHTS = {"water": 0.45, "cooling": 0.45, "surplus": 0.10}
+
+
+def _validate_objective_weights(weights=None) -> dict[str, float]:
+    """Validate normalized user priorities for water, cooling, and surplus."""
+    if weights is None:
+        return dict(DEFAULT_OBJECTIVE_WEIGHTS)
+    if not isinstance(weights, dict) or set(weights) != set(DEFAULT_OBJECTIVE_WEIGHTS):
+        raise ValueError("objective_weights must contain exactly water, cooling, and surplus")
+    parsed = {}
+    for key in DEFAULT_OBJECTIVE_WEIGHTS:
+        value = weights[key]
+        if isinstance(value, bool):
+            raise ValueError(f"objective weight {key} must be numeric")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"objective weight {key} must be numeric") from exc
+        if not np.isfinite(number) or number < 0:
+            raise ValueError(f"objective weight {key} must be finite and non-negative")
+        parsed[key] = number
+    if not np.isclose(sum(parsed.values()), 1.0, rtol=0.0, atol=1e-9):
+        raise ValueError("objective_weights must sum to 1.0")
+    return parsed
+
+
+def _score(result, water_demand, cooling_demand, objective_weights=None) -> float:
+    weights = DEFAULT_OBJECTIVE_WEIGHTS if objective_weights is None else objective_weights
     water_total = max(float(np.sum(water_demand)), 1e-9)
     cooling_total = max(float(np.sum(cooling_demand)), 1e-9)
     ro = result.loads.get("ro_desalination")
@@ -69,7 +96,11 @@ def _score(result, water_demand, cooling_demand) -> float:
     cooling_unmet = float(np.sum(ice.unmet_demand)) if ice else cooling_total
     total_available = max(float(np.sum(result.initial_available_power_kw)), 1e-9)
     surplus_ratio = float(np.sum(result.remaining_power_kw)) / total_available
-    return 0.45 * water_unmet / water_total + 0.45 * cooling_unmet / cooling_total + 0.10 * surplus_ratio
+    return (
+        weights["water"] * water_unmet / water_total
+        + weights["cooling"] * cooling_unmet / cooling_total
+        + weights["surplus"] * surplus_ratio
+    )
 
 
 def _execute_one(
@@ -260,6 +291,7 @@ def simulate_rolling(
     policy: str = "rolling",
     forecast_water_demand_m3_per_hour=None,
     forecast_cooling_demand_kw_th=None,
+    objective_weights=None,
 ) -> dict:
     """Simulate one-hour commits with causal forecasts and realized execution.
 
@@ -307,6 +339,7 @@ def simulate_rolling(
                 raise ValueError(f"{name} must match the scenario horizon")
             if not np.all(np.isfinite(values)) or np.any(values < 0):
                 raise ValueError(f"{name} must be finite and non-negative")
+    weights = _validate_objective_weights(objective_weights)
     if policy not in ("rolling", "ro_first", "ice_first", "perfect_information"):
         raise ValueError("policy must be rolling, ro_first, ice_first, or perfect_information")
 
@@ -347,7 +380,7 @@ def simulate_rolling(
                     ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                 )
                 candidates.append((
-                    _score(predicted, water_plan, cooling_plan),
+                    _score(predicted, water_plan, cooling_plan, weights),
                     priority, predicted,
                 ))
             _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -369,7 +402,7 @@ def simulate_rolling(
                         ro_run_hours_remaining, ro_fault_lockout_hours_remaining,
                     )
                     candidates.append((
-                        _score(predicted, info_water, info_cooling),
+                        _score(predicted, info_water, info_cooling, weights),
                         priority, predicted,
                     ))
                 _, chosen, chosen_plan = min(candidates, key=lambda item: (item[0], item[1]))
@@ -443,6 +476,7 @@ def simulate_rolling(
 
     return {
         "policy": policy,
+        "objective_weights": weights,
         "demand_forecast_policy": {
             "water": "explicit_forecast" if water_forecast is not None else "causal_persistence_fallback",
             "cooling": "explicit_forecast" if cooling_forecast is not None else "causal_persistence_fallback",
@@ -576,7 +610,7 @@ def summarize_aggregate(summaries):
 
 
 def summarize_weight_sensitivity(rows=None):
-    """Check whether rolling-vs-fixed conclusions change with objective weights."""
+    """Re-run rolling decisions under alternate objective weights and compare fixed baselines."""
     if rows is None:
         rows = run_experiment()
     scenarios = {scenario.name: scenario for scenario in build_scenarios()}
@@ -593,11 +627,33 @@ def summarize_weight_sensitivity(rows=None):
     reports = []
     for profile_name, weights in weight_profiles.items():
         deltas = []
-        for (scenario_name, _error_name), policies in sorted(grouped.items()):
+        changed_decisions = 0
+        for (scenario_name, error_name), policies in sorted(grouped.items()):
             required = {"rolling", "ro_first", "ice_first"}
             if not required.issubset(policies):
                 raise ValueError(f"incomplete policy group for {scenario_name}: {sorted(policies)}")
             scenario = scenarios[scenario_name]
+            actual = np.asarray(scenario.available_surplus_kw, dtype=float)
+            if error_name == "perfect":
+                forecast = actual
+            elif error_name == "overforecast_20pct":
+                forecast = actual * 1.2
+            elif error_name == "underforecast_20pct":
+                forecast = actual * 0.8
+            elif error_name == "alternating_pm20pct":
+                forecast = actual * np.asarray(
+                    [1.2 if i % 2 == 0 else 0.8 for i in range(len(actual))]
+                )
+            else:
+                raise ValueError(f"unknown forecast error profile: {error_name}")
+
+            # Re-optimize the rolling policy with these weights. Fixed-priority
+            # baselines are unchanged because their priority is not score-selected.
+            rolling_result = simulate_rolling(
+                scenario, forecast, "rolling", objective_weights=weights,
+            )
+            if rolling_result["hourly_priority_decisions"] != policies["rolling"]["hourly_priority_decisions"]:
+                changed_decisions += 1
             water_total = max(float(sum(scenario.water_demand_m3_per_hour)), 1e-9)
             cooling_total = max(float(sum(scenario.cooling_demand_kw_th)), 1e-9)
             power_total = max(float(sum(scenario.available_surplus_kw)), 1e-9)
@@ -610,20 +666,21 @@ def summarize_weight_sensitivity(rows=None):
                 )
 
             best_fixed = min(score(policies[name]) for name in ("ro_first", "ice_first"))
-            deltas.append(score(policies["rolling"]) - best_fixed)
+            deltas.append(score(rolling_result) - best_fixed)
         reports.append({
             "weight_profile": profile_name,
             "weights": weights,
             "comparison_count": len(deltas),
+            "rolling_policy_reoptimized": True,
+            "cases_with_changed_rolling_decisions_vs_default": changed_decisions,
             "rolling_better_count": sum(delta < -1e-9 for delta in deltas),
             "rolling_tied_count": sum(abs(delta) <= 1e-9 for delta in deltas),
             "rolling_worse_count": sum(delta > 1e-9 for delta in deltas),
             "mean_score_delta": round(float(np.mean(deltas)), 6) if deltas else None,
             "median_score_delta": round(float(np.median(deltas)), 6) if deltas else None,
-            "interpretation": "Synthetic case-matched sensitivity only; weights are illustrative, not stakeholder-validated.",
+            "interpretation": "Synthetic case-matched sensitivity with rolling decisions re-optimized; weights are illustrative, not stakeholder-validated.",
         })
     return reports
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
