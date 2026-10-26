@@ -41,7 +41,6 @@ def evaluate_simulated_action(
     interlocks_healthy: bool,
     operator_stop: bool = False,
     max_total_power_kw: float = 500.0,
-    minimum_water_inventory_m3: float = 20.0,
 ) -> dict[str, Any]:
     """Apply independent, fail-closed gates to one simulated dispatch row.
 
@@ -61,7 +60,6 @@ def evaluate_simulated_action(
 
     # Validate configuration before considering any action.
     max_power = _number({"value": max_total_power_kw}, "value")
-    min_water = _number({"value": minimum_water_inventory_m3}, "value")
     if max_power <= 0:
         raise ValueError("max_total_power_kw must be greater than zero")
 
@@ -83,15 +81,9 @@ def evaluate_simulated_action(
     if int(plan_row.get("total_constraint_violations", 0)) != 0:
         return _result("HOLD", "HOLD_DISPATCH_CONSTRAINT_VIOLATION", plan_row, flags, total_power, max_power)
 
-    # Do not start RO when inventory already exceeds the lower safety buffer
-    # threshold? The threshold here is a low-inventory guard: below it, an
-    # existing rolling plan may run if power is available; otherwise OFF.
     ro_requested = plan_row.get("ro_active")
     if not isinstance(ro_requested, bool):
         raise ValueError("ro_active must be boolean")
-    if ro_requested and values["water_inventory_m3"] < min_water:
-        return _result("HOLD", "HOLD_WATER_INVENTORY_BELOW_MINIMUM", plan_row, flags, total_power, max_power)
-
     action = "ON" if ro_requested else "OFF"
     reason = "SIM_RO_PLAN_ON_APPROVED" if ro_requested else "SIM_RO_PLAN_OFF_APPROVED"
     return _result(action, reason, plan_row, flags, total_power, max_power)
@@ -127,7 +119,6 @@ def main(argv: list[str] | None = None) -> int:
         interlocks_healthy=payload.get("interlocks_healthy"),
         operator_stop=payload.get("operator_stop", False),
         max_total_power_kw=payload.get("max_total_power_kw", 500.0),
-        minimum_water_inventory_m3=payload.get("minimum_water_inventory_m3", 20.0),
     )
     text = json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n"
     if args.output == "-":
