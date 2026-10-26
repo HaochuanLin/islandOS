@@ -13,7 +13,7 @@ python -m experiments.run_simulated_autonomous_dispatch --hours 24 --interlocks-
 python -m experiments.run_simulated_autonomous_dispatch --hours 24 --operator-stop
 ```
 
-The default report is written to `build/simulated-autonomous-dispatch/report.json`. Choose a different `--output` path if you want to preserve an earlier run. To process a user-provided hourly scenario, pass `--input-csv path/to/scenario.csv`; it must follow the schema accepted by `parse_scenario_csv` in `experiments/rolling_horizon_dispatch.py`.
+The generated fixture includes water/cooling demand forecasts derived from lagged observations plus deterministic perturbations (with an explicit initial seed), rather than from the target row's realized demand. This is a causal synthetic baseline, not a trained or site-validated forecast. The default report is written to `build/simulated-autonomous-dispatch/report.json`. Choose a different `--output` path if you want to preserve an earlier run. To process a user-provided hourly scenario, pass `--input-csv path/to/scenario.csv`; it must follow the schema accepted by `parse_scenario_csv` in `experiments/rolling_horizon_dispatch.py`.
 
 The report preserves each dispatch audit row beside its gate decision and reason code, summarizes ON/OFF/HOLD counts, and explicitly records the dataset status and non-live mode. It also records the input CSV's SHA-256 digest, row count, and first/last timestamps so the exact input bytes can be identified and the synthetic run reproduced. `--max-total-power-kw` is a software-test envelope only; it is not an engineering recommendation or site-approved setting.
 
