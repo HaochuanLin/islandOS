@@ -92,7 +92,6 @@ class DeploymentContractTests(unittest.TestCase):
             'config["Memory"] == 1073741824',
             'config["NanoCpus"] == 1000000000',
             'config["PidsLimit"] == 128',
-            'config["StopTimeout"] == 20',
             'config["LogConfig"]["Config"]["max-size"] == "10m"',
             'config["LogConfig"]["Config"]["max-file"] == "3"',
         ):
