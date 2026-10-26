@@ -15,8 +15,8 @@ class TestInputQualityStressSuite(unittest.TestCase):
     def test_suite_rejects_malformed_inputs_and_accepts_valid_baseline(self):
         first = run_input_quality_stress_suite(hours=4)
         second = run_input_quality_stress_suite(hours=4)
-        self.assertEqual(first["case_count"], 18)
-        self.assertEqual(first["passed_cases"], 18)
+        self.assertEqual(first["case_count"], 19)
+        self.assertEqual(first["passed_cases"], 19)
         self.assertEqual(first["failed_cases"], 0)
         self.assertTrue(first["all_expectations_met"])
         self.assertEqual(first["report_sha256"], second["report_sha256"])
@@ -36,7 +36,7 @@ class TestInputQualityStressSuite(unittest.TestCase):
     def test_case_matrix_contains_timestamp_numeric_and_schema_faults(self):
         cases = build_input_quality_cases(3)
         names = {case["name"] for case in cases}
-        self.assertEqual(len(cases), 18)
+        self.assertEqual(len(cases), 19)
         self.assertTrue({
             "duplicate_header", "extra_row_field", "short_row",
             "empty_input", "header_only", "missing_required_column",
@@ -44,6 +44,7 @@ class TestInputQualityStressSuite(unittest.TestCase):
             "duplicate_timestamp", "non_monotonic_timestamp", "hour_gap",
             "nan_actual_surplus", "infinite_forecast_surplus", "negative_water_demand",
             "nonnumeric_cooling_demand", "blank_forecast_water_demand",
+            "blank_forecast_cooling_demand",
         }.issubset(names))
 
     def test_cli_writes_json_report_and_returns_success(self):
@@ -52,7 +53,7 @@ class TestInputQualityStressSuite(unittest.TestCase):
             code = main(["--hours", "3", "--output", str(output)])
             self.assertEqual(code, 0)
             report = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(report["case_count"], 18)
+            self.assertEqual(report["case_count"], 19)
             self.assertTrue(report["all_expectations_met"])
             self.assertEqual(len(report["report_sha256"]), 64)
 
