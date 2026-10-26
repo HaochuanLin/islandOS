@@ -19,6 +19,11 @@ def test_rolling_horizon_page_renders_and_runs_synthetic_comparison():
     assert any("Source type: `synthetic`" in value for value in captions)
     assert any("UTC coverage:" in value for value in captions)
 
+    priorities = {element.label: element.value for element in app.number_input}
+    assert priorities["Water priority"] == 0.45
+    assert priorities["Cooling priority"] == 0.45
+    assert priorities["Unused-surplus priority"] == 0.10
+
     app.button[0].click().run()
     assert not app.exception
     frames = [element.value for element in app.dataframe]
