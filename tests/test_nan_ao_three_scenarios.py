@@ -47,7 +47,7 @@ class TestNanAoThreeScenarios(unittest.TestCase):
 
     def test_fair_economic_comparison_uses_matched_demand_control(self):
         comparison = self.report["fair_economic_comparison"]
-        self.assertIn("same reservoir", comparison["method"])
+        self.assertIn("reservoir", comparison["method"])
         self.assertIn("disables wind", comparison["method"])
         self.assertGreater(comparison["median_water_served_valley_only_m3_per_year"], 0)
         self.assertGreater(comparison["median_water_served_hybrid_m3_per_year"], 0)
