@@ -16,8 +16,8 @@ st.title("Rolling-horizon energy–water dispatch lab")
 st.caption("Research prototype · offline scenario analysis only · no live equipment control")
 st.warning(
     "The built-in example is synthetic. Uploaded CSVs are processed in this app session; "
-    "missing values are not imputed. The perfect-information policy is a non-deployable "
-    "reference, not a forecast-based operating recommendation."
+    "missing values are not imputed. Missing demand forecasts use a causal persistence baseline. "
+    "The perfect-information policy is a non-deployable hindsight reference."
 )
 
 st.subheader("Dispatch objective priorities")
@@ -133,9 +133,15 @@ with st.expander("Preview validated input", expanded=False):
     st.subheader("Available surplus power (kW)")
     st.line_chart(chart_input[["actual_surplus_kw", "forecast_surplus_kw"]])
     st.subheader("Water demand (m³ per hour)")
-    st.line_chart(chart_input[["water_demand_m3"]])
+    water_columns = ["water_demand_m3"]
+    if "forecast_water_demand_m3" in chart_input:
+        water_columns.append("forecast_water_demand_m3")
+    st.line_chart(chart_input[water_columns])
     st.subheader("Cooling demand (kW thermal)")
-    st.line_chart(chart_input[["cooling_demand_kw_th"]])
+    cooling_columns = ["cooling_demand_kw_th"]
+    if "forecast_cooling_demand_kw_th" in chart_input:
+        cooling_columns.append("forecast_cooling_demand_kw_th")
+    st.line_chart(chart_input[cooling_columns])
 
 if st.button("Run four-policy rolling comparison", type="primary", use_container_width=True, disabled=not weights_valid):
     policies = ("rolling", "ro_first", "ice_first", "perfect_information")
