@@ -164,12 +164,22 @@ def run_parameter_sweep(
         key=lambda row: row["rolling_minus_best_fixed"],
         reverse=True,
     )
+    # Keep water (m³) and cooling (kWh_th) dimensionally distinct by
+    # normalizing each against its own case demand before ranking service risk.
+    for row, case in zip(per_case, cases):
+        water_total = max(sum(case["scenario"].water_demand_m3_per_hour), 1e-9)
+        cooling_total = max(sum(case["scenario"].cooling_demand_kw_th), 1e-9)
+        row["rolling_water_unmet_fraction"] = round(row["rolling_water_unmet_m3"] / water_total, 8)
+        row["rolling_cooling_unmet_fraction"] = round(
+            row["rolling_cooling_unmet_kwh_th"] / cooling_total, 8
+        )
+        row["rolling_combined_unmet_fraction"] = round(
+            0.5 * row["rolling_water_unmet_fraction"]
+            + 0.5 * row["rolling_cooling_unmet_fraction"], 8
+        )
     high_service_risk = sorted(
         per_case,
-        key=lambda row: (
-            row["rolling_water_unmet_m3"] + row["rolling_cooling_unmet_kwh_th"],
-            row["case_id"],
-        ),
+        key=lambda row: (row["rolling_combined_unmet_fraction"], row["case_id"]),
         reverse=True,
     )[: min(5, len(per_case))]
     report: dict[str, Any] = {
