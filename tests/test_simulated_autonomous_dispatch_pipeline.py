@@ -1,4 +1,5 @@
 """Integration tests for the simulation-only dispatch-to-gate workflow."""
+import hashlib
 import unittest
 
 from experiments.run_simulated_autonomous_dispatch import run_simulated_autonomous_dispatch
@@ -9,6 +10,9 @@ class TestSimulatedAutonomousDispatchPipeline(unittest.TestCase):
         report = run_simulated_autonomous_dispatch(hours=24)
         self.assertEqual(report["workflow"], "rolling_dispatch_to_simulated_autonomous_gate")
         self.assertEqual(report["dataset_type"], "synthetic")
+        self.assertEqual(report["input_provenance"]["rows"], 24)
+        self.assertEqual(len(report["input_provenance"]["sha256"]), 64)
+        self.assertEqual(report["input_provenance"]["first_timestamp_utc"], "2026-01-01T00:00:00Z")
         self.assertFalse(report["is_measured_site_data"])
         self.assertEqual(len(report["hourly_results"]), 24)
         self.assertEqual(sum(report["gate_action_counts"].values()), 24)
