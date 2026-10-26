@@ -45,6 +45,26 @@ class TestNanAoThreeScenarios(unittest.TestCase):
         self.assertLess(diagnostics["median_unmet_demand_m3_per_year"], 1000.0)
         self.assertGreater(diagnostics["median_water_served_m3_per_year"], 28000.0)
 
+    def test_fair_economic_comparison_uses_matched_demand_control(self):
+        comparison = self.report["fair_economic_comparison"]
+        self.assertIn("reservoir", comparison["method"])
+        self.assertIn("disables wind", comparison["method"])
+        self.assertGreater(comparison["median_water_served_valley_only_m3_per_year"], 0)
+        self.assertGreater(comparison["median_water_served_hybrid_m3_per_year"], 0)
+        self.assertGreaterEqual(comparison["median_grid_electricity_cost_valley_only_rmb_per_year"], 0)
+        self.assertGreaterEqual(comparison["median_grid_electricity_cost_hybrid_rmb_per_year"], 0)
+        # Never assert a fabricated win: report computed savings and service delta.
+        self.assertAlmostEqual(
+            comparison["median_grid_cost_savings_rmb_per_year"],
+            comparison["median_grid_electricity_cost_valley_only_rmb_per_year"]
+            - comparison["median_grid_electricity_cost_hybrid_rmb_per_year"],
+        )
+        self.assertAlmostEqual(
+            comparison["median_total_screening_cost_savings_rmb_per_m3_served"],
+            comparison["median_total_screening_cost_valley_only_rmb_per_m3_served"]
+            - comparison["median_total_screening_cost_hybrid_rmb_per_m3_served"],
+        )
+
     def test_markdown_table_contains_requested_columns_and_three_rows(self):
         table = render_markdown_table(self.report)
         self.assertIn("年产水量P5", table)
