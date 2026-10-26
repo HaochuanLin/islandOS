@@ -236,8 +236,12 @@ def generate_synthetic_scenario_csv(hours: int = 24) -> str:
         forecast_surplus = max(0.0, actual_surplus + (8.0 if index % 4 == 0 else -5.0))
         water_demand = float(4 + index % 4)
         cooling_demand = float(6 + index % 5)
-        forecast_water = max(0.0, water_demand + (1.0 if index % 3 == 0 else -0.5))
-        forecast_cooling = max(0.0, cooling_demand + (1.5 if index % 4 == 0 else -1.0))
+        # Forecasts use only the previous observation (or an explicit initial
+        # seed at t=0), never the target row's realized demand.
+        previous_water = float(4 + (index - 1) % 4) if index > 0 else 4.0
+        previous_cooling = float(6 + (index - 1) % 5) if index > 0 else 6.0
+        forecast_water = max(0.0, previous_water + (1.0 if index % 3 == 0 else -0.5))
+        forecast_cooling = max(0.0, previous_cooling + (1.5 if index % 4 == 0 else -1.0))
         writer.writerow({
             "timestamp_utc": (start + timedelta(hours=index)).isoformat().replace("+00:00", "Z"),
             "actual_surplus_kw": actual_surplus,
