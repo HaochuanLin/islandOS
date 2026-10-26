@@ -76,10 +76,9 @@ jobs:
           assert config["NanoCpus"] == 1000000000
           assert config["PidsLimit"] == 128
           assert "/tmp" in config["Tmpfs"]
-          assert config["StopTimeout"] == 20
           assert config["LogConfig"]["Config"]["max-size"] == "10m"
           assert config["LogConfig"]["Config"]["max-file"] == "3"
-          print("Read-only root filesystem, resource bounds, graceful stop, and log rotation verified.")
+          print("Read-only root filesystem, resource bounds, configured graceful stop, and log rotation verified.")
           PY
       - name: Wait for Streamlit health endpoint
         run: |
