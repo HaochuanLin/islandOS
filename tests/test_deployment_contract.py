@@ -57,6 +57,39 @@ class DeploymentContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/container-web-smoke.yml").read_text(encoding="utf-8")
         self.assertIn("docker compose config --quiet", workflow)
 
+    def test_compose_uses_read_only_filesystem_ephemeral_storage_and_resource_limits(self):
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        for token in (
+            "read_only: true",
+            "/tmp:rw,noexec,nosuid,size=128m",
+            "mem_limit: 1g",
+            "cpus: 1.0",
+            "pids_limit: 128",
+            "HOME: /tmp/islandos-home",
+            "XDG_CACHE_HOME: /tmp/xdg-cache",
+            "MPLCONFIGDIR: /tmp/matplotlib",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, compose)
+        self.assertIn("STREAMLIT_BROWSER_GATHER_USAGE_STATS=false", dockerfile)
+
+    def test_container_smoke_verifies_runtime_hardening_not_only_static_config(self):
+        workflow = (ROOT / ".github/workflows/container-web-smoke.yml").read_text(encoding="utf-8")
+        for token in (
+            "--read-only",
+            "--tmpfs /tmp:rw,noexec,nosuid,size=128m",
+            "--memory=1g",
+            "--cpus=1",
+            "--pids-limit=128",
+            'config["ReadonlyRootfs"] is True',
+            'config["Memory"] == 1073741824',
+            'config["NanoCpus"] == 1000000000',
+            'config["PidsLimit"] == 128',
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, workflow)
+
     def test_pilot_acceptance_template_is_explicitly_unapproved_and_auditable(self):
         template = (ROOT / "docs/PILOT_ACCEPTANCE_TEMPLATE.md").read_text(encoding="utf-8")
         for phrase in ("NOT APPROVED", "NO-GO UNTIL ALL REQUIRED REVIEWS ARE COMPLETE", "abort criteria", "owner-approved", "SHA-256", "no actuator/control path"):

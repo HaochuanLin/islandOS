@@ -3,6 +3,10 @@ FROM python:3.11.17-slim-trixie@sha256:b7a9e5f6a93d6d4a31f129bbd4bdee69efccb6ded
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MPLBACKEND=Agg \
+    HOME=/tmp/islandos-home \
+    XDG_CACHE_HOME=/tmp/xdg-cache \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
     STREAMLIT_SERVER_HEADLESS=true \
     STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
     STREAMLIT_SERVER_PORT=8501
@@ -13,8 +17,8 @@ RUN python -m pip install --no-cache-dir --upgrade "pip==26.2.2" && \
     python -m pip install --no-cache-dir -r requirements-runtime.lock && \
     python -m pip check
 COPY . .
-# Run the web process without root privileges. Keep application files readable
-# and writable by the dedicated runtime account for local report/cache output.
+# Run without root privileges. Runtime caches and transient files are redirected
+# to /tmp so Compose and CI can enforce a read-only root filesystem.
 RUN useradd --create-home --uid 10001 islandos && chown -R islandos:islandos /app
 USER islandos
 

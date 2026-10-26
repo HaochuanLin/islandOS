@@ -31,7 +31,9 @@ python tools/deployment_preflight.py
 python tools/deployment_preflight.py --json > deployment-preflight.json
 ```
 
-The check verifies the pinned base-image digest, non-root container user, loopback-only Compose binding, health-check configuration, retained container SBOM workflow, documented security boundary, and current Git revision. The JSON output is suitable for attaching to a demo record. A failure blocks this local preflight; a pass is **not** production authorization and does not test a running container or validate site data.
+The check verifies the pinned base-image digest, non-root container user, loopback-only Compose binding, read-only root filesystem, bounded no-exec temporary storage, memory/CPU/PID limits, ephemeral cache paths, runtime hardening assertions in CI, health-check configuration, retained container SBOM workflow, documented security boundary, and current Git revision. The JSON output is suitable for attaching to a demo record. A failure blocks this local preflight; a pass is **not** production authorization and does not test a running container or validate site data.
+
+The Compose demo runs with a read-only root filesystem. Transient cache and report writes must go to /tmp, which is a size-bounded noexec/nosuid tmpfs. The container also has illustrative local-demo limits of 1 GiB memory, one CPU, and 128 processes; adjust them only with an explicit resource review and verify the same settings in the target environment. These limits reduce accidental resource exhaustion but do not replace authentication, network segmentation, monitoring, or production operations.
 
 ## Option A — Docker Compose (recommended for a repeatable local demo)
 

@@ -115,6 +115,19 @@ Do not increase the commercial/deployment score until the new tests and document
 
 ## Progress log
 
+### 2026-10-26 — Simulation-only dispatch gate and seeded policy benchmark (verified on main)
+
+- Merged [PR #176](https://github.com/HaochuanLin/islandOS/pull/176) as main commit [8fe712f](https://github.com/HaochuanLin/islandOS/commit/8fe712f4c60197fbd99c8af2d2a62df9b091c041). The full Python suite passed **608 tests, 2 skipped, 14 warnings, and 482 subtests**; all 11 checks passed on the tested PR head before merge.
+- Added a fail-closed simulation-only ON/OFF/HOLD gate, an end-to-end rolling-dispatch audit pipeline, a 10-case no-site-data stress matrix, and a seeded paired policy sweep comparing rolling, fixed-priority, and offline realized-input reference policies. The sweep reports per-policy score distributions, per-case regressions, normalized unmet-service risk, simulated constraint violations, and a deterministic report digest.
+- **No maturity score is raised by this merge alone.** Synthetic scenario coverage and reproducibility are stronger, but no measured site data, field accuracy, production authorization, or physical safety evidence was created. Public/site-data validation and real-world operational validation remain unchanged.
+
+### 2026-10-26 — Read-only container hardening (verified on PR head; score unchanged)
+
+- The tested PR #177 head `3b34999c827756fd95e1b5e184b6d0f47275f3f8` passed all 11 GitHub Actions checks, including container image build/SBOM/health under a read-only root filesystem, runtime inspection of tmpfs and memory/CPU/PID bounds, full pytest (**610 passed, 2 skipped, 14 warnings, 499 subtests**), integration examples, dependency audits, Windows packaging, hosted health, and Nan'ao scenario validation.
+- Added fail-closed preflight checks and regression tests for read-only rootfs, bounded noexec/nosuid temporary storage, ephemeral cache paths, and runtime resource limits. The container remains loopback-only and non-root.
+- No deployment or overall maturity score is raised automatically: this is local-demo defense in depth. Authentication, TLS/network segmentation, production monitoring, restore/incident response, site-specific authorization, and real-world operational evidence remain unresolved. Any subsequent documentation commit must pass checks on its own exact SHA before merge.
+
+
 ### 2026-10-24 — Pilot acceptance template and matched-window forecast baselines (verified)
 
 - Merged [PR #165](https://github.com/HaochuanLin/islandOS/pull/165), adding a reusable pilot acceptance template for source permissions/provenance, chronological holdouts, baseline comparisons, owner-approved thresholds, hard-stop conditions, security/rollback, economics, and named reviews. The document is explicitly **not approved** and cannot authorize live control. Its test run passed **550 tests, 2 skipped, 430 subtests**.

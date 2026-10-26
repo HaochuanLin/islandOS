@@ -43,6 +43,24 @@ def run_checks(root: Path) -> list[dict[str, str]]:
     add("compose_loopback_only", loopback and not wildcard, "web port binds to loopback only" if loopback and not wildcard else "Compose must bind 127.0.0.1:8501:8501 only")
     least_privilege = all(token in compose for token in ("init: true", "no-new-privileges:true", "cap_drop:", "- ALL"))
     add("compose_least_privilege", least_privilege, "Compose drops Linux capabilities and disables privilege escalation" if least_privilege else "Compose must set init: true, no-new-privileges:true, and cap_drop: [ALL]")
+    read_only = bool(re.search(r"(?m)^\s*read_only:\s*true\s*$", compose))
+    add("compose_read_only_rootfs", read_only, "container root filesystem is read-only" if read_only else "Compose must set read_only: true")
+    tmpfs = "/tmp:rw,noexec,nosuid,size=128m" in compose
+    add("compose_ephemeral_tmpfs", tmpfs, "transient writes are limited to a no-exec tmpfs" if tmpfs else "Compose must mount /tmp as a bounded noexec/nosuid tmpfs")
+    resource_limits = all(token in compose for token in ("mem_limit: 1g", "cpus: 1.0", "pids_limit: 128"))
+    add("compose_resource_limits", resource_limits, "memory, CPU, and process count are bounded" if resource_limits else "Compose must bound memory, CPU, and PID count")
+    ephemeral_caches = all(token in compose for token in (
+        "HOME: /tmp/islandos-home", "XDG_CACHE_HOME: /tmp/xdg-cache",
+        "MPLCONFIGDIR: /tmp/matplotlib", 'STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"',
+    ))
+    add("compose_ephemeral_cache_paths", ephemeral_caches, "application caches are redirected to ephemeral storage" if ephemeral_caches else "Compose must redirect writable caches to /tmp and disable Streamlit usage telemetry")
+    runtime_hardening = all(token in workflow for token in (
+        "--read-only", "--tmpfs /tmp:rw,noexec,nosuid,size=128m",
+        "--memory=1g", "--cpus=1", "--pids-limit=128",
+        "config[\"ReadonlyRootfs\"] is True", 'config["Memory"] == 1073741824',
+        'config["NanoCpus"] == 1000000000', 'config["PidsLimit"] == 128',
+    ))
+    add("ci_runtime_hardening_verified", runtime_hardening, "CI runs and inspects a read-only, resource-bounded container" if runtime_hardening else "container smoke CI must verify read-only root, tmpfs, memory, CPU, and PID limits")
     compose_ci = "docker compose config --quiet" in workflow
     add("compose_schema_checked_in_ci", compose_ci, "CI validates the Compose configuration" if compose_ci else "container smoke workflow must run docker compose config --quiet")
     health = "HEALTHCHECK" in docker and "/_stcore/health" in docker
