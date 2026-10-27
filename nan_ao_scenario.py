@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Nan'ao Island RO flexibility scenario model.
+"""Nan'ao emergency-resilience RO scenario model.
 
-This is an assumption-driven annual event-energy model, not a grid-flow model
-and not a reconstruction of measured Nan'ao curtailment. All distributions are
-explicit scenario inputs and should be replaced with validated local data.
-Uses only the Python standard library.
+The RO unit is treated as pre-installed equipment with sunk capital cost; no
+RO purchase CAPEX is included. This assumption-driven Monte Carlo simulation
+models an emergency-only pilot, not full-island daily water supply or
+field-validated performance.
 """
 from __future__ import annotations
 
@@ -17,12 +17,16 @@ import random
 from pathlib import Path
 from statistics import median
 
-DEFAULT_SEED = 20261021
+DEFAULT_SEED = 20261027
 DEFAULT_RUNS = 1000
 
 ASSUMPTIONS = {
     "site": "Nan'ao Island, Guangdong, China",
+    "scenario_scope": "emergency resilience pilot; not full-island daily water supply",
     "model_type": "scenario-based annual export-limitation event-energy abstraction",
+    "ro_asset_status": "pre-existing RO equipment assumed reusable; sunk capital cost excluded",
+    "ro_purchase_capex_rmb": 0,
+    "cost_boundary": "electricity, chemicals, membrane maintenance, and routine O&M only; no RO purchase CAPEX",
     "ro_rated_power_kw": 50.0,
     "ro_specific_energy_kwh_per_m3": 4.0,
     "annual_events_distribution": "triangular integer approximation: round(Triangular(4, 12, mode=8))",
@@ -30,18 +34,12 @@ ASSUMPTIONS = {
     "available_surplus_power_kw_distribution": "triangular(5, 50, mode=25) kW during an event",
     "ro_availability_distribution": "uniform(0.85, 1.00) per event",
     "water_yield_formula": "sum(event_hours * min(available_surplus_kw, RO_rated_power_kw) * RO_availability) / SEC",
-    "standby_ro_status": (
-        "No publicly accessible official documentation reviewed by the team confirms an "
-        "operable standby seawater RO unit on Nan'ao main island. The pilot assumes a modular "
-        "50 kW RO unit would be procured, installed and owned by the local water authority, "
-        "subject to site verification, approval and budget."
-    ),
     "data_status": "assumptions only; no measured Nan'ao curtailment time series supplied",
     "exclusions": [
         "No hourly grid power-flow, network congestion, export-limit or dispatch simulation",
         "No measured renewable generation, demand, curtailment or outage-event dataset",
         "No water demand, reservoir constraints, water-quality approval or plant ramp/flush model",
-        "No CAPEX/OPEX, savings, ROI, emissions or avoided-outage claims",
+        "No field-validated operating cost, savings, ROI, emissions or avoided-outage claims",
         "No claim that the modeled events actually occurred on Nan'ao",
     ],
 }
@@ -144,57 +142,6 @@ def run_sensitivity_analysis() -> list[dict]:
 
 
 
-def calculate_capital_cost_screen(
-    annual_water_output_m3: float,
-    capex_low_rmb: float = 1_600_000.0,
-    capex_high_rmb: float = 3_300_000.0,
-    equipment_life_years: float = 10.0,
-) -> dict:
-    """Return an illustrative capital-only cost screen, not ROI or payback.
-
-    Costs and lifetime are user-supplied screening assumptions. The calculation
-    excludes O&M, site/civil works, outfall, replacements, financing and downtime.
-    """
-    values = {
-        "annual_water_output_m3": annual_water_output_m3,
-        "capex_low_rmb": capex_low_rmb,
-        "capex_high_rmb": capex_high_rmb,
-        "equipment_life_years": equipment_life_years,
-    }
-    if any(not math.isfinite(value) for value in values.values()):
-        raise ValueError("all financial screen inputs must be finite")
-    if annual_water_output_m3 <= 0:
-        raise ValueError("annual_water_output_m3 must be > 0")
-    if capex_low_rmb <= 0 or capex_high_rmb < capex_low_rmb:
-        raise ValueError("CAPEX must be positive and capex_high_rmb >= capex_low_rmb")
-    if equipment_life_years <= 0:
-        raise ValueError("equipment_life_years must be > 0")
-
-    return {
-        "status": "illustrative capital-only screen; not ROI, payback, tariff, or investment advice",
-        "annual_water_output_m3": round(annual_water_output_m3, 3),
-        "capex_low_rmb": round(capex_low_rmb, 2),
-        "capex_high_rmb": round(capex_high_rmb, 2),
-        "equipment_life_years_assumed": equipment_life_years,
-        "capital_only_cost_rmb_per_m3_low": round(
-            capex_low_rmb / equipment_life_years / annual_water_output_m3, 2
-        ),
-        "capital_only_cost_rmb_per_m3_high": round(
-            capex_high_rmb / equipment_life_years / annual_water_output_m3, 2
-        ),
-        "excludes": [
-            "site preparation and civil works",
-            "marine intake/outfall and environmental approvals",
-            "electricity, consumables, staffing and routine maintenance",
-            "membrane replacement, financing, discounting and downtime",
-        ],
-        "interpretation": (
-            "Uses a synthetic scenario output and unverified draft CAPEX assumptions. "
-            "It does not establish positive ROI, payback, actual water yield, or local feasibility."
-        ),
-    }
-
-
 def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     rows, summary = run_simulation(runs, seed)
@@ -204,12 +151,6 @@ def write_outputs(output_dir: Path, runs: int, seed: int) -> dict:
         writer.writerows(rows)
     (output_dir / "nan_ao_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    financial_screen = calculate_capital_cost_screen(
-        summary["scenario_water_produced_m3_per_year"]["p50_median"]
-    )
-    (output_dir / "nan_ao_financial_screen.json").write_text(
-        json.dumps(financial_screen, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     sensitivity_rows = run_sensitivity_analysis()
     with (output_dir / "nan_ao_sensitivity.csv").open("w", newline="", encoding="utf-8") as f:
