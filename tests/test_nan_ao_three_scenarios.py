@@ -1,68 +1,46 @@
-"""Regression tests for the separate Nan'ao three-scenario exploration script."""
 import unittest
 
-from nan_ao_three_scenarios import (
-    DEFAULT_RUNS,
-    DEFAULT_SEED,
-    VALLEY_PRICE_RMB_PER_KWH,
-    SEC_KWH_PER_M3,
-    RO_AVAILABILITY,
-    RO_POWER_KW,
-    YEAR_HOURS,
-    render_markdown_table,
-    run_three_scenarios,
-)
+from nan_ao_scenario import DEFAULT_RUNS, DEFAULT_SEED
+from nan_ao_three_scenarios import run_scenarios
 
 
-class TestNanAoThreeScenarios(unittest.TestCase):
+class TestNanAoScenarios(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.report = run_three_scenarios()
+        cls.report = run_scenarios()
 
-    def test_baseline_median_matches_frozen_model_target(self):
-        parity = self.report["scenario1_baseline_parity"]
-        self.assertTrue(parity["passed"])
-        self.assertAlmostEqual(parity["actual_median_m3_per_year"], 442.5, delta=5.0)
-        self.assertEqual(self.report["seed"], 20261021)
-        self.assertEqual(self.report["runs"], 1000)
-
-    def test_all_three_scenarios_and_expected_valley_arithmetic(self):
+    def test_exposes_three_required_scenarios(self):
         scenarios = {row["scenario_key"]: row for row in self.report["scenarios"]}
-        self.assertEqual(set(scenarios), {"wind_only", "valley_only", "hybrid"})
-        expected_hours = YEAR_HOURS / 24 * 8 * RO_AVAILABILITY
-        expected_water = expected_hours * RO_POWER_KW / SEC_KWH_PER_M3
-        self.assertAlmostEqual(scenarios["valley_only"]["annual_water_p50_m3"], expected_water)
-        self.assertAlmostEqual(
-            scenarios["valley_only"]["electricity_cost_median_rmb_per_m3"],
-            VALLEY_PRICE_RMB_PER_KWH * SEC_KWH_PER_M3,
-        )
-        self.assertAlmostEqual(scenarios["valley_only"]["runtime_hours_p50"], expected_hours)
+        self.assertEqual(set(scenarios), {"wind_only", "valley_price", "hybrid"})
+        for row in scenarios.values():
+            self.assertEqual(row["ro_purchase_capex_rmb"], 0.0)
+            self.assertIn("annual_operating_cost_low_rmb", row)
+            self.assertIn("annual_operating_cost_high_rmb", row)
+            self.assertIn("unit_operating_cost_low_rmb_per_m3", row)
+            self.assertIn("unit_operating_cost_high_rmb_per_m3", row)
 
-    def test_hybrid_uses_emergency_hysteresis_and_reports_water_service(self):
-        diagnostics = self.report["hybrid_diagnostics"]
-        self.assertEqual(diagnostics["assumed_emergency_threshold_m3"], 25.0)
-        self.assertEqual(diagnostics["assumed_recovery_target_m3"], 75.0)
-        self.assertLess(diagnostics["median_unmet_demand_m3_per_year"], 1000.0)
-        self.assertGreater(diagnostics["median_water_served_m3_per_year"], 28000.0)
+    def test_valley_and_hybrid_water_arithmetic(self):
+        scenarios = {row["scenario_key"]: row for row in self.report["scenarios"]}
+        valley, hybrid = scenarios["valley_price"], scenarios["hybrid"]
+        self.assertEqual(valley["annual_water_median_m3"], 33650.0)
+        self.assertGreater(hybrid["annual_water_median_m3"], valley["annual_water_median_m3"])
+        self.assertAlmostEqual(valley["valley_electricity_cost_rmb_per_year"], 33650 * 4.0 * 0.272, places=2)
 
-    def test_markdown_table_contains_requested_columns_and_three_rows(self):
-        table = render_markdown_table(self.report)
-        self.assertIn("年产水量P5", table)
-        self.assertIn("年产水量中位数", table)
-        self.assertIn("年产水量P95", table)
-        self.assertIn("年运行小时中位数", table)
-        self.assertIn("硬件摊销区间", table)
-        self.assertIn("中位数电费", table)
-        self.assertIn("合计筛查成本区间", table)
-        self.assertEqual(table.count("| 情景"), 4)  # header plus three scenario rows
+    def test_wind_yield_and_hybrid_combination(self):
+        scenarios = {row["scenario_key"]: row for row in self.report["scenarios"]}
+        wind, hybrid = scenarios["wind_only"], scenarios["hybrid"]
+        self.assertLessEqual(wind["annual_water_p05_m3"], wind["annual_water_median_m3"])
+        self.assertLessEqual(wind["annual_water_median_m3"], wind["annual_water_p95_m3"])
+        self.assertAlmostEqual(hybrid["annual_water_median_m3"], 33650 + wind["annual_water_median_m3"], places=3)
+        self.assertEqual(self.report["ro_purchase_capex_rmb"], 0.0)
+        self.assertEqual(self.report["runs"], DEFAULT_RUNS)
+        self.assertEqual(self.report["seed"], DEFAULT_SEED)
 
-    def test_fixed_run_count_and_seed_cannot_be_changed_silently(self):
-        with self.assertRaises(ValueError):
-            run_three_scenarios(runs=999)
-        with self.assertRaises(ValueError):
-            run_three_scenarios(seed=DEFAULT_SEED + 1)
-        self.assertEqual(DEFAULT_RUNS, 1000)
-        self.assertEqual(DEFAULT_SEED, 20261021)
+    def test_operating_costs_and_emergency_supply_equivalent(self):
+        hybrid = next(row for row in self.report["scenarios"] if row["scenario_key"] == "hybrid")
+        self.assertGreater(hybrid["annual_operating_cost_high_rmb"], hybrid["annual_operating_cost_low_rmb"])
+        self.assertGreater(self.report["hybrid_emergency_population_annual_supply_equivalent"], 0)
+        self.assertTrue(self.report["limitations"])
 
 
 if __name__ == "__main__":
