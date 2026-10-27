@@ -82,7 +82,7 @@ def main() -> int:
     print()
     print("PRIMARY RESULT")
     print("-" * 68)
-    print(f"Unit water operating cost:     RMB {fmt(unit_cost_low)}–{fmt(unit_cost_high)}/m³")
+    print(f"Unit water operating cost:     RMB {unit_cost_low:.3f}–{unit_cost_high:.3f}/m³")
     print(f"Annual freshwater yield:       {fmt(annual_water_median)} m³/year (median scenario)")
     print(
         f"Emergency-water population:    {supported_population:,} people "
