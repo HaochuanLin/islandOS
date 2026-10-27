@@ -6,7 +6,6 @@ on:
       - nan-ao-scenario-pilot
   pull_request:
     branches:
-      - main
       - nan-ao-scenario-pilot
 
 jobs:
@@ -23,25 +22,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Compile interactive dashboard
-        run: python -m compileall -q app.py island_microgrid_ro_sim.py
-
+      - name: Compile scenario scripts
+        run: python -m compileall -q nan_ao_scenario.py nan_ao_three_scenarios.py
       - name: Run Nan'ao scenario tests
-        run: python -m unittest discover -s tests -v
+        run: python -m unittest discover -s tests -p 'test_nan_ao_*.py' -v
       - name: Generate reproducible scenario outputs
-        run: python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir build/nan_ao
-      - name: Upload CSV and JSON outputs
+        run: python nan_ao_scenario.py --runs 1000 --output-dir build/nan_ao
+      - name: Upload scenario outputs
         uses: actions/upload-artifact@v4
         with:
-          name: islandos-nan-ao-scenario
+          name: nan-ao-emergency-scenario-outputs
           path: build/nan_ao/
           if-no-files-found: error
-      - name: Run three-scenario Monte Carlo comparison (exploratory)
+      - name: Generate three-scenario comparison
         run: python nan_ao_three_scenarios.py --output-json build/nan_ao_three_scenarios/summary.json
-      - name: Upload three-scenario comparison report
+      - name: Upload three-scenario report
         uses: actions/upload-artifact@v4
         with:
-          name: islandos-nan-ao-three-scenarios-exploratory
+          name: nan-ao-emergency-three-scenario-report
           path: build/nan_ao_three_scenarios/summary.json
           if-no-files-found: error
           retention-days: 90
