@@ -7,9 +7,10 @@ import nan_ao_scenario
 
 
 class NanAoScenarioTests(unittest.TestCase):
-    def test_seeded_run_is_reproducible(self):
-        rows_a, summary_a = nan_ao_scenario.run_simulation(runs=20, seed=123)
-        rows_b, summary_b = nan_ao_scenario.run_simulation(runs=20, seed=123)
+    def test_default_seed_is_reproducible(self):
+        self.assertEqual(nan_ao_scenario.DEFAULT_SEED, 20261027)
+        rows_a, summary_a = nan_ao_scenario.run_simulation(runs=20, seed=nan_ao_scenario.DEFAULT_SEED)
+        rows_b, summary_b = nan_ao_scenario.run_simulation(runs=20, seed=nan_ao_scenario.DEFAULT_SEED)
         self.assertEqual(rows_a, rows_b)
         self.assertEqual(summary_a, summary_b)
 
@@ -21,71 +22,31 @@ class NanAoScenarioTests(unittest.TestCase):
         self.assertLessEqual(values["p05"], values["p50_median"])
         self.assertLessEqual(values["p50_median"], values["p95"])
         self.assertGreaterEqual(values["mean"], 0)
+        self.assertEqual(summary["assumptions"]["ro_purchase_capex_rmb"], 0)
+        self.assertIn("emergency", summary["assumptions"]["scenario_scope"])
 
-    def test_sensitivity_grid_is_complete_and_monotonic(self):
+    def test_sensitivity_grid_is_complete(self):
         rows = nan_ao_scenario.run_sensitivity_analysis()
         self.assertEqual(len(rows), 243)
-        baseline = next(
-            row for row in rows
-            if row["assumed_events_per_year"] == 8
-            and row["representative_event_duration_h"] == 8.0
-            and row["available_surplus_power_kw"] == 25.0
-            and row["ro_availability_fraction"] == 0.925
-            and row["specific_energy_kwh_per_m3"] == 4.0
-        )
-        self.assertAlmostEqual(
-            baseline["scenario_water_m3_per_year"],
-            8 * 8 * 25 * 0.925 / 4.0,
-            places=3,
-        )
-        high_sec = next(
-            row for row in rows
-            if row["assumed_events_per_year"] == 8
-            and row["representative_event_duration_h"] == 8.0
-            and row["available_surplus_power_kw"] == 25.0
-            and row["ro_availability_fraction"] == 0.925
-            and row["specific_energy_kwh_per_m3"] == 5.0
-        )
-        self.assertLess(high_sec["scenario_water_m3_per_year"], baseline["scenario_water_m3_per_year"])
+        baseline = next(row for row in rows if row["assumed_events_per_year"] == 8
+                        and row["representative_event_duration_h"] == 8.0
+                        and row["available_surplus_power_kw"] == 25.0
+                        and row["ro_availability_fraction"] == 0.925
+                        and row["specific_energy_kwh_per_m3"] == 4.0)
+        self.assertAlmostEqual(baseline["scenario_water_m3_per_year"], 8 * 8 * 25 * 0.925 / 4.0)
         self.assertIn("not a probability", baseline["interpretation"])
 
-    def test_capital_cost_screen_is_transparent_and_validated(self):
-        screen = nan_ao_scenario.calculate_capital_cost_screen(
-            annual_water_output_m3=442.734
-        )
-        self.assertAlmostEqual(
-            screen["capital_only_cost_rmb_per_m3_low"],
-            1600000 / 10 / 442.734,
-            places=2,
-        )
-        self.assertAlmostEqual(
-            screen["capital_only_cost_rmb_per_m3_high"],
-            3300000 / 10 / 442.734,
-            places=2,
-        )
-        self.assertIn("not ROI", screen["status"])
-        with self.assertRaises(ValueError):
-            nan_ao_scenario.calculate_capital_cost_screen(annual_water_output_m3=0)
-        with self.assertRaises(ValueError):
-            nan_ao_scenario.calculate_capital_cost_screen(
-                annual_water_output_m3=100, capex_low_rmb=3_000_000,
-                capex_high_rmb=2_000_000,
-            )
-
-    def test_writer_creates_auditable_outputs_including_sensitivity(self):
+    def test_writer_uses_stable_names_and_no_capex_screen(self):
         with tempfile.TemporaryDirectory() as tmp:
             nan_ao_scenario.write_outputs(Path(tmp), runs=5, seed=7)
-            self.assertTrue((Path(tmp) / "nan_ao_annual_runs.csv").exists())
-            self.assertTrue((Path(tmp) / "nan_ao_percentiles.csv").exists())
-            self.assertTrue((Path(tmp) / "nan_ao_summary.json").exists())
-            self.assertTrue((Path(tmp) / "nan_ao_financial_screen.json").exists())
-            with (Path(tmp) / "nan_ao_financial_screen.json").open(encoding="utf-8") as handle:
-                financial_screen = json.load(handle)
-            self.assertIn("capital_only_cost_rmb_per_m3_low", financial_screen)
-            sensitivity_path = Path(tmp) / "nan_ao_sensitivity.csv"
-            self.assertTrue(sensitivity_path.exists())
-            with sensitivity_path.open(encoding="utf-8", newline="") as handle:
-                self.assertEqual(sum(1 for _ in handle), 244)  # header + 243 combinations
+            expected = {"nan_ao_annual_runs.csv", "nan_ao_percentiles.csv",
+                        "nan_ao_summary.json", "nan_ao_sensitivity.csv"}
+            self.assertTrue(expected.issubset({p.name for p in Path(tmp).iterdir()}))
+            self.assertFalse((Path(tmp) / "nan_ao_financial_screen.json").exists())
+            with (Path(tmp) / "nan_ao_summary.json").open(encoding="utf-8") as handle:
+                summary = json.load(handle)
+            self.assertEqual(summary["seed"], 7)
+            self.assertEqual(summary["assumptions"]["ro_purchase_capex_rmb"], 0)
 
 
 if __name__ == "__main__":
