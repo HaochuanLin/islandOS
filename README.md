@@ -1,55 +1,42 @@
-# Nan’ao-type scenario — IslandOS｜Schneider Go Green 2026 Top-12 Finalist
+# Nan'ao emergency-resilience pilot — IslandOS
 
-> **Try the interactive IslandOS demo:** [https://islandos.streamlit.app/](https://islandos.streamlit.app/)
->
-> The public Streamlit app is deployed from this repository's `app.py`. It lets visitors explore the generic synthetic 24-hour energy–water simulation, compare RO dispatch with a no-flexible-RO baseline, adjust assumptions, and export results. **It is a separate demo from the Nan’ao annual Monte Carlo scenario documented on this branch.** All demo inputs are synthetic, not measured island data.
+> **Scenario-based Monte Carlo simulation, not field-validated performance.**
 
+This branch contains a Nan'ao-type emergency water-resilience pilot model. It treats a reusable, pre-existing reverse-osmosis (RO) unit as a sunk asset: **RO purchase capital expenditure is RMB 0 in the primary scenario**. The operating-cost screen includes valley-price electricity where applicable and draft annual operating-cost assumptions for electricity, chemicals, membrane maintenance, and routine O&M. Those O&M assumptions must be verified against site records.
 
-> **Scenario-based simulation assumption, not measured real-world data.**
->
-> This branch documents a synthetic Nan’ao-type scenario for Schneider Go Green 2026 review. It is not based on a measured Nan’ao curtailment time series, is not a grid power-flow model, and does not establish field performance or site feasibility.
+The pilot explores supplementary emergency freshwater production from otherwise-curtailed wind power and valley-price electricity. It is **not a model of full-island daily water supply**.
 
-## Scenario at a glance
+## Scenario files
 
-The script estimates annual theoretical water yield from assumed export-limitation events that could supply surplus energy to a proposed **50 kW reverse-osmosis (RO) unit**. It runs 1,000 Monte Carlo scenario years with fixed seed `20261021`.
+- `nan_ao_scenario.py`: assumption-driven annual event-energy Monte Carlo simulation for potential wind-curtailment windows.
+- `nan_ao_three_scenarios.py`: compares wind-only, valley-price-only, and hybrid screening cases; exports JSON.
+- `docs/NAN_AO_SCENARIO.md`: assumptions, boundaries, and evidence gaps.
+- `tests/test_nan_ao_scenario.py` and `tests/test_nan_ao_three_scenarios.py`: deterministic and output-contract tests.
 
-These are assumption-driven scenario outputs—not measured water production, a validated forecast, or evidence that the modeled events occurred on Nan’ao.
+## Reproduce
 
-## Reproduce the results
-
-Use Python 3.10 or later. The scenario script uses only the Python standard library.
+Use Python 3.10 or later; the core scenario uses the Python standard library.
 
 ```bash
-python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir outputs/nan_ao
+python nan_ao_scenario.py --runs 1000 --output-dir build/nan_ao
+python nan_ao_three_scenarios.py --output-json build/nan_ao_three_scenarios/summary.json
+python -m unittest discover -s tests -p 'test_nan_ao_*.py' -v
 ```
 
-The seeded run reports the following annual-yield percentiles:
+The default run uses 1,000 Monte Carlo samples and a fixed seed for reproducibility. Output filenames are stable and do not encode the seed:
+- `nan_ao_annual_runs.csv`
+- `nan_ao_percentiles.csv`
+- `nan_ao_summary.json`
+- `nan_ao_sensitivity.csv`
 
-| Metric | Result |
-|---|---:|
-| P5 | 237.6 m³/year |
-| Median | 442.7 m³/year |
-| P95 | 693.2 m³/year |
+The three-scenario report contains water-yield ranges, annual operating-cost assumptions, valley electricity cost, unit operating-cost screening ranges, and a theoretical annual-supply population equivalent at 50 L/person/day.
 
-All values above are **synthetic scenario simulation results, not measured real-world data**. They depend on the explicit assumptions described in [the scenario protocol](docs/NAN_AO_SCENARIO.md). Re-running with the same script, Python version, run count and seed is intended to reproduce the same results.
+## Model boundary and limitations
 
-The command writes the annual run log, percentile summary, assumptions/limitations JSON, sensitivity grid, and illustrative capital-only screen to `outputs/nan_ao/`. The output directory is generated locally and does not need to be committed.
+The wind model samples assumed annual event counts, durations, available surplus power, and RO availability. It is an annual event-energy abstraction—not an hourly grid-flow model, measured curtailment reconstruction, or validated dispatch optimizer. The valley-price annual water quantity is a fixed screening assumption, not calculated from site hourly load and wind time series. The hybrid adds these quantities and assumes the operating windows do not overlap.
 
-## Model assumptions and limitations
+The model does not verify that modeled events occurred, whether the RO equipment exists or is operable, water quality, intake/outfall, storage, distribution, permits, actual O&M, cost savings, ROI, or emergency access. All yield and cost results are scenario screens only. The population figure is an annual-supply equivalent, not evidence that water can be delivered safely to that number of people.
 
-The model uses assumed distributions for annual event count, event duration, available surplus power and RO availability. It caps usable power at the proposed 50 kW RO rating and converts usable energy to theoretical water volume using an assumed specific energy consumption of 4.0 kWh/m³.
+## Keep the generic IslandOS demo separate
 
-This is an **annual event-energy abstraction**, not a grid power-flow/network-congestion model. No measured Nan’ao renewable-generation, demand, export-limitation or curtailment time series is used. The model does not verify equipment availability, water quality, permits, site feasibility, savings, ROI, emissions reductions or avoided outages.
-
-See [docs/NAN_AO_SCENARIO.md](docs/NAN_AO_SCENARIO.md) for the full assumptions, sensitivity analysis, equipment boundary, and evidence needed before any real-world deployment claim.
-
-## Keep the two IslandOS demos separate
-
-| Branch / scenario | Purpose | Parameters |
-|---|---|---|
-| `nan-ao-scenario-pilot` (this branch) | Schneider Go Green 2026 Nan’ao-type case | 50 kW RO; 4.0 kWh/m³; event-energy model; 1,000 Monte Carlo runs; seed `20261021` |
-| `main` | General-purpose IslandOS prototype and generic isolated-island demo | 400 kW; 3.5 kWh/m³; synthetic 24-hour demo |
-
-**Do not mix results from these two scenarios.** This branch is dedicated to the Go Green review case. For the general-purpose IslandOS project and other competitions, switch to the [main branch](https://github.com/HaochuanLin/islandOS/tree/main).
-
-The repository-level [requirements.txt](requirements.txt) lists dependencies for the broader IslandOS project. The standalone Nan’ao scenario script itself requires only the Python standard library.
+The public [IslandOS Streamlit demo](https://islandos.streamlit.app/) is a separate generic synthetic 24-hour energy-water demonstration. Do not treat it as a live Nan'ao dispatch controller or as validation of this annual pilot model. The generic `main` branch is outside the scope of this scenario branch.
