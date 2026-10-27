@@ -1,80 +1,24 @@
-# Nan'ao Island scenario: RO as a flexible load
+# IslandOS Nan'ao hybrid simulation
 
-> **Scenario-based simulation assumption, not measured real-world data.** This document describes a synthetic, assumption-driven scenario for review and exploration. It does not use a measured Nan'ao curtailment time series, does not establish that modeled events occurred on Nan'ao, and is not evidence of site feasibility or field performance.
+This pilot intentionally contains one scenario only: `IslandOS_hybrid_clean_energy`.
 
-This is a separate, reproducible scenario for the IslandOS prototype. It does **not** replace or reinterpret the repository's original 24-hour synthetic isolated-island demo.
+## Calculation contract
 
-## Interactive web demo
+- Fixed valley-power annual water yield: 33,650 m³.
+- Wind-curtailment yield: median annual water volume from 1,000 Monte Carlo runs by default.
+- Total annual water: fixed valley yield + simulated wind-curtailment median.
+- RO asset: pre-existing 50 kW unit, treated as sunk; purchase CAPEX = RMB 0.
+- Unit operating cost: (valley electricity cost + non-electric operating costs) / total hybrid annual water.
+- Supported population equivalent: total annual water / (0.05 m³/person/day × 365 days).
 
-Explore the public [IslandOS Streamlit demo](https://islandos.streamlit.app/). It is deployed from this repository's `app.py` and demonstrates the generic synthetic 24-hour energy–water dashboard, including same-trace RO policy comparison, scenario controls, charts, and CSV/JSON exports.
+Wind simulation assumptions: annual event count rounded from triangular(4, 12, mode 8); event duration lognormal with median 8 hours and sigma 0.5 clipped to 2–24 hours; surplus power triangular from 5–50 kW with mode 25 kW; RO availability uniform from 0.85–1.00; specific energy 4.0 kWh/m³. Default seed: 20261027.
 
-**Scope note:** the web app's 24-hour demo is separate from the Nan’ao-specific annual Monte Carlo model in `nan_ao_scenario.py`. The website does not, by itself, display or validate the Nan’ao annual-yield percentiles documented below. Both are assumption-driven simulations, not measured field data.
+Valley electricity price is assumed to be RMB 0.272/kWh. Chemical reagents and routine O&M are represented by a combined annual non-electric operating-cost range of RMB 8,000–18,000. These are unverified screening assumptions. No capital expenditure is included.
 
+## Outputs
 
-## Core scenario assumptions
+Run `python islandos_nanao_hybrid.py`. It writes `outputs/scenario_result.csv` with one data row and `outputs/sim_meta.json` with seed, run count, assumptions, simulated wind-yield summary, and limitations. Console output contains only the hybrid result.
 
-The default run uses 1,000 Monte Carlo scenario years with seed `20261021`. The following are model inputs, not verified Nan'ao operating statistics.
+## Limitations
 
-| Input | Assumption used | Interpretation |
-|---|---|---|
-| Annual export-limitation event count | Rounded triangular distribution: minimum 4, maximum 12, mode 8 events/year | Assumed count of potential surplus-energy events |
-| Event duration | Lognormal distribution with median 8 hours and sigma 0.5, clipped to 2–24 hours | Assumed duration for each event |
-| Available surplus power | Triangular distribution: minimum 5 kW, maximum 50 kW, mode 25 kW | Assumed power available to the RO load during an event |
-| Proposed RO rated power | 50 kW | Scenario equipment rating; not confirmation of installed equipment |
-| RO availability per event | Uniform distribution from 0.85 to 1.00 | Assumed operational availability factor |
-| Specific energy consumption (SEC) | 4.0 kWh/m³ | Assumed energy required per cubic metre of produced water |
-| Monte Carlo run count | 1,000 | Number of simulated scenario years in the reported run |
-| Random seed | `20261021` | Fixed seed for reproducibility |
-
-For each event, the modeled usable power is the lesser of available surplus power and the 50 kW RO rating. The event's theoretical water volume is calculated from event duration × usable power × the event RO-availability factor, divided by the assumed SEC. Event volumes are summed to obtain a simulated annual yield.
-
-These distributions and parameters are scenario assumptions. They must not be described as measured local data, an empirically calibrated probability model, or a validated forecast. Changing assumptions can materially change the results.
-
-## Run it
-
-```bash
-python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir outputs/nan_ao
-```
-
-The command writes:
-- `nan_ao_annual_runs.csv`: one row per simulated scenario year;
-- `nan_ao_percentiles.csv`: P5, median, P95 and mean scenario yield;
-- `nan_ao_summary.json`: assumptions, summary and limitations;
-- `nan_ao_sensitivity.csv`: a deterministic grid of 243 combinations covering event count, representative event duration, available surplus power, RO availability, and specific energy consumption.
-- `nan_ao_financial_screen.json`: a capital-only cost-per-m³ screen using the simulated median output and explicit draft CAPEX assumptions.
-
-Only the Python standard library is required. Repeating the same command with the same Python version, run count and seed is deterministic.
-
-## What the model represents
-
-The model draws an assumed annual count of export-limitation events, event durations, available surplus power, and RO availability. During each event, usable RO energy is the duration multiplied by the lesser of available surplus power and the proposed RO rating. Water volume is usable energy divided by the assumed specific energy consumption.
-
-All distributions are explicit placeholders, not measurements or verified Nan'ao operating statistics. This is an annual event-energy abstraction, **not** a grid power-flow model and not a reconstruction of actual curtailment. It does not establish that any event happened on Nan'ao.
-
-## Sensitivity analysis
-
-The sensitivity CSV is a deterministic full-factorial screen over representative values:
-- 4, 8, or 12 assumed events per year;
-- 4, 8, or 12 hours per event;
-- 10, 25, or 40 kW available surplus;
-- 0.85, 0.925, or 1.0 RO availability;
-- 3.5, 4.0, or 5.0 kWh/m³ specific energy consumption.
-
-This produces 243 combinations. The values show how strongly the assumed inputs affect theoretical water yield; they are **not** probability-weighted results, field forecasts, or estimates of how often Nan'ao actually experiences export limitation. Do not label the sensitivity grid as P5–P95. The original 1,000-run distributional simulation remains a separate result.
-
-## Equipment status and deployment boundary
-
-No publicly accessible official documentation reviewed by the team confirms an operable standby seawater RO unit on Nan'ao main island. The pilot therefore assumes a modular 50 kW RO unit would be procured, installed and owned by the local water authority, subject to site verification, approval and budget.
-
-The scenario does not prove site feasibility or water quality, and does not estimate savings, ROI, emissions, avoided outages or measured annual water yield. Results must be described as **“Scenario-based simulation assumption, not measured real-world data.”**
-
-## Next evidence needed
-
-Replace the placeholder distributions with documented hourly export-limit/curtailment records, renewable output and essential load; confirm candidate installation site, seawater intake/outfall, water-quality requirements, permissions, equipment quotations and operating responsibility. Then rerun the model and update external pitch materials only from that reviewed result.
-
-
-## Illustrative capital-cost screen
-
-The output JSON annualises the draft RMB 1.6–3.3 million hardware estimate over an explicitly assumed 10-year equipment life, then divides by the simulated median annual output. It is intentionally labelled **capital-only, not ROI or payback**. The screen excludes site/civil works, marine intake/outfall, environmental approvals, electricity, consumables, staffing, maintenance, membrane replacement, financing and downtime. Inputs are not supplier quotations, and the water output is not field-validated. Do not use this output as a price recommendation or investment case.
-
-Before procurement, replace the draft capital range with comparable supplier quotes, cost the complete site and lifecycle scope, verify actual usable curtailed power and emergency demand, and identify a funded asset-owner operating model.
+Simulation-only, not field-calibrated. The model does not use measured Nan'ao hourly generation, load, curtailment, water demand, or operating records; fixed valley-water yield is not an hourly dispatch calculation. The population equivalent does not demonstrate water quality, storage, distribution, or real emergency access.
