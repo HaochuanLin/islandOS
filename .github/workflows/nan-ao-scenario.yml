@@ -1,4 +1,4 @@
-name: Nan'ao scenario validation
+name: Nan'ao hybrid scenario validation
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - nan-ao-scenario-pilot
 
 jobs:
-  scenario:
+  hybrid-scenario:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -18,28 +18,29 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install project dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Compile scenario scripts
-        run: python -m compileall -q nan_ao_scenario.py nan_ao_three_scenarios.py
-      - name: Run Nan'ao scenario tests
+      - name: Compile the single scenario script
+        run: python -m py_compile islandos_nanao_hybrid.py
+      - name: Run hybrid scenario tests
         run: python -m unittest discover -s tests -p 'test_nan_ao_*.py' -v
-      - name: Generate reproducible scenario outputs
-        run: python nan_ao_scenario.py --runs 1000 --output-dir build/nan_ao
-      - name: Upload scenario outputs
+      - name: Generate the single hybrid result
+        run: python islandos_nanao_hybrid.py --runs 1000 --output-dir build/outputs
+      - name: Verify output contract
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          with Path("build/outputs/scenario_result.csv").open(newline="", encoding="utf-8") as f:
+              rows = list(csv.DictReader(f))
+          assert len(rows) == 1, rows
+          assert rows[0]["scenario"] == "IslandOS_hybrid_clean_energy", rows
+          meta = json.loads(Path("build/outputs/sim_meta.json").read_text(encoding="utf-8"))
+          assert meta["run_count"] == 1000, meta
+          assert meta["key_assumptions"]["ro_purchase_capex_rmb"] == 0, meta
+          PY
+      - name: Upload hybrid outputs
         uses: actions/upload-artifact@v4
         with:
-          name: nan-ao-emergency-scenario-outputs
-          path: build/nan_ao/
-          if-no-files-found: error
-      - name: Generate three-scenario comparison
-        run: python nan_ao_three_scenarios.py --output-json build/nan_ao_three_scenarios/summary.json
-      - name: Upload three-scenario report
-        uses: actions/upload-artifact@v4
-        with:
-          name: nan-ao-emergency-three-scenario-report
-          path: build/nan_ao_three_scenarios/summary.json
+          name: islandos-nanao-hybrid-output
+          path: build/outputs/
           if-no-files-found: error
           retention-days: 90
