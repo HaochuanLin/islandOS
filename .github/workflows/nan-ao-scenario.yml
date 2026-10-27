@@ -37,7 +37,10 @@ jobs:
           assert rows[0]["scenario"] == "IslandOS_hybrid_clean_energy", rows
           meta = json.loads((root / "sim_meta.json").read_text(encoding="utf-8"))
           assert meta["run_count"] == 1000, meta
-          assert meta["key_assumptions"]["ro_purchase_capex_rmb"] == 0, meta
+          assert meta["parameters"]["ro_purchase_capex_rmb"] == 0, meta
+          assert meta["parameters"]["ro_rated_power_kw"] == 100.0, meta
+          assert meta["parameters"]["ro_availability_factor"] == 0.925, meta
+          assert "simulated_annual_wind_curtailment_hours_median" in meta["calculated_values"], meta
           PY
       - uses: actions/upload-artifact@v7
         with:
