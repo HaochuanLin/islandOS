@@ -1,24 +1,39 @@
 # IslandOS Nan'ao hybrid simulation
 
-This pilot intentionally contains one scenario only: `IslandOS_hybrid_clean_energy`.
+This is a single-scenario simulation: `IslandOS_hybrid_clean_energy`.
 
-## Calculation contract
+## System setup and calculation
 
-- Fixed valley-power annual water yield: 33,650 m³.
-- Wind-curtailment yield: median annual water volume from 1,000 Monte Carlo runs by default.
-- Total annual water: fixed valley yield + simulated wind-curtailment median.
-- RO asset: pre-existing 50 kW unit, treated as sunk; purchase CAPEX = RMB 0.
-- Unit operating cost: (valley electricity cost + non-electric operating costs) / total hybrid annual water.
-- Supported population equivalent: total annual water / (0.05 m³/person/day × 365 days).
+Two local standby 50 kW skid-mounted RO units are coordinated in parallel (total rated power 100 kW). The competition submission documents multiple existing small-scale RO desalination units across Nan'ao island; this solution aggregates distributed emergency assets under the scheduling platform. The exact hardware inventory will be confirmed during on-site pilot investigation. All RO assets are pre-existing, so no new-equipment CAPEX is included.
 
-Wind simulation assumptions: annual event count rounded from triangular(4, 12, mode 8); event duration lognormal with median 8 hours and sigma 0.5 clipped to 2–24 hours; surplus power triangular from 5–50 kW with mode 25 kW; RO availability uniform from 0.85–1.00; specific energy 4.0 kWh/m³. Default seed: 20261027.
+Fixed parameters:
 
-Valley electricity price is assumed to be RMB 0.272/kWh. Chemical reagents and routine O&M are represented by a combined annual non-electric operating-cost range of RMB 8,000–18,000. These are unverified screening assumptions. No capital expenditure is included.
+- Specific energy: 4.0 kWh/m³
+- Daily valley window: 8.0 h
+- Availability factor: 0.925
+- Total RO rated power: 100 kW (two 50 kW units)
 
-## Outputs
+Valley water is calculated, not hardcoded:
 
-Run `python islandos_nanao_hybrid.py`. It writes `outputs/scenario_result.csv` with one data row and `outputs/sim_meta.json` with seed, run count, assumptions, simulated wind-yield summary, and limitations. Console output contains only the hybrid result.
+`m3_per_hour = 100 / 4.0`
+
+`valley_annual_water = m3_per_hour * 8.0 * 365 * 0.925 = 67,525 m³/year`
+
+Wind-curtailment water uses 1,000 Monte Carlo runs by default. Each run samples event count (rounded triangular distribution), event duration (lognormal, clipped to 2–24 h), and surplus power (triangular distribution, 5–100 kW with mode 50 kW). The availability factor is 0.925. Total annual wind-curtailment hours are computed from simulated event durations and reported as output statistics; they are not preset inputs.
+
+Total annual water = calculated valley annual water + median simulated annual wind-curtailment water.
+
+Unit operating-cost bounds = (valley electricity cost + annual chemical-reagent/routine-O&M cost bound) / total hybrid water. Annual non-electric OPEX of RMB 8,000–18,000 and valley electricity price RMB 0.272/kWh are screening assumptions, not site-verified costs. Wind-surplus marginal electricity cost is assumed zero. No equipment CAPEX is included.
+
+## Reproducible run
+
+```bash
+python islandos_nanao_hybrid.py
+python -m unittest discover -s tests -p 'test_nan_ao_hybrid.py' -v
+```
+
+The script writes `outputs/scenario_result.csv` with exactly one data row for `IslandOS_hybrid_clean_energy`, and `outputs/sim_meta.json` with the seed, run count, all model parameters, calculation notes, simulated water/hour statistics, and limitations. Console output contains only the hybrid result. Default seed: `20261028`.
 
 ## Limitations
 
-Simulation-only, not field-calibrated. The model does not use measured Nan'ao hourly generation, load, curtailment, water demand, or operating records; fixed valley-water yield is not an hourly dispatch calculation. The population equivalent does not demonstrate water quality, storage, distribution, or real emergency access.
+This is a simulation-only result, not field-calibrated or a validated forecast. Event distributions are assumptions, not measured Nan'ao curtailment records. Exact installed hardware inventory and availability require on-site confirmation. The 50 L/person/day population figure is a theoretical annual supply equivalent and does not establish water quality, storage, distribution, or continuous access.

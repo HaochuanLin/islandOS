@@ -23,17 +23,11 @@ Use the interactive app to explore energy–water dispatch strategies, adjust RO
 
 ## Nan'ao scenario: emergency desalination case
 
-A frozen snapshot of this Nan'ao scenario is available on branch: `nan-ao-scenario-pilot`.
+The single-scenario hybrid pilot is implemented in [`islandos_nanao_hybrid.py`](islandos_nanao_hybrid.py). It models two existing 50 kW skid-mounted RO units coordinated in parallel (100 kW aggregate rating), with valley-power annual water calculated from rated power, 4.0 kWh/m³ specific energy, an 8-hour daily valley window, and a 0.925 availability factor. Wind-curtailment yield comes from 1,000 Monte Carlo runs by default; annual curtailment hours are simulated output statistics, not a preset input.
 
-It is implemented in `nan_ao_scenario.py`, using a 50 kW / 4.0 kWh/m³ event-energy scenario with 1,000 Monte Carlo runs and fixed seed 20261021.
+The competition submission documents multiple existing small-scale RO desalination units across Nan'ao island. Exact hardware inventory will be confirmed during on-site pilot investigation. All equipment is treated as pre-existing, with no new-equipment CAPEX. Results are assumption-driven and not field-calibrated; see [scenario calculation and limitations](docs/NAN_AO_SCENARIO.md).
 
-All outputs are synthetic scenario assumptions, not measured real-world data. The 50 kW value is a proposed procurement assumption, not a verified installed rating.
-
-The submitted Nan'ao case uses the assumption-driven Monte Carlo event-energy model in `nan_ao_scenario.py`; that model estimates scenario water yield and is not a dispatch scheduler. The rolling-horizon, optimization and forecasting modules in this repository are exploratory research and were not used to produce the submitted numbers.
-
-In a proposed Nan'ao pilot, any future dispatch scheduler would first be evaluated in advisory (recommendation-only) mode, with a water-authority operator confirming each start. The current Monte Carlo scenario model does not make dispatch recommendations or control equipment. Closed-loop automation would be considered only after operator approval and safety validation.
-
-The interactive `app.py` on main is a generic conceptual demo only, and does not generate the quantitative results from this pilot case.
+The scenario model is not a dispatch scheduler and does not control equipment. Any future pilot would begin in advisory mode with operator confirmation and safety validation. The generic interactive app does not generate the quantitative results from this case.
 
 ## What it can do today
 
@@ -238,7 +232,7 @@ Exit code `0` means these local structural checks passed; exit code `2` means at
 
 ## Nan'ao emergency resilience pilot
 
-The single-scenario hybrid simulation is in [`islandos_nanao_hybrid.py`](islandos_nanao_hybrid.py). It combines fixed valley-power annual water yield (33,650 m³) with the median wind-curtailment water yield from 1,000 Monte Carlo runs by default. The pre-existing 50 kW RO unit is treated as a sunk asset with zero purchase CAPEX.
+The single-scenario hybrid simulation models two existing 50 kW RO units in parallel (100 kW total). Valley annual water is formula-derived from 100 kW, 4.0 kWh/m³, an 8-hour daily valley window, and a 0.925 availability factor. Wind yield is the median of 1,000 Monte Carlo runs by default; total annual wind-curtailment hours are reported only as simulated output statistics.
 
 Run:
 
@@ -247,4 +241,4 @@ python islandos_nanao_hybrid.py
 python -m unittest discover -s tests -p 'test_nan_ao_hybrid.py' -v
 ```
 
-The script writes `outputs/scenario_result.csv` (one data row: `IslandOS_hybrid_clean_energy`) and `outputs/sim_meta.json`. Default seed: `20261027`. Unit operating-cost bounds use valley electricity plus unverified annual assumptions for chemical reagents and routine O&M. The simulation is not field-calibrated; see [scenario limitations](docs/NAN_AO_SCENARIO.md).
+The script writes `outputs/scenario_result.csv` with one data row (`IslandOS_hybrid_clean_energy`) and `outputs/sim_meta.json` with parameters and calculation notes. Default seed: `20261028`. Existing RO assets incur no new-equipment CAPEX. Chemical/O&M cost bounds are unverified screening assumptions; the model is not field-calibrated. See [scenario limitations](docs/NAN_AO_SCENARIO.md).
