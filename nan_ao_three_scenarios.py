@@ -1,152 +1,97 @@
 #!/usr/bin/env python3
-"""Economic screening for the Nan'ao valley-hour + curtailed-wind scenario.
+"""Compare wind-only, valley-price, and hybrid emergency-water scenarios.
 
-The physical Monte Carlo model remains in nan_ao_scenario.py and is imported
-without modification. This script runs its fixed-seed 1,000-run simulation,
-then adds the explicitly hypothetical valley-hour production assumption.
-
-All results are assumption-driven screening outputs, not measured field data.
+The existing RO unit is treated as a sunk asset (purchase CAPEX = RMB 0).
+Reported costs are operating-cost screening assumptions only, not field-validated
+economics. Valley-hour output is a fixed scenario assumption, not hourly dispatch.
 """
 from __future__ import annotations
 
-import csv
+import argparse
+import json
 from pathlib import Path
 
 from nan_ao_scenario import DEFAULT_RUNS, DEFAULT_SEED, run_simulation
 
-# Existing RO is assumed to be safely reusable; purchase CAPEX is zero and is
-# excluded. New-RO procurement is retained only as a reference consideration:
-# if no suitable existing unit can be verified, a separately costed fallback
-# procurement case would be required; it is not part of this primary result.
-
-# Fixed screening assumptions retained from the existing economic model.
-VALLEY_WATER_M3_YEAR = 33_650.0
-RO_SEC_KWH_PER_M3 = 4.0  # Do not change: original RO specific-energy assumption.
+RO_SEC_KWH_PER_M3 = 4.0
 VALLEY_PRICE_RMB_PER_KWH = 0.272
+VALLEY_WATER_M3_YEAR = 33_650.0
 ANNUAL_OPEX_LOW_RMB = 8_000.0
 ANNUAL_OPEX_HIGH_RMB = 18_000.0
-EMERGENCY_WATER_M3_PER_PERSON_PER_DAY = 0.05  # User-specified 50 L/person/day.
+EMERGENCY_WATER_M3_PER_PERSON_PER_DAY = 0.05
 DAYS_PER_YEAR = 365
-OUTPUT_CSV = Path("nan_ao_hybrid_scenario_results.csv")
+DEFAULT_OUTPUT = Path("outputs/nan_ao_three_scenarios.json")
 
 
-def fmt(value: float) -> str:
-    return f"{value:,.2f}"
+def run_scenarios(runs: int = DEFAULT_RUNS, seed: int = DEFAULT_SEED) -> dict:
+    """Return auditable screening fields for wind-only, valley-price, and hybrid."""
+    _rows, wind_summary = run_simulation(runs=runs, seed=seed)
+    wind = wind_summary["scenario_water_produced_m3_per_year"]
+    wind_p05 = float(wind["p05"])
+    wind_median = float(wind["p50_median"])
+    wind_p95 = float(wind["p95"])
+    valley_energy_cost = VALLEY_WATER_M3_YEAR * RO_SEC_KWH_PER_M3 * VALLEY_PRICE_RMB_PER_KWH
+    definitions = [
+        ("wind_only", "Wind-curtailment-only emergency production", wind_p05, wind_median, wind_p95, 0.0),
+        ("valley_price", "Valley-price electricity-only production", VALLEY_WATER_M3_YEAR, VALLEY_WATER_M3_YEAR, VALLEY_WATER_M3_YEAR, valley_energy_cost),
+        ("hybrid", "Wind-curtailment + valley-price hybrid", VALLEY_WATER_M3_YEAR + wind_p05, VALLEY_WATER_M3_YEAR + wind_median, VALLEY_WATER_M3_YEAR + wind_p95, valley_energy_cost),
+    ]
+    scenarios = []
+    for key, name, p05, median, p95, electricity_cost in definitions:
+        low_total_cost = ANNUAL_OPEX_LOW_RMB + electricity_cost
+        high_total_cost = ANNUAL_OPEX_HIGH_RMB + electricity_cost
+        scenarios.append({
+            "scenario_key": key,
+            "scenario_name": name,
+            "ro_purchase_capex_rmb": 0.0,
+            "annual_water_p05_m3": round(p05, 3),
+            "annual_water_median_m3": round(median, 3),
+            "annual_water_p95_m3": round(p95, 3),
+            "valley_electricity_cost_rmb_per_year": round(electricity_cost, 2),
+            "annual_operating_cost_low_rmb": round(low_total_cost, 2),
+            "annual_operating_cost_high_rmb": round(high_total_cost, 2),
+            "unit_operating_cost_low_rmb_per_m3": round(low_total_cost / p95, 4) if p95 else None,
+            "unit_operating_cost_high_rmb_per_m3": round(high_total_cost / p05, 4) if p05 else None,
+        })
+    median_hybrid_water = VALLEY_WATER_M3_YEAR + wind_median
+    return {
+        "title": "Nan'ao emergency-resilience operating-cost scenario screen",
+        "runs": runs,
+        "seed": seed,
+        "ro_purchase_capex_rmb": 0.0,
+        "assumptions": {
+            "ro_asset": "pre-existing sunk asset; purchase CAPEX excluded",
+            "scope": "emergency resilience pilot, not full-island daily water supply",
+            "ro_specific_energy_kwh_per_m3": RO_SEC_KWH_PER_M3,
+            "valley_price_rmb_per_kwh": VALLEY_PRICE_RMB_PER_KWH,
+            "valley_water_m3_per_year": VALLEY_WATER_M3_YEAR,
+            "annual_opex_assumption_rmb": [ANNUAL_OPEX_LOW_RMB, ANNUAL_OPEX_HIGH_RMB],
+            "emergency_benchmark_litres_per_person_day": 50,
+        },
+        "scenarios": scenarios,
+        "hybrid_emergency_population_annual_supply_equivalent": int(
+            median_hybrid_water / (EMERGENCY_WATER_M3_PER_PERSON_PER_DAY * DAYS_PER_YEAR)
+        ),
+        "limitations": [
+            "Monte Carlo wind-curtailment yield is assumption-driven and not field-validated.",
+            "Valley-hour production is a fixed screening assumption, not derived from hourly Nan'ao wind/load data.",
+            "The model assumes valley-price and curtailed-wind production windows do not overlap.",
+            "Annual O&M values are draft assumptions; electricity, chemicals, membrane maintenance and routine O&M require site records.",
+            "Population is an annual-supply equivalent and does not establish water quality, storage, distribution, or emergency access.",
+        ],
+    }
 
 
 def main() -> int:
-    # Reuse the unchanged Nan'ao Monte Carlo implementation, including its
-    # stochastic event counts, wind-surplus power limits, event duration,
-    # RO availability, SEC, fixed seed, and risk/boundary assumptions.
-    _run_rows, summary = run_simulation(runs=DEFAULT_RUNS, seed=DEFAULT_SEED)
-    curtailment = summary["scenario_water_produced_m3_per_year"]
-    p05 = float(curtailment["p05"])
-    median = float(curtailment["p50_median"])
-    p95 = float(curtailment["p95"])
-
-    # Valley-hour electricity is charged only to water produced during valley
-    # hours. Curtailment-window water is assumed to use otherwise-curtailed
-    # power and therefore carries no purchased-electricity charge in this screen.
-    valley_electricity_rmb_year = (
-        VALLEY_WATER_M3_YEAR * RO_SEC_KWH_PER_M3 * VALLEY_PRICE_RMB_PER_KWH
-    )
-    annual_water_p05 = VALLEY_WATER_M3_YEAR + p05
-    annual_water_median = VALLEY_WATER_M3_YEAR + median
-    annual_water_p95 = VALLEY_WATER_M3_YEAR + p95
-
-    # Conservative cross-range: low O&M with P95 water for the lower unit-cost
-    # bound; high O&M with P05 water for the upper bound.
-    unit_cost_low = (
-        ANNUAL_OPEX_LOW_RMB + valley_electricity_rmb_year
-    ) / annual_water_p95
-    unit_cost_high = (
-        ANNUAL_OPEX_HIGH_RMB + valley_electricity_rmb_year
-    ) / annual_water_p05
-
-    supported_population = int(
-        annual_water_median
-        / (EMERGENCY_WATER_M3_PER_PERSON_PER_DAY * DAYS_PER_YEAR)
-    )
-    per_person_annual_water = (
-        EMERGENCY_WATER_M3_PER_PERSON_PER_DAY * DAYS_PER_YEAR
-    )
-
-    print("Nan'ao Island — Valley-Hour + Curtailed-Wind Hybrid Scenario")
-    print("=" * 68)
-    print(f"Monte Carlo runs:              {summary['runs']:,}")
-    print(f"Fixed random seed:             {summary['seed']}")
-    print("Existing RO purchase CAPEX:    RMB 0.00 (treated as sunk cost)")
-    print(f"Annual operating cost range:   RMB {ANNUAL_OPEX_LOW_RMB:,.0f}–{ANNUAL_OPEX_HIGH_RMB:,.0f}")
-    print(f"Valley-hour electricity cost:  RMB {VALLEY_PRICE_RMB_PER_KWH:.3f}/kWh")
-    print(f"RO specific energy:            {RO_SEC_KWH_PER_M3:.2f} kWh/m³")
-    print()
-    print("PRIMARY RESULT")
-    print("-" * 68)
-    print(f"Unit water operating cost:     RMB {unit_cost_low:.3f}–{unit_cost_high:.3f}/m³")
-    print(f"Annual freshwater yield:       {fmt(annual_water_median)} m³/year (median scenario)")
-    print(
-        f"Emergency-water population:    {supported_population:,} people "
-        f"at 50 L/person/day, sustained for 365 days"
-    )
-    print()
-    print("MONTE CARLO WATER-YIELD RANGE")
-    print("-" * 68)
-    print(f"Combined annual yield P05:     {fmt(annual_water_p05)} m³/year")
-    print(f"Combined annual yield median:  {fmt(annual_water_median)} m³/year")
-    print(f"Combined annual yield P95:     {fmt(annual_water_p95)} m³/year")
-    print()
-    print("BOUNDARIES AND LIMITATIONS")
-    print("-" * 68)
-    print("- Existing RO purchase cost is excluded; electricity, membrane/chemical costs and routine O&M should be verified against site records.")
-    print("- Valley-hour production is a fixed screening assumption, not derived from hourly Nan'ao load or wind time-series data.")
-    print("- The hybrid calculation assumes valley-hour and curtailed-wind operating windows do not overlap.")
-    print("- Curtailment production is simulated from the unchanged assumption-driven model; it is not measured Nan'ao output or a calibrated forecast.")
-    print("- The cost range combines low O&M with P95 output and high O&M with P05 output; it is a screening envelope, not a confidence interval.")
-    print("- The 50 L/person/day benchmark is applied as specified by the user; the population figure is a theoretical annual-supply equivalent and does not establish potable-water quality, storage, distribution, or emergency access.")
-    print()
-
-    # Export a compact, readable summary table for reuse in reports and slides.
-    with OUTPUT_CSV.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(
-            file,
-            fieldnames=[
-                "scenario",
-                "monte_carlo_runs",
-                "seed",
-                "existing_ro_purchase_capex_rmb",
-                "unit_cost_low_rmb_per_m3",
-                "unit_cost_high_rmb_per_m3",
-                "annual_water_p05_m3",
-                "annual_water_median_m3",
-                "annual_water_p95_m3",
-                "emergency_population_at_50_l_per_person_day",
-                "annual_opex_low_rmb",
-                "annual_opex_high_rmb",
-                "valley_electricity_price_rmb_per_kwh",
-                "ro_specific_energy_kwh_per_m3",
-            ],
-        )
-        writer.writeheader()
-        writer.writerow(
-            {
-                "scenario": "Valley-hour + curtailed-wind hybrid (IslandOS screening)",
-                "monte_carlo_runs": summary["runs"],
-                "seed": summary["seed"],
-                "existing_ro_purchase_capex_rmb": 0,
-                "unit_cost_low_rmb_per_m3": round(unit_cost_low, 4),
-                "unit_cost_high_rmb_per_m3": round(unit_cost_high, 4),
-                "annual_water_p05_m3": round(annual_water_p05, 3),
-                "annual_water_median_m3": round(annual_water_median, 3),
-                "annual_water_p95_m3": round(annual_water_p95, 3),
-                "emergency_population_at_50_l_per_person_day": supported_population,
-                "annual_opex_low_rmb": ANNUAL_OPEX_LOW_RMB,
-                "annual_opex_high_rmb": ANNUAL_OPEX_HIGH_RMB,
-                "valley_electricity_price_rmb_per_kwh": VALLEY_PRICE_RMB_PER_KWH,
-                "ro_specific_energy_kwh_per_m3": RO_SEC_KWH_PER_M3,
-            }
-        )
-
-    print(f"CSV summary exported to:       {OUTPUT_CSV.resolve()}")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-json", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--runs", type=int, default=DEFAULT_RUNS)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    args = parser.parse_args()
+    report = run_scenarios(runs=args.runs, seed=args.seed)
+    args.output_json.parent.mkdir(parents=True, exist_ok=True)
+    args.output_json.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
 
