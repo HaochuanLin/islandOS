@@ -234,3 +234,17 @@ python tools/islandos_doctor.py --config path/to/site_parameters.json
 ```
 
 Exit code `0` means these local structural checks passed; exit code `2` means attention is needed. The doctor does not install dependencies, verify exact installed package versions, contact external services, validate the truth of site data, or certify operational safety. A passing check is only a starting point for tests and scenario-specific review.
+
+
+## Nan'ao emergency resilience pilot
+
+The single-scenario hybrid simulation is in [`islandos_nanao_hybrid.py`](islandos_nanao_hybrid.py). It combines fixed valley-power annual water yield (33,650 m³) with the median wind-curtailment water yield from 1,000 Monte Carlo runs by default. The pre-existing 50 kW RO unit is treated as a sunk asset with zero purchase CAPEX.
+
+Run:
+
+```bash
+python islandos_nanao_hybrid.py
+python -m unittest discover -s tests -p 'test_nan_ao_hybrid.py' -v
+```
+
+The script writes `outputs/scenario_result.csv` (one data row: `IslandOS_hybrid_clean_energy`) and `outputs/sim_meta.json`. Default seed: `20261027`. Unit operating-cost bounds use valley electricity plus unverified annual assumptions for chemical reagents and routine O&M. The simulation is not field-calibrated; see [scenario limitations](docs/NAN_AO_SCENARIO.md).
