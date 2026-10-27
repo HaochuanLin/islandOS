@@ -1,68 +1,47 @@
-name: Nan'ao scenario validation
+name: Nan'ao hybrid scenario validation
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  scenario:
+  hybrid-scenario:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-      - name: Compile standalone scenario model
-        run: python -m py_compile nan_ao_scenario.py
-      - name: Run Nan'ao scenario regression tests
-        run: python -m unittest discover -s tests -p "test_nan_ao_scenario.py" -v
-      - name: Generate fixed-seed scenario outputs
-        run: python nan_ao_scenario.py --runs 1000 --seed 20261021 --output-dir build/nan_ao
-      - name: Validate generated scenario outputs
+      - name: Compile single scenario script
+        run: python -m py_compile islandos_nanao_hybrid.py
+      - name: Run hybrid scenario tests
+        run: python -m unittest discover -s tests -p 'test_nan_ao_hybrid.py' -v
+      - name: Generate single hybrid result
+        run: python islandos_nanao_hybrid.py --runs 1000 --output-dir build/outputs
+      - name: Validate output contract
         run: |
           python - <<'PY'
-          import csv
-          import json
+          import csv, json
           from pathlib import Path
-
-          root = Path("build/nan_ao")
-          with (root / "nan_ao_summary.json").open(encoding="utf-8") as handle:
-              summary = json.load(handle)
-          with (root / "nan_ao_financial_screen.json").open(encoding="utf-8") as handle:
-              financial = json.load(handle)
-          with (root / "nan_ao_annual_runs.csv").open(encoding="utf-8", newline="") as handle:
-              annual_rows = list(csv.DictReader(handle))
-          with (root / "nan_ao_sensitivity.csv").open(encoding="utf-8", newline="") as handle:
-              sensitivity_rows = list(csv.DictReader(handle))
-          with (root / "nan_ao_percentiles.csv").open(encoding="utf-8", newline="") as handle:
-              percentiles = list(csv.DictReader(handle))
-
-          assert summary["seed"] == 20261021
-          assert summary["runs"] == 1000
-          assert len(annual_rows) == 1000
-          assert len(sensitivity_rows) == 243
-          assert len(percentiles) == 1
-          values = summary["scenario_water_produced_m3_per_year"]
-          assert 0 <= values["p05"] <= values["p50_median"] <= values["p95"]
-          assert financial["status"].startswith("illustrative capital-only screen")
-          assert financial["annual_water_output_m3"] == values["p50_median"]
-          print("Nan'ao generated output schemas, run counts, and percentile ordering passed.")
+          root = Path("build/outputs")
+          with (root / "scenario_result.csv").open(newline="", encoding="utf-8") as f:
+              rows = list(csv.DictReader(f))
+          assert len(rows) == 1, rows
+          assert rows[0]["scenario"] == "IslandOS_hybrid_clean_energy", rows
+          meta = json.loads((root / "sim_meta.json").read_text(encoding="utf-8"))
+          assert meta["run_count"] == 1000, meta
+          assert meta["key_assumptions"]["ro_purchase_capex_rmb"] == 0, meta
           PY
-      - name: Upload scenario outputs
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
-          name: islandos-nan-ao-scenario
-          path: build/nan_ao/
+          name: islandos-nan-ao-hybrid-output
+          path: build/outputs/
           if-no-files-found: error
           retention-days: 30
