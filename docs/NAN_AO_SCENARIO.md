@@ -1,58 +1,28 @@
-# Nan'ao emergency-resilience scenario: flexible RO load
+# IslandOS Nan'ao hybrid simulation
 
-> **Scenario-based Monte Carlo simulation, not field-validated performance.** This document records assumptions for an emergency-resilience pilot. It does not claim measured Nan'ao curtailment, verified site feasibility, or demonstrated operating savings.
+This pilot is intentionally restricted to one scenario: `IslandOS_hybrid_clean_energy`.
 
-## Purpose and asset boundary
+## Calculation contract
 
-The pilot explores using otherwise-curtailed wind power and valley-price electricity to support supplementary emergency freshwater reserves. It is **not intended to provide the full island's daily water supply**.
+- Fixed valley-power annual water yield: 33,650 m³.
+- Wind-curtailment yield: median annual water volume from 1,000 Monte Carlo runs by default.
+- Total annual water: fixed valley yield + simulated wind-curtailment median.
+- RO asset: pre-existing 50 kW unit, treated as sunk; purchase CAPEX = RMB 0.
+- Unit operating cost: (valley electricity cost + non-electric operating costs) / total hybrid annual water.
+- Supported population equivalent: total annual water / (0.05 m³/person/day × 365 days).
 
-The primary case assumes the RO desalination unit is already installed and reusable. Its purchase CAPEX is treated as a sunk cost and set to RMB 0 for this scenario. Only operating costs belong in the economic screen: electricity, chemicals, membrane maintenance, and routine O&M. Annual O&M values in the economic script are draft screening assumptions, not site-verified quotations or accounting records.
+The wind simulation assumes annual event count rounded from a triangular distribution (4–12, mode 8), event duration lognormal with median 8 hours and sigma 0.5 clipped to 2–24 hours, surplus power triangular from 5–50 kW with mode 25 kW, RO availability uniform from 0.85–1.00, and specific energy of 4.0 kWh/m³. The default seed is 20261027.
 
-## Core simulation assumptions
+Valley electricity price is assumed to be RMB 0.272/kWh. Chemical reagents and routine O&M are represented by a combined annual non-electric operating-cost range of RMB 8,000–18,000. These are screening assumptions, not audited site costs. No capital expenditure is included.
 
-The default run uses 1,000 Monte Carlo scenario years and a fixed reproducibility seed defined by `DEFAULT_SEED` in `nan_ao_scenario.py`. The seed is not encoded in output filenames.
+## Outputs
 
-| Input | Assumption | Interpretation |
-|---|---|---|
-| Annual export-limitation events | Rounded triangular distribution, 4–12 events, mode 8 | Assumed potential surplus-energy events |
-| Event duration | Lognormal, median 8 h, sigma 0.5, clipped to 2–24 h | Assumed event duration |
-| Available surplus power | Triangular distribution, 5–50 kW, mode 25 kW | Assumed power during an event |
-| RO rated power | 50 kW | Scenario rating; does not prove installed equipment |
-| RO availability per event | Uniform from 0.85 to 1.00 | Assumed operational availability |
-| Specific energy consumption | 4.0 kWh/m³ | Assumed energy per cubic metre |
-| Simulation size | 1,000 runs by default | Simulated scenario years |
+Run `python islandos_nanao_hybrid.py`. It writes:
+- `outputs/scenario_result.csv` — one data row only.
+- `outputs/sim_meta.json` — seed, run count, assumptions, wind-yield summary, and limitations.
 
-For each event, usable power is the lesser of sampled surplus power and the 50 kW RO rating. The event's theoretical water volume is event duration multiplied by usable power and RO availability, divided by specific energy consumption. Event volumes are summed to estimate a scenario-year yield.
+Console output contains only the single hybrid result.
 
-## Three-scenario comparison
+## Limitations
 
-`nan_ao_three_scenarios.py` exposes `run_scenarios()` and reports:
-- `wind_only`: simulated water yield from assumed curtailment events;
-- `valley_price`: fixed annual screening water volume at the assumed valley electricity price;
-- `hybrid`: the sum of valley-price water and simulated wind-curtailment water.
-
-The report provides P05, median, and P95 annual water volumes, valley electricity cost, annual operating-cost screening bounds, unit operating-cost bounds, and an annual-supply population equivalent using 50 L/person/day. No RO purchase CAPEX is included.
-
-The valley-water amount (33,650 m³/year), valley price (RMB 0.272/kWh), specific energy (4.0 kWh/m³), and annual operating-cost bounds (RMB 8,000–18,000) are explicit screening assumptions. They are not derived from measured hourly Nan'ao demand, wind output, or audited O&M records. The hybrid assumes valley-price and curtailed-wind windows do not overlap.
-
-## Reproducible outputs
-
-Run:
-
-```bash
-python nan_ao_scenario.py --runs 1000 --output-dir build/nan_ao
-python nan_ao_three_scenarios.py --output-json build/nan_ao_three_scenarios/summary.json
-```
-
-The simulation writes `nan_ao_annual_runs.csv`, `nan_ao_percentiles.csv`, `nan_ao_summary.json`, and `nan_ao_sensitivity.csv`. The comparison script writes a JSON report to the requested path. Generated build outputs are intended as CI artifacts rather than committed results.
-
-## Limitations and evidence required
-
-- The wind model is an annual event-energy abstraction, not an hourly grid-flow model, measured curtailment reconstruction, or calibrated forecast.
-- No measured local renewable-generation, load, export-limit, or curtailment time series is supplied.
-- No actual RO installation, operational readiness, capacity, water quality, intake/outfall, storage, distribution, permits, or staffing has been verified.
-- O&M costs are assumptions. Actual electricity, chemical, membrane, and routine-maintenance records are required for credible unit-cost estimates.
-- The population figure is an annual-supply equivalent only; it does not prove safe delivery, continuous supply, or emergency accessibility.
-- Results do not establish savings, ROI, emissions reductions, avoided outages, or commercial readiness.
-
-Before field use, verify the existing RO asset and operating envelope, obtain measured hourly energy/load/curtailment records, confirm emergency storage and distribution, and replace draft O&M values with site evidence.
+The model is not field-calibrated. It does not use measured Nan'ao hourly generation, load, curtailment, water demand, or operating records; the fixed valley-water yield is not a dispatch calculation. Wind-curtailment yield is an assumption-driven Monte Carlo result. The annual population equivalent does not demonstrate water quality, storage, distribution, or real emergency access.
