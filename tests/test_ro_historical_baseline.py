@@ -29,7 +29,8 @@ class TestHistoricalBaseline(unittest.TestCase):
         )
         report = result["cost_report"]
         self.assertEqual(result["status"], "historical_cost_reconstructed")
-        self.assertTrue(result["is_measured_site_data"])
+        self.assertTrue(result["is_customer_supplied_data"])
+        self.assertEqual(result["measurement_status"], "not independently verified")
         self.assertEqual(result["rows"], 2)
         self.assertEqual(result["represented_hours"], 2.0)
         self.assertEqual(result["timestamp_span_hours"], 1.0)
