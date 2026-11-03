@@ -75,5 +75,30 @@ class TestHistoricalBaseline(unittest.TestCase):
             )
 
 
+    def test_rejects_mixed_timezone_awareness(self):
+        mixed = CSV.replace(
+            "2026-01-01T01:00:00+00:00", "2026-01-01T01:00:00"
+        )
+        with self.assertRaisesRegex(ValueError, "consistent timezone"):
+            reconstruct_historical_ro_cost(
+                io.StringIO(mixed), self.rates, dt_hours=1.0,
+            )
+
+    def test_rejects_invalid_time_step_inputs(self):
+        for value in (0, -1, float("nan"), True, "1"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "dt_hours"):
+                    reconstruct_historical_ro_cost(
+                        io.StringIO(CSV), self.rates, dt_hours=value,
+                    )
+        for value in (0, -1, float("inf"), True, "1"):
+            with self.subTest(expected_interval_hours=value):
+                with self.assertRaisesRegex(ValueError, "expected_interval_hours"):
+                    reconstruct_historical_ro_cost(
+                        io.StringIO(CSV), self.rates, dt_hours=1.0,
+                        expected_interval_hours=value,
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()
