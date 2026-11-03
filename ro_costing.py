@@ -9,7 +9,9 @@ step, tariff is currency/kWh, and start_events is a non-negative integer count.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+import hashlib
+import json
 import math
 from typing import Sequence
 
@@ -67,6 +69,7 @@ class ROCostReport:
     cost_per_m3: float | None
     cost_breakdown: dict[str, float]
     provenance: str
+    cost_basis_signature: str
     includes_sunk_capex: bool = False
 
 
@@ -181,6 +184,23 @@ def calculate_ro_operating_cost(
         cost_per_m3=(total / total_water) if total_water > 0 else None,
         cost_breakdown=components,
         provenance=provenance,
+        cost_basis_signature=hashlib.sha256(
+            json.dumps(
+                {
+                    "currency": rates.currency,
+                    "chemical_cost_per_m3": rates.chemical_cost_per_m3,
+                    "variable_om_cost_per_m3": rates.variable_om_cost_per_m3,
+                    "maintenance_cost_per_runtime_hour": rates.maintenance_cost_per_runtime_hour,
+                    "start_stop_cost_per_event": rates.start_stop_cost_per_event,
+                    "fixed_om_per_year": rates.fixed_om_per_year,
+                    "fixed_om_allocation_hours": rates.fixed_om_allocation_hours,
+                    "electricity_prices_per_kwh": prices,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest(),
     )
 
 
@@ -217,11 +237,13 @@ def compare_ro_operating_plans(
     else:
         water_delta_fraction = abs(candidate.water_m3 - baseline.water_m3) / baseline.water_m3
     equivalent_water_volume = water_delta_fraction <= water_output_tolerance_fraction
+    same_cost_basis = baseline.cost_basis_signature == candidate.cost_basis_signature
     service_volume_equivalent = same_period and equivalent_water_volume
-    qualified_savings = savings if service_volume_equivalent else None
+    qualified_comparison = service_volume_equivalent and same_cost_basis
+    qualified_savings = savings if qualified_comparison else None
     savings_percent = (
         savings / baseline.total_operating_cost * 100.0
-        if service_volume_equivalent and baseline.total_operating_cost > 0 else None
+        if qualified_comparison and baseline.total_operating_cost > 0 else None
     )
     return {
         "currency": baseline.currency,
@@ -242,15 +264,17 @@ def compare_ro_operating_plans(
         "water_output_tolerance_fraction": float(water_output_tolerance_fraction),
         "equivalent_water_volume": equivalent_water_volume,
         "service_volume_equivalent": service_volume_equivalent,
+        "same_cost_basis": same_cost_basis,
+        "qualified_comparison": qualified_comparison,
         "baseline_cost_per_m3": baseline.cost_per_m3,
         "candidate_cost_per_m3": candidate.cost_per_m3,
         "baseline_provenance": baseline.provenance,
         "candidate_provenance": candidate.provenance,
         "interpretation": (
             "Savings are qualified only for matching represented hours and "
-            "water output within the configured tolerance. This does not verify "
+            "water output within the configured tolerance and identical recorded cost assumptions. This does not verify "
             "water quality, reservoir state, demand satisfaction, equipment "
-            "constraints, or identical tariff/cost assumptions; confirm these "
+            "constraints; confirm these "
             "before claiming achievable customer savings."
         ),
     }
