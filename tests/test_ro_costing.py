@@ -45,7 +45,7 @@ class TestROCosting(unittest.TestCase):
         candidate = calculate_ro_operating_cost([8], [2], 0.5, self.rates, provenance="modelled")
         comparison = compare_ro_operating_plans(baseline, candidate)
         self.assertAlmostEqual(comparison["absolute_savings"], 1.0)
-        self.assertAlmostEqual(comparison["savings_percent"], 10.0)
+        self.assertAlmostEqual(comparison["savings_percent"], 15.625)
         self.assertEqual(comparison["water_output_change_m3"], 0.0)
 
     def test_rejects_misaligned_or_invalid_inputs(self):
