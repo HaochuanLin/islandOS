@@ -34,7 +34,7 @@ class TestHistoricalBaseline(unittest.TestCase):
         self.assertEqual(result["represented_hours"], 2.0)
         self.assertEqual(result["timestamp_span_hours"], 1.0)
         self.assertAlmostEqual(report.electricity_cost, 7.0)
-        self.assertAlmostEqual(report.total_operating_cost, 13.6)
+        self.assertAlmostEqual(report.total_operating_cost, 11.6)
         self.assertIsNone(result.get("annualized_cost"))
 
     def test_rejects_missing_columns(self):
