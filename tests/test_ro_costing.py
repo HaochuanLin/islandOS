@@ -125,5 +125,32 @@ class TestROCosting(unittest.TestCase):
         self.assertIsNone(comparison["qualified_savings"])
 
 
+    def test_does_not_qualify_savings_when_sampling_grid_differs(self):
+        baseline = calculate_ro_operating_cost(
+            [10, 10], [2, 2], [0.5, 0.5], self.rates, dt_hours=1.0
+        )
+        candidate = calculate_ro_operating_cost(
+            [8], [4], [0.5], self.rates, dt_hours=2.0
+        )
+        comparison = compare_ro_operating_plans(baseline, candidate)
+        self.assertTrue(comparison["same_time_coverage"])
+        self.assertFalse(comparison["same_sampling_grid"])
+        self.assertFalse(comparison["qualified_comparison"])
+        self.assertIsNone(comparison["qualified_savings"])
+
+    def test_does_not_qualify_savings_when_step_count_differs(self):
+        baseline = calculate_ro_operating_cost(
+            [10, 10], [2, 2], [0.5, 0.5], self.rates, dt_hours=1.0
+        )
+        candidate = calculate_ro_operating_cost(
+            [8, 8, 4], [1, 1, 2], [0.5, 0.5, 0.5], self.rates,
+            dt_hours=1.0,
+        )
+        comparison = compare_ro_operating_plans(baseline, candidate)
+        self.assertTrue(comparison["same_time_coverage"])
+        self.assertFalse(comparison["same_sampling_grid"])
+        self.assertIsNone(comparison["qualified_savings"])
+
+
 if __name__ == "__main__":
     unittest.main()
