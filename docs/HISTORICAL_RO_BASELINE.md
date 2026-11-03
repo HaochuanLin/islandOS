@@ -49,3 +49,14 @@ quantity and quality, reservoir/service conditions, tariff, and equipment
 constraints. Then calculate net customer benefit after software, integration,
 and operating-change costs. If net benefit is not positive and repeatable, the
 customer has no economic reason to buy.
+
+
+## Streamlit workflow
+
+The app includes a **Historical RO baseline** page. A customer can upload the CSV,
+enter confirmed cost rates and interval duration, optionally enforce regular
+timestamp spacing, inspect the actual-period cost breakdown, and export a CSV
+report. The upload is processed in the current app session; it is not sent to a
+plant controller or stored as a verified customer record. The page labels
+customer-supplied measurements as not independently verified and does not
+produce an optimizer counterfactual or savings claim.
