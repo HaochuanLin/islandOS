@@ -486,7 +486,15 @@ elif page == "Strategy simulator":
                     "estimated_cost_per_m3": report.cost_per_m3,
                     "provenance": report.provenance,
                 })
-            st.dataframe(pd.DataFrame(cost_rows), use_container_width=True, hide_index=True)
+            cost_frame = pd.DataFrame(cost_rows)
+            st.dataframe(cost_frame, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download operating-cost comparison (CSV)",
+                data=cost_frame.to_csv(index=False).encode("utf-8-sig"),
+                file_name="islandos_ro_operating_cost_comparison.csv",
+                mime="text/csv",
+                help="Exports the displayed estimates and provenance. Review the exclusions below before using it for a purchase or operating decision.",
+            )
             st.caption(
                 "Cost estimate excludes renewable-energy opportunity cost, backup energy/fuel, "
                 "demand charges, taxes, water-quality penalties and any unentered cost items. "
