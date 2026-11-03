@@ -90,5 +90,40 @@ class TestROCosting(unittest.TestCase):
             calculate_ro_operating_cost([1, 2], [1, 1], 0.2, self.rates, runtime_hours=[1])
 
 
+    def test_does_not_qualify_savings_when_cost_assumptions_differ(self):
+        baseline = calculate_ro_operating_cost(
+            [10], [2], [0.5], self.rates, provenance="customer_supplied"
+        )
+        changed_rates = ROCostRates(
+            currency="CNY",
+            electricity_price_per_kwh=0.5,
+            chemical_cost_per_m3=0.20,
+            variable_om_cost_per_m3=0.08,
+            maintenance_cost_per_runtime_hour=2.0,
+            start_stop_cost_per_event=5.0,
+            fixed_om_per_year=8760.0,
+        )
+        candidate = calculate_ro_operating_cost(
+            [8], [2], [0.5], changed_rates, provenance="modelled"
+        )
+        comparison = compare_ro_operating_plans(baseline, candidate)
+        self.assertTrue(comparison["service_volume_equivalent"])
+        self.assertFalse(comparison["same_cost_basis"])
+        self.assertFalse(comparison["qualified_comparison"])
+        self.assertIsNone(comparison["qualified_savings"])
+        self.assertIsNone(comparison["savings_percent"])
+
+    def test_does_not_qualify_savings_when_tariff_series_differs(self):
+        baseline = calculate_ro_operating_cost(
+            [10], [2], [0.5], self.rates
+        )
+        candidate = calculate_ro_operating_cost(
+            [8], [2], [0.6], self.rates
+        )
+        comparison = compare_ro_operating_plans(baseline, candidate)
+        self.assertFalse(comparison["same_cost_basis"])
+        self.assertIsNone(comparison["qualified_savings"])
+
+
 if __name__ == "__main__":
     unittest.main()
