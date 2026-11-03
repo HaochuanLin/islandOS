@@ -28,6 +28,7 @@ from islandos_core.app_workflow import (
 from islandos_core.simulation_adapter import simulation_row_to_screening_signals
 from islandos_core.virtual_instrument import make_virtual_reading
 from ro_costing import ROCostRates, calculate_ro_operating_cost
+from ro_historical_baseline import reconstruct_historical_ro_cost
 
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
@@ -109,7 +110,7 @@ with st.sidebar:
     st.caption("Island energy + water planning")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Data guide"],
+        ["Overview", "Strategy simulator", "Historical RO baseline", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -768,6 +769,155 @@ elif page == "Strategy simulator":
         )
     else:
         st.info("Set assumptions above, then click **Run strategy comparison** to see results.")
+
+elif page == "Historical RO baseline":
+    st.title("Historical RO operating-cost baseline")
+    st.write(
+        "Upload an exported RO operating log to reconstruct costs for the supplied period. "
+        "This is the first customer-facing step before testing an optimizer against a real baseline."
+    )
+    st.warning(
+        "Customer-supplied data is not independently verified. The report is historical accounting only: "
+        "it does not forecast, optimize, annualize, or prove savings."
+    )
+    baseline_file = st.file_uploader(
+        "Upload historical RO CSV", type=["csv"], key="historical_ro_csv"
+    )
+    st.markdown("**Required columns**")
+    st.code(
+        "timestamp,energy_kwh,water_produced_m3,electricity_price_per_kwh,"
+        "runtime_hours,start_events",
+        language="text",
+    )
+    st.caption(
+        "One row per fixed-duration interval. Use ISO-8601 timestamps; include a timezone when available. "
+        "Do not omit unknown costs by entering zero unless the customer confirms they are zero."
+    )
+    with st.expander("Enter customer-confirmed cost assumptions", expanded=True):
+        rate_a, rate_b, rate_c = st.columns(3)
+        with rate_a:
+            hist_currency = st.text_input("Currency", value="CNY", key="hist_currency")
+            hist_chemical = st.number_input(
+                "Chemical cost (currency/m³)", min_value=0.0, value=0.0, step=0.01,
+                key="hist_chemical",
+            )
+        with rate_b:
+            hist_variable_om = st.number_input(
+                "Variable O&M (currency/m³)", min_value=0.0, value=0.0, step=0.01,
+                key="hist_variable_om",
+            )
+            hist_maintenance = st.number_input(
+                "Maintenance (currency/runtime hour)", min_value=0.0, value=0.0, step=0.1,
+                key="hist_maintenance",
+            )
+        with rate_c:
+            hist_start_cost = st.number_input(
+                "Start/stop cost per event", min_value=0.0, value=0.0, step=0.1,
+                key="hist_start_cost",
+            )
+            hist_fixed_om = st.number_input(
+                "Annual fixed O&M", min_value=0.0, value=0.0, step=100.0,
+                key="hist_fixed_om",
+            )
+        hist_fixed_hours = st.number_input(
+            "Annual fixed-O&M allocation hours", min_value=1.0, value=8760.0, step=24.0,
+            key="hist_fixed_hours",
+        )
+    interval_a, interval_b = st.columns(2)
+    with interval_a:
+        hist_dt = st.number_input(
+            "Duration represented by each row (hours)", min_value=0.001,
+            value=1.0, step=0.5, key="hist_dt",
+        )
+    with interval_b:
+        check_intervals = st.checkbox(
+            "Reject missing/irregular timestamps", value=True, key="hist_check_intervals"
+        )
+        hist_expected_interval = st.number_input(
+            "Expected timestamp interval (hours)", min_value=0.001,
+            value=float(hist_dt), step=0.5, key="hist_expected_interval",
+            disabled=not check_intervals,
+        )
+    if baseline_file is not None:
+        try:
+            rates = ROCostRates(
+                currency=hist_currency,
+                electricity_price_per_kwh=0.0,
+                chemical_cost_per_m3=float(hist_chemical),
+                variable_om_cost_per_m3=float(hist_variable_om),
+                maintenance_cost_per_runtime_hour=float(hist_maintenance),
+                start_stop_cost_per_event=float(hist_start_cost),
+                fixed_om_per_year=float(hist_fixed_om),
+                fixed_om_allocation_hours=float(hist_fixed_hours),
+            )
+            raw_text = baseline_file.getvalue().decode("utf-8-sig")
+            reconstructed = reconstruct_historical_ro_cost(
+                io.StringIO(raw_text),
+                rates,
+                dt_hours=float(hist_dt),
+                expected_interval_hours=(
+                    float(hist_expected_interval) if check_intervals else None
+                ),
+            )
+            report = reconstructed["cost_report"]
+            st.subheader("Reconstructed historical period")
+            st.caption(
+                f"Period: {reconstructed['period_start']} → {reconstructed['period_end']} · "
+                f"{reconstructed['rows']} rows · {reconstructed['represented_hours']:.2f} represented hours"
+            )
+            st.caption(
+                f"Provenance: {reconstructed['data_provenance']} · "
+                f"Measurement status: {reconstructed['measurement_status']}"
+            )
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Total supplied cost", f"{report.total_operating_cost:,.2f} {report.currency}")
+            k2.metric(
+                "Cost per m³",
+                "N/A" if report.cost_per_m3 is None else f"{report.cost_per_m3:,.4f} {report.currency}/m³",
+            )
+            k3.metric("Water produced", f"{report.water_m3:,.2f} m³")
+            k4.metric("Electricity", f"{report.energy_kwh:,.2f} kWh")
+            breakdown = pd.DataFrame(
+                [{"Cost component": name, "Cost": value, "Currency": report.currency}
+                 for name, value in report.cost_breakdown.items()]
+            )
+            st.dataframe(breakdown, use_container_width=True, hide_index=True)
+            export = {
+                "status": reconstructed["status"],
+                "data_provenance": reconstructed["data_provenance"],
+                "measurement_status": reconstructed["measurement_status"],
+                "period_start": reconstructed["period_start"],
+                "period_end": reconstructed["period_end"],
+                "rows": reconstructed["rows"],
+                "represented_hours": reconstructed["represented_hours"],
+                "currency": report.currency,
+                "energy_kwh": report.energy_kwh,
+                "water_m3": report.water_m3,
+                "runtime_hours": report.runtime_hours,
+                "start_stop_events": report.start_stop_events,
+                **report.cost_breakdown,
+                "total_operating_cost": report.total_operating_cost,
+                "cost_per_m3": report.cost_per_m3,
+            }
+            st.download_button(
+                "Download historical baseline report (CSV)",
+                data=pd.DataFrame([export]).to_csv(index=False).encode("utf-8-sig"),
+                file_name="islandos_historical_ro_baseline.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+            with st.expander("Limitations and exclusions"):
+                for limitation in reconstructed["limitations"]:
+                    st.write(f"- {limitation}")
+                st.write(
+                    "A candidate schedule must later be compared over the same period, "
+                    "water quantity and quality, service conditions, tariff, and equipment constraints. "
+                    "Subtract integration, software, and operational-change costs before claiming net customer benefit."
+                )
+        except (ValueError, TypeError, UnicodeDecodeError) as exc:
+            st.error(f"Could not reconstruct historical costs: {exc}")
+    else:
+        st.info("Upload a historical RO CSV to calculate its actual-period cost breakdown.")
 
 else:
     st.title("Data guide")
