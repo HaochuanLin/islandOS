@@ -96,6 +96,7 @@ def calculate_ro_operating_cost(
     runtime_hours: Sequence[float] | None = None,
     start_events: Sequence[int] | None = None,
     provenance: str = "unspecified",
+    dt_hours: float = 1.0,
 ) -> ROCostReport:
     """Calculate an auditable operating-cost breakdown for one RO schedule.
 
@@ -106,6 +107,8 @@ def calculate_ro_operating_cost(
     convention (the caller should pass the actual period duration).
     """
     rates.validate()
+    if isinstance(dt_hours, bool) or not isinstance(dt_hours, (int, float)) or not math.isfinite(dt_hours) or dt_hours <= 0:
+        raise ValueError("dt_hours must be a finite number > 0")
     energy = _numeric_series(energy_kwh, "energy_kwh")
     water = _numeric_series(water_m3, "water_m3")
     if len(energy) != len(water):
@@ -140,7 +143,7 @@ def calculate_ro_operating_cost(
 
     total_energy = sum(energy)
     total_water = sum(water)
-    represented_hours = len(energy)
+    represented_hours = len(energy) * float(dt_hours)
     electricity = sum(kwh * price for kwh, price in zip(energy, prices))
     chemicals = total_water * rates.chemical_cost_per_m3
     variable_om = total_water * rates.variable_om_cost_per_m3
