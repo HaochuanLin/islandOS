@@ -47,6 +47,16 @@ def reconstruct_historical_ro_cost(
     unique and increasing. If expected_interval_hours is supplied, any gap or
     irregular interval is rejected rather than silently interpolated.
     """
+    if isinstance(dt_hours, bool) or not isinstance(dt_hours, (int, float)) or not math.isfinite(dt_hours) or dt_hours <= 0:
+        raise ValueError("dt_hours must be a finite number > 0")
+    if expected_interval_hours is not None and (
+        isinstance(expected_interval_hours, bool)
+        or not isinstance(expected_interval_hours, (int, float))
+        or not math.isfinite(expected_interval_hours)
+        or expected_interval_hours <= 0
+    ):
+        raise ValueError("expected_interval_hours must be a finite number > 0")
+
     close_after = not hasattr(source, "read")
     handle = open(source, "r", encoding="utf-8-sig", newline="") if close_after else source
     try:
@@ -67,8 +77,14 @@ def reconstruct_historical_ro_cost(
                 stamp = datetime.fromisoformat(row["timestamp"].strip().replace("Z", "+00:00"))
             except (AttributeError, ValueError) as exc:
                 raise ValueError(f"row {row_number}: timestamp must be ISO-8601") from exc
-            if timestamps and stamp <= timestamps[-1]:
-                raise ValueError(f"row {row_number}: timestamps must be strictly increasing")
+            if timestamps:
+                previous = timestamps[-1]
+                if (stamp.tzinfo is None) != (previous.tzinfo is None):
+                    raise ValueError(
+                        f"row {row_number}: timestamps must use a consistent timezone convention"
+                    )
+                if stamp <= previous:
+                    raise ValueError(f"row {row_number}: timestamps must be strictly increasing")
             timestamps.append(stamp)
             energy.append(_number(row["energy_kwh"], "energy_kwh", row_number))
             water.append(_number(row["water_produced_m3"], "water_produced_m3", row_number))
@@ -82,8 +98,6 @@ def reconstruct_historical_ro_cost(
         if not timestamps:
             raise ValueError("CSV contains no data rows")
         if expected_interval_hours is not None:
-            if not math.isfinite(expected_interval_hours) or expected_interval_hours <= 0:
-                raise ValueError("expected_interval_hours must be > 0")
             for index in range(1, len(timestamps)):
                 elapsed = (timestamps[index] - timestamps[index - 1]).total_seconds() / 3600
                 if not math.isclose(elapsed, expected_interval_hours, rel_tol=0, abs_tol=1e-6):
