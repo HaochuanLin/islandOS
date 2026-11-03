@@ -46,3 +46,10 @@ baseline = calculate_ro_operating_cost(
 - 产水量为零时，单位水成本返回 null；
 - 比较结果同时报告产水量变化，不只展示节省百分比；
 - 结果保留 provenance 标签；synthetic/modelled 不得标成 measured。
+
+
+## Streamlit 集成说明
+
+Strategy simulator 的结果页提供 RO operating-cost estimate 区域，可填写币种、药剂、可变运维、运行小时维护、启停和年度固定运维假设，并按五种策略分别输出成本明细。
+
+当前集成版仅将 **电网供电的 RO 电量** 按输入的逐时电价计费；可再生富余电量的机会成本与备用能源/燃料成本暂未计入。因此它是部分成本估算，不是完整的全能源成本核算。未填写的成本项以 0 参与计算，但界面明确提示这代表“尚未录入”，不能解释为现场成本为零。策略排序不能作为节省承诺。
