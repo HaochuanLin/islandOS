@@ -917,7 +917,7 @@ elif page == "Historical RO baseline":
         except (ValueError, TypeError, UnicodeDecodeError) as exc:
             st.error(f"Could not reconstruct historical costs: {exc}")
     else:
-        st.info("Upload a historical RO CSV to calculate its actual-period cost breakdown.")
+        st.info("Upload a customer-supplied RO CSV to reconstruct the costs for its represented period. Data is not independently verified.")
 
 else:
     st.title("Data guide")
