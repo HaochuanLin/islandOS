@@ -48,6 +48,31 @@ class TestROCosting(unittest.TestCase):
         self.assertAlmostEqual(comparison["savings_percent"], 15.625)
         self.assertEqual(comparison["water_output_change_m3"], 0.0)
 
+        self.assertTrue(comparison["service_volume_equivalent"])
+        self.assertAlmostEqual(comparison["qualified_savings"], 1.0)
+
+    def test_does_not_qualify_savings_when_candidate_produces_less_water(self):
+        baseline = calculate_ro_operating_cost([10], [2], 0.5, self.rates)
+        candidate = calculate_ro_operating_cost([8], [1.8], 0.5, self.rates)
+        comparison = compare_ro_operating_plans(baseline, candidate)
+        self.assertGreater(comparison["absolute_savings"], 0)
+        self.assertFalse(comparison["service_volume_equivalent"])
+        self.assertIsNone(comparison["qualified_savings"])
+        self.assertIsNone(comparison["savings_percent"])
+
+    def test_does_not_qualify_savings_for_different_time_coverage(self):
+        baseline = calculate_ro_operating_cost([10, 10], [2, 2], 0.5, self.rates, dt_hours=1)
+        candidate = calculate_ro_operating_cost([8], [4], 0.5, self.rates, dt_hours=1)
+        comparison = compare_ro_operating_plans(baseline, candidate)
+        self.assertFalse(comparison["same_time_coverage"])
+        self.assertFalse(comparison["service_volume_equivalent"])
+        self.assertIsNone(comparison["qualified_savings"])
+
+    def test_rejects_invalid_water_output_tolerance(self):
+        baseline = calculate_ro_operating_cost([1], [1], 0.5, self.rates)
+        with self.assertRaisesRegex(ValueError, "water_output_tolerance_fraction"):
+            compare_ro_operating_plans(baseline, baseline, water_output_tolerance_fraction=-0.1)
+
     def test_rejects_misaligned_or_invalid_inputs(self):
         with self.assertRaisesRegex(ValueError, "same number"):
             calculate_ro_operating_cost([1, 2], [1], 0.5, self.rates)
