@@ -58,6 +58,7 @@ class ROCostReport:
     water_m3: float
     runtime_hours: float
     represented_hours: float
+    time_step_hours: float
     start_stop_events: int
     electricity_cost: float
     chemical_cost: float
@@ -173,6 +174,7 @@ def calculate_ro_operating_cost(
         water_m3=total_water,
         runtime_hours=runtime,
         represented_hours=represented_hours,
+        time_step_hours=float(dt_hours),
         start_stop_events=starts,
         electricity_cost=electricity,
         chemical_cost=chemicals,
@@ -232,6 +234,15 @@ def compare_ro_operating_plans(
         rel_tol=1e-9,
         abs_tol=1e-9,
     )
+    same_sampling_grid = (
+        baseline.time_steps == candidate.time_steps
+        and math.isclose(
+            baseline.time_step_hours,
+            candidate.time_step_hours,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        )
+    )
     if baseline.water_m3 == 0:
         water_delta_fraction = 0.0 if candidate.water_m3 == 0 else math.inf
     else:
@@ -239,7 +250,7 @@ def compare_ro_operating_plans(
     equivalent_water_volume = water_delta_fraction <= water_output_tolerance_fraction
     same_cost_basis = baseline.cost_basis_signature == candidate.cost_basis_signature
     service_volume_equivalent = same_period and equivalent_water_volume
-    qualified_comparison = service_volume_equivalent and same_cost_basis
+    qualified_comparison = service_volume_equivalent and same_sampling_grid and same_cost_basis
     qualified_savings = savings if qualified_comparison else None
     savings_percent = (
         savings / baseline.total_operating_cost * 100.0
@@ -255,6 +266,11 @@ def compare_ro_operating_plans(
         "baseline_represented_hours": baseline.represented_hours,
         "candidate_represented_hours": candidate.represented_hours,
         "same_time_coverage": same_period,
+        "same_sampling_grid": same_sampling_grid,
+        "baseline_time_steps": baseline.time_steps,
+        "candidate_time_steps": candidate.time_steps,
+        "baseline_time_step_hours": baseline.time_step_hours,
+        "candidate_time_step_hours": candidate.time_step_hours,
         "baseline_water_m3": baseline.water_m3,
         "candidate_water_m3": candidate.water_m3,
         "water_output_change_m3": candidate.water_m3 - baseline.water_m3,
@@ -272,7 +288,7 @@ def compare_ro_operating_plans(
         "candidate_provenance": candidate.provenance,
         "interpretation": (
             "Savings are qualified only for matching represented hours and "
-            "water output within the configured tolerance and identical recorded cost assumptions. This does not verify "
+            "water output within the configured tolerance, identical sampling grids, and identical recorded cost assumptions. This does not verify "
             "water quality, reservoir state, demand satisfaction, equipment "
             "constraints; confirm these "
             "before claiming achievable customer savings."
