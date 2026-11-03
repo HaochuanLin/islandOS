@@ -101,7 +101,8 @@ def reconstruct_historical_ro_cost(
         return {
             "status": "historical_cost_reconstructed",
             "data_provenance": "customer_uploaded_historical_data",
-            "is_measured_site_data": True,
+            "is_customer_supplied_data": True,
+            "measurement_status": "not independently verified",
             "period_start": timestamps[0].isoformat(),
             "period_end": timestamps[-1].isoformat(),
             "rows": len(timestamps),
