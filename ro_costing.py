@@ -55,6 +55,7 @@ class ROCostReport:
     energy_kwh: float
     water_m3: float
     runtime_hours: float
+    represented_hours: float
     start_stop_events: int
     electricity_cost: float
     chemical_cost: float
@@ -168,6 +169,7 @@ def calculate_ro_operating_cost(
         energy_kwh=total_energy,
         water_m3=total_water,
         runtime_hours=runtime,
+        represented_hours=represented_hours,
         start_stop_events=starts,
         electricity_cost=electricity,
         chemical_cost=chemicals,
@@ -183,31 +185,72 @@ def calculate_ro_operating_cost(
 
 
 def compare_ro_operating_plans(
-    baseline: ROCostReport, candidate: ROCostReport
+    baseline: ROCostReport,
+    candidate: ROCostReport,
+    *,
+    water_output_tolerance_fraction: float = 0.01,
 ) -> dict:
-    """Compare two cost reports and expose service/cost differences transparently."""
+    """Compare plans; only qualify savings when service volume and period match.
+
+    Water quality, reservoir state, demand satisfaction, equipment constraints,
+    and tariff/cost-rate equivalence still require caller-side verification.
+    """
     if baseline.currency != candidate.currency:
         raise ValueError("plans must use the same currency")
+    if (
+        isinstance(water_output_tolerance_fraction, bool)
+        or not isinstance(water_output_tolerance_fraction, (int, float))
+        or not math.isfinite(water_output_tolerance_fraction)
+        or water_output_tolerance_fraction < 0
+    ):
+        raise ValueError("water_output_tolerance_fraction must be finite and non-negative")
+
     savings = baseline.total_operating_cost - candidate.total_operating_cost
+    same_period = math.isclose(
+        baseline.represented_hours,
+        candidate.represented_hours,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+    if baseline.water_m3 == 0:
+        water_delta_fraction = 0.0 if candidate.water_m3 == 0 else math.inf
+    else:
+        water_delta_fraction = abs(candidate.water_m3 - baseline.water_m3) / baseline.water_m3
+    equivalent_water_volume = water_delta_fraction <= water_output_tolerance_fraction
+    service_volume_equivalent = same_period and equivalent_water_volume
+    qualified_savings = savings if service_volume_equivalent else None
+    savings_percent = (
+        savings / baseline.total_operating_cost * 100.0
+        if service_volume_equivalent and baseline.total_operating_cost > 0 else None
+    )
     return {
         "currency": baseline.currency,
         "baseline_total_cost": baseline.total_operating_cost,
         "candidate_total_cost": candidate.total_operating_cost,
         "absolute_savings": savings,
-        "savings_percent": (
-            savings / baseline.total_operating_cost * 100.0
-            if baseline.total_operating_cost > 0 else None
-        ),
+        "qualified_savings": qualified_savings,
+        "savings_percent": savings_percent,
+        "baseline_represented_hours": baseline.represented_hours,
+        "candidate_represented_hours": candidate.represented_hours,
+        "same_time_coverage": same_period,
         "baseline_water_m3": baseline.water_m3,
         "candidate_water_m3": candidate.water_m3,
         "water_output_change_m3": candidate.water_m3 - baseline.water_m3,
+        "water_output_change_fraction": (
+            water_delta_fraction if math.isfinite(water_delta_fraction) else None
+        ),
+        "water_output_tolerance_fraction": float(water_output_tolerance_fraction),
+        "equivalent_water_volume": equivalent_water_volume,
+        "service_volume_equivalent": service_volume_equivalent,
         "baseline_cost_per_m3": baseline.cost_per_m3,
         "candidate_cost_per_m3": candidate.cost_per_m3,
         "baseline_provenance": baseline.provenance,
         "candidate_provenance": candidate.provenance,
         "interpretation": (
-            "Cost comparison only. Confirm equivalent water quantity, quality, "
-            "reservoir state, equipment constraints, and time coverage before "
-            "treating savings as operationally achievable."
+            "Savings are qualified only for matching represented hours and "
+            "water output within the configured tolerance. This does not verify "
+            "water quality, reservoir state, demand satisfaction, equipment "
+            "constraints, or identical tariff/cost assumptions; confirm these "
+            "before claiming achievable customer savings."
         ),
     }
