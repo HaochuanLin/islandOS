@@ -31,6 +31,10 @@ class TestROCosting(unittest.TestCase):
         self.assertAlmostEqual(report.cost_per_m3, 5.8)
         self.assertFalse(report.includes_sunk_capex)
 
+    def test_fixed_om_respects_subhourly_step_duration(self):
+        report = calculate_ro_operating_cost([1, 1], [1, 1], 0.5, self.rates, dt_hours=0.5)
+        self.assertAlmostEqual(report.allocated_fixed_om_cost, 1.0)
+
     def test_fixed_tariff_and_zero_water(self):
         report = calculate_ro_operating_cost([4], [0], 0.25, self.rates)
         self.assertEqual(report.electricity_cost, 1.0)
@@ -49,6 +53,8 @@ class TestROCosting(unittest.TestCase):
             calculate_ro_operating_cost([1, 2], [1], 0.5, self.rates)
         with self.assertRaisesRegex(ValueError, "finite non-negative"):
             calculate_ro_operating_cost([1, -2], [1, 1], 0.5, self.rates)
+        with self.assertRaisesRegex(ValueError, "dt_hours"):
+            calculate_ro_operating_cost([1], [1], 0.5, self.rates, dt_hours=0)
         with self.assertRaisesRegex(ValueError, "start_events"):
             calculate_ro_operating_cost([1], [1], 0.5, self.rates, start_events=[1.5])
 
