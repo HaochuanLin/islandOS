@@ -27,6 +27,7 @@ from islandos_core.app_workflow import (
 )
 from islandos_core.simulation_adapter import simulation_row_to_screening_signals
 from islandos_core.virtual_instrument import make_virtual_reading
+from ro_costing import ROCostRates, calculate_ro_operating_cost
 
 st.set_page_config(
     page_title="islandOS | Energy-Water Planner",
@@ -399,6 +400,102 @@ elif page == "Strategy simulator":
             "Direct diesel-displacement potential is reported separately from RO consumption; "
             "this app does not claim that RO operation creates additional diesel savings."
         )
+
+        st.subheader("RO operating-cost estimate")
+        st.caption(
+            "Uses the selected strategy's simulated production and grid-supplied RO energy. "
+            "Renewable-energy opportunity cost and backup-fuel cost are excluded from this first-pass estimate; "
+            "enter customer-confirmed non-electric rates. This is not a measured bill."
+        )
+        with st.expander("Enter site operating-cost assumptions", expanded=False):
+            cost_a, cost_b, cost_c = st.columns(3)
+            with cost_a:
+                cost_currency = st.text_input("Currency label", value="CNY", key="cost_currency")
+                chemical_rate = st.number_input(
+                    "Chemical cost (currency/m³)", min_value=0.0, value=0.0, step=0.01,
+                    key="cost_chemical_rate",
+                )
+            with cost_b:
+                variable_om_rate = st.number_input(
+                    "Variable O&M (currency/m³)", min_value=0.0, value=0.0, step=0.01,
+                    key="cost_variable_om_rate",
+                )
+                maintenance_rate = st.number_input(
+                    "Maintenance (currency/runtime hour)", min_value=0.0, value=0.0, step=0.1,
+                    key="cost_maintenance_rate",
+                )
+            with cost_c:
+                start_cost = st.number_input(
+                    "Cost per start event (currency)", min_value=0.0, value=0.0, step=0.1,
+                    key="cost_start_event",
+                )
+                fixed_om = st.number_input(
+                    "Annual fixed O&M (currency/year)", min_value=0.0, value=0.0, step=100.0,
+                    key="cost_fixed_om",
+                )
+            fixed_hours = st.number_input(
+                "Annual fixed-O&M allocation hours", min_value=1.0, value=8760.0, step=24.0,
+                key="cost_fixed_hours",
+            )
+        try:
+            rates = ROCostRates(
+                currency=cost_currency,
+                electricity_price_per_kwh=0.0,
+                chemical_cost_per_m3=float(chemical_rate),
+                variable_om_cost_per_m3=float(variable_om_rate),
+                maintenance_cost_per_runtime_hour=float(maintenance_rate),
+                start_stop_cost_per_event=float(start_cost),
+                fixed_om_per_year=float(fixed_om),
+                fixed_om_allocation_hours=float(fixed_hours),
+            )
+            cost_rows = []
+            for strategy_name, strategy_detail in details.groupby("strategy", sort=False):
+                strategy_detail = strategy_detail.reset_index(drop=True)
+                on = strategy_detail["ro_power_kw"].astype(float).gt(0).tolist()
+                starts = [
+                    1 if active and (index == 0 or not on[index - 1]) else 0
+                    for index, active in enumerate(on)
+                ]
+                grid_energy = [
+                    float(row.ro_energy_kwh) if row.ro_source == "grid" else 0.0
+                    for row in strategy_detail.itertuples()
+                ]
+                report = calculate_ro_operating_cost(
+                    energy_kwh=grid_energy,
+                    water_m3=strategy_detail["water_produced_m3"].astype(float).tolist(),
+                    electricity_price_per_kwh=strategy_detail["grid_price_per_kwh"].astype(float).tolist(),
+                    rates=rates,
+                    runtime_hours=[
+                        float(active) * float(dt) for active in on
+                    ],
+                    start_events=starts,
+                    provenance=source_type,
+                    dt_hours=float(dt),
+                )
+                cost_rows.append({
+                    "strategy": strategy_name,
+                    "currency": report.currency,
+                    "grid_electricity_cost": report.electricity_cost,
+                    "chemical_cost": report.chemical_cost,
+                    "variable_om_cost": report.variable_om_cost,
+                    "maintenance_cost": report.maintenance_cost,
+                    "start_stop_cost": report.start_stop_cost,
+                    "allocated_fixed_om": report.allocated_fixed_om_cost,
+                    "estimated_total_cost": report.total_operating_cost,
+                    "water_produced_m3": report.water_m3,
+                    "estimated_cost_per_m3": report.cost_per_m3,
+                    "provenance": report.provenance,
+                })
+            st.dataframe(pd.DataFrame(cost_rows), use_container_width=True, hide_index=True)
+            st.caption(
+                "Cost estimate excludes renewable-energy opportunity cost, backup energy/fuel, "
+                "demand charges, taxes, water-quality penalties and any unentered cost items. "
+                "Zero-valued assumptions mean 'not entered', not proof that the cost is zero. "
+                "Do not interpret the ranking as a validated saving until all material cost items "
+                "and equivalent service constraints are confirmed."
+            )
+        except (ValueError, TypeError) as exc:
+            st.error(f"Could not calculate operating costs: {exc}")
         st.subheader("Water outcomes by strategy")
         chart_df = summaries.set_index("strategy")[[
             "water_produced_m3", "water_served_m3", "unmet_water_demand_m3"
