@@ -28,6 +28,7 @@ Experimental pilot scenario: Nan’ao emergency desalination case. This is a bou
 ## Integrated system model
 
 - **Integrated microgrid energy–water accounting:** `islandos_core/microgrid_model.py` evaluates PV, wind, essential electricity demand, battery SOC, grid imports, diesel backup, scheduled RO demand, renewable curtailment, water production, and tank inventory in one deterministic time-step simulation. It enforces explicit energy and water balances and reports unmet essential load and unmet water demand. This is a transparent priority-policy baseline—not an optimizer or validated digital twin. See [Integrated Microgrid Model](docs/INTEGRATED_MICROGRID_MODEL.md).
+- **Common-physics schedule evaluation:** run supplied flexible-load schedules through the integrated energy–water simulator, apply service feasibility checks first, and rank candidates using transparent cost/emissions/curtailment tie-breakers. This is schedule evaluation, not an optimizer; see [Common-Physics Schedule Evaluation](docs/COMMON_PHYSICS_SCHEDULE_EVALUATION.md).
 - **Reproducible system-level benchmark:** run `python tools/run_integrated_microgrid_demo.py --hours 168 --seed 20261104` to compare a no-RO baseline with a renewable-only RO flexible-load policy on the same synthetic scenario. It exports a provenance-labelled JSON report and hourly CSV; see [Integrated Microgrid Demo](docs/INTEGRATED_MICROGRID_DEMO.md).
 
 ## What it can do today
