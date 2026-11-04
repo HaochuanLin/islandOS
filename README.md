@@ -115,6 +115,7 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 - **Engineering maturity and delivery gates:** [scored targets, acceptance criteria, and evidence requirements](docs/ENGINEERING_MATURITY_ROADMAP.md)
 - **Release acceptance checklist:** [exact-SHA CI evidence, data integrity, deployment rollback, and field-operation gates](docs/RELEASE_ACCEPTANCE_CHECKLIST.md)
 - **Plug-and-play platform roadmap:** [modular decision core, signal adapters, configuration, safety boundaries, and local deployment](docs/PLUG_AND_PLAY_PRODUCT_ROADMAP.md)
+- **Product and system blueprint:** [six-stage decision loop, current implementation map, objective hierarchy, evidence requirements, and V1–V5 exit gates](docs/PRODUCT_SYSTEM_BLUEPRINT.md)
 
 | Topic | Guide |
 |---|---|
