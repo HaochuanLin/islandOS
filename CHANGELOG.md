@@ -4,6 +4,9 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- Added an integrated deterministic microgrid energy–water model covering PV, wind, essential demand, battery SOC, grid imports, diesel backup, renewable-only scheduled RO consumption, curtailment, water production, tank inventory, and explicit unmet-service metrics. Added regression tests for energy/water conservation and operating limits.
+- Refocused the README on IslandOS as a generic predictive multi-resource decision platform; Nan’ao is described only as an experimental pilot scenario.
+
 - Added a dependency-free forecast plug-in contract with strict hourly timestamp and numeric-value validation.
 - Added a rolling-origin backtest harness for trusted third-party forecast plugins and a dispatch-compatible JSON report.
 - Added an optional PyTorch LSTM experiment and multi-series comparison against gradient boosting and seasonal baselines.
