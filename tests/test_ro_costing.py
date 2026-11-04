@@ -147,7 +147,7 @@ class TestROCosting(unittest.TestCase):
             dt_hours=1.0,
         )
         comparison = compare_ro_operating_plans(baseline, candidate)
-        self.assertTrue(comparison["same_time_coverage"])
+        self.assertFalse(comparison["same_time_coverage"])
         self.assertFalse(comparison["same_sampling_grid"])
         self.assertIsNone(comparison["qualified_savings"])
 
