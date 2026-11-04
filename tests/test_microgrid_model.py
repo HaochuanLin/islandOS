@@ -33,6 +33,14 @@ class IntegratedMicrogridModelTests(unittest.TestCase):
             diesel_cost_per_kwh=.8, diesel_emissions_kg_per_kwh=.7,
         )
         values.update(overrides)
+        # Keep optional time-series aligned when a test shortens the required inputs.
+        n = len(values["pv_power_kw"])
+        if "grid_available" not in overrides:
+            values["grid_available"] = [True] * n
+        if "grid_price_per_kwh" not in overrides:
+            values["grid_price_per_kwh"] = [0.2] * n
+        if "grid_emissions_kg_per_kwh" not in overrides:
+            values["grid_emissions_kg_per_kwh"] = None
         return MicrogridInputs(**values)
 
     def test_allocation_and_inventory_invariants_hold(self):
