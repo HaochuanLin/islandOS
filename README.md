@@ -153,19 +153,18 @@ For a concrete definition of plug-in compatibility, reproducibility, forecast ev
 
 ## Methods and AI scope
 
-The submitted Nan'ao numbers come from the assumption-driven Monte Carlo event-energy model described above. The following table distinguishes deterministic rules, optimization methods, forecasting, and advisory prototypes. The three AI experiments are exploratory research modules in this repository; they are not used for the submitted Nan'ao numbers.
+The following table distinguishes deterministic simulation policies, optimization methods, forecasting, and advisory prototypes. These are separate research modules with different maturity levels; they are not yet unified as a validated end-to-end operational controller.
 
-| Module | What it is | Machine learning? | Used for submitted Nan'ao numbers? |
+| Module | What it is | Machine learning? | Current scope |
 |---|---|---|---|
-| Nan'ao annual event-energy Monte Carlo model (`nan_ao_scenario.py`) | Assumption-driven event sampling and energy-to-water calculation | No | Yes |
-| Priority-based flexible-load policies | Fixed-priority rules | No | No |
-| Rolling-horizon dispatch prototype | Receding-horizon planning, re-planned each step | No | No |
-| NSGA-II / grid search | Evolutionary multi-objective optimization / enumerated parameter search | No | No (experimental) |
-| Water-demand forecasting baselines and optional ML/LSTM comparison | Forecasting | Optional | No (site accuracy not established) |
-| Read-only telemetry prototype | Recommendation-only review dashboard | No | No (no actuator control) |
-| Renewable-surplus forecasting experiment (exploratory) | Persistence and seasonal-naive baselines; optional scikit-learn model | Optional | No |
-| Telemetry anomaly-detection experiment (exploratory) | Rolling median/MAD baseline; optional IsolationForest | Optional | No |
-| Structured recommendation explanations (exploratory) | Rule-derived reason codes and template-generated text | No | No |
+| Integrated microgrid physical model | Deterministic PV/wind, essential-load, battery, grid, diesel, RO, and water-inventory accounting | No | Implemented simulation baseline |
+| Priority-based flexible-load policies | Fixed-priority rules | No | Experimental dispatch policies |
+| Rolling-horizon dispatch prototype | Receding-horizon planning, re-planned each step | No | Experimental planning workflow |
+| NSGA-II / grid search | Evolutionary multi-objective optimization / enumerated parameter search | No | Experimental; not yet coupled to the integrated model |
+| Renewable, load, and water-demand forecasting experiments | Baseline and optional ML model evaluation | Optional | Separate experiments; not a unified site forecast |
+| Read-only telemetry prototype | Recommendation-only review dashboard | No | Read-only; no actuator control |
+| Telemetry anomaly-detection experiment (exploratory) | Rolling median/MAD baseline; optional IsolationForest | Optional | Exploratory |
+| Structured recommendation explanations (exploratory) | Rule-derived reason codes and template-generated text | No | Exploratory |
 
 The AI experiments are research modules, not a deployed control system. All synthetic inputs are labeled as scenario assumptions, not measured real-world data. Hard operating constraints remain rule-based; model outputs are advisory and must not bypass input-quality checks or operator approval.
 
@@ -173,13 +172,13 @@ The AI experiments are research modules, not a deployed control system. All synt
 
 | Capability | Status |
 |---|---|
-| Synthetic RO demo and water-inventory accounting | Implemented with simplified physics |
+| Integrated PV/wind–battery–grid–diesel–RO–water simulation | Implemented deterministic physical-accounting baseline |
 | Interactive strategy comparison and hourly audit | Available as a local Streamlit prototype |
 | Flexible-load dispatch and multi-objective optimization | Experimental; limited candidate space and simplified plant models |
 | Public-data import and time-series quality checks | Implemented for selected data sources and formats |
 | Water-demand forecasting | Baselines and optional ML comparison/backtesting; site accuracy not established |
 | Weather-parameter forecasting | Experimental; not an island PV, wind, or electricity-demand forecast |
-| Integrated forecast-aware island controller | Not implemented as a validated end-to-end system |
+| Unified forecast-to-optimization decision loop | Not implemented as a validated end-to-end system |
 | Live equipment control, site safety validation, and field-proven savings | Not available |
 
 ## Public measured-data forecast validation
@@ -194,7 +193,7 @@ The optional PyTorch LSTM experiment now compares the neural model with the incu
 
 - Simulation and benchmark fixtures are synthetic unless a dataset is explicitly identified as measured or public.
 - Public data from another site can test the data pipeline, but it does not establish accuracy for any other island.
-- The RO and cold-storage models simplify real equipment behavior; the full island electrical system, battery dispatch, network constraints, protection, and plant interlocks are not comprehensively modelled.
+- The integrated model simplifies battery, grid, diesel, and RO behavior; network power flow, voltage/frequency, protection, detailed generator dynamics, equipment interlocks, and comprehensive plant physics are not modelled.
 - Optimizer results are candidate trade-offs under declared assumptions, not guaranteed operating schedules or safety approvals.
 - Cost estimates are preliminary and omit several project-specific financial and operational factors. No field-proven savings, emissions reductions, or resilience gains are claimed.
 
@@ -229,17 +228,3 @@ python tools/islandos_doctor.py --config path/to/site_parameters.json
 ```
 
 Exit code `0` means these local structural checks passed; exit code `2` means attention is needed. The doctor does not install dependencies, verify exact installed package versions, contact external services, validate the truth of site data, or certify operational safety. A passing check is only a starting point for tests and scenario-specific review.
-
-
-## Nan'ao emergency resilience pilot
-
-The single-scenario hybrid simulation models two existing 50 kW RO units in parallel (100 kW total). Valley annual water is formula-derived from 100 kW, 4.0 kWh/m³, an 8-hour daily valley window, and a 0.925 availability factor. Wind yield is the median of 1,000 Monte Carlo runs by default; total annual wind-curtailment hours are reported only as simulated output statistics.
-
-Run:
-
-```bash
-python islandos_nanao_hybrid.py
-python -m unittest discover -s tests -p 'test_nan_ao_hybrid.py' -v
-```
-
-The script writes `outputs/scenario_result.csv` with one data row (`IslandOS_hybrid_clean_energy`) and `outputs/sim_meta.json` with parameters and calculation notes. Default seed: `20261028`. Existing RO assets incur no new-equipment CAPEX. Chemical/O&M cost bounds are unverified screening assumptions; the model is not field-calibrated. See [scenario limitations](docs/NAN_AO_SCENARIO.md).
