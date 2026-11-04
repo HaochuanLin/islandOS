@@ -1,8 +1,8 @@
-# IslandOS: Plug-in energy–water decision platform for island freshwater resilience
+# IslandOS: Predictive Multi-Resource Optimization for Distributed Infrastructure
 
 <p align="center">
-  <strong>A modular, plug-in simulation and decision platform for island energy–water resilience.</strong><br>
-  Rule-based look-ahead scheduling explores when surplus wind/solar electricity can drive modular reverse osmosis (RO) and build an emergency freshwater buffer while protecting essential electricity demand.
+  <strong>A modular, simulation-first decision platform for energy-constrained regions and distributed infrastructure.</strong><br>
+  IslandOS is designed to connect renewable generation, storage, grid and backup supply, essential demand, flexible loads, and resource inventories in one predictive optimization workflow.
 </p>
 
 <p align="center">
@@ -21,13 +21,13 @@ Use the interactive app to explore energy–water dispatch strategies, adjust RO
 </p>
 <p align="center"><em>Illustrative synthetic simulation only—not field measurements or evidence of real-island performance.</em></p>
 
-## Nan'ao scenario: emergency desalination case
+## Experimental pilot scenario
 
-The single-scenario hybrid pilot is implemented in [`islandos_nanao_hybrid.py`](islandos_nanao_hybrid.py). It models two existing 50 kW skid-mounted RO units coordinated in parallel (100 kW aggregate rating), with valley-power annual water calculated from rated power, 4.0 kWh/m³ specific energy, an 8-hour daily valley window, and a 0.925 availability factor. Wind-curtailment yield comes from 1,000 Monte Carlo runs by default; annual curtailment hours are simulated output statistics, not a preset input.
+Experimental pilot scenario: Nan’ao emergency desalination case. This is a bounded demonstration scenario, not the IslandOS product identity or technical boundary. Its assumptions are scenario inputs, not measured site data. The generic app and integrated microgrid model are designed independently of this pilot.
 
-The competition submission documents multiple existing small-scale RO desalination units across Nan'ao island. Exact hardware inventory will be confirmed during on-site pilot investigation. All equipment is treated as pre-existing, with no new-equipment CAPEX. Results are assumption-driven and not field-calibrated; see [scenario calculation and limitations](docs/NAN_AO_SCENARIO.md).
+## Integrated system model
 
-The scenario model is not a dispatch scheduler and does not control equipment. Any future pilot would begin in advisory mode with operator confirmation and safety validation. The generic interactive app does not generate the quantitative results from this case.
+- **Integrated microgrid energy–water accounting:** `islandos_core/microgrid_model.py` evaluates PV, wind, essential electricity demand, battery SOC, grid imports, diesel backup, scheduled RO demand, renewable curtailment, water production, and tank inventory in one deterministic time-step simulation. It enforces explicit energy and water balances and reports unmet essential load and unmet water demand. This is a transparent priority-policy baseline—not an optimizer or validated digital twin. See [Integrated Microgrid Model](docs/INTEGRATED_MICROGRID_MODEL.md).
 
 ## What it can do today
 
