@@ -23,7 +23,7 @@ class ScheduleEvaluatorTests(unittest.TestCase):
 
     def test_all_candidates_use_same_physical_constraints(self):
         ranked = rank_ro_schedules(
-            {"always_on": [20, 20, 20], "surplus_only": [0, 20, 0]},
+            {"no_ro": [0, 0, 0], "surplus_only": [0, 20, 0]},
             self.inputs, self.config,
         )
         self.assertEqual(ranked[0].schedule_id, "surplus_only")
