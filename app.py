@@ -862,9 +862,16 @@ elif page == "Microgrid screening":
         st.dataframe(display, use_container_width=True, hide_index=True)
         winner = ranked[0]
         st.subheader("Why this candidate ranked first")
-        st.write(
-            f"**{winner.schedule_id}** ranked first under the fixed lexicographic rule: "
-            "service feasibility first, then unmet essential electricity, unmet water, "
+        if winner.feasible:
+            st.success(f"{winner.schedule_id} is the highest-ranked candidate and meets the modelled essential-electricity and water-demand constraints.")
+        else:
+            st.warning(
+                f"No candidate meets all modelled service constraints. {winner.schedule_id} "
+                "ranks first only as the least-infeasible option under the screening rule; "
+                "do not treat it as an acceptable operating plan."
+            )
+        st.caption(
+            "Ranking order: feasibility first, then unmet essential electricity, unmet water, "
             "operating cost, emissions, and renewable curtailment."
         )
         k1, k2, k3, k4 = st.columns(4)
