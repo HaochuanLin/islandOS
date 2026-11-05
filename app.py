@@ -947,7 +947,8 @@ elif page == "Microgrid screening":
             st.write("- Nominal: unchanged inputs.")
             st.write("- Low renewables: PV and wind reduced to 80% of baseline.")
             st.write("- High demand: essential electricity and water demand increased to 115%.")
-            st.write("- Combined stress: both low-renewable and high-demand assumptions apply.")
+            st.write("- High energy price: grid tariff and diesel unit cost increased to 125%.")
+            st.write("- Combined stress: low renewables, high demand, and higher energy prices apply.")
             st.write(
                 "Robust feasible means all tested scenarios satisfy the modelled essential-electricity "
                 "and water-service constraints. It is not a reliability guarantee."
