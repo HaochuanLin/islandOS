@@ -69,7 +69,9 @@ class IntegratedMicrogridModelTests(unittest.TestCase):
             self.config(),
         )
         self.assertEqual(result.ro_power_served_kw[0], 20)
-        self.assertEqual(result.renewable_curtailed_kw[0], 5)
+        # The remaining 5 kW is charged into the battery before curtailment.
+        self.assertEqual(result.battery_charge_kw[0], 5)
+        self.assertEqual(result.renewable_curtailed_kw[0], 0)
 
     def test_battery_charges_from_remaining_renewables(self):
         result = simulate_microgrid(
