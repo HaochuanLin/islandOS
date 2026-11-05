@@ -170,3 +170,117 @@ def screen_renewable_surplus_candidates(
     """Generate and rank simple surplus-following candidates on common physics."""
     candidates = generate_renewable_surplus_candidates(inputs, config)
     return rank_ro_schedules(candidates, inputs, config)
+
+
+
+@dataclass(frozen=True)
+class RobustnessEvaluation:
+    """Worst-case summary across explicit deterministic stress scenarios."""
+
+    schedule_id: str
+    robust_feasible: bool
+    scenarios_evaluated: int
+    worst_essential_unserved_kwh: float
+    worst_unmet_water_m3: float
+    worst_operating_cost: float
+    worst_emissions_kg: float
+    scenario_results: Mapping[str, ScheduleEvaluation]
+
+    def to_dict(self) -> dict[str, str | bool | int | float]:
+        return {
+            "schedule_id": self.schedule_id,
+            "robust_feasible": self.robust_feasible,
+            "scenarios_evaluated": self.scenarios_evaluated,
+            "worst_essential_unserved_kwh": self.worst_essential_unserved_kwh,
+            "worst_unmet_water_m3": self.worst_unmet_water_m3,
+            "worst_operating_cost": self.worst_operating_cost,
+            "worst_emissions_kg": self.worst_emissions_kg,
+        }
+
+
+def evaluate_schedule_robustness(
+    schedules: Mapping[str, Sequence[float]],
+    inputs: MicrogridInputs,
+    config: MicrogridConfig,
+    *,
+    stress_scenarios: Mapping[str, Mapping[str, float]] | None = None,
+) -> list[RobustnessEvaluation]:
+    """Re-simulate each schedule under deterministic input stress multipliers.
+
+    Multipliers apply to PV, wind, essential load and water demand. Defaults
+    include nominal, low-renewable, high-demand and combined stress cases.
+    This is sensitivity analysis, not probabilistic forecasting or optimization.
+    """
+    if not schedules:
+        raise ValueError("at least one candidate schedule is required")
+    scenarios = stress_scenarios or {
+        "nominal": {},
+        "low_renewables": {"pv": 0.8, "wind": 0.8},
+        "high_demand": {"essential_load": 1.15, "water_demand": 1.15},
+        "combined_stress": {
+            "pv": 0.8, "wind": 0.8,
+            "essential_load": 1.15, "water_demand": 1.15,
+        },
+    }
+    if not scenarios:
+        raise ValueError("at least one stress scenario is required")
+
+    allowed = {"pv", "wind", "essential_load", "water_demand"}
+    validated: dict[str, dict[str, float]] = {}
+    for scenario_name, multipliers in scenarios.items():
+        if not isinstance(scenario_name, str) or not scenario_name.strip():
+            raise ValueError("stress scenario names must be non-empty strings")
+        if not isinstance(multipliers, Mapping):
+            raise ValueError("stress scenario multipliers must be mappings")
+        unknown = set(multipliers) - allowed
+        if unknown:
+            raise ValueError(f"unsupported stress multiplier(s): {sorted(unknown)}")
+        clean: dict[str, float] = {}
+        for key, value in multipliers.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"{scenario_name}.{key} must be finite and non-negative")
+            clean[key] = float(value)
+        validated[scenario_name] = clean
+
+    base_series = {
+        "pv": np.asarray(inputs.pv_power_kw, dtype=float),
+        "wind": np.asarray(inputs.wind_power_kw, dtype=float),
+        "essential_load": np.asarray(inputs.essential_load_kw, dtype=float),
+        "water_demand": np.asarray(inputs.water_demand_m3, dtype=float),
+    }
+    all_results: list[RobustnessEvaluation] = []
+    for schedule_id, schedule in schedules.items():
+        per_scenario: dict[str, ScheduleEvaluation] = {}
+        for scenario_name, factors in validated.items():
+            stressed_inputs = replace(
+                inputs,
+                pv_power_kw=base_series["pv"] * factors.get("pv", 1.0),
+                wind_power_kw=base_series["wind"] * factors.get("wind", 1.0),
+                essential_load_kw=base_series["essential_load"] * factors.get("essential_load", 1.0),
+                water_demand_m3=base_series["water_demand"] * factors.get("water_demand", 1.0),
+            )
+            per_scenario[scenario_name] = evaluate_ro_schedule(
+                schedule_id, schedule, stressed_inputs, config
+            )
+        values = list(per_scenario.values())
+        all_results.append(RobustnessEvaluation(
+            schedule_id=schedule_id,
+            robust_feasible=all(item.feasible for item in values),
+            scenarios_evaluated=len(values),
+            worst_essential_unserved_kwh=max(item.essential_unserved_kwh for item in values),
+            worst_unmet_water_m3=max(item.unmet_water_m3 for item in values),
+            worst_operating_cost=max(item.operating_cost for item in values),
+            worst_emissions_kg=max(item.emissions_kg for item in values),
+            scenario_results=per_scenario,
+        ))
+    return sorted(
+        all_results,
+        key=lambda item: (
+            not item.robust_feasible,
+            item.worst_essential_unserved_kwh,
+            item.worst_unmet_water_m3,
+            item.worst_operating_cost,
+            item.worst_emissions_kg,
+            item.schedule_id,
+        ),
+    )
