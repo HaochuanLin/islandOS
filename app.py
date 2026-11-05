@@ -862,6 +862,18 @@ elif page == "Microgrid screening":
             row["water_served_m3"] = float(item.result.water_served_m3.sum())
             row["final_water_inventory_m3"] = float(item.result.water_inventory_m3[-1])
             rows.append(row)
+        baseline_row = next((row for row in rows if row["schedule_id"] == "no_ro"), None)
+        for row in rows:
+            served = row["water_served_m3"]
+            row["whole_system_operating_cost_per_m3_served"] = (
+                row["operating_cost"] / served if served > 0 else None
+            )
+            if baseline_row is not None:
+                additional_water = served - baseline_row["water_served_m3"]
+                row["incremental_cost_per_additional_m3_vs_no_ro"] = (
+                    (row["operating_cost"] - baseline_row["operating_cost"]) / additional_water
+                    if additional_water > 1e-9 else None
+                )
         frame = pd.DataFrame(rows)
         st.caption(
             f"Data provenance: Synthetic demo data — not measured site data · "
@@ -985,6 +997,23 @@ elif page == "Microgrid screening":
             "water_produced_m3", "unmet_water_m3", "renewable_curtailed_kwh"
         ]]
         st.bar_chart(chart)
+        st.subheader("Customer economics indicators")
+        st.dataframe(
+            frame[[
+                "schedule_id", "water_served_m3", "operating_cost",
+                "whole_system_operating_cost_per_m3_served",
+                "incremental_cost_per_additional_m3_vs_no_ro",
+            ]].round(4),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "Whole-system operating cost per m³ divides modelled site operating cost by water served. "
+            "Incremental cost per additional m³ compares each candidate with the no-RO reference. "
+            "These are scenario accounting indicators, not RO equipment tariffs, customer bills, "
+            "CAPEX payback, or validated savings; values are only meaningful when service and cost "
+            "boundaries are comparable."
+        )
         st.download_button(
             "Download candidate comparison (CSV)",
             data=frame.to_csv(index=False).encode("utf-8-sig"),
