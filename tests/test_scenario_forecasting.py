@@ -2,8 +2,8 @@
 import unittest
 
 from islandos_core.scenario_forecasting import (
-    evaluate_forecast, forecast_microgrid_signals, rolling_origin_evaluate,
-    seasonal_naive_forecast,
+    evaluate_forecast, forecast_microgrid_signals, generate_synthetic_microgrid_history,
+    rolling_origin_evaluate, seasonal_naive_forecast,
 )
 
 
@@ -39,6 +39,38 @@ class TestScenarioForecasting(unittest.TestCase):
             seasonal_naive_forecast([1, -1], 2)
         with self.assertRaises(ValueError):
             seasonal_naive_forecast([1, 2], 0)
+
+
+    def test_synthetic_history_is_reproducible_variable_and_non_negative(self):
+        kwargs = {
+            "pv_peak_kw": 40.0, "wind_mean_kw": 12.0,
+            "essential_load_mean_kw": 20.0,
+            "water_demand_mean_m3_per_hour": 0.5,
+        }
+        first = generate_synthetic_microgrid_history(**kwargs)
+        second = generate_synthetic_microgrid_history(**kwargs)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first["pv_kw"]), 168)
+        for values in first.values():
+            self.assertTrue(all(value >= 0 for value in values))
+        self.assertNotEqual(first["pv_kw"][:24], first["pv_kw"][24:48])
+        self.assertNotEqual(first["water_demand_m3"][:24], first["water_demand_m3"][24:48])
+        replay = rolling_origin_evaluate(
+            first["water_demand_m3"], initial_history=48, horizon=24
+        )
+        self.assertGreater(replay.mae, 0.0)
+
+    def test_synthetic_history_rejects_invalid_parameters(self):
+        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+            generate_synthetic_microgrid_history(
+                pv_peak_kw=-1, wind_mean_kw=1, essential_load_mean_kw=1,
+                water_demand_mean_m3_per_hour=1,
+            )
+        with self.assertRaisesRegex(ValueError, "hours must be"):
+            generate_synthetic_microgrid_history(
+                pv_peak_kw=1, wind_mean_kw=1, essential_load_mean_kw=1,
+                water_demand_mean_m3_per_hour=1, hours=24,
+            )
 
 
 if __name__ == "__main__":
