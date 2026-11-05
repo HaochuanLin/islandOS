@@ -217,15 +217,17 @@ def evaluate_schedule_robustness(
         "nominal": {},
         "low_renewables": {"pv": 0.8, "wind": 0.8},
         "high_demand": {"essential_load": 1.15, "water_demand": 1.15},
+        "high_energy_price": {"grid_price": 1.25, "diesel_cost": 1.25},
         "combined_stress": {
             "pv": 0.8, "wind": 0.8,
             "essential_load": 1.15, "water_demand": 1.15,
+            "grid_price": 1.25, "diesel_cost": 1.25,
         },
     } if stress_scenarios is None else stress_scenarios)
     if not scenarios:
         raise ValueError("at least one stress scenario is required")
 
-    allowed = {"pv", "wind", "essential_load", "water_demand"}
+    allowed = {"pv", "wind", "essential_load", "water_demand", "grid_price", "diesel_cost"}
     validated: dict[str, dict[str, float]] = {}
     for scenario_name, multipliers in scenarios.items():
         if not isinstance(scenario_name, str) or not scenario_name.strip():
@@ -247,6 +249,8 @@ def evaluate_schedule_robustness(
         "wind": np.asarray(inputs.wind_power_kw, dtype=float),
         "essential_load": np.asarray(inputs.essential_load_kw, dtype=float),
         "water_demand": np.asarray(inputs.water_demand_m3, dtype=float),
+        "grid_price": (None if inputs.grid_price_per_kwh is None else
+                       np.asarray(inputs.grid_price_per_kwh, dtype=float)),
     }
     all_results: list[RobustnessEvaluation] = []
     for schedule_id, schedule in schedules.items():
@@ -258,6 +262,9 @@ def evaluate_schedule_robustness(
                 wind_power_kw=base_series["wind"] * factors.get("wind", 1.0),
                 essential_load_kw=base_series["essential_load"] * factors.get("essential_load", 1.0),
                 water_demand_m3=base_series["water_demand"] * factors.get("water_demand", 1.0),
+                grid_price_per_kwh=(None if base_series["grid_price"] is None else
+                                     base_series["grid_price"] * factors.get("grid_price", 1.0)),
+                diesel_cost_per_kwh=(inputs.diesel_cost_per_kwh * factors.get("diesel_cost", 1.0)),
             )
             per_scenario[scenario_name] = evaluate_ro_schedule(
                 schedule_id, schedule, stressed_inputs, config
