@@ -21,7 +21,9 @@ from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
-from islandos_core.schedule_evaluator import screen_renewable_surplus_candidates
+from islandos_core.schedule_evaluator import (
+    screen_renewable_surplus_candidates, evaluate_schedule_robustness,
+)
 from islandos_core.scenario_forecasting import (
     forecast_microgrid_signals, generate_synthetic_microgrid_history,
     rolling_origin_evaluate,
@@ -843,6 +845,12 @@ elif page == "Microgrid screening":
         )
         try:
             ranked = screen_renewable_surplus_candidates(scenario, config)
+            candidate_schedules = {
+                item.schedule_id: item.result.ro_requested_power_kw for item in ranked
+            }
+            robustness = evaluate_schedule_robustness(
+                candidate_schedules, scenario, config
+            )
         except (ValueError, TypeError) as exc:
             st.error(f"Could not evaluate this scenario: {exc}")
             st.stop()
@@ -919,6 +927,31 @@ elif page == "Microgrid screening":
             "Ranking order: feasibility first, then unmet essential electricity, unmet water, "
             "operating cost, emissions, and renewable curtailment."
         )
+
+        st.subheader("Stress-test robustness")
+        st.caption(
+            "The same candidate schedules are replayed under deterministic input shocks. "
+            "These are illustrative sensitivity assumptions, not probabilities or measured forecast errors."
+        )
+        robustness_frame = pd.DataFrame([item.to_dict() for item in robustness])
+        st.dataframe(
+            robustness_frame[[
+                "schedule_id", "robust_feasible", "scenarios_evaluated",
+                "worst_essential_unserved_kwh", "worst_unmet_water_m3",
+                "worst_operating_cost", "worst_emissions_kg",
+            ]].round(3),
+            use_container_width=True,
+            hide_index=True,
+        )
+        with st.expander("Stress scenario assumptions"):
+            st.write("- Nominal: unchanged inputs.")
+            st.write("- Low renewables: PV and wind reduced to 80% of baseline.")
+            st.write("- High demand: essential electricity and water demand increased to 115%.")
+            st.write("- Combined stress: both low-renewable and high-demand assumptions apply.")
+            st.write(
+                "Robust feasible means all tested scenarios satisfy the modelled essential-electricity "
+                "and water-service constraints. It is not a reliability guarantee."
+            )
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Water produced", f"{winner.water_produced_m3:,.1f} m³")
         k2.metric("Water demand unmet", f"{winner.unmet_water_m3:,.1f} m³")
