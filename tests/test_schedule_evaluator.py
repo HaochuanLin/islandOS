@@ -61,6 +61,22 @@ class ScheduleEvaluatorTests(unittest.TestCase):
         self.assertLessEqual(float(candidates["renewable_surplus_full"].max()), self.config.ro_rated_power_kw)
         self.assertEqual(candidates["renewable_surplus_full"].tolist(), [0.0, 20.0, 0.0])
 
+    def test_candidate_generator_rejects_non_finite_ro_rating(self):
+        from dataclasses import replace
+        for invalid in (float("nan"), float("inf"), 0.0, -1.0):
+            with self.subTest(rating=invalid):
+                config = replace(self.config, ro_rated_power_kw=invalid)
+                with self.assertRaisesRegex(ValueError, "finite and > 0"):
+                    generate_renewable_surplus_candidates(self.inputs, config)
+
+    def test_candidate_generator_rejects_non_numeric_series(self):
+        scenario = MicrogridInputs(
+            pv_power_kw=["bad"], wind_power_kw=[0], essential_load_kw=[0],
+            ro_requested_power_kw=[0], water_demand_m3=[0],
+        )
+        with self.assertRaisesRegex(ValueError, "numeric series"):
+            generate_renewable_surplus_candidates(scenario, self.config)
+
     def test_generated_candidates_are_evaluated_by_common_physics(self):
         ranked = screen_renewable_surplus_candidates(self.inputs, self.config)
         self.assertEqual(len(ranked), 3)
