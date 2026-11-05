@@ -175,6 +175,17 @@ class ScheduleEvaluatorTests(unittest.TestCase):
             )
 
 
+
+    def test_robustness_preserves_grid_availability_input_validation(self):
+        invalid = MicrogridInputs(
+            pv_power_kw=[0], wind_power_kw=[0], essential_load_kw=[0],
+            ro_requested_power_kw=[0], water_demand_m3=[0],
+            grid_available=[2],
+        )
+        with self.assertRaisesRegex(ValueError, "grid_available must be a boolean"):
+            evaluate_schedule_robustness({"no_ro": [0]}, invalid, self.config)
+
+
     def test_robustness_rejects_empty_scenarios(self):
         with self.assertRaisesRegex(ValueError, "at least one stress"):
             evaluate_schedule_robustness(
