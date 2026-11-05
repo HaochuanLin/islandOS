@@ -36,6 +36,36 @@ for item in ranked:
 Use synthetic scenarios to test code paths and invariants, clearly labelled as synthetic. A real-world saving claim requires site data, matched service coverage, equivalent water output and quality, confirmed cost assumptions, and field validation. The evaluator does not issue equipment commands.
 
 
+
+## Deterministic stress-scenario robustness screening
+
+`evaluate_schedule_robustness(schedules, inputs, config)` replays every supplied schedule through the same physical model under four explicit default cases:
+
+| Scenario | PV / wind | Essential load / water demand |
+|---|---:|---:|
+| Nominal | 100% | 100% |
+| Low renewables | 80% | 100% |
+| High demand | 100% | 115% |
+| Combined stress | 80% | 115% |
+
+The function returns per-schedule worst-case essential electricity not served, unmet water, operating cost, and emissions, plus the detailed result for each scenario. `robust_feasible` is true only when the schedule remains feasible in every tested case. Custom named scenarios may supply non-negative multipliers for `pv`, `wind`, `essential_load`, and `water_demand`.
+
+Example:
+
+```python
+from islandos_core.schedule_evaluator import (
+    generate_renewable_surplus_candidates,
+    evaluate_schedule_robustness,
+)
+
+candidates = generate_renewable_surplus_candidates(inputs, config)
+results = evaluate_schedule_robustness(candidates, inputs, config)
+for item in results:
+    print(item.to_dict())
+```
+
+This is deterministic sensitivity / stress testing. The default multipliers are illustrative assumptions, not probability distributions, measured forecast errors, weather forecasts, or a robust optimizer. Customers must replace them with locally justified stress ranges. No site savings, reliability guarantee, or safe-control claim follows from this screening alone.
+
 ## Reproducible exported comparison
 
 Run `python tools/run_schedule_screening_demo.py --hours 168 --seed 20261105` to export a provenance-labelled JSON report and ranked CSV. The report records the candidate rules, common scenario, model assumptions, ranking order, and metrics. It is an auditable synthetic demonstration, not site validation.
