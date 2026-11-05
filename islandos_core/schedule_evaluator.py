@@ -257,8 +257,13 @@ def evaluate_schedule_robustness(
                        np.asarray(inputs.grid_price_per_kwh, dtype=float)),
         "grid_available": (np.ones(len(inputs.pv_power_kw), dtype=bool)
                            if inputs.grid_available is None else
-                           np.asarray(inputs.grid_available, dtype=bool)),
+                           np.asarray(inputs.grid_available)),
     }
+    grid_availability = base_series["grid_available"]
+    if (grid_availability.shape != (len(base_series["pv"]),)
+            or not np.all(np.isin(grid_availability, [True, False, 0, 1]))):
+        raise ValueError("grid_available must be a boolean series matching the inputs")
+    base_series["grid_available"] = grid_availability.astype(bool)
     all_results: list[RobustnessEvaluation] = []
     for schedule_id, schedule in schedules.items():
         per_scenario: dict[str, ScheduleEvaluation] = {}
