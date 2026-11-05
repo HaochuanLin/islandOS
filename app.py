@@ -943,6 +943,28 @@ elif page == "Microgrid screening":
             use_container_width=True,
             hide_index=True,
         )
+        stress_detail_rows = []
+        for robustness_item in robustness:
+            for scenario_name, evaluation in robustness_item.scenario_results.items():
+                stress_detail_rows.append({
+                    "schedule_id": robustness_item.schedule_id,
+                    "stress_scenario": scenario_name,
+                    **evaluation.to_dict(),
+                })
+        stress_detail_frame = pd.DataFrame(stress_detail_rows)
+        with st.expander("Inspect scenario-by-scenario results"):
+            st.dataframe(
+                stress_detail_frame.round(3),
+                use_container_width=True,
+                hide_index=True,
+            )
+            st.download_button(
+                "Download stress-test audit (CSV)",
+                data=stress_detail_frame.to_csv(index=False).encode("utf-8-sig"),
+                file_name="islandos_stress_test_audit.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
         with st.expander("Stress scenario assumptions"):
             st.write("- Nominal: unchanged inputs.")
             st.write("- Low renewables: PV and wind reduced to 80% of baseline.")
