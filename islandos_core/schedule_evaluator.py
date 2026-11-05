@@ -1,7 +1,7 @@
 """Common-physics evaluation of candidate flexible-load schedules.
 
-Every schedule is simulated by the same integrated physical model. This module
-ranks supplied candidates; it does not generate schedules or claim optimality.
+Every schedule is simulated by the same integrated physical model. This module generates a small set of transparent rule-based candidates and
+ranks them; it does not forecast inputs or claim global optimality.
 """
 from __future__ import annotations
 
@@ -135,18 +135,27 @@ def generate_renewable_surplus_candidates(
     The physical evaluator still clips service to actual renewable headroom,
     RO nameplate capacity, and water-tank headroom.
     """
-    pv = np.asarray(inputs.pv_power_kw, dtype=float)
-    wind = np.asarray(inputs.wind_power_kw, dtype=float)
-    essential = np.asarray(inputs.essential_load_kw, dtype=float)
+    try:
+        pv = np.asarray(inputs.pv_power_kw, dtype=float)
+        wind = np.asarray(inputs.wind_power_kw, dtype=float)
+        essential = np.asarray(inputs.essential_load_kw, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("PV, wind, and essential-load inputs must be numeric series") from exc
     if any(x.ndim != 1 or x.size == 0 or not np.all(np.isfinite(x)) or np.any(x < 0)
            for x in (pv, wind, essential)):
         raise ValueError("PV, wind, and essential-load inputs must be finite non-negative series")
     if not (len(pv) == len(wind) == len(essential)):
         raise ValueError("PV, wind, and essential-load horizons must match")
-    if config.ro_rated_power_kw <= 0:
-        raise ValueError("RO rated power must be > 0 to generate candidates")
+    rated_power = config.ro_rated_power_kw
+    if (
+        isinstance(rated_power, (bool, np.bool_))
+        or not isinstance(rated_power, (int, float, np.integer, np.floating))
+        or not math.isfinite(float(rated_power))
+        or rated_power <= 0
+    ):
+        raise ValueError("RO rated power must be finite and > 0 to generate candidates")
 
-    surplus = np.clip(pv + wind - essential, 0.0, config.ro_rated_power_kw)
+    surplus = np.clip(pv + wind - essential, 0.0, float(rated_power))
     return {
         "no_ro": np.zeros(len(pv), dtype=float),
         "conservative_surplus_50pct": surplus * 0.5,
