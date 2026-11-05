@@ -92,6 +92,55 @@ def rolling_origin_evaluate(
     return evaluate_forecast(actual_all, predicted_all)
 
 
+
+def generate_synthetic_microgrid_history(
+    *, pv_peak_kw: float, wind_mean_kw: float, essential_load_mean_kw: float,
+    water_demand_mean_m3_per_hour: float, hours: int = 168,
+) -> dict[str, list[float]]:
+    """Create a deterministic, deliberately non-stationary synthetic hourly history.
+
+    Day-to-day variation makes replay metrics non-trivial; this is test/demo
+    data only and must never be represented as measured site history.
+    """
+    parameters = {
+        "pv_peak_kw": pv_peak_kw,
+        "wind_mean_kw": wind_mean_kw,
+        "essential_load_mean_kw": essential_load_mean_kw,
+        "water_demand_mean_m3_per_hour": water_demand_mean_m3_per_hour,
+    }
+    for name, value in parameters.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be numeric")
+        if not math.isfinite(float(value)) or value < 0:
+            raise ValueError(f"{name} must be finite and non-negative")
+    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 25:
+        raise ValueError("hours must be an integer >= 25")
+
+    history = {"pv_kw": [], "wind_kw": [], "essential_load_kw": [], "water_demand_m3": []}
+    for index in range(hours):
+        hour = index % 24
+        day_index = index // 24
+        solar_shape = max(0.0, math.sin(math.pi * (hour - 6) / 12.0))
+        solar_day_factor = 0.88 + 0.12 * math.sin(day_index * 0.83 + 0.2)
+        history["pv_kw"].append(float(pv_peak_kw) * solar_shape * solar_day_factor)
+        wind_factor = 0.75 + 0.25 * math.sin(index * 0.41 + 0.7)
+        history["wind_kw"].append(max(0.0, float(wind_mean_kw) * wind_factor))
+        load_day_factor = 0.96 + 0.06 * math.sin(day_index * 0.71 + 0.4)
+        load_factor = load_day_factor * (
+            1.0 + 0.08 * math.sin(2 * math.pi * (hour - 8) / 24.0)
+        )
+        history["essential_load_kw"].append(
+            float(essential_load_mean_kw) * load_factor
+        )
+        water_day_factor = 0.92 + 0.12 * math.sin(day_index * 0.67 + 0.9)
+        water_peak_factor = 1.0 + 0.08 * (
+            hour in range(6, 9) or hour in range(18, 21)
+        )
+        history["water_demand_m3"].append(
+            float(water_demand_mean_m3_per_hour) * water_day_factor * water_peak_factor
+        )
+    return history
+
 def forecast_microgrid_signals(
     history: Mapping[str, Sequence[float]], horizon: int, *, season_length: int = 24
 ) -> dict[str, list[float]]:
