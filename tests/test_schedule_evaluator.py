@@ -94,10 +94,10 @@ class ScheduleEvaluatorTests(unittest.TestCase):
             robust_scenario, self.config,
         )
         self.assertEqual(len(results), 2)
-        self.assertEqual(results[0].scenarios_evaluated, 4)
+        self.assertEqual(results[0].scenarios_evaluated, 5)
         self.assertEqual(
             set(results[0].scenario_results),
-            {"nominal", "low_renewables", "high_demand", "combined_stress"},
+            {"nominal", "low_renewables", "high_demand", "high_energy_price", "combined_stress"},
         )
         self.assertTrue(results[0].robust_feasible)
         self.assertIn("worst_operating_cost", results[0].to_dict())
@@ -125,6 +125,29 @@ class ScheduleEvaluatorTests(unittest.TestCase):
                 {"no_ro": [0, 0, 0]}, self.inputs, self.config,
                 stress_scenarios={"bad": {"pv": -1}},
             )
+
+
+    def test_robustness_applies_grid_tariff_stress_to_operating_cost(self):
+        from dataclasses import replace
+        config = replace(self.config, grid_import_limit_kw=10)
+        scenario = MicrogridInputs(
+            pv_power_kw=[0], wind_power_kw=[0], essential_load_kw=[5],
+            ro_requested_power_kw=[0], water_demand_m3=[0],
+            grid_available=[True], grid_price_per_kwh=[0.20],
+            diesel_cost_per_kwh=0.50,
+        )
+        results = evaluate_schedule_robustness(
+            {"no_ro": [0]}, scenario, config,
+            stress_scenarios={"nominal": {}, "energy_cost_up": {
+                "grid_price": 1.5, "diesel_cost": 1.5,
+            }},
+        )
+        nominal = results[0].scenario_results["nominal"].operating_cost
+        stressed = results[0].scenario_results["energy_cost_up"].operating_cost
+        self.assertAlmostEqual(nominal, 1.0)
+        self.assertAlmostEqual(stressed, 1.5)
+        self.assertAlmostEqual(results[0].worst_operating_cost, 1.5)
+
 
     def test_robustness_rejects_empty_scenarios(self):
         with self.assertRaisesRegex(ValueError, "at least one stress"):
