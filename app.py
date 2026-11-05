@@ -22,7 +22,7 @@ from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
 from islandos_core.schedule_evaluator import screen_renewable_surplus_candidates
-from islandos_core.scenario_forecasting import forecast_microgrid_signals
+from islandos_core.scenario_forecasting import forecast_microgrid_signals, rolling_origin_evaluate
 from islandos_core.app_workflow import (
     dataframe_csv,
     parse_uploaded_csv,
@@ -875,6 +875,28 @@ elif page == "Microgrid screening":
         st.caption(
             "This is a transparent seasonal-naive benchmark, not a trained model. "
             "The same forecast series are passed into the physical simulator for every candidate."
+        )
+        replay_rows = []
+        for signal_name, values in history.items():
+            replay = rolling_origin_evaluate(
+                values, initial_history=48, horizon=24, season_length=24
+            )
+            replay_rows.append({
+                "Signal": signal_name,
+                "Samples": replay.samples,
+                "MAE": replay.mae,
+                "RMSE": replay.rmse,
+                "WAPE (%)": replay.wape_percent,
+            })
+        st.subheader("Synthetic historical replay")
+        st.dataframe(
+            pd.DataFrame(replay_rows).round(3),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "Chronological replay on the generated synthetic history only. "
+            "These errors measure this toy scenario's baseline behavior, not expected accuracy at a real site."
         )
         st.subheader("Ranked strategy comparison")
         display = frame[[
