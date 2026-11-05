@@ -94,10 +94,10 @@ class ScheduleEvaluatorTests(unittest.TestCase):
             robust_scenario, self.config,
         )
         self.assertEqual(len(results), 2)
-        self.assertEqual(results[0].scenarios_evaluated, 5)
+        self.assertEqual(results[0].scenarios_evaluated, 6)
         self.assertEqual(
             set(results[0].scenario_results),
-            {"nominal", "low_renewables", "high_demand", "high_energy_price", "combined_stress"},
+            {"nominal", "low_renewables", "high_demand", "high_energy_price", "grid_outage", "combined_stress"},
         )
         self.assertTrue(results[0].robust_feasible)
         self.assertIn("worst_operating_cost", results[0].to_dict())
@@ -147,6 +147,32 @@ class ScheduleEvaluatorTests(unittest.TestCase):
         self.assertAlmostEqual(nominal, 1.0)
         self.assertAlmostEqual(stressed, 1.5)
         self.assertAlmostEqual(results[0].worst_operating_cost, 1.5)
+
+
+
+    def test_robustness_detects_grid_outage_service_failure(self):
+        from dataclasses import replace
+        config = replace(self.config, grid_import_limit_kw=10)
+        scenario = MicrogridInputs(
+            pv_power_kw=[0], wind_power_kw=[0], essential_load_kw=[5],
+            ro_requested_power_kw=[0], water_demand_m3=[0],
+            grid_available=[True], grid_price_per_kwh=[0.2],
+        )
+        result = evaluate_schedule_robustness(
+            {"no_ro": [0]}, scenario, config,
+        )[0]
+        self.assertTrue(result.scenario_results["nominal"].feasible)
+        self.assertFalse(result.scenario_results["grid_outage"].feasible)
+        self.assertEqual(
+            result.scenario_results["grid_outage"].essential_unserved_kwh, 5
+        )
+
+    def test_robustness_rejects_fractional_grid_availability_multiplier(self):
+        with self.assertRaisesRegex(ValueError, "must be 0 or 1"):
+            evaluate_schedule_robustness(
+                {"no_ro": [0, 0, 0]}, self.inputs, self.config,
+                stress_scenarios={"partial": {"grid_availability": 0.5}},
+            )
 
 
     def test_robustness_rejects_empty_scenarios(self):
