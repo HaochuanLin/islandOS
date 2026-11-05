@@ -26,7 +26,7 @@ The engineering challenge is not to optimize one machine in isolation. It is to 
 | 1. Data acquisition | CSV, APIs, normalized signals, sensors, PLC gateways, history | `islandos_core/signals.py`, `islandos_sensors/`, `data_quality.py`, `data_sources/`, gateway and telemetry modules | Schema validation and read-only telemetry prototypes exist. Protocol/site mapping and live production integration are not universal. |
 | 2. State recognition and forecasting | Forecast PV, wind, essential demand, resource demand, availability, and uncertainty | `islandos_core/forecasting.py`, `experiments/forecasting_baselines.py`, water-demand backtests and weather experiments | Replaceable water-demand forecast contract and several experiments exist. A unified, site-calibrated multi-signal forecast service is not implemented. |
 | 3. Physical system model | Couple generation, storage, loads, conversion equipment, inventories, and limits | `islandos_core/microgrid_model.py`, `flexible_loads.py`, `island_microgrid_ro_sim.py` | A new integrated deterministic PV/wind–battery–grid–diesel–RO–water accounting baseline is implemented. Network physics, detailed asset dynamics, and site calibration remain gaps. |
-| 4. Multi-objective optimization | Generate, simulate, reject infeasible, compare, and rank candidate schedules | `experiments/rolling_horizon_dispatch.py`, `optimization/`, `experiments/nsga2_dispatch_optimizer.py` | Experimental optimizers and rolling dispatch exist, but are not yet connected to the new integrated physical evaluator as one auditable pipeline. |
+| 4. Multi-objective optimization | Generate, simulate, reject infeasible, compare, and rank candidate schedules | `islandos_core/schedule_evaluator.py`, `experiments/rolling_horizon_dispatch.py`, `optimization/`, `experiments/nsga2_dispatch_optimizer.py` | Three transparent rule-based flexible-load candidates are evaluated on common physics; deterministic stress-scenario replay reports worst-case service, cost, and emissions. Experimental optimizers are not yet connected as one auditable pipeline. |
 | 5. Decision console | Show schedule, expected outcomes, risks, constraints, reasons, and operator approval | `app.py`, `islandos_core/decision.py`, `islandos_advisor.py` | Interactive simulation and simple read-only advice exist. A complete forecast → model → optimizer → explanation console remains planned. |
 | 6. Feedback and continuous improvement | Compare forecast with actuals, audit operator choices, monitor drift, update approved models | `islandos_core/audit.py`, forecast monitoring and telemetry experiments | Provenance, reports, and offline monitoring experiments exist. No autonomous online learning or automatic production model promotion is claimed. |
 
@@ -92,7 +92,7 @@ Use measured or reproducible quantities, not adjectives. Every metric should ide
 | Economic performance | Grid/fuel cost under explicit tariffs and fuel assumptions; sensitivity range; no unsupported savings claims |
 | Forecast performance | MAE/RMSE/bias against persistence and seasonal baselines on chronological holdouts |
 | Optimization quality | Feasible-schedule rate, objective trade-offs, runtime, repeatability, and baseline comparison |
-| Robustness | Paired seeds, forecast error, low renewable, demand spike, grid outage, equipment derating, and invalid telemetry |
+| Robustness | Paired seeds, forecast error, low renewable, demand spike, energy-price shock, grid outage, equipment derating, and invalid telemetry |
 | Integration readiness | Adapter contract tests, signal freshness/unit checks, read-only shadow-mode logs, operator review and rollback evidence |
 
 A benchmark is not a product proof if the chosen policy is compared against a weaker baseline, uses future actuals unavailable at decision time, or hides unmet service.
@@ -109,13 +109,13 @@ A benchmark is not a product proof if the chosen policy is compared against a we
 
 - Add replaceable forecasts for PV, wind, essential electricity demand, and resource demand.
 - Compare with persistence and seasonal baselines using chronological holdouts.
-- Add uncertainty scenarios and forecast-error stress tests.
-- Exit when model identity, data provenance, forecast metrics, and input/target alignment are auditable.
+- Add uncertainty scenarios and forecast-error stress tests. The current schedule evaluator includes deterministic PV/wind reduction, demand increase, tariff/fuel-cost increase, and combined stress replay; scenario-level results can be exported from the screening UI.
+- Exit when model identity, data provenance, forecast metrics, stress assumptions, and input/target alignment are auditable. Current stress multipliers are illustrative sensitivity assumptions, not calibrated forecast-error distributions.
 
 ### V3 — Multi-objective optimization
 
-- Generate candidate schedules and evaluate every candidate using the same integrated simulator.
-- Enforce critical-service and equipment constraints as hard feasibility gates.
+- Generate candidate schedules and evaluate every candidate using the same integrated simulator. A first rule-based candidate set and common-physics ranking are implemented; a connected mathematical optimizer remains future work.
+- Enforce critical-service and equipment constraints as hard feasibility gates; report schedules that fail any tested stress case rather than presenting them as safe operating plans.
 - Report Pareto trade-offs and a disclosed recommendation-selection rule.
 - Exit when the optimizer beats or explains its baseline on paired cases without increasing hidden service violations.
 
