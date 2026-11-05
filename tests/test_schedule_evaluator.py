@@ -87,9 +87,11 @@ class ScheduleEvaluatorTests(unittest.TestCase):
 
 
     def test_robustness_evaluates_each_schedule_under_default_stress_cases(self):
+        from dataclasses import replace
+        robust_scenario = replace(self.inputs, essential_load_kw=[5, 5, 5])
         results = evaluate_schedule_robustness(
             {"no_ro": [0, 0, 0], "surplus": [0, 20, 0]},
-            self.inputs, self.config,
+            robust_scenario, self.config,
         )
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].scenarios_evaluated, 4)
