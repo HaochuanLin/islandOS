@@ -218,6 +218,7 @@ def evaluate_schedule_robustness(
         "low_renewables": {"pv": 0.8, "wind": 0.8},
         "high_demand": {"essential_load": 1.15, "water_demand": 1.15},
         "high_energy_price": {"grid_price": 1.25, "diesel_cost": 1.25},
+        "grid_outage": {"grid_availability": 0.0},
         "combined_stress": {
             "pv": 0.8, "wind": 0.8,
             "essential_load": 1.15, "water_demand": 1.15,
@@ -227,7 +228,7 @@ def evaluate_schedule_robustness(
     if not scenarios:
         raise ValueError("at least one stress scenario is required")
 
-    allowed = {"pv", "wind", "essential_load", "water_demand", "grid_price", "diesel_cost"}
+    allowed = {"pv", "wind", "essential_load", "water_demand", "grid_price", "diesel_cost", "grid_availability"}
     validated: dict[str, dict[str, float]] = {}
     for scenario_name, multipliers in scenarios.items():
         if not isinstance(scenario_name, str) or not scenario_name.strip():
@@ -242,6 +243,8 @@ def evaluate_schedule_robustness(
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
                 raise ValueError(f"{scenario_name}.{key} must be finite and non-negative")
             clean[key] = float(value)
+            if key == "grid_availability" and clean[key] not in (0.0, 1.0):
+                raise ValueError(f"{scenario_name}.grid_availability must be 0 or 1")
         validated[scenario_name] = clean
 
     base_series = {
@@ -251,6 +254,9 @@ def evaluate_schedule_robustness(
         "water_demand": np.asarray(inputs.water_demand_m3, dtype=float),
         "grid_price": (None if inputs.grid_price_per_kwh is None else
                        np.asarray(inputs.grid_price_per_kwh, dtype=float)),
+        "grid_available": (np.ones(len(inputs.pv_power_kw), dtype=bool)
+                           if inputs.grid_available is None else
+                           np.asarray(inputs.grid_available, dtype=bool)),
     }
     all_results: list[RobustnessEvaluation] = []
     for schedule_id, schedule in schedules.items():
@@ -265,6 +271,8 @@ def evaluate_schedule_robustness(
                 grid_price_per_kwh=(None if base_series["grid_price"] is None else
                                      base_series["grid_price"] * factors.get("grid_price", 1.0)),
                 diesel_cost_per_kwh=(inputs.diesel_cost_per_kwh * factors.get("diesel_cost", 1.0)),
+                grid_available=(base_series["grid_available"] &
+                                (factors.get("grid_availability", 1.0) == 1.0)),
             )
             per_scenario[scenario_name] = evaluate_ro_schedule(
                 schedule_id, schedule, stressed_inputs, config
