@@ -207,8 +207,9 @@ def evaluate_schedule_robustness(
 ) -> list[RobustnessEvaluation]:
     """Re-simulate each schedule under deterministic input stress multipliers.
 
-    Multipliers apply to PV, wind, essential load and water demand. Defaults
-    include nominal, low-renewable, high-demand and combined stress cases.
+    Multipliers apply to PV, wind, essential load, water demand, energy prices,
+    backup-fuel cost and grid availability. Defaults include nominal, resource,
+    demand, price, grid-outage and combined stress cases.
     This is sensitivity analysis, not probabilistic forecasting or optimization.
     """
     if not schedules:
