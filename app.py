@@ -810,13 +810,28 @@ elif page == "Microgrid screening":
         history = {"pv_kw": [], "wind_kw": [], "essential_load_kw": [], "water_demand_m3": []}
         for history_index in range(-168, 0):
             hour = history_index % 24
+            day_index = (history_index + 168) // 24
+            # Deliberate day-to-day variation makes the synthetic replay a
+            # non-trivial forecast benchmark instead of a perfectly repeated day.
             solar_shape = max(0.0, math.sin(math.pi * (hour - 6) / 12.0))
-            history["pv_kw"].append(float(pv_peak) * solar_shape)
+            solar_day_factor = 0.88 + 0.12 * math.sin(day_index * 0.83 + 0.2)
+            history["pv_kw"].append(
+                float(pv_peak) * solar_shape * solar_day_factor
+            )
             wind_factor = 0.75 + 0.25 * math.sin((history_index + 168) * 0.41 + 0.7)
             history["wind_kw"].append(max(0.0, float(wind_mean) * wind_factor))
-            load_factor = 1.0 + 0.08 * math.sin(2 * math.pi * (hour - 8) / 24.0)
+            load_day_factor = 0.96 + 0.06 * math.sin(day_index * 0.71 + 0.4)
+            load_factor = load_day_factor * (
+                1.0 + 0.08 * math.sin(2 * math.pi * (hour - 8) / 24.0)
+            )
             history["essential_load_kw"].append(float(essential_mean) * load_factor)
-            history["water_demand_m3"].append(float(water_demand))
+            water_day_factor = 0.92 + 0.12 * math.sin(day_index * 0.67 + 0.9)
+            water_peak_factor = 1.0 + 0.08 * (
+                hour in range(6, 9) or hour in range(18, 21)
+            )
+            history["water_demand_m3"].append(
+                float(water_demand) * water_day_factor * water_peak_factor
+            )
 
         forecast = forecast_microgrid_signals(history, int(horizon), season_length=24)
         pv_series = forecast["pv_kw"]
