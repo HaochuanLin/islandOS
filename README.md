@@ -31,6 +31,10 @@ Experimental pilot scenario: Nan’ao emergency desalination case. This is a bou
 - **Common-physics schedule evaluation:** run supplied flexible-load schedules through the integrated energy–water simulator, apply service feasibility checks first, and rank candidates using transparent cost/emissions/curtailment tie-breakers. This is schedule evaluation, not an optimizer; see [Common-Physics Schedule Evaluation](docs/COMMON_PHYSICS_SCHEDULE_EVALUATION.md).
 - **Reproducible system-level benchmark:** run `python tools/run_integrated_microgrid_demo.py --hours 168 --seed 20261104` to compare a no-RO baseline with a renewable-only RO flexible-load policy on the same synthetic scenario. It exports a provenance-labelled JSON report and hourly CSV; see [Integrated Microgrid Demo](docs/INTEGRATED_MICROGRID_DEMO.md).
 
+## Hosted demo access
+
+The hosted Streamlit app is intended to be publicly accessible without sign-in. Public visibility is controlled in Streamlit Community Cloud, not by repository code. If the app redirects visitors to sign-in, follow [the public deployment check](docs/STREAMLIT_PUBLIC_DEPLOYMENT.md). GitHub code tests and hosted access checks are reported separately.
+
 ## What it can do today
 
 - **Interactive strategy screening:** choose synthetic demo data or upload hourly site data; adjust key RO and water-tank assumptions; compare strategies; inspect hourly outcomes; export results.
