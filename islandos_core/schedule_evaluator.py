@@ -213,7 +213,7 @@ def evaluate_schedule_robustness(
     """
     if not schedules:
         raise ValueError("at least one candidate schedule is required")
-    scenarios = stress_scenarios or {
+    scenarios = ({
         "nominal": {},
         "low_renewables": {"pv": 0.8, "wind": 0.8},
         "high_demand": {"essential_load": 1.15, "water_demand": 1.15},
@@ -221,7 +221,7 @@ def evaluate_schedule_robustness(
             "pv": 0.8, "wind": 0.8,
             "essential_load": 1.15, "water_demand": 1.15,
         },
-    }
+    } if stress_scenarios is None else stress_scenarios)
     if not scenarios:
         raise ValueError("at least one stress scenario is required")
 
