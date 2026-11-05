@@ -46,9 +46,10 @@ Use synthetic scenarios to test code paths and invariants, clearly labelled as s
 | Nominal | 100% | 100% |
 | Low renewables | 80% | 100% |
 | High demand | 100% | 115% |
-| Combined stress | 80% | 115% |
+| High energy price | 100% | 100% | Grid tariff and diesel unit cost × 1.25 |
+| Combined stress | 80% | 115% | Grid tariff and diesel unit cost × 1.25 |
 
-The function returns per-schedule worst-case essential electricity not served, unmet water, operating cost, and emissions, plus the detailed result for each scenario. `robust_feasible` is true only when the schedule remains feasible in every tested case. Custom named scenarios may supply non-negative multipliers for `pv`, `wind`, `essential_load`, and `water_demand`.
+The function returns per-schedule worst-case essential electricity not served, unmet water, operating cost, and emissions, plus the detailed result for each scenario. `robust_feasible` is true only when the schedule remains feasible in every tested case. Custom named scenarios may supply non-negative multipliers for `pv`, `wind`, `essential_load`, `water_demand`, `grid_price`, and `diesel_cost`.
 
 Example:
 
