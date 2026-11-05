@@ -122,3 +122,42 @@ def rank_ro_schedules(
             item.schedule_id,
         ),
     )
+
+
+
+def generate_renewable_surplus_candidates(
+    inputs: MicrogridInputs,
+    config: MicrogridConfig,
+) -> dict[str, np.ndarray]:
+    """Generate transparent, deterministic RO request schedules from supplied inputs.
+
+    These are rule-based screening candidates, not forecasts or an optimizer.
+    The physical evaluator still clips service to actual renewable headroom,
+    RO nameplate capacity, and water-tank headroom.
+    """
+    pv = np.asarray(inputs.pv_power_kw, dtype=float)
+    wind = np.asarray(inputs.wind_power_kw, dtype=float)
+    essential = np.asarray(inputs.essential_load_kw, dtype=float)
+    if any(x.ndim != 1 or x.size == 0 or not np.all(np.isfinite(x)) or np.any(x < 0)
+           for x in (pv, wind, essential)):
+        raise ValueError("PV, wind, and essential-load inputs must be finite non-negative series")
+    if not (len(pv) == len(wind) == len(essential)):
+        raise ValueError("PV, wind, and essential-load horizons must match")
+    if config.ro_rated_power_kw <= 0:
+        raise ValueError("RO rated power must be > 0 to generate candidates")
+
+    surplus = np.clip(pv + wind - essential, 0.0, config.ro_rated_power_kw)
+    return {
+        "no_ro": np.zeros(len(pv), dtype=float),
+        "conservative_surplus_50pct": surplus * 0.5,
+        "renewable_surplus_full": surplus,
+    }
+
+
+def screen_renewable_surplus_candidates(
+    inputs: MicrogridInputs,
+    config: MicrogridConfig,
+) -> list[ScheduleEvaluation]:
+    """Generate and rank simple surplus-following candidates on common physics."""
+    candidates = generate_renewable_surplus_candidates(inputs, config)
+    return rank_ro_schedules(candidates, inputs, config)
