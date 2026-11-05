@@ -37,6 +37,16 @@ Use synthetic scenarios to test code paths and invariants, clearly labelled as s
 
 
 
+
+## Customer-facing operating-cost indicators
+
+The screening UI also reports two descriptive ratios:
+
+- **Whole-system operating cost per m³ served** = modelled grid and diesel operating cost divided by water served over the tested horizon.
+- **Incremental cost per additional m³ vs no-RO** = the difference in whole-system operating cost divided by the additional water served relative to the no-RO reference. It is omitted when the candidate does not serve more water.
+
+These ratios help expose the cost/service trade-off; they are not the RO equipment's standalone energy tariff, a customer invoice, CAPEX payback, or verified savings. They omit any cost component not explicitly represented in the physical inputs. Compare only equivalent time horizons, service boundaries, and declared cost assumptions. A zero or missing cost factor is not evidence that the real-world cost is zero.
+
 ## Deterministic stress-scenario robustness screening
 
 `evaluate_schedule_robustness(schedules, inputs, config)` replays every supplied schedule through the same physical model under four explicit default cases:
