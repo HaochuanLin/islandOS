@@ -20,6 +20,8 @@ from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
+from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
+from islandos_core.schedule_evaluator import screen_renewable_surplus_candidates
 from islandos_core.app_workflow import (
     dataframe_csv,
     parse_uploaded_csv,
@@ -110,7 +112,7 @@ with st.sidebar:
     st.caption("Island energy + water planning")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Historical RO baseline", "Data guide"],
+        ["Overview", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -769,6 +771,129 @@ elif page == "Strategy simulator":
         )
     else:
         st.info("Set assumptions above, then click **Run strategy comparison** to see results.")
+
+elif page == "Microgrid screening":
+    st.title("Integrated microgrid strategy screening")
+    st.write(
+        "Change a small set of site assumptions, generate a transparent synthetic "
+        "energy-and-water scenario, and compare three RO scheduling candidates "
+        "against the same physical constraints."
+    )
+    st.warning(
+        "Synthetic scenario only — not measured site data, a forecast, a global optimizer, "
+        "or a live controller. Replace assumptions with validated site measurements before use."
+    )
+    with st.expander("Scenario and equipment assumptions", expanded=True):
+        a, b, c = st.columns(3)
+        with a:
+            horizon = st.select_slider("Scenario horizon (hours)", options=[24, 48, 72, 120, 168], value=72)
+            pv_peak = st.number_input("PV peak output (kW)", min_value=0.0, value=45.0, step=5.0)
+            wind_mean = st.number_input("Wind average output (kW)", min_value=0.0, value=12.0, step=2.0)
+        with b:
+            essential_mean = st.number_input("Essential electric load (kW)", min_value=0.1, value=24.0, step=2.0)
+            water_demand = st.number_input("Water demand (m³/hour)", min_value=0.0, value=0.45, step=0.05)
+            ro_rating = st.number_input("RO rated power (kW)", min_value=0.1, value=20.0, step=2.0)
+        with c:
+            sec = st.number_input("RO specific energy (kWh/m³)", min_value=0.1, value=4.0, step=0.1)
+            tank_capacity = st.number_input("Water tank capacity (m³)", min_value=0.1, value=60.0, step=5.0)
+            initial_water = st.number_input("Initial water inventory (m³)", min_value=0.0, value=15.0, step=1.0)
+    if initial_water > tank_capacity:
+        st.error("Initial water inventory cannot exceed tank capacity.")
+        st.stop()
+
+    if st.button("▶ Generate scenario and compare candidates", type="primary", use_container_width=True):
+        import math
+
+        pv_series = []
+        wind_series = []
+        load_series = []
+        demand_series = []
+        for hour_index in range(int(horizon)):
+            hour = hour_index % 24
+            solar_shape = max(0.0, math.sin(math.pi * (hour - 6) / 12.0))
+            pv_series.append(float(pv_peak) * solar_shape)
+            wind_factor = 0.75 + 0.25 * math.sin(hour_index * 0.41 + 0.7)
+            wind_series.append(max(0.0, float(wind_mean) * wind_factor))
+            load_factor = 1.0 + 0.08 * math.sin(2 * math.pi * (hour - 8) / 24.0)
+            load_series.append(float(essential_mean) * load_factor)
+            demand_series.append(float(water_demand))
+
+        scenario = MicrogridInputs(
+            pv_power_kw=pv_series,
+            wind_power_kw=wind_series,
+            essential_load_kw=load_series,
+            ro_requested_power_kw=[0.0] * int(horizon),
+            water_demand_m3=demand_series,
+            grid_available=[True] * int(horizon),
+            grid_price_per_kwh=[0.25] * int(horizon),
+            grid_emissions_kg_per_kwh=[0.4] * int(horizon),
+        )
+        config = MicrogridConfig(
+            grid_import_limit_kw=max(float(essential_mean) * 2.0, 1.0),
+            ro_rated_power_kw=float(ro_rating),
+            ro_specific_energy_kwh_per_m3=float(sec),
+            water_tank_capacity_m3=float(tank_capacity),
+            water_initial_inventory_m3=float(initial_water),
+        )
+        try:
+            ranked = screen_renewable_surplus_candidates(scenario, config)
+        except (ValueError, TypeError) as exc:
+            st.error(f"Could not evaluate this scenario: {exc}")
+            st.stop()
+
+        rows = []
+        for rank, item in enumerate(ranked, start=1):
+            row = item.to_dict()
+            row["rank"] = rank
+            row["water_served_m3"] = float(item.result.water_served_m3.sum())
+            row["final_water_inventory_m3"] = float(item.result.water_inventory_m3[-1])
+            rows.append(row)
+        frame = pd.DataFrame(rows)
+        st.caption(
+            f"Data provenance: Synthetic demo data — not measured site data · "
+            f"{horizon} hourly steps · same physical scenario for all candidates"
+        )
+        st.subheader("Ranked strategy comparison")
+        display = frame[[
+            "rank", "schedule_id", "feasible", "water_produced_m3",
+            "water_served_m3", "unmet_water_m3", "operating_cost",
+            "emissions_kg", "renewable_curtailed_kwh", "ro_electricity_kwh",
+        ]]
+        st.dataframe(display, use_container_width=True, hide_index=True)
+        winner = ranked[0]
+        st.subheader("Why this candidate ranked first")
+        st.write(
+            f"**{winner.schedule_id}** ranked first under the fixed lexicographic rule: "
+            "service feasibility first, then unmet essential electricity, unmet water, "
+            "operating cost, emissions, and renewable curtailment."
+        )
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Water produced", f"{winner.water_produced_m3:,.1f} m³")
+        k2.metric("Water demand unmet", f"{winner.unmet_water_m3:,.1f} m³")
+        k3.metric("Operating cost", f"{winner.operating_cost:,.2f}")
+        k4.metric("Renewable curtailment", f"{winner.renewable_curtailed_kwh:,.1f} kWh")
+        chart = frame.set_index("schedule_id")[[
+            "water_produced_m3", "unmet_water_m3", "renewable_curtailed_kwh"
+        ]]
+        st.bar_chart(chart)
+        st.download_button(
+            "Download candidate comparison (CSV)",
+            data=frame.to_csv(index=False).encode("utf-8-sig"),
+            file_name="islandos_microgrid_candidate_screening.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        with st.expander("Candidate definitions and model limits"):
+            st.write("- no_ro: RO power request is zero.")
+            st.write("- conservative_surplus_50pct: requests 50% of renewable power above essential load.")
+            st.write("- renewable_surplus_full: requests all renewable power above essential load.")
+            st.write(
+                "All candidates are evaluated by the same physical model. The model serves essential "
+                "electricity first; RO uses remaining renewable power only. Grid imports can cover "
+                "essential load but are not used to power RO in this screening model. Candidate "
+                "generation is rule-based and uses the scenario values directly; it does not predict "
+                "future weather or demand and does not prove savings."
+            )
 
 elif page == "Historical RO baseline":
     st.title("Historical RO operating-cost baseline")
