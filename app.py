@@ -22,6 +22,7 @@ from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
 from islandos_core.schedule_evaluator import screen_renewable_surplus_candidates
+from islandos_core.scenario_forecasting import forecast_microgrid_signals
 from islandos_core.app_workflow import (
     dataframe_csv,
     parse_uploaded_csv,
@@ -804,19 +805,24 @@ elif page == "Microgrid screening":
     if st.button("▶ Generate scenario and compare candidates", type="primary", use_container_width=True):
         import math
 
-        pv_series = []
-        wind_series = []
-        load_series = []
-        demand_series = []
-        for hour_index in range(int(horizon)):
-            hour = hour_index % 24
+        # Build a synthetic seven-day observation window, then forecast the
+        # requested horizon using only the latest observed daily profile.
+        history = {"pv_kw": [], "wind_kw": [], "essential_load_kw": [], "water_demand_m3": []}
+        for history_index in range(-168, 0):
+            hour = history_index % 24
             solar_shape = max(0.0, math.sin(math.pi * (hour - 6) / 12.0))
-            pv_series.append(float(pv_peak) * solar_shape)
-            wind_factor = 0.75 + 0.25 * math.sin(hour_index * 0.41 + 0.7)
-            wind_series.append(max(0.0, float(wind_mean) * wind_factor))
+            history["pv_kw"].append(float(pv_peak) * solar_shape)
+            wind_factor = 0.75 + 0.25 * math.sin((history_index + 168) * 0.41 + 0.7)
+            history["wind_kw"].append(max(0.0, float(wind_mean) * wind_factor))
             load_factor = 1.0 + 0.08 * math.sin(2 * math.pi * (hour - 8) / 24.0)
-            load_series.append(float(essential_mean) * load_factor)
-            demand_series.append(float(water_demand))
+            history["essential_load_kw"].append(float(essential_mean) * load_factor)
+            history["water_demand_m3"].append(float(water_demand))
+
+        forecast = forecast_microgrid_signals(history, int(horizon), season_length=24)
+        pv_series = forecast["pv_kw"]
+        wind_series = forecast["wind_kw"]
+        load_series = forecast["essential_load_kw"]
+        demand_series = forecast["water_demand_m3"]
 
         scenario = MicrogridInputs(
             pv_power_kw=pv_series,
@@ -851,7 +857,24 @@ elif page == "Microgrid screening":
         frame = pd.DataFrame(rows)
         st.caption(
             f"Data provenance: Synthetic demo data — not measured site data · "
-            f"{horizon} hourly steps · same physical scenario for all candidates"
+            f"168 historical hourly observations → {horizon}-hour baseline forecast · "
+            "seasonal-naive (repeat latest 24-hour profile)"
+        )
+        st.subheader("Baseline forecast used by the scheduler")
+        forecast_frame = pd.DataFrame({
+            "hour_ahead": list(range(1, int(horizon) + 1)),
+            "PV forecast (kW)": pv_series,
+            "Wind forecast (kW)": wind_series,
+            "Essential load forecast (kW)": load_series,
+            "Water demand forecast (m³/h)": demand_series,
+        })
+        st.line_chart(
+            forecast_frame.set_index("hour_ahead"),
+            use_container_width=True,
+        )
+        st.caption(
+            "This is a transparent seasonal-naive benchmark, not a trained model. "
+            "The same forecast series are passed into the physical simulator for every candidate."
         )
         st.subheader("Ranked strategy comparison")
         display = frame[[
