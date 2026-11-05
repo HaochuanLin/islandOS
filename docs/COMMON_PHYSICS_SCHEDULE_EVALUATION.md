@@ -34,3 +34,8 @@ for item in ranked:
 ## Evidence boundary
 
 Use synthetic scenarios to test code paths and invariants, clearly labelled as synthetic. A real-world saving claim requires site data, matched service coverage, equivalent water output and quality, confirmed cost assumptions, and field validation. The evaluator does not issue equipment commands.
+
+
+## Reproducible exported comparison
+
+Run `python tools/run_schedule_screening_demo.py --hours 168 --seed 20261105` to export a provenance-labelled JSON report and ranked CSV. The report records the candidate rules, common scenario, model assumptions, ranking order, and metrics. It is an auditable synthetic demonstration, not site validation.
