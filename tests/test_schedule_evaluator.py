@@ -5,6 +5,7 @@ from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
 from islandos_core.schedule_evaluator import (
     evaluate_ro_schedule, rank_ro_schedules,
     generate_renewable_surplus_candidates, screen_renewable_surplus_candidates,
+    evaluate_schedule_robustness,
 )
 
 
@@ -83,6 +84,52 @@ class ScheduleEvaluatorTests(unittest.TestCase):
         self.assertTrue(all(item.result is not None for item in ranked))
         self.assertTrue(all(item.essential_unserved_kwh == 0 for item in ranked))
         self.assertEqual(ranked[0].schedule_id, "renewable_surplus_full")
+
+
+    def test_robustness_evaluates_each_schedule_under_default_stress_cases(self):
+        results = evaluate_schedule_robustness(
+            {"no_ro": [0, 0, 0], "surplus": [0, 20, 0]},
+            self.inputs, self.config,
+        )
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].scenarios_evaluated, 4)
+        self.assertEqual(
+            set(results[0].scenario_results),
+            {"nominal", "low_renewables", "high_demand", "combined_stress"},
+        )
+        self.assertTrue(results[0].robust_feasible)
+        self.assertIn("worst_operating_cost", results[0].to_dict())
+
+    def test_robustness_exposes_service_failure_under_renewable_collapse(self):
+        results = evaluate_schedule_robustness(
+            {"no_ro": [0, 0, 0]},
+            self.inputs, self.config,
+            stress_scenarios={"nominal": {}, "renewable_collapse": {"pv": 0, "wind": 0}},
+        )
+        result = results[0]
+        self.assertFalse(result.robust_feasible)
+        self.assertEqual(result.scenario_results["nominal"].essential_unserved_kwh, 0)
+        self.assertEqual(result.scenario_results["renewable_collapse"].essential_unserved_kwh, 30)
+        self.assertEqual(result.worst_essential_unserved_kwh, 30)
+
+    def test_robustness_rejects_unknown_or_invalid_multipliers(self):
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            evaluate_schedule_robustness(
+                {"no_ro": [0, 0, 0]}, self.inputs, self.config,
+                stress_scenarios={"bad": {"tariff": 2}},
+            )
+        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+            evaluate_schedule_robustness(
+                {"no_ro": [0, 0, 0]}, self.inputs, self.config,
+                stress_scenarios={"bad": {"pv": -1}},
+            )
+
+    def test_robustness_rejects_empty_scenarios(self):
+        with self.assertRaisesRegex(ValueError, "at least one stress"):
+            evaluate_schedule_robustness(
+                {"no_ro": [0, 0, 0]}, self.inputs, self.config,
+                stress_scenarios={},
+            )
 
 
 if __name__ == "__main__":
