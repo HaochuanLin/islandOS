@@ -16,7 +16,7 @@ class ScheduleEvaluatorTests(unittest.TestCase):
             water_initial_inventory_m3=0,
         )
         self.inputs = MicrogridInputs(
-            pv_power_kw=[10, 30, 0], wind_power_kw=[0, 0, 0],
+            pv_power_kw=[10, 30, 10], wind_power_kw=[0, 0, 0],
             essential_load_kw=[10, 10, 10], ro_requested_power_kw=[0, 0, 0],
             water_demand_m3=[0, 0, 0], grid_available=[False, False, False],
         )
