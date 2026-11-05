@@ -2,7 +2,10 @@
 import unittest
 
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
-from islandos_core.schedule_evaluator import evaluate_ro_schedule, rank_ro_schedules
+from islandos_core.schedule_evaluator import (
+    evaluate_ro_schedule, rank_ro_schedules,
+    generate_renewable_surplus_candidates, screen_renewable_surplus_candidates,
+)
 
 
 class ScheduleEvaluatorTests(unittest.TestCase):
@@ -49,6 +52,21 @@ class ScheduleEvaluatorTests(unittest.TestCase):
     def test_rejects_empty_candidate_set(self):
         with self.assertRaisesRegex(ValueError, "at least one"):
             rank_ro_schedules({}, self.inputs, self.config)
+
+
+    def test_candidate_generator_is_transparent_and_respects_nameplate(self):
+        candidates = generate_renewable_surplus_candidates(self.inputs, self.config)
+        self.assertEqual(set(candidates), {"no_ro", "conservative_surplus_50pct", "renewable_surplus_full"})
+        self.assertTrue((candidates["no_ro"] == 0).all())
+        self.assertLessEqual(float(candidates["renewable_surplus_full"].max()), self.config.ro_rated_power_kw)
+        self.assertEqual(candidates["renewable_surplus_full"].tolist(), [0.0, 20.0, 0.0])
+
+    def test_generated_candidates_are_evaluated_by_common_physics(self):
+        ranked = screen_renewable_surplus_candidates(self.inputs, self.config)
+        self.assertEqual(len(ranked), 3)
+        self.assertTrue(all(item.result is not None for item in ranked))
+        self.assertTrue(all(item.essential_unserved_kwh == 0 for item in ranked))
+        self.assertEqual(ranked[0].schedule_id, "renewable_surplus_full")
 
 
 if __name__ == "__main__":
