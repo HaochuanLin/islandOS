@@ -236,3 +236,8 @@ python tools/islandos_doctor.py --config path/to/site_parameters.json
 ```
 
 Exit code `0` means these local structural checks passed; exit code `2` means attention is needed. The doctor does not install dependencies, verify exact installed package versions, contact external services, validate the truth of site data, or certify operational safety. A passing check is only a starting point for tests and scenario-specific review.
+
+
+### Physics-connected schedule search
+
+The Microgrid screening workflow now includes a bounded deterministic coordinate search. It tests zero, half-rated, and full-rated RO requests at each time step, re-evaluating each trial through the same physical simulator. The interface reports the selected schedule, service result, search evaluation count, convergence/pass-limit status, and a downloadable hourly schedule audit. This is a local heuristic, not a global optimum or live controller. The same searched schedule is included in the deterministic stress replay.
