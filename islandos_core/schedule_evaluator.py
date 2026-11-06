@@ -364,8 +364,8 @@ def search_ro_schedule(
             item.unmet_water_m3,
             item.operating_cost,
             item.emissions_kg,
-            item.renewable_curtailed_kwh,
             item.ro_electricity_kwh,
+            item.renewable_curtailed_kwh,
             item.schedule_id,
         )
 
