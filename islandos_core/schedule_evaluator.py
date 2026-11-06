@@ -305,3 +305,103 @@ def evaluate_schedule_robustness(
             item.schedule_id,
         ),
     )
+
+@dataclass(frozen=True)
+class ScheduleSearchResult:
+    """Result of bounded deterministic coordinate search on common physics."""
+
+    best: ScheduleEvaluation
+    evaluations: int
+    passes_completed: int
+    converged: bool
+    method: str = "deterministic_coordinate_search"
+
+
+def search_ro_schedule(
+    inputs: MicrogridInputs,
+    config: MicrogridConfig,
+    *,
+    initial_schedules: Mapping[str, Sequence[float]] | None = None,
+    max_passes: int = 3,
+    power_levels: Sequence[float] = (0.0, 0.5, 1.0),
+) -> ScheduleSearchResult:
+    """Search RO power schedules with repeated common-physics coordinate updates.
+
+    At each time step, test the configured fractions of the available RO
+    nameplate power and retain the lexicographically best full-horizon result.
+    The objective prioritizes feasible essential/water service, then unmet
+    water, operating cost, emissions, renewable curtailment and RO energy.
+    This is a bounded heuristic, not a global optimum or a production controller.
+    """
+    if isinstance(max_passes, bool) or not isinstance(max_passes, int) or max_passes < 1:
+        raise ValueError("max_passes must be an integer >= 1")
+    try:
+        levels = np.asarray(power_levels, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("power_levels must be a numeric sequence") from exc
+    if (levels.ndim != 1 or levels.size == 0 or not np.all(np.isfinite(levels))
+            or np.any(levels < 0) or np.any(levels > 1)):
+        raise ValueError("power_levels must be a non-empty finite sequence within [0, 1]")
+    if config.ro_rated_power_kw <= 0:
+        raise ValueError("RO rated power must be > 0")
+    horizon = len(inputs.pv_power_kw)
+    if horizon == 0:
+        raise ValueError("input horizon must be non-empty")
+
+    candidates = dict(initial_schedules or {})
+    candidates.setdefault("zero_start", np.zeros(horizon, dtype=float))
+    candidates.setdefault("surplus_start", generate_renewable_surplus_candidates(inputs, config)["renewable_surplus_full"])
+    ranked = rank_ro_schedules(candidates, inputs, config)
+    best = ranked[0]
+    evaluations = len(ranked)
+    converged = False
+    passes_completed = 0
+
+    def objective(item: ScheduleEvaluation) -> tuple[float, ...]:
+        return (
+            not item.feasible,
+            item.essential_unserved_kwh,
+            item.unmet_water_m3,
+            item.operating_cost,
+            item.emissions_kg,
+            item.renewable_curtailed_kwh,
+            item.ro_electricity_kwh,
+            item.schedule_id,
+        )
+
+    # Work on a private copy: caller-provided arrays are never mutated.
+    schedule = np.asarray(best.result.ro_requested_power_kw, dtype=float).copy()
+    for pass_index in range(max_passes):
+        changed = False
+        for t in range(horizon):
+            local_best = best
+            local_power = float(schedule[t])
+            for fraction in levels:
+                trial = schedule.copy()
+                trial[t] = float(fraction) * config.ro_rated_power_kw
+                # Give each trial a stable, auditable identifier.
+                evaluation = evaluate_ro_schedule(
+                    f"coordinate_p{pass_index + 1}_t{t}_f{fraction:g}",
+                    trial, inputs, config,
+                )
+                evaluations += 1
+                if objective(evaluation) < objective(local_best):
+                    local_best = evaluation
+                    local_power = float(trial[t])
+            if objective(local_best) < objective(best):
+                best = local_best
+            if local_power != schedule[t]:
+                schedule[t] = local_power
+                changed = True
+        passes_completed = pass_index + 1
+        if not changed:
+            converged = True
+            break
+
+    return ScheduleSearchResult(
+        best=best,
+        evaluations=evaluations,
+        passes_completed=passes_completed,
+        converged=converged,
+    )
+
