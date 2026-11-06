@@ -26,7 +26,7 @@ The engineering challenge is not to optimize one machine in isolation. It is to 
 | 1. Data acquisition | CSV, APIs, normalized signals, sensors, PLC gateways, history | `islandos_core/signals.py`, `islandos_sensors/`, `data_quality.py`, `data_sources/`, gateway and telemetry modules | Schema validation and read-only telemetry prototypes exist. Protocol/site mapping and live production integration are not universal. |
 | 2. State recognition and forecasting | Forecast PV, wind, essential demand, resource demand, availability, and uncertainty | `islandos_core/forecasting.py`, `experiments/forecasting_baselines.py`, water-demand backtests and weather experiments | Replaceable water-demand forecast contract and several experiments exist. A unified, site-calibrated multi-signal forecast service is not implemented. |
 | 3. Physical system model | Couple generation, storage, loads, conversion equipment, inventories, and limits | `islandos_core/microgrid_model.py`, `flexible_loads.py`, `island_microgrid_ro_sim.py` | A new integrated deterministic PV/wind–battery–grid–diesel–RO–water accounting baseline is implemented. Network physics, detailed asset dynamics, and site calibration remain gaps. |
-| 4. Multi-objective optimization | Generate, simulate, reject infeasible, compare, and rank candidate schedules | `islandos_core/schedule_evaluator.py`, `experiments/rolling_horizon_dispatch.py`, `optimization/`, `experiments/nsga2_dispatch_optimizer.py` | Three transparent rule-based flexible-load candidates are evaluated on common physics; deterministic stress-scenario replay reports worst-case service, cost, and emissions. Experimental optimizers are not yet connected as one auditable pipeline. |
+| 4. Multi-objective optimization | Generate, simulate, reject infeasible, compare, and rank candidate schedules | `islandos_core/schedule_evaluator.py`, `experiments/rolling_horizon_dispatch.py`, `optimization/`, `experiments/nsga2_dispatch_optimizer.py` | Three transparent rule-based candidates and a bounded deterministic coordinate search are evaluated on common physics; deterministic stress-scenario replay reports worst-case service, cost, and emissions. The search is a heuristic, not a global optimum; forecast-to-optimization uncertainty integration remains incomplete. |
 | 5. Decision console | Show schedule, expected outcomes, risks, constraints, reasons, and operator approval | `app.py`, `islandos_core/decision.py`, `islandos_advisor.py` | Interactive simulation and simple read-only advice exist. A complete forecast → model → optimizer → explanation console remains planned. |
 | 6. Feedback and continuous improvement | Compare forecast with actuals, audit operator choices, monitor drift, update approved models | `islandos_core/audit.py`, forecast monitoring and telemetry experiments | Provenance, reports, and offline monitoring experiments exist. No autonomous online learning or automatic production model promotion is claimed. |
 
@@ -114,10 +114,10 @@ A benchmark is not a product proof if the chosen policy is compared against a we
 
 ### V3 — Multi-objective optimization
 
-- Generate candidate schedules and evaluate every candidate using the same integrated simulator. A first rule-based candidate set and common-physics ranking are implemented; a connected mathematical optimizer remains future work.
+- Generate candidate schedules and evaluate every candidate using the same integrated simulator. Rule-based candidates and a bounded coordinate-search heuristic are implemented; the search tests zero, half-rated, and full-rated RO requests per time step and reports its evaluation count.
 - Enforce critical-service and equipment constraints as hard feasibility gates; report schedules that fail any tested stress case rather than presenting them as safe operating plans.
 - Report Pareto trade-offs and a disclosed recommendation-selection rule.
-- Exit when the optimizer beats or explains its baseline on paired cases without increasing hidden service violations.
+- Exit when broader optimization methods beat or explain this heuristic baseline on paired cases without increasing hidden service violations. The current coordinate search is local and bounded, not a global optimum.
 
 ### V4 — Plug-and-play data integration
 
