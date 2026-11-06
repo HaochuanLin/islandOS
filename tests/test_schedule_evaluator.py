@@ -5,7 +5,7 @@ from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
 from islandos_core.schedule_evaluator import (
     evaluate_ro_schedule, rank_ro_schedules,
     generate_renewable_surplus_candidates, screen_renewable_surplus_candidates,
-    evaluate_schedule_robustness,
+    evaluate_schedule_robustness, search_ro_schedule,
 )
 
 
@@ -192,6 +192,34 @@ class ScheduleEvaluatorTests(unittest.TestCase):
                 {"no_ro": [0, 0, 0]}, self.inputs, self.config,
                 stress_scenarios={},
             )
+
+
+    def test_coordinate_search_finds_lower_power_schedule_that_meets_water_demand(self):
+        from dataclasses import replace
+        scenario = replace(self.inputs, water_demand_m3=[0, 2, 0])
+        result = search_ro_schedule(
+            scenario, self.config, max_passes=3, power_levels=(0, 0.5, 1)
+        )
+        self.assertTrue(result.best.feasible)
+        self.assertAlmostEqual(result.best.unmet_water_m3, 0)
+        self.assertAlmostEqual(result.best.ro_electricity_kwh, 10)
+        self.assertGreater(result.evaluations, 2)
+        self.assertGreaterEqual(result.passes_completed, 1)
+        self.assertEqual(result.method, "deterministic_coordinate_search")
+
+    def test_coordinate_search_does_not_mutate_initial_schedule(self):
+        initial = [0.0, 20.0, 0.0]
+        search_ro_schedule(
+            self.inputs, self.config, initial_schedules={"caller": initial},
+            max_passes=1,
+        )
+        self.assertEqual(initial, [0.0, 20.0, 0.0])
+
+    def test_coordinate_search_rejects_invalid_search_controls(self):
+        with self.assertRaisesRegex(ValueError, "max_passes"):
+            search_ro_schedule(self.inputs, self.config, max_passes=0)
+        with self.assertRaisesRegex(ValueError, "power_levels"):
+            search_ro_schedule(self.inputs, self.config, power_levels=(0, 1.2))
 
 
 if __name__ == "__main__":
