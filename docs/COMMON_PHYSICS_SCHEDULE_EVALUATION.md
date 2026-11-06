@@ -81,3 +81,12 @@ This is deterministic sensitivity / stress testing. The default multipliers are 
 ## Reproducible exported comparison
 
 Run `python tools/run_schedule_screening_demo.py --hours 168 --seed 20261105` to export a provenance-labelled JSON report and ranked CSV. The report records the candidate rules, common scenario, model assumptions, ranking order, and metrics. It is an auditable synthetic demonstration, not site validation.
+
+
+## Bounded physics-connected schedule search
+
+`search_ro_schedule(inputs, config, ...)` performs deterministic coordinate search over the RO request schedule. It starts from the best supplied/generated baseline and, for each time step, re-simulates alternatives at configured fractions of RO nameplate power (default: 0%, 50%, 100%). Each candidate is evaluated by `evaluate_ro_schedule` and the same integrated microgrid simulator.
+
+The lexicographic objective prioritizes essential-service feasibility, unmet water, operating cost, emissions, RO energy, and renewable curtailment. The API returns the selected `ScheduleEvaluation`, number of full-physics evaluations, passes completed, and whether a no-change pass was reached. Callers can cap the number of passes and define power fractions.
+
+This is a deterministic local heuristic over a discrete action set. It is **not** exhaustive over all possible schedules, a mathematical proof of optimality, a forecast uncertainty optimizer, or a real-time controller. In the current physical model RO can consume only renewable power remaining after essential electricity demand; the model does not dispatch grid or diesel energy to RO. Economics therefore depend on the model's explicit accounting boundary and should not be interpreted as customer savings or payback.
