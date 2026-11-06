@@ -23,6 +23,7 @@ from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
 from islandos_core.schedule_evaluator import (
     screen_renewable_surplus_candidates, evaluate_schedule_robustness,
+    search_ro_schedule,
 )
 from islandos_core.scenario_forecasting import (
     forecast_microgrid_signals, generate_synthetic_microgrid_history,
@@ -845,9 +846,13 @@ elif page == "Microgrid screening":
         )
         try:
             ranked = screen_renewable_surplus_candidates(scenario, config)
+            search_result = search_ro_schedule(
+                scenario, config, max_passes=1, power_levels=(0.0, 0.5, 1.0)
+            )
             candidate_schedules = {
                 item.schedule_id: item.result.ro_requested_power_kw for item in ranked
             }
+            candidate_schedules["coordinate_search"] = search_result.best.result.ro_requested_power_kw
             robustness = evaluate_schedule_robustness(
                 candidate_schedules, scenario, config
             )
@@ -938,6 +943,39 @@ elif page == "Microgrid screening":
         st.caption(
             "Ranking order: feasibility first, then unmet essential electricity, unmet water, "
             "operating cost, emissions, and renewable curtailment."
+        )
+
+        st.subheader("Physics-connected schedule search")
+        st.caption(
+            "A deterministic coordinate search tests zero, half-rated, and full-rated RO requests "
+            "at each time step. Every trial is re-simulated by the same physical model. "
+            "This bounded heuristic is not a global optimum."
+        )
+        searched = search_result.best
+        search_metrics = st.columns(4)
+        search_metrics[0].metric("Search evaluations", f"{search_result.evaluations:,}")
+        search_metrics[1].metric("Water unmet", f"{searched.unmet_water_m3:,.2f} m³")
+        search_metrics[2].metric("RO energy", f"{searched.ro_electricity_kwh:,.1f} kWh")
+        search_metrics[3].metric("Search status", "Converged" if search_result.converged else "Pass limit")
+        st.write(
+            f"Selected schedule: **{searched.schedule_id}** · "
+            f"Feasible: **{searched.feasible}** · "
+            f"Passes: **{search_result.passes_completed}**"
+        )
+        search_schedule_frame = pd.DataFrame({
+            "hour_ahead": list(range(1, int(horizon) + 1)),
+            "RO requested power (kW)": searched.result.ro_requested_power_kw,
+            "RO power served (kW)": searched.result.ro_power_served_kw,
+            "Water demand (m³)": demand_series,
+            "Water produced (m³)": searched.result.water_produced_m3,
+        }).set_index("hour_ahead")
+        st.line_chart(search_schedule_frame, use_container_width=True)
+        st.download_button(
+            "Download searched schedule (CSV)",
+            data=search_schedule_frame.to_csv().encode("utf-8-sig"),
+            file_name="islandos_coordinate_search_schedule.csv",
+            mime="text/csv",
+            use_container_width=True,
         )
 
         st.subheader("Stress-test robustness")
