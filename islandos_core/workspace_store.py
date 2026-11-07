@@ -402,6 +402,15 @@ def verify_audit_chain(db_path: str | Path) -> dict[str, Any]:
     return {"valid": True, "event_count": count, "latest_hash": previous_hash}
 
 
+def list_projects(db_path: str | Path) -> list[dict[str, Any]]:
+    """Return project metadata in a local workspace, ordered by creation time."""
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT project_id, display_name, created_at, updated_at FROM projects ORDER BY created_at, project_id"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
 def list_import_artifacts(db_path: str | Path, *, project_id: str) -> list[dict[str, Any]]:
     with _connect(db_path) as connection:
         rows = connection.execute(
