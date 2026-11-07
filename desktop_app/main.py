@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QInputDialog,
     QPushButton,
     QPlainTextEdit,
     QVBoxLayout,
@@ -175,18 +176,23 @@ class IslandOSDesktopWindow(QMainWindow):
             return
         try:
             suffix = Path(path).suffix.lower()
+            options = {}
             if suffix == ".xlsx":
-                QMessageBox.information(
-                    self, "Excel timezone",
-                    "This first desktop shell currently uses conservative default Excel import options. "
-                    "If the workbook contains naive timestamps, use the Streamlit Data Onboarding Lab "
-                    "with an explicit IANA timezone until the timezone selector is added here.",
+                timezone_name, accepted = QInputDialog.getText(
+                    self, "Excel timestamp timezone",
+                    "If timestamps in this workbook have no timezone, enter the site's IANA timezone "
+                    "(for example Asia/Shanghai or Africa/Nairobi). Leave blank only if timestamps "
+                    "already contain timezone information.",
                 )
+                if not accepted:
+                    return
+                options["timezone_name"] = timezone_name.strip() or None
             raw = Path(path).read_bytes()
             result = inspect_upload(
                 raw, file_name=Path(path).name,
                 source_type="customer_provided",
                 task=self.task_edit.text().strip() or "exploration",
+                options=options,
             )
             self.last_inspection = result
             self.last_file_name = Path(path).name
