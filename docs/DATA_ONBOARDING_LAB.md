@@ -10,7 +10,7 @@ traceability and refusing unsafe assumptions.
 ## Current scope
 
 - UTF-8 CSV and UTF-8-with-BOM input.
-- Excel `.xlsx` worksheet extraction with bounded archive expansion, visible-sheet preference, automatic header-row detection, and cached formula values only.
+- Excel `.xlsx` worksheet extraction with bounded archive expansion and row scanning, visible-sheet preference, automatic header-row detection, and cached formula values only.
 - Original workbook SHA-256 provenance; formulas are never evaluated. Naive Excel timestamps require an explicit IANA timezone, and ambiguous/nonexistent daylight-saving times are rejected.
 - Automatic recognition of common timestamp and energy-signal headers.
 - Explicit, limited unit conversion (W to kW and MW to kW).
