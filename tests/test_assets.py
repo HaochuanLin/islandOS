@@ -51,7 +51,7 @@ def battery_asset(constraints=None):
 def test_asset_keeps_nameplate_and_installed_values_separate():
     asset = battery_asset()
     assert asset.nameplate_parameters["energy_capacity_kwh"].value == 600
-    assert asset.installed_parameters["energy_capacity_kwh"].value == 500
+    assert asset.installed_parameters["usable_energy_capacity_kwh"].value == 500
     assert evaluate_asset_readiness(asset)["can_screen"] is True
 
 
@@ -64,7 +64,7 @@ def test_unconfirmed_hard_constraint_blocks_asset_readiness():
     ])
     report = evaluate_asset_readiness(asset)
     assert report["can_screen"] is False
-    assert "confirmed_hard_constraint_required:max_charge_kw" in report["blockers"]
+    assert "confirmed_hard_constraint_required:max_charge_kw:max" in report["blockers"]
 
 
 def test_required_hard_constraint_must_use_correct_operator():
