@@ -64,6 +64,18 @@ def test_unconfirmed_hard_constraint_blocks_asset_readiness():
     assert "confirmed_hard_constraint_required:max_charge_kw" in report["blockers"]
 
 
+def test_required_hard_constraint_must_use_correct_operator():
+    asset = battery_asset([
+        constraint("max_charge_kw", "min", 200, "kW"),
+        constraint("max_discharge_kw", "max", 200, "kW"),
+        constraint("soc_min_pct", "min", 15, "%"),
+        constraint("soc_max_pct", "max", 90, "%"),
+    ])
+    report = evaluate_asset_readiness(asset)
+    assert report["can_screen"] is False
+    assert "confirmed_hard_constraint_required:max_charge_kw:max" in report["blockers"]
+
+
 def test_missing_battery_constraints_block_readiness():
     report = evaluate_asset_readiness(battery_asset([]))
     assert report["can_screen"] is False
