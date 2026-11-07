@@ -442,6 +442,7 @@ def record_operator_override(
     source_reference: str,
     approval_status: str = "pending_review",
     reviewer_id: str | None = None,
+    proposal_id: str | None = None,
     created_at: datetime | None = None,
 ) -> str:
     """Append a reasoned operator override proposal/review to the audit trail.
@@ -454,25 +455,51 @@ def record_operator_override(
         raise WorkspaceStoreError("project_id, actor_id, field_path, reason, and source_reference are required")
     if approval_status not in {"pending_review", "approved", "rejected"}:
         raise WorkspaceStoreError("approval_status must be pending_review, approved, or rejected")
-    if approval_status == "pending_review" and reviewer_id is not None:
-        raise WorkspaceStoreError("reviewer_id must be omitted while an override is pending")
-    if approval_status in {"approved", "rejected"}:
+    if approval_status == "pending_review":
+        if reviewer_id is not None or proposal_id is not None:
+            raise WorkspaceStoreError("reviewer_id and proposal_id must be omitted for a new pending proposal")
+        proposal_id = str(uuid.uuid4())
+    else:
         if not isinstance(reviewer_id, str) or not reviewer_id.strip():
             raise WorkspaceStoreError("reviewer_id is required for an approval decision")
         if reviewer_id.strip() == actor_id.strip():
             raise WorkspaceStoreError("the proposing actor cannot review their own override")
+        if not isinstance(proposal_id, str) or not proposal_id.strip():
+            raise WorkspaceStoreError("proposal_id is required to review an existing proposal")
     # Validate all values before appending so the audit event is always exportable JSON.
     _json({"previous_value": previous_value, "proposed_value": proposed_value})
     timestamp = _timestamp(created_at)
     with _connect(db_path) as connection:
         if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
             raise WorkspaceStoreError("project_id does not exist")
-        return _append_event(
+        if approval_status in {"approved", "rejected"}:
+            proposals = connection.execute(
+                "SELECT payload_json FROM audit_events WHERE project_id=? AND event_type='operator_override_pending_review'",
+                (project_id,),
+            ).fetchall()
+            matching = []
+            for row in proposals:
+                payload = json.loads(row["payload_json"])
+                if payload.get("proposal_id") == proposal_id:
+                    matching.append(payload)
+            if len(matching) != 1:
+                raise WorkspaceStoreError("proposal_id does not identify one pending override in this project")
+            original = matching[0]
+            if (
+                original.get("field_path") != field_path.strip()
+                or original.get("previous_value") != previous_value
+                or original.get("proposed_value") != proposed_value
+                or original.get("reason") != reason.strip()
+                or original.get("source_reference") != source_reference.strip()
+            ):
+                raise WorkspaceStoreError("review details must match the original override proposal")
+        _append_event(
             connection,
             actor_id=reviewer_id.strip() if reviewer_id else actor_id,
             event_type="operator_override_" + approval_status,
             project_id=project_id,
             payload={
+                "proposal_id": proposal_id,
                 "proposing_actor_id": actor_id,
                 "field_path": field_path.strip(),
                 "previous_value": previous_value,
@@ -485,6 +512,7 @@ def record_operator_override(
             },
             created_at=timestamp,
         )
+        return proposal_id
 
 
 def list_audit_events(db_path: str | Path, *, project_id: str | None = None) -> list[dict[str, Any]]:
