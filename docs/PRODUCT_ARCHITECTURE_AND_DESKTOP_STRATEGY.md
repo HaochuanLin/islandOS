@@ -208,3 +208,21 @@ metadata-only artifact registration, run-manifest creation, and audit-chain
 verification. It also fails if Streamlit has been imported. The smoke path is
 an architecture check, not a customer deployment or desktop packaging test.
 
+
+## 13. Shared application-service boundary
+
+The first UI-independent application orchestration layer lives in
+`islandos_core/application.py`. It coordinates the existing onboarding and
+workspace domain services and exposes stable functions for:
+
+- `inspect_upload`: inspect CSV/XLSX bytes and evaluate task-specific readiness.
+- `create_local_project`: initialize a local workspace after explicit consent.
+- `register_inspected_import`: persist metadata and source hashes only.
+- `create_analysis_record`: persist a reproducibility snapshot only after the
+  task readiness gate passes.
+
+These functions accept plain Python values and paths; they do not import
+Streamlit or retain uploaded bytes. The current analysis-record function does
+not execute a forecast, simulation, optimizer, or control command. A desktop
+client and the Streamlit experiment should call this same service layer rather
+than implement separate business rules.
