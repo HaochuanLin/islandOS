@@ -7,13 +7,8 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
-from islandos_core.onboarding import (
-    CANONICAL_UNITS,
-    evaluate_task_readiness,
-    inspect_csv_bytes,
-    inspect_excel_bytes,
-    inspect_excel_sheets,
-)
+from islandos_core.application import evaluate_readiness, inspect_upload as inspect_upload_service
+from islandos_core.onboarding import CANONICAL_UNITS, inspect_excel_sheets
 
 st.set_page_config(page_title="IslandOS Data Onboarding Lab", page_icon="🧭", layout="wide")
 st.title("IslandOS · Data Onboarding Lab")
@@ -98,24 +93,23 @@ if is_excel:
     ).strip() or None
 
 
-def inspect_upload(*, column_overrides=None, source_unit_overrides=None):
-    common = {
-        "source_type": source_type,
-        "source_name": uploaded.name,
+def inspect_current_upload(*, column_overrides=None, source_unit_overrides=None):
+    options = {
         "expected_interval_minutes": interval_minutes,
-        "now": datetime.now(timezone.utc),
         "column_overrides": column_overrides,
         "source_unit_overrides": source_unit_overrides,
     }
     if is_excel:
-        return inspect_excel_bytes(
-            raw, sheet_name=excel_sheet, timezone_name=excel_timezone, **common,
-        )
-    return inspect_csv_bytes(raw, **common)
+        options.update({"sheet_name": excel_sheet, "timezone_name": excel_timezone})
+    result = inspect_upload_service(
+        raw, file_name=uploaded.name, source_type=source_type,
+        task="exploration", options=options, now=datetime.now(timezone.utc),
+    )
+    return result["inspection"]
 
 
 try:
-    initial = inspect_upload()
+    initial = inspect_current_upload()
 except (TypeError, ValueError) as exc:
     st.error(f"Could not inspect this file: {exc}")
     st.stop()
@@ -191,7 +185,7 @@ if needs_unit:
 
 if column_overrides or source_unit_overrides:
     try:
-        report = inspect_upload(
+        report = inspect_current_upload(
             column_overrides=column_overrides,
             source_unit_overrides=source_unit_overrides,
         )
@@ -242,10 +236,8 @@ if task == "dispatch_optimization":
     confirmed_constraints["asset_limits"] = st.checkbox("I have confirmed installed asset operating limits")
     confirmed_constraints["critical_load_policy"] = st.checkbox("I have confirmed critical-load / load-shedding policy")
     confirmed_constraints["grid_import_limit"] = st.checkbox("I have confirmed grid import limits and interconnection constraints")
-readiness = evaluate_task_readiness(
-    report,
-    task,
-    confirmed_constraints=confirmed_constraints,
+readiness = evaluate_readiness(
+    report, task, confirmed_constraints=confirmed_constraints,
 )
 if readiness["can_run"]:
     st.success(f"Ready for {task.replace('_', ' ')} screening")
