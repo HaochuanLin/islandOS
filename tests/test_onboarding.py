@@ -114,6 +114,30 @@ def test_forecasting_readiness_is_task_specific():
     assert "less_than_one_week_of_history" in readiness["warnings"]
 
 
+def test_forecasting_is_blocked_until_target_unit_is_confirmed():
+    raw = csv_bytes(
+        "timestamp,load\\n" + "".join(
+            f"2026-11-{day:02d}T{hour:02d}:00:00Z,100\\n"
+            for day in range(1, 2) for hour in range(24)
+        )
+    )
+    report = inspect_csv_bytes(raw, source_type="measured", now=NOW)
+    readiness = evaluate_task_readiness(report, "forecasting")
+    assert readiness["can_run"] is False
+    assert "source_unit_confirmation_required:load_kw" in readiness["blockers"]
+
+
+def test_forecasting_is_blocked_when_target_values_are_missing():
+    raw = csv_bytes(
+        "timestamp,load_kw\\n"
+        "2026-11-07T10:00:00Z,\\n"
+        "2026-11-07T11:00:00Z,100\\n"
+    )
+    report = inspect_csv_bytes(raw, source_type="measured", now=NOW)
+    readiness = evaluate_task_readiness(report, "forecasting")
+    assert "missing_target_values:load_kw" in readiness["blockers"]
+
+
 def test_dispatch_optimization_requires_confirmed_operating_constraints():
     raw = csv_bytes(
         "timestamp,load_kw,pv_kw\n"
