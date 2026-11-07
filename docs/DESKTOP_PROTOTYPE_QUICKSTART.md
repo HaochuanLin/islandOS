@@ -7,6 +7,7 @@ same UI-independent services used by the Streamlit onboarding experiment. It
 currently supports:
 
 - Creating a new local SQLite project after explicit metadata-storage consent.
+- Reopening an existing project after verifying its local audit chain.
 - Inspecting a CSV or XLSX file in memory.
 - Reviewing the import report and task-specific readiness result.
 - Saving import metadata and a SHA-256 digest to the local workspace after a
@@ -39,8 +40,8 @@ standalone EXE; a clean Windows build and runtime test are still required.
 
 ## First-use flow
 
-1. Choose a new SQLite workspace file.
-2. Enter a project ID, project name, and local operator ID.
+1. To start fresh, choose a new SQLite workspace file. To continue work, use **Open existing…**, select the database, and enter the project ID.
+2. For a new project, enter a project ID, project name, and local operator ID.
 3. Explicitly consent to local project metadata storage and create the project.
 4. Select a CSV or XLSX file for inspection.
 5. Review the quality issues and task-readiness blockers in the result panel.
