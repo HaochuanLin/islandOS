@@ -195,7 +195,7 @@ def simulate_energy_balance(
                 raise RuntimeError(f"battery state-of-charge balance failed at step {t}")
 
     renewable_total = float(np.sum(renewable) * dt)
-    renewable_used_total = float(np.sum(renewable_used) * dt)
+    renewable_used_total = float(np.sum(renewable_used + charge) * dt)
     return EnergyBalanceResult(
         renewable_available_kw=renewable.copy(), renewable_used_kw=renewable_used,
         curtailment_kw=curtailment, battery_charge_kw=charge,
