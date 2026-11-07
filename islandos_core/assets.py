@@ -16,13 +16,16 @@ SEVERITIES = {"hard", "operational", "soft"}
 OPERATORS = {"min", "max", "range"}
 
 REQUIRED_HARD_CONSTRAINTS = {
-    "pv": {"max_power_kw"},
-    "wind": {"max_power_kw"},
-    "battery": {"max_charge_kw", "max_discharge_kw", "soc_min_pct", "soc_max_pct"},
-    "diesel_generator": {"max_power_kw", "min_stable_power_kw"},
-    "grid_connection": {"import_limit_kw"},
-    "flexible_load": {"max_power_kw", "min_power_kw"},
-    "generic": set(),
+    "pv": {"max_power_kw": "max"},
+    "wind": {"max_power_kw": "max"},
+    "battery": {
+        "max_charge_kw": "max", "max_discharge_kw": "max",
+        "soc_min_pct": "min", "soc_max_pct": "max",
+    },
+    "diesel_generator": {"max_power_kw": "max", "min_stable_power_kw": "min"},
+    "grid_connection": {"import_limit_kw": "max"},
+    "flexible_load": {"max_power_kw": "max", "min_power_kw": "min"},
+    "generic": {},
 }
 
 EXPECTED_UNITS = {
@@ -76,6 +79,9 @@ class AssetParameter:
         if not isinstance(value, Mapping):
             raise AssetValidationError("asset parameter must be an object")
         required = {"value", "unit", "source_type", "source_reference"}
+        unknown = sorted(set(value) - set(cls.__dataclass_fields__))
+        if unknown:
+            raise AssetValidationError("unknown parameter fields: " + ", ".join(unknown))
         missing = sorted(required - set(value))
         if missing:
             raise AssetValidationError("missing parameter fields: " + ", ".join(missing))
@@ -243,11 +249,16 @@ def evaluate_asset_readiness(asset: AssetRecord) -> dict[str, Any]:
     for constraint in asset.constraints:
         by_parameter.setdefault(constraint.parameter, []).append(constraint)
     blockers = []
-    for parameter in sorted(required):
+    for parameter, expected_operator in sorted(required.items()):
         candidates = by_parameter.get(parameter, [])
-        hard_confirmed = [item for item in candidates if item.severity == "hard" and item.confirmed]
+        hard_confirmed = [
+            item for item in candidates
+            if item.severity == "hard" and item.confirmed and item.operator == expected_operator
+        ]
         if not hard_confirmed:
-            blockers.append("confirmed_hard_constraint_required:" + parameter)
+            blockers.append(
+                "confirmed_hard_constraint_required:" + parameter + ":" + expected_operator
+            )
     if asset.asset_type == "battery":
         lower = by_parameter.get("soc_min_pct", [])
         upper = by_parameter.get("soc_max_pct", [])
