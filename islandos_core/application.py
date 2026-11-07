@@ -69,6 +69,18 @@ def inspect_upload(
     }
 
 
+def evaluate_readiness(
+    inspection_report: Mapping[str, Any],
+    task: str,
+    *,
+    confirmed_constraints: Mapping[str, bool] | None = None,
+) -> dict[str, Any]:
+    """Expose the canonical task gate through the shared application boundary."""
+    return evaluate_task_readiness(
+        inspection_report, task, confirmed_constraints=confirmed_constraints,
+    )
+
+
 def create_local_project(
     db_path: str | Path,
     *,
