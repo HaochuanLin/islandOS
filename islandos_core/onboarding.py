@@ -113,25 +113,25 @@ def _timestamp(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _resolve_column(header: str, overrides: Mapping[str, str]) -> ColumnMapping | None:
+def _resolve_column(header: str, overrides: Mapping[str, str], unit_overrides: Mapping[str, str]) -> ColumnMapping | None:
     if header in overrides:
         canonical = overrides[header]
         if canonical not in CANONICAL_UNITS:
             raise ValueError(f"unsupported canonical field override: {canonical}")
         base, unit = _split_header_unit(header)
-        return _make_mapping(header, canonical, unit, "user_confirmed")
+        return _make_mapping(header, canonical, unit_overrides.get(header, unit), "user_confirmed")
     normalized = _normalise_header(header)
     base, unit = _split_header_unit(header)
     if normalized in _TIMESTAMP_ALIASES or base in _TIMESTAMP_ALIASES:
         return None
     for canonical, aliases in _HEADER_ALIASES.items():
         if normalized in aliases:
-            candidate_unit = unit
+            candidate_unit = unit_overrides.get(header, unit)
             if candidate_unit and candidate_unit not in {CANONICAL_UNITS[canonical], "W", "MW"}:
-                candidate_unit = None
+                candidate_unit = None if header not in unit_overrides else candidate_unit
             return _make_mapping(header, canonical, candidate_unit, "alias_match")
         if base in aliases:
-            return _make_mapping(header, canonical, unit, "alias_match")
+            return _make_mapping(header, canonical, unit_overrides.get(header, unit), "alias_match")
     return None
 
 
@@ -161,6 +161,7 @@ def inspect_csv_bytes(
     *,
     source_type: str,
     column_overrides: Mapping[str, str] | None = None,
+    source_unit_overrides: Mapping[str, str] | None = None,
     expected_interval_minutes: int | None = None,
     now: datetime | None = None,
     future_tolerance_minutes: int = 5,
@@ -186,6 +187,11 @@ def inspect_csv_bytes(
     if reference_now.tzinfo is None or reference_now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
     overrides = dict(column_overrides or {})
+    unit_overrides = dict(source_unit_overrides or {})
+    allowed_units = {"kW", "W", "MW", "%", "L/h", "degC", "currency/kWh"}
+    invalid_units = {key: value for key, value in unit_overrides.items() if value not in allowed_units}
+    if invalid_units:
+        raise ValueError("unsupported source unit override: " + ", ".join(sorted(invalid_units)))
     digest = hashlib.sha256(content).hexdigest()
     issues: list[ImportIssue] = []
     try:
@@ -214,7 +220,7 @@ def inspect_csv_bytes(
     recognized_source_headers = set(timestamp_columns)
     for header in headers:
         try:
-            mapping = _resolve_column(header, overrides)
+            mapping = _resolve_column(header, overrides, unit_overrides)
         except ValueError as exc:
             issues.append(ImportIssue("unit_or_mapping_error", "error", str(exc), column=header))
             continue
@@ -313,7 +319,7 @@ def inspect_csv_bytes(
 def _invalid_report(digest: str, source_type: str, issues: list[ImportIssue]) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION, "status": "invalid", "source_type": source_type,
-        "artifact": {"sha256": digest, "byte_count": 0}, "timestamp_column": None,
+        "artifact": {"sha256": digest, "byte_count": None}, "timestamp_column": None,
         "column_mappings": [], "row_count": 0, "recognized_signal_count": 0,
         "error_count": len(issues), "warning_count": 0,
         "issues": [asdict(issue) for issue in issues], "preview": [],
