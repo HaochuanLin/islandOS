@@ -410,3 +410,227 @@ def evaluate_task_readiness(
         "warnings": warnings,
         "note": "Readiness permits the named analysis workflow only; it is not a safety approval or operational-control authorization.",
     }
+
+
+def inspect_excel_bytes(
+    content: bytes,
+    *,
+    source_type: str,
+    source_name: str | None = None,
+    sheet_name: str | None = None,
+    header_row: int | None = None,
+    timezone_name: str | None = None,
+    column_overrides: Mapping[str, str] | None = None,
+    source_unit_overrides: Mapping[str, str] | None = None,
+    expected_interval_minutes: int | None = None,
+    now: datetime | None = None,
+    max_file_bytes: int = 20 * 1024 * 1024,
+    max_rows: int = 200_000,
+    max_columns: int = 256,
+) -> dict[str, Any]:
+    """Extract one worksheet and pass it through the same conservative CSV validator.
+
+    The original workbook hash is retained as the source artifact. Formula cells
+    are read only from cached workbook values; formulas are never evaluated.
+    Naive Excel timestamps require an explicit IANA timezone. Ambiguous or
+    nonexistent daylight-saving timestamps are rejected rather than guessed.
+    """
+    from datetime import date
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    from openpyxl import load_workbook
+
+    if not isinstance(content, bytes):
+        raise TypeError("content must be bytes")
+    if not content:
+        raise ValueError("workbook is empty")
+    if len(content) > max_file_bytes:
+        raise ValueError(f"workbook exceeds the {max_file_bytes // (1024 * 1024)} MB import limit")
+    if max_rows < 1 or max_columns < 1:
+        raise ValueError("row and column limits must be positive")
+
+    try:
+        value_book = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        formula_book = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
+    except Exception as exc:
+        raise ValueError("file is not a readable .xlsx workbook") from exc
+
+    try:
+        sheet_names = value_book.sheetnames
+        if not sheet_names:
+            raise ValueError("workbook contains no worksheets")
+        selected_name = sheet_name or sheet_names[0]
+        if selected_name not in sheet_names:
+            raise ValueError(f"worksheet not found: {selected_name}")
+        ws = value_book[selected_name]
+        formula_ws = formula_book[selected_name]
+
+        def cell_text(value: Any) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, datetime):
+                return value.isoformat()
+            if isinstance(value, date):
+                return datetime(value.year, value.month, value.day).isoformat()
+            return str(value)
+
+        def localize_naive(value: Any) -> str:
+            if isinstance(value, str):
+                raw = value.strip()
+                try:
+                    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                except ValueError:
+                    return raw
+            elif isinstance(value, datetime):
+                parsed = value
+            elif isinstance(value, date):
+                parsed = datetime(value.year, value.month, value.day)
+            else:
+                return cell_text(value)
+            if parsed.tzinfo is not None and parsed.utcoffset() is not None:
+                return parsed.isoformat()
+            if not timezone_name:
+                return parsed.isoformat()
+            try:
+                zone = ZoneInfo(timezone_name)
+            except ZoneInfoNotFoundError as exc:
+                raise ValueError(f"unknown IANA timezone: {timezone_name}") from exc
+            first = parsed.replace(tzinfo=zone, fold=0)
+            second = parsed.replace(tzinfo=zone, fold=1)
+            roundtrip_first = first.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None)
+            roundtrip_second = second.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None)
+            valid_first = roundtrip_first == parsed
+            valid_second = roundtrip_second == parsed
+            if not valid_first and not valid_second:
+                raise ValueError(f"nonexistent local timestamp during daylight-saving transition: {parsed.isoformat()}")
+            if valid_first and valid_second and first.utcoffset() != second.utcoffset():
+                raise ValueError(f"ambiguous local timestamp during daylight-saving transition: {parsed.isoformat()}")
+            selected = first if valid_first else second
+            return selected.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        # Scan a bounded prefix and select the row with the strongest recognizable header.
+        if header_row is None:
+            best_row = None
+            best_score = -1
+            for row_index, row in enumerate(ws.iter_rows(min_row=1, max_row=min(ws.max_row or 1, 20), values_only=True), start=1):
+                values = list(row[:max_columns])
+                score = 0
+                has_timestamp = False
+                for value in values:
+                    if value is None:
+                        continue
+                    header = str(value).strip()
+                    normalized = _normalise_header(header)
+                    base, _ = _split_header_unit(header)
+                    if normalized in _TIMESTAMP_ALIASES or base in _TIMESTAMP_ALIASES:
+                        has_timestamp = True
+                    if _resolve_column(header, {}, {}) is not None:
+                        score += 1
+                if has_timestamp and score > best_score:
+                    best_score, best_row = score, row_index
+            if best_row is None or best_score < 1:
+                raise ValueError("could not identify a timestamp and supported signal header in the first 20 rows")
+            header_row = best_row
+        if header_row < 1 or header_row > 20:
+            raise ValueError("header_row must be between 1 and 20")
+
+        headers = [cell_text(value).strip() for value in next(
+            ws.iter_rows(min_row=header_row, max_row=header_row, values_only=True)
+        )[:max_columns]]
+        while headers and not headers[-1]:
+            headers.pop()
+        if not headers:
+            raise ValueError("selected header row is empty")
+        timestamp_columns = []
+        for index, header in enumerate(headers):
+            normalized = _normalise_header(header)
+            base, _ = _split_header_unit(header)
+            if normalized in _TIMESTAMP_ALIASES or base in _TIMESTAMP_ALIASES:
+                timestamp_columns.append(index)
+        if len(timestamp_columns) != 1:
+            raise ValueError("worksheet must contain exactly one recognizable timestamp column")
+        timestamp_index = timestamp_columns[0]
+
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        extracted_rows = 0
+        formula_count = 0
+        for row_number, row in enumerate(
+            ws.iter_rows(min_row=header_row + 1, max_col=min(ws.max_column or 1, max_columns), values_only=True),
+            start=header_row + 1,
+        ):
+            values = list(row[:len(headers)])
+            if not any(value is not None for value in values):
+                continue
+            if extracted_rows >= max_rows:
+                raise ValueError(f"worksheet exceeds the {max_rows:,}-row import limit")
+            # Count formulas separately; only cached values are imported.
+            formula_row = next(
+                formula_ws.iter_rows(min_row=row_number, max_row=row_number, max_col=len(headers), values_only=True)
+            )
+            formula_count += sum(
+                1 for value in formula_row
+                if isinstance(value, str) and value.startswith("=")
+            )
+            if timestamp_index < len(values):
+                values[timestamp_index] = localize_naive(values[timestamp_index])
+            writer.writerow([cell_text(value) for value in values])
+            extracted_rows += 1
+
+        report = inspect_csv_bytes(
+            output.getvalue().encode("utf-8"),
+            source_type=source_type,
+            source_name=source_name,
+            column_overrides=column_overrides,
+            source_unit_overrides=source_unit_overrides,
+            expected_interval_minutes=expected_interval_minutes,
+            now=now,
+        )
+        report["artifact"] = {
+            **report["artifact"],
+            "source_name": source_name,
+            "source_type": source_type,
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "worksheet": selected_name,
+            "header_row": header_row,
+            "extracted_row_count": extracted_rows,
+            "formula_cell_count": formula_count,
+        }
+        report["source_adapter"] = "xlsx_cached_values_only"
+        if formula_count:
+            report["issues"].append({
+                "code": "formula_cells_present",
+                "severity": "warning",
+                "message": f"{formula_count} formula cells were detected; IslandOS imported cached values only and did not calculate formulas.",
+            })
+            report["warning_count"] += 1
+        report["source_timezone"] = timezone_name
+        report["source_workbook_sha256"] = hashlib.sha256(content).hexdigest()
+        return report
+    finally:
+        value_book.close()
+        formula_book.close()
+
+
+def inspect_excel_sheets(content: bytes, *, max_file_bytes: int = 20 * 1024 * 1024) -> list[dict[str, Any]]:
+    """Return worksheet names and visibility without extracting customer data."""
+    from openpyxl import load_workbook
+
+    if not isinstance(content, bytes):
+        raise TypeError("content must be bytes")
+    if not content:
+        raise ValueError("workbook is empty")
+    if len(content) > max_file_bytes:
+        raise ValueError(f"workbook exceeds the {max_file_bytes // (1024 * 1024)} MB import limit")
+    try:
+        workbook = load_workbook(io.BytesIO(content), read_only=False, data_only=True)
+    except Exception as exc:
+        raise ValueError("file is not a readable .xlsx workbook") from exc
+    try:
+        return [
+            {"name": sheet.title, "state": sheet.sheet_state, "visible": sheet.sheet_state == "visible"}
+            for sheet in workbook.worksheets
+        ]
+    finally:
+        workbook.close()
