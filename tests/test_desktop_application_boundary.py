@@ -20,6 +20,10 @@ def test_optional_desktop_shell_uses_shared_core_and_has_no_streamlit_dependency
     assert "register_inspected_import" in source
     assert "import streamlit" not in source
     assert "control_command" not in source
+    assert "currentData()" in source
+    assert "list_excel_sheets" in source
+    assert "Review data column" in source
+    assert "Confirm source unit" in source
 
 
 def test_desktop_dependency_is_optional_and_separate():
