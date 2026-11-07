@@ -192,3 +192,19 @@ A feature can move from Streamlit experiment to shared product only when:
 8. Prototype the Windows shell only after service boundaries are stable.
 
 This document is an architecture baseline. Implementation status must be tracked separately; describing a planned component here does not mean it already exists.
+
+## 12. Headless core smoke path
+
+The shared onboarding and local workspace services can be exercised without
+starting Streamlit:
+
+```bash
+python tools/islandos_core_smoke.py
+```
+
+This uses only synthetic in-memory CSV data and a temporary SQLite workspace.
+It verifies import readiness, project creation with explicit metadata consent,
+metadata-only artifact registration, run-manifest creation, and audit-chain
+verification. It also fails if Streamlit has been imported. The smoke path is
+an architecture check, not a customer deployment or desktop packaging test.
+
