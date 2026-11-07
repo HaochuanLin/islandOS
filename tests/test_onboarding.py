@@ -40,8 +40,16 @@ def test_unknown_columns_are_not_guessed_and_can_be_confirmed_by_override():
         column_overrides={"site_consumption": "load_kw", "solar_output": "pv_power_kw"},
         now=NOW,
     )
-    assert confirmed["status"] == "valid"
+    assert confirmed["status"] == "needs_review"
     assert {x["mapping_method"] for x in confirmed["column_mappings"]} == {"user_confirmed"}
+    assert confirmed["warning_count"] == 2
+    unit_confirmed = inspect_csv_bytes(
+        raw, source_type="customer_provided",
+        column_overrides={"site_consumption": "load_kw", "solar_output": "pv_power_kw"},
+        source_unit_overrides={"site_consumption": "kW", "solar_output": "kW"},
+        now=NOW,
+    )
+    assert unit_confirmed["status"] == "valid"
 
 
 def test_missing_values_are_warnings_and_never_imputed():
@@ -127,3 +135,5 @@ def test_invalid_arguments_fail_explicitly():
         inspect_csv_bytes(b"x", source_type="measured", expected_interval_minutes=0, now=NOW)
     with pytest.raises(TypeError):
         inspect_csv_bytes("not bytes", source_type="measured", now=NOW)
+    with pytest.raises(ValueError):
+        inspect_csv_bytes(b"x", source_type="measured", source_unit_overrides={"x": "kWh"}, now=NOW)
