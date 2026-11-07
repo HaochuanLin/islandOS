@@ -8,7 +8,10 @@ currently supports:
 
 - Creating a new local SQLite project after explicit metadata-storage consent.
 - Reopening an existing project after verifying its local audit chain.
-- Inspecting a CSV or XLSX file in memory.
+- Inspecting a CSV or XLSX file in memory, with explicit worksheet selection for Excel.
+- Selecting the intended analysis task before import readiness is evaluated.
+- Reviewing and manually mapping unrecognized signal columns to canonical fields.
+- Explicitly confirming units when a recognized signal has no unit in its header.
 - Reviewing the import report and task-specific readiness result.
 - Saving import metadata and a SHA-256 digest to the local workspace after a
   separate explicit consent.
@@ -35,17 +38,20 @@ python -m desktop_app.main
 ```
 
 The current dependency set includes the repository's existing analysis stack
-and optional PySide6 UI. This prototype has not yet been packaged into a
-standalone EXE; a clean Windows build and runtime test are still required.
+and optional PySide6 UI. A Windows onedir EXE prototype is built by GitHub Actions and uploaded as a
+14-day artifact. A successful build proves packaging, not interactive GUI
+acceptance or customer deployment readiness.
 
 ## First-use flow
 
 1. To start fresh, choose a new SQLite workspace file. To continue work, use **Open existing…**, select the database, and enter the project ID.
 2. For a new project, enter a project ID, project name, and local operator ID.
 3. Explicitly consent to local project metadata storage and create the project.
-4. Select a CSV or XLSX file for inspection.
-5. Review the quality issues and task-readiness blockers in the result panel.
-6. Separately consent before saving import metadata.
+4. Select the intended task: exploration, forecasting, or dispatch-optimization screening.
+5. Select a CSV or XLSX file. For Excel, choose the worksheet explicitly.
+6. If a column is not recognized, map it to a canonical signal or leave it unused. Confirm units explicitly when the source header does not state one.
+7. Review the quality issues and task-readiness blockers in the result panel.
+8. Separately consent before saving import metadata.
 
 For XLSX files, provide the site's IANA timezone when timestamps are naive.
 Do not guess UTC or use the computer's local timezone by default.
