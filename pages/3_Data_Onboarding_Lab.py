@@ -11,6 +11,8 @@ from islandos_core.onboarding import (
     CANONICAL_UNITS,
     evaluate_task_readiness,
     inspect_csv_bytes,
+    inspect_excel_bytes,
+    inspect_excel_sheets,
 )
 
 st.set_page_config(page_title="IslandOS Data Onboarding Lab", page_icon="🧭", layout="wide")
@@ -24,9 +26,9 @@ st.info(
 )
 
 uploaded = st.file_uploader(
-    "Upload an existing energy-data CSV",
-    type=["csv"],
-    help="UTF-8 CSV with one timestamp column and one or more supported energy signals.",
+    "Upload an existing energy-data file",
+    type=["csv", "xlsx"],
+    help="CSV or Excel workbook. IslandOS reads one worksheet, detects common signal headers, and never evaluates workbook formulas.",
 )
 source_type = st.selectbox(
     "What kind of data is this?",
@@ -56,19 +58,53 @@ if uploaded is None:
         - Battery charge, discharge and state of charge
         - Electricity tariff, fuel consumption and ambient temperature
         - Timestamp, time zone, sampling interval and missing values
+        - Excel worksheet selection, header-row detection and cached-value extraction
         """
     )
     st.stop()
 
 raw = uploaded.getvalue()
-try:
-    initial = inspect_csv_bytes(
-        raw,
-        source_type=source_type,
-        source_name=uploaded.name,
-        expected_interval_minutes=interval_minutes,
-        now=datetime.now(timezone.utc),
+is_excel = uploaded.name.lower().endswith(".xlsx")
+excel_sheet = None
+excel_timezone = None
+if is_excel:
+    try:
+        sheets = inspect_excel_sheets(raw)
+    except (TypeError, ValueError) as exc:
+        st.error(f"Could not inspect this workbook: {exc}")
+        st.stop()
+    visible_sheets = [item for item in sheets if item["visible"]]
+    choices = visible_sheets or sheets
+    excel_sheet = st.selectbox(
+        "Worksheet to import",
+        [item["name"] for item in choices],
+        help="Hidden worksheets are excluded when at least one visible worksheet exists.",
     )
+    excel_timezone = st.text_input(
+        "Site timezone for Excel timestamps (IANA name)",
+        placeholder="e.g. Asia/Shanghai, Africa/Nairobi, America/New_York",
+        help="Excel timestamps are often timezone-naive. IslandOS will not assume UTC or your computer timezone. Ambiguous/nonexistent daylight-saving times are rejected.",
+    ).strip() or None
+
+
+def inspect_upload(*, column_overrides=None, source_unit_overrides=None):
+    common = {
+        "source_type": source_type,
+        "source_name": uploaded.name,
+        "expected_interval_minutes": interval_minutes,
+        "now": datetime.now(timezone.utc),
+        "column_overrides": column_overrides,
+        "source_unit_overrides": source_unit_overrides,
+    }
+    if is_excel:
+        return inspect_excel_bytes(
+            raw, sheet_name=excel_sheet, timezone_name=excel_timezone, **common,
+        )
+    return inspect_csv_bytes(raw, **common)
+
+
+try:
+    initial = inspect_upload()
 except (TypeError, ValueError) as exc:
     st.error(f"Could not inspect this file: {exc}")
     st.stop()
@@ -144,14 +180,9 @@ if needs_unit:
 
 if column_overrides or source_unit_overrides:
     try:
-        report = inspect_csv_bytes(
-            raw,
-            source_type=source_type,
-            source_name=uploaded.name,
+        report = inspect_upload(
             column_overrides=column_overrides,
             source_unit_overrides=source_unit_overrides,
-            expected_interval_minutes=interval_minutes,
-            now=datetime.now(timezone.utc),
         )
     except (TypeError, ValueError) as exc:
         st.error(f"Mapping review failed: {exc}")
@@ -215,7 +246,7 @@ for warning in readiness.get("warnings", []):
     st.write(f"- **Warning:** {warning}")
 
 st.subheader("6 · Export the review record")
-st.caption("The report records the exact input file hash, source label, mappings, issues and preview. The original file is not modified.")
+st.caption("The report records the original input file hash, source label, worksheet (for Excel), mappings, issues and preview. Excel formulas are not evaluated and the original file is not modified.")
 st.download_button(
     "Download onboarding report (JSON)",
     data=json.dumps({"import_report": report, "task_readiness": readiness}, indent=2, ensure_ascii=False).encode("utf-8"),
