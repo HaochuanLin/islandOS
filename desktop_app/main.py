@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -30,6 +31,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from islandos_core.onboarding import CANONICAL_UNITS
 
 from islandos_core.application import (
     create_local_project,
@@ -100,8 +103,10 @@ class IslandOSDesktopWindow(QMainWindow):
 
         layout.addWidget(QLabel("Data onboarding"))
         controls = QHBoxLayout()
-        self.task_edit = QLineEdit("exploration")
-        self.task_edit.setPlaceholderText("exploration / forecasting / dispatch_optimization")
+        self.task_edit = QComboBox()
+        self.task_edit.addItem("Initial data exploration", "exploration")
+        self.task_edit.addItem("Load / renewable forecasting", "forecasting")
+        self.task_edit.addItem("Dispatch optimization screening", "dispatch_optimization")
         inspect_button = QPushButton("Choose file and inspect")
         inspect_button.clicked.connect(self.choose_and_inspect)
         controls.addWidget(self.task_edit, 1)
@@ -236,9 +241,56 @@ class IslandOSDesktopWindow(QMainWindow):
             result = inspect_upload(
                 raw, file_name=Path(path).name,
                 source_type="customer_provided",
-                task=self.task_edit.text().strip() or "exploration",
+                task=str(self.task_edit.currentData()),
                 options=options,
             )
+            inspection = result["inspection"]
+            column_overrides = dict(options.get("column_overrides", {}))
+            source_unit_overrides = dict(options.get("source_unit_overrides", {}))
+
+            # Offer explicit mapping only for columns the parser could not identify.
+            unmapped = [
+                issue.get("column") for issue in inspection.get("issues", [])
+                if issue.get("code") == "unrecognized_column" and issue.get("column")
+            ]
+            canonical_choices = list(CANONICAL_UNITS.keys())
+            for column in dict.fromkeys(unmapped):
+                choice, accepted = QInputDialog.getItem(
+                    self, "Review data column",
+                    f"IslandOS could not identify '{column}'. Map it to a canonical signal, or leave it unused:",
+                    ["Leave unused"] + canonical_choices, 0, False,
+                )
+                if not accepted:
+                    return
+                if choice != "Leave unused":
+                    column_overrides[column] = choice
+
+            # Never infer missing units silently. Ask for confirmation per mapped column.
+            mappings = inspection.get("column_mappings", [])
+            for mapping in mappings:
+                column = mapping.get("source_column")
+                if mapping.get("detected_source_unit") is None and column not in source_unit_overrides:
+                    unit_choices = ["kW", "W", "MW", "%", "L/h", "degC", "currency/kWh"]
+                    unit, accepted = QInputDialog.getItem(
+                        self, "Confirm source unit",
+                        f"Confirm the source unit for '{column}' "
+                        f"(canonical field: {mapping.get('canonical_field')}). "
+                        "No unit will be assumed if you cancel this import.",
+                        unit_choices, 0, False,
+                    )
+                    if not accepted:
+                        return
+                    source_unit_overrides[column] = unit
+
+            if column_overrides or source_unit_overrides:
+                options["column_overrides"] = column_overrides
+                options["source_unit_overrides"] = source_unit_overrides
+                result = inspect_upload(
+                    raw, file_name=Path(path).name,
+                    source_type="customer_provided",
+                    task=str(self.task_edit.currentData()),
+                    options=options,
+                )
             self.last_inspection = result
             self.last_file_name = Path(path).name
             self.output.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
