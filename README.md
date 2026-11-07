@@ -33,6 +33,20 @@ Experimental pilot scenario: Nan’ao emergency desalination case. This is a bou
 - **Stress-tested decision screening and operating economics:** replay the same candidate schedules under nominal conditions, renewable shortfall, demand growth, energy-price increases, grid outage, and combined stress. The app reports worst-case service/cost/emissions, scenario-level downloadable audit rows, whole-system operating cost per m³ served, and incremental cost per additional m³ versus the no-RO reference. These are deterministic sensitivity and accounting indicators—not probability-calibrated reliability, equipment payback, or verified savings; see [Common-Physics Schedule Evaluation](docs/COMMON_PHYSICS_SCHEDULE_EVALUATION.md).
 - **Reproducible system-level benchmark:** run `python tools/run_integrated_microgrid_demo.py --hours 168 --seed 20261104` to compare a no-RO baseline with a renewable-only RO flexible-load policy on the same synthetic scenario. It exports a provenance-labelled JSON report and hourly CSV; see [Integrated Microgrid Demo](docs/INTEGRATED_MICROGRID_DEMO.md).
 
+## Product architecture: Streamlit lab, shared core, future desktop app
+
+**Streamlit is IslandOS's rapid product laboratory, not the long-term software boundary.** It is used to test onboarding flows, data-quality feedback, asset configuration, scenario comparison, and decision reports with fast iteration.
+
+The intended architecture is **one UI-independent IslandOS core with multiple interfaces**:
+- Streamlit remains the experimental web interface and regression surface.
+- Shared Python services and domain modules own data validation, asset constraints, physical simulation, forecasting, optimization, and audit records.
+- A future Windows desktop application will call those same services rather than reimplementing the algorithms.
+- Device and file integrations remain isolated adapters with explicit support status and read-only defaults.
+
+The repository already contains portable Windows executables for selected telemetry/gateway and advisor utilities. **Those utilities are not yet the complete IslandOS desktop decision console or a customer-ready installer.** The full desktop shell, onboarding experience, local project management, and installer require separate implementation and acceptance testing.
+
+See [Product Architecture and Desktop Strategy](docs/PRODUCT_ARCHITECTURE_AND_DESKTOP_STRATEGY.md) for the architecture rules and promotion gates. The first UI-independent onboarding service and Streamlit experiment are documented in [Data Onboarding Lab](docs/DATA_ONBOARDING_LAB.md) and available at `pages/3_Data_Onboarding_Lab.py`. The versioned equipment and hard-constraint model is documented in [Asset and Constraint Registry](docs/ASSET_CONSTRAINT_REGISTRY.md) and exercised at `pages/4_Asset_Constraint_Lab.py`.
+
 ## Hosted demo access
 
 The hosted Streamlit app is intended to be publicly accessible without sign-in. Public visibility is controlled in Streamlit Community Cloud, not by repository code. If the app redirects visitors to sign-in, follow [the public deployment check](docs/STREAMLIT_PUBLIC_DEPLOYMENT.md). GitHub code tests and hosted access checks are reported separately.

@@ -1,0 +1,78 @@
+# IslandOS Asset and Constraint Registry
+
+## Purpose
+
+The asset registry keeps three different kinds of equipment information
+separate: vendor nameplate ratings, the configuration actually installed at a
+site, and observed operating behavior. Operating constraints are versioned
+records with source references and explicit confirmation state.
+
+## Constraint severity
+
+- **Hard:** a boundary that a candidate recommendation must never violate.
+- **Operational:** a site operating rule that applies by default.
+- **Soft:** a preference that may be traded off and explained.
+
+The first Streamlit form captures required hard constraints for common asset
+types. The core schema supports all three severity levels.
+
+## Required minimum constraints for offline screening
+
+| Asset type | Required confirmed hard constraints |
+|---|---|
+| PV | Maximum usable power |
+| Wind | Maximum usable power |
+| Battery | Maximum charge power, maximum discharge power, minimum SOC, maximum SOC |
+| Diesel generator | Maximum power, minimum stable power |
+| Grid connection | Import limit |
+| Flexible load | Maximum power, minimum power |
+| Generic | No generic default; add asset-specific constraints before use |
+
+The core also requires confirmed installed configuration fields: configured
+power for all named asset types, and usable energy capacity for batteries.
+These requirements intentionally distinguish a vendor datasheet from the
+site's installed configuration.
+
+## Provenance requirements
+
+Every parameter and constraint must include:
+- numeric value and unit;
+- source type (measured, customer-provided, vendor specification, inferred,
+  or synthetic);
+- traceable source reference;
+- explicit confirmation state.
+
+Inferred values are not automatically treated as confirmed. The Streamlit
+experiment requires a source reference and makes the operator confirm entered
+hard limits. A missing or unconfirmed hard limit blocks asset screening.
+
+## Validation behavior
+
+- Values must be finite numeric values.
+- Known parameter names have canonical units.
+- Min, max, and range operators must have the appropriate bounds.
+- Range lower bound cannot exceed upper bound.
+- Required hard constraints must use the correct direction (for example,
+  maximum charge power is a max constraint).
+- Battery minimum SOC must be below maximum SOC.
+- Duplicate constraint IDs are rejected.
+- An unavailable asset cannot be screened.
+
+## Run the experiment
+
+```bash
+streamlit run pages/4_Asset_Constraint_Lab.py
+```
+
+The page stores records only in Streamlit session state and can export a JSON
+registry. It does not create a persistent customer workspace, connect to
+equipment, validate the source document, certify equipment settings, or issue
+control commands.
+
+## Current limitations
+
+The first form captures the minimum hard constraints for common asset types.
+It does not yet provide a complete asset lifecycle, approval workflow,
+maintenance calendar, vendor catalogue, automatic datasheet extraction,
+cross-asset electrical topology, or live device discovery. Those should be
+separate tested capabilities before the desktop application adopts them.
