@@ -20,15 +20,24 @@ st.title("IslandOS · Data Onboarding Lab")
 st.caption("Streamlit product laboratory · shared core service · offline import only")
 
 st.info(
-    "This page tests the future desktop onboarding workflow. Files are processed in this "
-    "app session and are not saved as a customer project. Automatic column recognition is "
+    "This page tests the future desktop onboarding workflow. Automatic column recognition is "
     "a suggestion, not proof of measurement accuracy. No missing values are filled."
+)
+st.warning(
+    "Hosted-demo privacy boundary: uploading a file sends it to the hosted app server for "
+    "processing. This page does not create a persistent customer project, but it is not a "
+    "confidential-data vault. Use synthetic or redacted files only; do not upload credentials, "
+    "personal information, security diagrams, or sensitive operational records."
+)
+hosted_demo_ack = st.checkbox(
+    "I understand this is a hosted demo and will only upload synthetic or non-sensitive, redacted data."
 )
 
 uploaded = st.file_uploader(
     "Upload an existing energy-data file",
     type=["csv", "xlsx"],
     help="CSV or Excel workbook. IslandOS reads one worksheet, detects common signal headers, and never evaluates workbook formulas.",
+    disabled=not hosted_demo_ack,
 )
 source_type = st.selectbox(
     "What kind of data is this?",
@@ -51,6 +60,8 @@ interval_choice = st.selectbox(
 interval_minutes = None if interval_choice == "Do not enforce" else int(interval_choice.split()[0])
 
 if uploaded is None:
+    if not hosted_demo_ack:
+        st.caption("Confirm the hosted-demo data boundary above before uploading a file.")
     st.markdown(
         """
         **What IslandOS attempts to recognize automatically**
