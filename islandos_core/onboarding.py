@@ -567,11 +567,15 @@ def inspect_excel_bytes(
         writer = csv.writer(output)
         writer.writerow(headers)
         extracted_rows = 0
+        scanned_rows = 0
         formula_count = 0
         for row_number, row in enumerate(
             ws.iter_rows(min_row=header_row + 1, max_col=min(ws.max_column or 1, max_columns), values_only=True),
             start=header_row + 1,
         ):
+            scanned_rows += 1
+            if scanned_rows > max_rows:
+                raise ValueError(f"worksheet scan exceeds the {max_rows:,}-row safety limit")
             values = list(row[:len(headers)])
             if not any(value is not None for value in values):
                 continue
