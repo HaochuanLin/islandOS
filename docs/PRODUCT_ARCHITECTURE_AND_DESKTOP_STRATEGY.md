@@ -241,3 +241,12 @@ core and Streamlit app do not require PySide6. Run the prototype with
 `python -m desktop_app.main` after installing the base and desktop requirements.
 This is a functional shell for project creation and data intake, not yet the
 full forecasting/optimization product, a signed installer, or a standalone EXE.
+
+## 15. Reopening a local project
+
+The workspace store exposes a project-listing query, and the application
+boundary exposes `open_local_project`. The desktop client can reopen a
+selected project from an existing SQLite file only after checking that the
+project exists and the audit chain verifies. This is a local integrity check,
+not authentication or protection against a privileged user editing the
+database file.
