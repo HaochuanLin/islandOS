@@ -17,6 +17,9 @@ SQLite library. Streamlit session state is not treated as a customer database.
   human-review/read-only execution boundary.
 - Append-only audit events with actor, timestamp, event type, payload, previous
   event hash, and current event hash.
+- Reasoned operator-override proposals and independent review events linked by
+  a proposal ID, including prior/proposed values, reason, source reference,
+  proposer, reviewer, and pending/approved/rejected state.
 
 ## What is not stored
 
@@ -32,7 +35,11 @@ Absolute source paths are reduced to the filename only. A run can reference
 only source hashes registered to the same project. Run manifests and audit
 events have SQLite triggers that reject normal update/delete operations.
 The audit chain also hashes each event together with the preceding event hash,
-and verify_audit_chain detects edits or reordering.
+and verify_audit_chain detects edits or reordering. A reasoned override review
+record is not proof that the reviewer has the legal or engineering authority
+to approve the change, and it does not mutate the equipment model or authorize
+operation. The hash chain cannot independently detect deletion of its final
+events without an external trusted checkpoint.
 
 These controls improve traceability; they are not cryptographic protection
 against an administrator who can replace or modify the SQLite database file.
@@ -80,6 +87,8 @@ assert verify_audit_chain(db)["valid"]
   desktop shell, not beside the executable.
 - A full customer-facing workflow still needs project export/import, backup
   and restore, retention controls, deletion/purge policy, multi-user approvals,
-  and a security review.
+  and a security review. Override proposals are recorded as history only; a
+separate authorization model and signed approval workflow are required before
+a reviewed value can be treated as an approved site constraint.
 - A manifest records what the application says it used; it does not prove
   sensor calibration, source authenticity, or physical correctness.
