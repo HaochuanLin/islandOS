@@ -14,6 +14,7 @@ from islandos_core.onboarding import (
     evaluate_task_readiness,
     inspect_csv_bytes,
     inspect_excel_bytes,
+    inspect_excel_sheets,
 )
 from islandos_core.workspace_store import (
     create_project as _create_project,
@@ -69,6 +70,11 @@ def inspect_upload(
         "readiness": readiness,
         "raw_file_retained": False,
     }
+
+
+def list_excel_sheets(content: bytes) -> list[dict[str, Any]]:
+    """List workbook worksheets without importing their data rows."""
+    return inspect_excel_sheets(content)
 
 
 def evaluate_readiness(
