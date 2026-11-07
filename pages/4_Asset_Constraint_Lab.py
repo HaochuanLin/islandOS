@@ -118,7 +118,7 @@ if submitted:
         if nameplate_power.strip():
             nameplate["rated_power_kw"] = AssetParameter(
                 float(nameplate_power), "kW", "vendor_specification",
-                source_reference.strip() or "source not yet documented", False,
+                source_reference.strip(), False,
             )
         if installed_power.strip():
             installed["configured_power_kw"] = AssetParameter(
@@ -129,7 +129,7 @@ if submitted:
             if nameplate_energy.strip():
                 nameplate["energy_capacity_kwh"] = AssetParameter(
                     float(nameplate_energy), "kWh", "vendor_specification",
-                    source_reference.strip() or "source not yet documented", False,
+                    source_reference.strip(), False,
                 )
             if installed_energy.strip():
                 installed["usable_energy_capacity_kwh"] = AssetParameter(
