@@ -250,3 +250,24 @@ selected project from an existing SQLite file only after checking that the
 project exists and the audit chain verifies. This is a local integrity check,
 not authentication or protection against a privileged user editing the
 database file.
+
+## Deterministic energy-balance core (prototype)
+
+`islandos_core.energy_balance` provides an offline, timestep-based screening engine
+for load, available renewable generation, grid import, diesel backup, and an optional
+battery. It exposes two transparent comparison baselines: renewable-first and
+grid-first. The model reports grid/diesel energy and cost separately, renewable
+curtailment, battery SOC, unmet load, and renewable utilization.
+
+Every timestep checks three conservation identities: served load equals supplied
+power; available renewable generation is allocated to direct use, battery charging,
+or curtailment; and battery SOC follows charge/discharge efficiency and power limits.
+Battery nameplate capacity, charge/discharge power, efficiency, SOC bounds, and
+initial SOC are explicit inputs. No missing equipment values are silently inferred.
+
+This is a deterministic offline screening model using supplied time series. It is
+not a forecast, optimizer, equipment compatibility certification, field validation,
+or controller. It currently omits degradation, demand response, network losses,
+reactive power, ramp/start constraints, fuel logistics, tariff complexity, and
+protection/interlock behavior. Economic results are only as reliable as the
+operator-supplied profiles, limits, and prices.
