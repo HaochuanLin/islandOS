@@ -107,6 +107,12 @@ if submitted:
     try:
         if not asset_id.strip() or not site_id.strip():
             raise ValueError("Asset ID and Site ID are required.")
+        has_parameter_or_constraint = any([
+            nameplate_power.strip(), installed_power.strip(), nameplate_energy.strip(),
+            installed_energy.strip(), *[value.strip() for value in constraint_inputs.values()],
+        ])
+        if has_parameter_or_constraint and not source_reference.strip():
+            raise ValueError("A traceable source reference is required for every entered parameter or constraint.")
         nameplate = {}
         installed = {}
         if nameplate_power.strip():
@@ -117,7 +123,7 @@ if submitted:
         if installed_power.strip():
             installed["configured_power_kw"] = AssetParameter(
                 float(installed_power), "kW", source_type,
-                source_reference.strip() or "source not yet documented", confirmed,
+                source_reference.strip(), confirmed and source_type != "inferred",
             )
         if asset_type == "battery":
             if nameplate_energy.strip():
@@ -128,7 +134,7 @@ if submitted:
             if installed_energy.strip():
                 installed["usable_energy_capacity_kwh"] = AssetParameter(
                     float(installed_energy), "kWh", source_type,
-                    source_reference.strip() or "source not yet documented", confirmed,
+                    source_reference.strip(), confirmed and source_type != "inferred",
                 )
         constraints = []
         for field, label, unit, operator in ASSET_FIELDS[asset_type]:
@@ -145,8 +151,8 @@ if submitted:
                 lower_bound=value if operator == "min" else None,
                 upper_bound=value if operator == "max" else None,
                 source_type=source_type,
-                source_reference=source_reference.strip() or "source not yet documented",
-                confirmed=confirmed and bool(source_reference.strip()),
+                source_reference=source_reference.strip(),
+                confirmed=confirmed and source_type != "inferred",
                 rationale=label,
             ))
         asset = AssetRecord(
