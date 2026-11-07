@@ -12,7 +12,9 @@ from islandos_core.workspace_store import (
     get_run_manifest,
     initialize_workspace,
     list_import_artifacts,
+    list_audit_events,
     record_import_artifact,
+    record_operator_override,
     verify_audit_chain,
 )
 
@@ -139,6 +141,68 @@ def test_audit_chain_detects_tampering(tmp_path):
     report = verify_audit_chain(db)
     assert report["valid"] is False
     assert report["failed_sequence"] == 1
+
+
+def test_operator_override_requires_reason_and_independent_review(tmp_path):
+    db = ready_project(tmp_path)
+    proposal_id = record_operator_override(
+        db, project_id="site-01", actor_id="operator-a",
+        field_path="assets.battery-01.max_charge_kw",
+        previous_value=180, proposed_value=150,
+        reason="Commissioning sheet lists a lower configured limit.",
+        source_reference="commissioning-sheet-rev2.pdf page 4",
+        approval_status="pending_review", created_at=NOW,
+    )
+    with pytest.raises(WorkspaceStoreError, match="cannot review their own"):
+        record_operator_override(
+            db, project_id="site-01", actor_id="operator-a",
+            field_path="assets.battery-01.max_charge_kw",
+            previous_value=180, proposed_value=150,
+            reason="Commissioning sheet lists a lower configured limit.",
+            source_reference="commissioning-sheet-rev2.pdf page 4",
+            approval_status="approved", reviewer_id="operator-a",
+            proposal_id=proposal_id, created_at=NOW,
+        )
+    with pytest.raises(WorkspaceStoreError, match="match the original"):
+        record_operator_override(
+            db, project_id="site-01", actor_id="operator-a",
+            field_path="assets.battery-01.max_charge_kw",
+            previous_value=180, proposed_value=140,
+            reason="Commissioning sheet lists a lower configured limit.",
+            source_reference="commissioning-sheet-rev2.pdf page 4",
+            approval_status="approved", reviewer_id="reviewer-b",
+            proposal_id=proposal_id, created_at=NOW,
+        )
+    record_operator_override(
+        db, project_id="site-01", actor_id="operator-a",
+        field_path="assets.battery-01.max_charge_kw",
+        previous_value=180, proposed_value=150,
+        reason="Commissioning sheet lists a lower configured limit.",
+        source_reference="commissioning-sheet-rev2.pdf page 4",
+        approval_status="approved", reviewer_id="reviewer-b",
+        proposal_id=proposal_id, created_at=NOW,
+    )
+    events = list_audit_events(db, project_id="site-01")
+    override_events = [item for item in events if item["event_type"].startswith("operator_override_")]
+    assert [item["event_type"] for item in override_events] == [
+        "operator_override_pending_review", "operator_override_approved",
+    ]
+    assert override_events[0]["payload"]["proposal_id"] == proposal_id
+    assert override_events[1]["payload"]["proposal_id"] == proposal_id
+    assert override_events[1]["payload"]["operational_authorization"] is False
+    assert verify_audit_chain(db)["valid"] is True
+
+
+def test_override_review_cannot_reference_unknown_proposal(tmp_path):
+    db = ready_project(tmp_path)
+    with pytest.raises(WorkspaceStoreError, match="does not identify"):
+        record_operator_override(
+            db, project_id="site-01", actor_id="operator-a",
+            field_path="assets.pv-01.max_power_kw",
+            previous_value=100, proposed_value=90, reason="Site test",
+            source_reference="test report", approval_status="rejected",
+            reviewer_id="reviewer-b", proposal_id="unknown", created_at=NOW,
+        )
 
 
 def test_audit_events_are_append_only_at_sqlite_layer(tmp_path):
