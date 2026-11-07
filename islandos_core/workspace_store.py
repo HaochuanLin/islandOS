@@ -484,7 +484,15 @@ def record_operator_override(
                     matching.append(payload)
             if len(matching) != 1:
                 raise WorkspaceStoreError("proposal_id does not identify one pending override in this project")
+            reviewed_events = connection.execute(
+                "SELECT payload_json FROM audit_events WHERE project_id=? AND event_type IN ('operator_override_approved', 'operator_override_rejected')",
+                (project_id,),
+            ).fetchall()
+            if any(json.loads(row["payload_json"]).get("proposal_id") == proposal_id for row in reviewed_events):
+                raise WorkspaceStoreError("override proposal has already been reviewed")
             original = matching[0]
+            if original.get("proposing_actor_id") != actor_id.strip():
+                raise WorkspaceStoreError("actor_id must match the original proposing actor")
             if (
                 original.get("field_path") != field_path.strip()
                 or original.get("previous_value") != previous_value
