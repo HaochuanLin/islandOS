@@ -189,6 +189,8 @@ def inspect_csv_bytes(
         raise ValueError("now must be timezone-aware")
     if source_name is not None and (not isinstance(source_name, str) or not source_name.strip()):
         raise ValueError("source_name must be a non-empty string when provided")
+    if source_name is not None and (not isinstance(source_name, str) or not source_name.strip()):
+        raise ValueError("source_name must be a non-empty string when provided")
     overrides = dict(column_overrides or {})
     unit_overrides = dict(source_unit_overrides or {})
     allowed_units = {"kW", "W", "MW", "%", "L/h", "degC", "currency/kWh"}
