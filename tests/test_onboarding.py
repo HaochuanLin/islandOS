@@ -116,8 +116,8 @@ def test_forecasting_readiness_is_task_specific():
 
 def test_forecasting_is_blocked_until_target_unit_is_confirmed():
     raw = csv_bytes(
-        "timestamp,load\\n" + "".join(
-            f"2026-11-{day:02d}T{hour:02d}:00:00Z,100\\n"
+        "timestamp,load\n" + "".join(
+            f"2026-11-{day:02d}T{hour:02d}:00:00Z,100\n"
             for day in range(1, 2) for hour in range(24)
         )
     )
@@ -129,9 +129,9 @@ def test_forecasting_is_blocked_until_target_unit_is_confirmed():
 
 def test_forecasting_is_blocked_when_target_values_are_missing():
     raw = csv_bytes(
-        "timestamp,load_kw\\n"
-        "2026-11-07T10:00:00Z,\\n"
-        "2026-11-07T11:00:00Z,100\\n"
+        "timestamp,load_kw\n"
+        "2026-11-07T10:00:00Z,\n"
+        "2026-11-07T11:00:00Z,100\n"
     )
     report = inspect_csv_bytes(raw, source_type="measured", now=NOW)
     readiness = evaluate_task_readiness(report, "forecasting")
