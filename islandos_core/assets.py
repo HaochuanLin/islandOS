@@ -15,6 +15,16 @@ SOURCE_TYPES = {"measured", "customer_provided", "vendor_specification", "inferr
 SEVERITIES = {"hard", "operational", "soft"}
 OPERATORS = {"min", "max", "range"}
 
+REQUIRED_INSTALLED_PARAMETERS = {
+    "pv": {"configured_power_kw"},
+    "wind": {"configured_power_kw"},
+    "battery": {"configured_power_kw", "usable_energy_capacity_kwh"},
+    "diesel_generator": {"configured_power_kw"},
+    "grid_connection": {"configured_power_kw"},
+    "flexible_load": {"configured_power_kw"},
+    "generic": set(),
+}
+
 REQUIRED_HARD_CONSTRAINTS = {
     "pv": {"max_power_kw": "max"},
     "wind": {"max_power_kw": "max"},
@@ -244,11 +254,16 @@ def evaluate_asset_readiness(asset: AssetRecord) -> dict[str, Any]:
         raise TypeError("asset must be an AssetRecord")
     if not asset.available:
         return {"asset_id": asset.asset_id, "status": "unavailable", "can_screen": False, "blockers": ["asset_unavailable"]}
+    required_installed = REQUIRED_INSTALLED_PARAMETERS[asset.asset_type]
+    blockers = []
+    for parameter in sorted(required_installed):
+        installed = asset.installed_parameters.get(parameter)
+        if installed is None or not installed.confirmed:
+            blockers.append("confirmed_installed_parameter_required:" + parameter)
     required = REQUIRED_HARD_CONSTRAINTS[asset.asset_type]
     by_parameter: dict[str, list[OperatingConstraint]] = {}
     for constraint in asset.constraints:
         by_parameter.setdefault(constraint.parameter, []).append(constraint)
-    blockers = []
     for parameter, expected_operator in sorted(required.items()):
         candidates = by_parameter.get(parameter, [])
         hard_confirmed = [
