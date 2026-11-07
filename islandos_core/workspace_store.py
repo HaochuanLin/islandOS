@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+from contextlib import contextmanager
 import re
 import sqlite3
 import uuid
@@ -52,7 +53,8 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _connect(db_path: str | Path) -> sqlite3.Connection:
+@contextmanager
+def _connect(db_path: str | Path):
     path = Path(db_path)
     if str(db_path) != ":memory:":
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -60,7 +62,14 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 5000")
-    return connection
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def _append_event(
