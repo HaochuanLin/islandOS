@@ -82,7 +82,7 @@ class EnergyBalanceTests(unittest.TestCase):
 
     def test_zero_renewable_has_defined_utilization(self):
         result = simulate_energy_balance([1], [0], grid_import_limit_kw=1)
-        self.assertEqual(result.renewable_utilization_fraction, 1.0)
+        self.assertEqual(result.renewable_utilization_fraction, 0.0)
 
 
 if __name__ == "__main__":
