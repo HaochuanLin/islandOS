@@ -85,6 +85,27 @@ def test_missing_battery_constraints_block_readiness():
     assert len(report["blockers"]) == 4
 
 
+def test_hard_power_limit_cannot_exceed_installed_configuration():
+    asset = battery_asset([
+        constraint("max_charge_kw", "max", 300, "kW"),
+        constraint("max_discharge_kw", "max", 200, "kW"),
+        constraint("soc_min_pct", "min", 15, "%"),
+        constraint("soc_max_pct", "max", 90, "%"),
+    ])
+    assert "constraint_exceeds_installed_power:max_charge_kw" in evaluate_asset_readiness(asset)["blockers"]
+
+
+def test_installed_configuration_cannot_exceed_vendor_nameplate():
+    asset = AssetRecord(
+        asset_id="pv-01", site_id="site-01", asset_type="pv",
+        nameplate_parameters={"rated_power_kw": parameter(100, "kW")},
+        installed_parameters={"configured_power_kw": parameter(120, "kW", "customer_provided")},
+        observed_parameters={},
+        constraints=(constraint("max_power_kw", "max", 100, "kW"),),
+    )
+    assert "installed_power_exceeds_nameplate" in evaluate_asset_readiness(asset)["blockers"]
+
+
 def test_inconsistent_soc_bounds_block_readiness():
     asset = battery_asset([
         constraint("max_charge_kw", "max", 200, "kW"),
