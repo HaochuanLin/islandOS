@@ -14,6 +14,7 @@ import hashlib
 import io
 import math
 import re
+import zipfile
 from typing import Any, Mapping
 
 
@@ -447,6 +448,18 @@ def inspect_excel_bytes(
         raise ValueError(f"workbook exceeds the {max_file_bytes // (1024 * 1024)} MB import limit")
     if max_rows < 1 or max_columns < 1:
         raise ValueError("row and column limits must be positive")
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            members = archive.infolist()
+            uncompressed_total = sum(item.file_size for item in members)
+            if uncompressed_total > 200 * 1024 * 1024:
+                raise ValueError("workbook expands beyond the 200 MB safety limit")
+            if any(item.file_size > 1024 * 1024 and item.compress_size > 0 and item.file_size / item.compress_size > 200 for item in members):
+                raise ValueError("workbook contains an unusually highly compressed member")
+            if "[Content_Types].xml" not in archive.namelist() or "xl/workbook.xml" not in archive.namelist():
+                raise ValueError("file is not a valid .xlsx package")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("file is not a valid .xlsx package") from exc
 
     try:
         value_book = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
