@@ -637,6 +637,17 @@ def inspect_excel_sheets(content: bytes, *, max_file_bytes: int = 20 * 1024 * 10
     if len(content) > max_file_bytes:
         raise ValueError(f"workbook exceeds the {max_file_bytes // (1024 * 1024)} MB import limit")
     try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            members = archive.infolist()
+            if sum(item.file_size for item in members) > 200 * 1024 * 1024:
+                raise ValueError("workbook expands beyond the 200 MB safety limit")
+            if any(item.file_size > 1024 * 1024 and item.compress_size > 0 and item.file_size / item.compress_size > 200 for item in members):
+                raise ValueError("workbook contains an unusually highly compressed member")
+            if "[Content_Types].xml" not in archive.namelist() or "xl/workbook.xml" not in archive.namelist():
+                raise ValueError("file is not a valid .xlsx package")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("file is not a valid .xlsx package") from exc
+    try:
         workbook = load_workbook(io.BytesIO(content), read_only=False, data_only=True)
     except Exception as exc:
         raise ValueError("file is not a readable .xlsx workbook") from exc
