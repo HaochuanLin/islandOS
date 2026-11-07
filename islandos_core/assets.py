@@ -260,6 +260,15 @@ def evaluate_asset_readiness(asset: AssetRecord) -> dict[str, Any]:
         installed = asset.installed_parameters.get(parameter)
         if installed is None or not installed.confirmed:
             blockers.append("confirmed_installed_parameter_required:" + parameter)
+    nameplate_power = asset.nameplate_parameters.get("rated_power_kw")
+    installed_power = asset.installed_parameters.get("configured_power_kw")
+    if nameplate_power and installed_power and installed_power.value > nameplate_power.value:
+        blockers.append("installed_power_exceeds_nameplate")
+    nameplate_energy = asset.nameplate_parameters.get("energy_capacity_kwh")
+    installed_energy = asset.installed_parameters.get("usable_energy_capacity_kwh")
+    if nameplate_energy and installed_energy and installed_energy.value > nameplate_energy.value:
+        blockers.append("installed_energy_exceeds_nameplate")
+
     required = REQUIRED_HARD_CONSTRAINTS[asset.asset_type]
     by_parameter: dict[str, list[OperatingConstraint]] = {}
     for constraint in asset.constraints:
@@ -274,6 +283,18 @@ def evaluate_asset_readiness(asset: AssetRecord) -> dict[str, Any]:
             blockers.append(
                 "confirmed_hard_constraint_required:" + parameter + ":" + expected_operator
             )
+    if installed_power:
+        for parameter in ("max_power_kw", "max_charge_kw", "max_discharge_kw", "import_limit_kw", "min_stable_power_kw", "min_power_kw"):
+            for item in by_parameter.get(parameter, []):
+                bound = item.upper_bound if item.operator == "max" else item.lower_bound
+                if bound is not None and bound > installed_power.value:
+                    blockers.append("constraint_exceeds_installed_power:" + parameter)
+    if asset.asset_type in {"diesel_generator", "flexible_load"}:
+        minimum_name = "min_stable_power_kw" if asset.asset_type == "diesel_generator" else "min_power_kw"
+        minimums = [item.lower_bound for item in by_parameter.get(minimum_name, []) if item.lower_bound is not None]
+        maximums = [item.upper_bound for item in by_parameter.get("max_power_kw", []) if item.upper_bound is not None]
+        if minimums and maximums and max(minimums) > min(maximums):
+            blockers.append("minimum_power_exceeds_maximum_power")
     if asset.asset_type == "battery":
         lower = by_parameter.get("soc_min_pct", [])
         upper = by_parameter.get("soc_max_pct", [])
