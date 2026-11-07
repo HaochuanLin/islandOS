@@ -202,7 +202,7 @@ def simulate_energy_balance(
         battery_discharge_kw=discharge, battery_soc_kwh=soc,
         grid_import_kw=grid, diesel_generation_kw=diesel, load_served_kw=served,
         unmet_load_kw=unmet, step_cost=cost, total_cost=float(np.sum(cost)),
-        renewable_utilization_fraction=(renewable_used_total / renewable_total if renewable_total else 1.0),
+        renewable_utilization_fraction=(renewable_used_total / renewable_total if renewable_total else 0.0),
         total_unmet_energy_kwh=float(np.sum(unmet) * dt),
         total_curtailment_kwh=float(np.sum(curtailment) * dt),
         total_grid_energy_kwh=float(np.sum(grid) * dt),
