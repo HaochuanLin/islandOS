@@ -67,3 +67,17 @@ The desktop client must call `islandos_core.application`; it must not reimplemen
 CSV/XLSX parsing, data-quality gates, project persistence, or audit rules.
 Keep PySide6 optional so the shared core and Streamlit workflows remain usable
 without installing desktop UI dependencies.
+
+## Build a Windows prototype executable
+
+A GitHub Actions workflow is available at
+`.github/workflows/windows-desktop-prototype.yml`. Run it manually from the
+Actions tab, or push a change to the desktop/core paths on the configured
+branches. A successful run uploads the onedir prototype as the
+`IslandOS-Windows-Desktop-Prototype` artifact for 14 days.
+
+The workflow verifies that PyInstaller creates
+`dist/IslandOS/IslandOS.exe`. It does not yet perform a full interactive GUI
+acceptance test, create a signed installer, configure auto-updates, or certify
+the application for customer deployment. Treat the artifact as an engineering
+prototype only.
