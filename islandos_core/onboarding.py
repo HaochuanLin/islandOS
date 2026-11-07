@@ -40,7 +40,7 @@ CANONICAL_UNITS = {
 }
 
 _HEADER_ALIASES = {
-    "load_kw": {"load", "load_kw", "demand", "demand_kw", "site_load", "site_load_kw", "critical_load_kw", "active_load_kw"},
+    "load_kw": {"load", "load_kw", "demand", "demand_kw", "site_load", "site_load_kw", "critical_load_kw", "critical_load", "active_load_kw"},
     "pv_power_kw": {"pv", "pv_kw", "pv_power", "pv_power_kw", "solar", "solar_kw", "solar_power_kw"},
     "wind_power_kw": {"wind", "wind_kw", "wind_power", "wind_power_kw"},
     "grid_import_kw": {"grid_import", "grid_import_kw", "import_kw", "utility_import_kw"},
@@ -55,7 +55,7 @@ _HEADER_ALIASES = {
 }
 _TIMESTAMP_ALIASES = {"timestamp", "timestamp_utc", "datetime", "date_time", "time", "observed_at", "date"}
 _UNIT_SUFFIXES = {
-    "kw": "kW", "w": "W", "mw": "MW", "kwh": "kWh",
+    "kw": "kW", "w": "W", "mw": "MW",
     "%": "%", "pct": "%", "l/h": "L/h", "lph": "L/h",
     "c": "degC", "°c": "degC",
 }
@@ -120,10 +120,16 @@ def _resolve_column(header: str, overrides: Mapping[str, str]) -> ColumnMapping 
             raise ValueError(f"unsupported canonical field override: {canonical}")
         base, unit = _split_header_unit(header)
         return _make_mapping(header, canonical, unit, "user_confirmed")
+    normalized = _normalise_header(header)
     base, unit = _split_header_unit(header)
-    if base in _TIMESTAMP_ALIASES:
+    if normalized in _TIMESTAMP_ALIASES or base in _TIMESTAMP_ALIASES:
         return None
     for canonical, aliases in _HEADER_ALIASES.items():
+        if normalized in aliases:
+            candidate_unit = unit
+            if candidate_unit and candidate_unit not in {CANONICAL_UNITS[canonical], "W", "MW"}:
+                candidate_unit = None
+            return _make_mapping(header, canonical, candidate_unit, "alias_match")
         if base in aliases:
             return _make_mapping(header, canonical, unit, "alias_match")
     return None
@@ -205,6 +211,7 @@ def inspect_csv_bytes(
     if len(timestamp_columns) != 1:
         issues.append(ImportIssue("timestamp_column", "error", "Exactly one recognized timestamp column is required"))
     mappings: list[ColumnMapping] = []
+    recognized_source_headers = set(timestamp_columns)
     for header in headers:
         try:
             mapping = _resolve_column(header, overrides)
@@ -213,6 +220,13 @@ def inspect_csv_bytes(
             continue
         if mapping:
             mappings.append(mapping)
+            recognized_source_headers.add(header)
+    for header in headers:
+        if header not in recognized_source_headers:
+            issues.append(ImportIssue("unrecognized_column", "warning", "Column was not mapped automatically; review or map it manually", column=header))
+    for mapping in mappings:
+        if mapping.detected_source_unit is None:
+            issues.append(ImportIssue("unit_not_explicit", "warning", "Unit was not explicit in the header; confirm the source unit", column=mapping.source_column))
     canonical_names = [m.canonical_field for m in mappings]
     if len(set(canonical_names)) != len(canonical_names):
         issues.append(ImportIssue("ambiguous_mapping", "error", "Multiple source columns map to the same canonical field"))
