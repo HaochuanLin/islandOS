@@ -428,3 +428,86 @@ def get_run_manifest(db_path: str | Path, *, run_id: str) -> dict[str, Any]:
     if _hash(row["manifest_json"]) != row["manifest_sha256"]:
         raise AuditIntegrityError("stored run manifest hash does not match its contents")
     return {**manifest, "manifest_sha256": row["manifest_sha256"]}
+
+
+def record_operator_override(
+    db_path: str | Path,
+    *,
+    project_id: str,
+    actor_id: str,
+    field_path: str,
+    previous_value: Any,
+    proposed_value: Any,
+    reason: str,
+    source_reference: str,
+    approval_status: str = "pending_review",
+    reviewer_id: str | None = None,
+    created_at: datetime | None = None,
+) -> str:
+    """Append a reasoned operator override proposal/review to the audit trail.
+
+    This records an assertion and review trail only. It does not grant a role,
+    validate reviewer authority, mutate the underlying asset configuration, or
+    authorize an operational action.
+    """
+    if not all(isinstance(value, str) and value.strip() for value in (project_id, actor_id, field_path, reason, source_reference)):
+        raise WorkspaceStoreError("project_id, actor_id, field_path, reason, and source_reference are required")
+    if approval_status not in {"pending_review", "approved", "rejected"}:
+        raise WorkspaceStoreError("approval_status must be pending_review, approved, or rejected")
+    if approval_status == "pending_review" and reviewer_id is not None:
+        raise WorkspaceStoreError("reviewer_id must be omitted while an override is pending")
+    if approval_status in {"approved", "rejected"}:
+        if not isinstance(reviewer_id, str) or not reviewer_id.strip():
+            raise WorkspaceStoreError("reviewer_id is required for an approval decision")
+        if reviewer_id.strip() == actor_id.strip():
+            raise WorkspaceStoreError("the proposing actor cannot review their own override")
+    # Validate all values before appending so the audit event is always exportable JSON.
+    _json({"previous_value": previous_value, "proposed_value": proposed_value})
+    timestamp = _timestamp(created_at)
+    with _connect(db_path) as connection:
+        if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
+            raise WorkspaceStoreError("project_id does not exist")
+        return _append_event(
+            connection,
+            actor_id=reviewer_id.strip() if reviewer_id else actor_id,
+            event_type="operator_override_" + approval_status,
+            project_id=project_id,
+            payload={
+                "proposing_actor_id": actor_id,
+                "field_path": field_path.strip(),
+                "previous_value": previous_value,
+                "proposed_value": proposed_value,
+                "reason": reason.strip(),
+                "source_reference": source_reference.strip(),
+                "approval_status": approval_status,
+                "reviewer_id": reviewer_id.strip() if reviewer_id else None,
+                "operational_authorization": False,
+            },
+            created_at=timestamp,
+        )
+
+
+def list_audit_events(db_path: str | Path, *, project_id: str | None = None) -> list[dict[str, Any]]:
+    """Return audit events in append order for inspection or export."""
+    with _connect(db_path) as connection:
+        if project_id is None:
+            rows = connection.execute("SELECT * FROM audit_events ORDER BY sequence").fetchall()
+        else:
+            rows = connection.execute(
+                "SELECT * FROM audit_events WHERE project_id=? ORDER BY sequence",
+                (project_id,),
+            ).fetchall()
+    return [
+        {
+            "sequence": row["sequence"],
+            "event_id": row["event_id"],
+            "created_at": row["created_at"],
+            "actor_id": row["actor_id"],
+            "event_type": row["event_type"],
+            "project_id": row["project_id"],
+            "payload": json.loads(row["payload_json"]),
+            "previous_hash": row["previous_hash"],
+            "event_hash": row["event_hash"],
+        }
+        for row in rows
+    ]
