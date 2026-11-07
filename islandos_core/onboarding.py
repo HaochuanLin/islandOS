@@ -160,6 +160,7 @@ def inspect_csv_bytes(
     content: bytes,
     *,
     source_type: str,
+    source_name: str | None = None,
     column_overrides: Mapping[str, str] | None = None,
     source_unit_overrides: Mapping[str, str] | None = None,
     expected_interval_minutes: int | None = None,
@@ -186,6 +187,8 @@ def inspect_csv_bytes(
     reference_now = now or datetime.now(timezone.utc)
     if reference_now.tzinfo is None or reference_now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
+    if source_name is not None and (not isinstance(source_name, str) or not source_name.strip()):
+        raise ValueError("source_name must be a non-empty string when provided")
     overrides = dict(column_overrides or {})
     unit_overrides = dict(source_unit_overrides or {})
     allowed_units = {"kW", "W", "MW", "%", "L/h", "degC", "currency/kWh"}
@@ -297,7 +300,8 @@ def inspect_csv_bytes(
         "schema_version": SCHEMA_VERSION,
         "status": "invalid" if error_count else ("needs_review" if warning_count else "valid"),
         "source_type": source_type,
-        "artifact": {"sha256": digest, "byte_count": len(content)},
+        "ingested_at": reference_now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "artifact": {"source_name": source_name, "sha256": digest, "byte_count": len(content)},
         "timestamp_column": timestamp_columns[0] if len(timestamp_columns) == 1 else None,
         "column_mappings": [asdict(item) for item in mappings],
         "row_count": len(rows_out),
@@ -319,7 +323,7 @@ def inspect_csv_bytes(
 def _invalid_report(digest: str, source_type: str, issues: list[ImportIssue]) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION, "status": "invalid", "source_type": source_type,
-        "artifact": {"sha256": digest, "byte_count": None}, "timestamp_column": None,
+        "artifact": {"source_name": None, "sha256": digest, "byte_count": None}, "timestamp_column": None,
         "column_mappings": [], "row_count": 0, "recognized_signal_count": 0,
         "error_count": len(issues), "warning_count": 0,
         "issues": [asdict(issue) for issue in issues], "preview": [],
