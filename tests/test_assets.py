@@ -39,12 +39,12 @@ def battery_asset(constraints=None):
             "usable_energy_capacity_kwh": parameter(500, "kWh", "customer_provided"),
         },
         observed_parameters={},
-        constraints=tuple(constraints or [
+        constraints=tuple([
             constraint("max_charge_kw", "max", 200, "kW"),
             constraint("max_discharge_kw", "max", 200, "kW"),
             constraint("soc_min_pct", "min", 15, "%"),
             constraint("soc_max_pct", "max", 90, "%"),
-        ]),
+        ] if constraints is None else constraints),
     )
 
 
