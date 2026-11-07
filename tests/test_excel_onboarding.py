@@ -80,6 +80,14 @@ def test_excel_does_not_evaluate_formula_cells():
     assert report["preview"][1]["values"]["load_kw"] is None
 
 
+def test_excel_scan_limit_counts_blank_rows_too():
+    raw = workbook_bytes(basic_workbook)
+    with pytest.raises(ValueError, match="scan exceeds"):
+        inspect_excel_bytes(
+            raw, source_type="measured", timezone_name="UTC", now=NOW, max_rows=1,
+        )
+
+
 def test_excel_lists_hidden_sheets_and_rejects_oversized_input():
     def build(workbook):
         hidden = workbook.create_sheet("Hidden")
