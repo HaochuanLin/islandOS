@@ -200,6 +200,11 @@ def initialize_workspace(
             "INSERT OR IGNORE INTO workspace_meta(key, value) VALUES('schema_version', ?)",
             (SCHEMA_VERSION,),
         )
+        schema_row = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='schema_version'"
+        ).fetchone()
+        if schema_row and schema_row["value"] != SCHEMA_VERSION:
+            raise WorkspaceStoreError("unsupported workspace schema version")
         if not connection.execute("SELECT 1 FROM audit_events LIMIT 1").fetchone():
             _append_event(
                 connection, actor_id=actor_id, event_type="workspace_initialized",
@@ -377,18 +382,20 @@ def verify_audit_chain(db_path: str | Path) -> dict[str, Any]:
     with _connect(db_path) as connection:
         rows = connection.execute("SELECT * FROM audit_events ORDER BY sequence").fetchall()
         for row in rows:
-            body = {
-                "event_id": row["event_id"],
-                "created_at": row["created_at"],
-                "actor_id": row["actor_id"],
-                "event_type": row["event_type"],
-                "project_id": row["project_id"],
-                "payload": json.loads(row["payload_json"]),
-                "previous_hash": row["previous_hash"],
-            }
-            if row["previous_hash"] != previous_hash:
+            try:
+                body = {
+                    "event_id": row["event_id"],
+                    "created_at": row["created_at"],
+                    "actor_id": row["actor_id"],
+                    "event_type": row["event_type"],
+                    "project_id": row["project_id"],
+                    "payload": json.loads(row["payload_json"]),
+                    "previous_hash": row["previous_hash"],
+                }
+                expected_hash = _hash(_json(body))
+            except (json.JSONDecodeError, WorkspaceStoreError, TypeError, ValueError):
                 return {"valid": False, "event_count": count, "failed_sequence": row["sequence"]}
-            if _hash(_json(body)) != row["event_hash"]:
+            if row["previous_hash"] != previous_hash or expected_hash != row["event_hash"]:
                 return {"valid": False, "event_count": count, "failed_sequence": row["sequence"]}
             previous_hash = row["event_hash"]
             count += 1
@@ -414,7 +421,10 @@ def get_run_manifest(db_path: str | Path, *, run_id: str) -> dict[str, Any]:
         ).fetchone()
     if row is None:
         raise WorkspaceStoreError("run_id does not exist")
-    manifest = json.loads(row["manifest_json"])
+    try:
+        manifest = json.loads(row["manifest_json"])
+    except json.JSONDecodeError as exc:
+        raise AuditIntegrityError("stored run manifest is not valid JSON") from exc
     if _hash(row["manifest_json"]) != row["manifest_sha256"]:
         raise AuditIntegrityError("stored run manifest hash does not match its contents")
     return {**manifest, "manifest_sha256": row["manifest_sha256"]}
