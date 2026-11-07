@@ -45,7 +45,7 @@ The intended architecture is **one UI-independent IslandOS core with multiple in
 
 The repository already contains portable Windows executables for selected telemetry/gateway and advisor utilities. **Those utilities are not yet the complete IslandOS desktop decision console or a customer-ready installer.** The full desktop shell, onboarding experience, local project management, and installer require separate implementation and acceptance testing.
 
-See [Product Architecture and Desktop Strategy](docs/PRODUCT_ARCHITECTURE_AND_DESKTOP_STRATEGY.md) for the architecture rules and promotion gates. The first UI-independent onboarding service and Streamlit experiment are documented in [Data Onboarding Lab](docs/DATA_ONBOARDING_LAB.md) and available at `pages/3_Data_Onboarding_Lab.py`.
+See [Product Architecture and Desktop Strategy](docs/PRODUCT_ARCHITECTURE_AND_DESKTOP_STRATEGY.md) for the architecture rules and promotion gates. The first UI-independent onboarding service and Streamlit experiment are documented in [Data Onboarding Lab](docs/DATA_ONBOARDING_LAB.md) and available at `pages/3_Data_Onboarding_Lab.py`. The versioned equipment and hard-constraint model is documented in [Asset and Constraint Registry](docs/ASSET_CONSTRAINT_REGISTRY.md) and exercised at `pages/4_Asset_Constraint_Lab.py`.
 
 ## Hosted demo access
 
