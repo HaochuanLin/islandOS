@@ -8,6 +8,7 @@ from islandos_core.application import (
     create_analysis_record,
     create_local_project,
     inspect_upload,
+    open_local_project,
     register_inspected_import,
 )
 from islandos_core.workspace_store import list_import_artifacts, verify_audit_chain
@@ -63,6 +64,30 @@ def test_application_services_inspect_register_and_snapshot_without_streamlit(tm
     assert manifest["output_summary"]["execution_performed"] is False
     assert manifest["input_artifact_hashes"] == [hashlib.sha256(CSV).hexdigest()]
     assert verify_audit_chain(db)["valid"] is True
+
+
+def test_application_service_reopens_existing_project_after_audit_verification(tmp_path):
+    db = tmp_path / "workspace.sqlite3"
+    create_local_project(
+        db, workspace_id="workspace-a", project_id="site-a",
+        display_name="Site A", actor_id="user-a",
+        consent_to_store_metadata=True, created_at=NOW,
+    )
+    opened = open_local_project(db, project_id="site-a")
+    assert opened["project"]["display_name"] == "Site A"
+    assert opened["audit"]["valid"] is True
+    assert opened["audit"]["event_count"] == 2
+
+
+def test_application_service_refuses_to_open_unknown_project(tmp_path):
+    db = tmp_path / "workspace.sqlite3"
+    create_local_project(
+        db, workspace_id="workspace-a", project_id="site-a",
+        display_name="Site A", actor_id="user-a",
+        consent_to_store_metadata=True, created_at=NOW,
+    )
+    with pytest.raises(ValueError, match="does not exist"):
+        open_local_project(db, project_id="unknown")
 
 
 def test_application_service_requires_consent_before_workspace_creation(tmp_path):
