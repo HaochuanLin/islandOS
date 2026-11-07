@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from islandos_core.application import (
     create_local_project,
     inspect_upload,
+    list_excel_sheets,
     open_local_project,
     register_inspected_import,
 )
@@ -208,7 +209,21 @@ class IslandOSDesktopWindow(QMainWindow):
         try:
             suffix = Path(path).suffix.lower()
             options = {}
+            raw = Path(path).read_bytes()
             if suffix == ".xlsx":
+                sheets = list_excel_sheets(raw)
+                visible_sheets = [item["name"] for item in sheets if item["visible"]]
+                selectable_sheets = visible_sheets or [item["name"] for item in sheets]
+                if not selectable_sheets:
+                    raise ValueError("workbook contains no selectable worksheets")
+                sheet_name, accepted = QInputDialog.getItem(
+                    self, "Select worksheet",
+                    "Choose the worksheet containing the energy time-series data:",
+                    selectable_sheets, 0, False,
+                )
+                if not accepted:
+                    return
+                options["sheet_name"] = sheet_name
                 timezone_name, accepted = QInputDialog.getText(
                     self, "Excel timestamp timezone",
                     "If timestamps in this workbook have no timezone, enter the site's IANA timezone "
@@ -218,7 +233,6 @@ class IslandOSDesktopWindow(QMainWindow):
                 if not accepted:
                     return
                 options["timezone_name"] = timezone_name.strip() or None
-            raw = Path(path).read_bytes()
             result = inspect_upload(
                 raw, file_name=Path(path).name,
                 source_type="customer_provided",
