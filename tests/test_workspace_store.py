@@ -190,6 +190,16 @@ def test_operator_override_requires_reason_and_independent_review(tmp_path):
     assert override_events[0]["payload"]["proposal_id"] == proposal_id
     assert override_events[1]["payload"]["proposal_id"] == proposal_id
     assert override_events[1]["payload"]["operational_authorization"] is False
+    with pytest.raises(WorkspaceStoreError, match="already been reviewed"):
+        record_operator_override(
+            db, project_id="site-01", actor_id="operator-a",
+            field_path="assets.battery-01.max_charge_kw",
+            previous_value=180, proposed_value=150,
+            reason="Commissioning sheet lists a lower configured limit.",
+            source_reference="commissioning-sheet-rev2.pdf page 4",
+            approval_status="rejected", reviewer_id="reviewer-c",
+            proposal_id=proposal_id, created_at=NOW,
+        )
     assert verify_audit_chain(db)["valid"] is True
 
 
