@@ -23,9 +23,21 @@ CSV = (
 
 
 def test_application_services_inspect_register_and_snapshot_without_streamlit(tmp_path):
+    import subprocess
     import sys
 
-    assert "streamlit" not in sys.modules
+    # Check the import boundary in a fresh interpreter. The full pytest suite
+    # may have imported Streamlit in earlier tests, so sys.modules in this
+    # process is order-dependent and cannot prove this module's isolation.
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import islandos_core.application; "
+            "assert 'streamlit' not in sys.modules",
+        ],
+        check=True,
+    )
     result = inspect_upload(
         CSV, file_name="customer-load.csv", source_type="customer_provided",
         task="exploration", now=NOW,
