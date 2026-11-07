@@ -19,7 +19,9 @@ from islandos_core.workspace_store import (
     create_project as _create_project,
     create_run_manifest,
     initialize_workspace,
+    list_projects,
     record_import_artifact,
+    verify_audit_chain,
 )
 
 
@@ -101,6 +103,21 @@ def create_local_project(
         db_path, project_id=project_id, display_name=display_name,
         actor_id=actor_id, consent_to_store_metadata=True, created_at=created_at,
     )
+
+
+def open_local_project(db_path: str | Path, *, project_id: str) -> dict[str, Any]:
+    """Open an existing project only after verifying its audit chain."""
+    database = Path(db_path)
+    if not database.is_file():
+        raise ValueError("workspace database does not exist")
+    projects = list_projects(database)
+    project = next((item for item in projects if item["project_id"] == project_id), None)
+    if project is None:
+        raise ValueError("project_id does not exist in this workspace")
+    audit = verify_audit_chain(database)
+    if audit.get("valid") is not True:
+        raise ValueError("workspace audit chain verification failed")
+    return {"project": project, "audit": audit, "database_path": str(database)}
 
 
 def register_inspected_import(
