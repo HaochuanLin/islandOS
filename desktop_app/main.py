@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from islandos_core.application import (
     create_local_project,
     inspect_upload,
+    open_local_project,
     register_inspected_import,
 )
 
@@ -67,8 +68,11 @@ class IslandOSDesktopWindow(QMainWindow):
         browse = QPushButton("Browse…")
         browse.clicked.connect(self.choose_workspace)
         workspace_row = QHBoxLayout()
+        open_existing = QPushButton("Open existing…")
+        open_existing.clicked.connect(self.open_existing_project)
         workspace_row.addWidget(self.workspace_edit, 1)
         workspace_row.addWidget(browse)
+        workspace_row.addWidget(open_existing)
         workspace_widget = QWidget()
         workspace_widget.setLayout(workspace_row)
         project_form.addRow("Workspace", workspace_widget)
@@ -133,6 +137,33 @@ class IslandOSDesktopWindow(QMainWindow):
         )
         if path:
             self.workspace_edit.setText(path)
+
+    def open_existing_project(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open existing IslandOS workspace", "",
+            "SQLite database (*.sqlite3 *.db)",
+        )
+        if not path:
+            return
+        project_id = self.project_id_edit.text().strip()
+        if not project_id:
+            QMessageBox.warning(self, "Project ID required", "Enter the project ID to open.")
+            return
+        try:
+            result = open_local_project(path, project_id=project_id)
+            self.workspace_edit.setText(path)
+            self.database_path = Path(path)
+            self.project_id = project_id
+            project = result["project"]
+            self.project_name_edit.setText(project["display_name"])
+            self.project_status.setText(
+                f"Opened local project: {project['display_name']} ({project_id}) · "
+                f"audit events verified: {result['audit']['event_count']}"
+            )
+            self.save_import_button.setEnabled(self.last_inspection is not None)
+            QMessageBox.information(self, "Workspace opened", "Project found and audit chain verified.")
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not open workspace", str(exc))
 
     def create_project(self) -> None:
         path = self.workspace_edit.text().strip()
