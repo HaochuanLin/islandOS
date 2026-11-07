@@ -18,8 +18,13 @@ def test_recognizes_common_headers_and_preserves_provenance():
         "2026-11-07T10:00:00Z,100,25000,50\n"
         "2026-11-07T11:00:00Z,110,30000,51\n"
     )
-    report = inspect_csv_bytes(raw, source_type="measured", now=NOW, expected_interval_minutes=60)
+    report = inspect_csv_bytes(
+        raw, source_type="measured", source_name="site-telemetry.csv",
+        now=NOW, expected_interval_minutes=60,
+    )
     assert report["status"] == "valid"
+    assert report["artifact"]["source_name"] == "site-telemetry.csv"
+    assert report["ingested_at"] == "2026-11-07T12:00:00Z"
     assert report["artifact"]["sha256"]
     mappings = {item["canonical_field"]: item for item in report["column_mappings"]}
     assert mappings["load_kw"]["canonical_unit"] == "kW"
