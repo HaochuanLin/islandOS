@@ -226,3 +226,18 @@ Streamlit or retain uploaded bytes. The current analysis-record function does
 not execute a forecast, simulation, optimizer, or control command. A desktop
 client and the Streamlit experiment should call this same service layer rather
 than implement separate business rules.
+
+## 14. First desktop client shell
+
+An optional PySide6 client now lives in `desktop_app/main.py`. It creates a
+local project after explicit consent, inspects CSV/XLSX uploads through
+`islandos_core.application`, displays the import/readiness report, and can
+record metadata-only import artifacts after a separate consent step. The
+Streamlit Data Onboarding Lab also calls the same application service for
+inspection and task-readiness evaluation.
+
+The desktop dependency is isolated in `requirements-desktop.txt`; the shared
+core and Streamlit app do not require PySide6. Run the prototype with
+`python -m desktop_app.main` after installing the base and desktop requirements.
+This is a functional shell for project creation and data intake, not yet the
+full forecasting/optimization product, a signed installer, or a standalone EXE.
