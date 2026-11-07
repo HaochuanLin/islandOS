@@ -339,30 +339,63 @@ def evaluate_task_readiness(
     *,
     confirmed_constraints: Mapping[str, bool] | None = None,
 ) -> dict[str, Any]:
-    """Apply task-specific minimum gates; a global completeness score is avoided."""
+    """Apply task-specific gates for required signals, units, history and constraints."""
     if task not in {"exploration", "forecasting", "dispatch_optimization"}:
         raise ValueError("task must be exploration, forecasting, or dispatch_optimization")
     if report.get("status") == "invalid":
         return {"task": task, "status": "blocked", "can_run": False, "blockers": ["import_invalid"]}
-    fields = {item["canonical_field"] for item in report.get("column_mappings", [])}
+    mappings = list(report.get("column_mappings", []))
+    fields = {item["canonical_field"] for item in mappings}
     rows = int(report.get("row_count", 0))
+    unit_missing = {
+        item["canonical_field"] for item in mappings
+        if item.get("detected_source_unit") is None
+    }
+    source_to_field = {item["source_column"]: item["canonical_field"] for item in mappings}
+    missing_value_fields = {
+        source_to_field[issue["column"]]
+        for issue in report.get("issues", [])
+        if issue.get("code") == "missing_value" and issue.get("column") in source_to_field
+    }
+    issue_codes = {issue.get("code") for issue in report.get("issues", [])}
     blockers: list[str] = []
     warnings: list[str] = []
+
     if task == "exploration":
         if not fields:
             blockers.append("no_recognized_signals")
+        if unit_missing:
+            warnings.extend("unit_confirmation_recommended:" + field for field in sorted(unit_missing))
     elif task == "forecasting":
-        if "load_kw" not in fields and not ({"pv_power_kw", "wind_power_kw"} & fields):
+        targets = ["load_kw"] if "load_kw" in fields else [
+            field for field in ("pv_power_kw", "wind_power_kw") if field in fields
+        ]
+        if not targets:
             blockers.append("no_forecast_target_signal")
+        for field in targets:
+            if field in unit_missing:
+                blockers.append("source_unit_confirmation_required:" + field)
+            if field in missing_value_fields:
+                blockers.append("missing_target_values:" + field)
         if rows < 24:
             blockers.append("insufficient_history_for_baseline_screening")
         if rows < 168:
             warnings.append("less_than_one_week_of_history")
+        if "interval_mismatch" in issue_codes:
+            blockers.append("irregular_sampling_interval")
     elif task == "dispatch_optimization":
         if "load_kw" not in fields:
             blockers.append("load_signal_required")
-        if not ({"pv_power_kw", "wind_power_kw", "grid_import_kw", "diesel_power_kw"} & fields):
+        supply_fields = {"pv_power_kw", "wind_power_kw", "grid_import_kw", "diesel_power_kw"} & fields
+        if not supply_fields:
             blockers.append("no_supply_or_dispatchable_resource_signal")
+        used_fields = ({"load_kw"} & fields) | supply_fields
+        for field in sorted(used_fields & unit_missing):
+            blockers.append("source_unit_confirmation_required:" + field)
+        for field in sorted(used_fields & missing_value_fields):
+            blockers.append("missing_operating_values:" + field)
+        if "interval_mismatch" in issue_codes:
+            blockers.append("irregular_sampling_interval")
         constraints = dict(confirmed_constraints or {})
         required_constraints = {"asset_limits", "critical_load_policy", "grid_import_limit"}
         missing = sorted(key for key in required_constraints if constraints.get(key) is not True)
