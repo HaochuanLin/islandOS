@@ -89,6 +89,24 @@ def test_run_manifest_is_reproducible_and_immutable(tmp_path):
             )
 
 
+def test_run_manifest_hash_detects_database_tampering(tmp_path):
+    db = ready_project(tmp_path)
+    manifest = create_run_manifest(
+        db, project_id="site-01", input_artifact_hashes=[],
+        configuration={"grid_import_limit_kw": 100}, model_versions={},
+        software_version="0.1.0", output_summary={}, actor_id="local-user",
+        created_at=NOW,
+    )
+    with sqlite3.connect(db) as connection:
+        connection.execute("DROP TRIGGER run_manifests_no_update")
+        connection.execute(
+            "UPDATE run_manifests SET manifest_json=? WHERE run_id=?",
+            (json.dumps({"changed": True}), manifest["run_id"]),
+        )
+    with pytest.raises(AuditIntegrityError, match="hash does not match"):
+        get_run_manifest(db, run_id=manifest["run_id"])
+
+
 def test_run_manifest_cannot_reference_unregistered_or_duplicate_hashes(tmp_path):
     db = ready_project(tmp_path)
     args = dict(
