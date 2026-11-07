@@ -34,7 +34,10 @@ def battery_asset(constraints=None):
         site_id="site-01",
         asset_type="battery",
         nameplate_parameters={"energy_capacity_kwh": parameter(600, "kWh")},
-        installed_parameters={"energy_capacity_kwh": parameter(500, "kWh", "customer_provided")},
+        installed_parameters={
+            "configured_power_kw": parameter(200, "kW", "customer_provided"),
+            "usable_energy_capacity_kwh": parameter(500, "kWh", "customer_provided"),
+        },
         observed_parameters={},
         constraints=tuple(constraints or [
             constraint("max_charge_kw", "max", 200, "kW"),
