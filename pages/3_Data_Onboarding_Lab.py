@@ -65,6 +65,7 @@ try:
     initial = inspect_csv_bytes(
         raw,
         source_type=source_type,
+        source_name=uploaded.name,
         expected_interval_minutes=interval_minutes,
         now=datetime.now(timezone.utc),
     )
@@ -146,6 +147,7 @@ if column_overrides or source_unit_overrides:
         report = inspect_csv_bytes(
             raw,
             source_type=source_type,
+            source_name=uploaded.name,
             column_overrides=column_overrides,
             source_unit_overrides=source_unit_overrides,
             expected_interval_minutes=interval_minutes,
