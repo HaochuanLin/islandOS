@@ -271,7 +271,7 @@ def build_energy_system_config_from_assets(
             int(match.group(1))
             for name in curve_keys
             if (match := re.fullmatch(
-                r"diesel_fuel_curve_(\\d+)_(?:power_kw|fuel_l_per_hour)", name
+                r"diesel_fuel_curve_(\d+)_(?:power_kw|fuel_l_per_hour)", name
             ))
         })
         curve_points = []
