@@ -412,3 +412,39 @@ def rolling_origin_backtest(
             "A passing software test is not evidence of site forecast accuracy.",
         ],
     }
+
+
+def forecast_values_for_dispatch(
+    result: SignalForecastResult,
+    *,
+    expected_signal_id: str,
+    expected_unit: str,
+    target_timestamps: Sequence[datetime],
+    bound: str = "point",
+) -> tuple[float, ...]:
+    """Extract a timestamp-checked point/lower/upper series for a simulator.
+
+    This adapter does not perform unit conversion or dispatch. It fails closed
+    on a signal, unit, timestamp, or interval mismatch before values are passed
+    to a downstream physical model.
+    """
+    if not isinstance(result, SignalForecastResult):
+        raise ValueError("result must be a SignalForecastResult")
+    if result.signal_id != expected_signal_id:
+        raise ValueError("Forecast signal_id does not match the dispatch input")
+    if result.unit != expected_unit:
+        raise ValueError("Forecast unit does not match the dispatch input")
+    if bound not in {"point", "lower", "upper"}:
+        raise ValueError("bound must be 'point', 'lower', or 'upper'")
+    targets = tuple(target_timestamps)
+    if tuple(point.timestamp for point in result.points) != targets:
+        raise ValueError("Forecast timestamps do not exactly match dispatch target timestamps")
+    attribute = {
+        "point": "predicted_value",
+        "lower": "lower_bound",
+        "upper": "upper_bound",
+    }[bound]
+    values = tuple(getattr(point, attribute) for point in result.points)
+    if not values or any(value is None for value in values):
+        raise ValueError(f"Forecast {bound} bounds are unavailable; calibrated intervals are required")
+    return tuple(float(value) for value in values)
