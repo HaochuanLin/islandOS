@@ -42,22 +42,31 @@ individual SOC, efficiency, and operating limits.
   confirmed hard maximum power.
 
 Battery efficiencies, initial SOC, and diesel variable cost are explicit
-operating assumptions passed by the caller. They are not invented from the
-asset registry and must retain their own provenance in a future run manifest.
+operating assumptions passed by the caller as provenance-bearing
+`AssetParameter` records. Each must have a unit, source type, source reference,
+and explicit confirmation. They are not invented from the asset registry.
+The caller must carry these records into the future run manifest.
 
 ## Example
 
 ```python
 from islandos_core.asset_energy_adapter import build_energy_system_config_from_assets
+from islandos_core.assets import AssetParameter
+
+def assumption(value, unit, reference):
+    return AssetParameter(
+        value=value, unit=unit, source_type="customer_provided",
+        source_reference=reference, confirmed=True,
+    )
 
 config = build_energy_system_config_from_assets(
     confirmed_assets,
     dt_hours=1.0,
     operating_assumptions={
-        "battery_initial_soc": 0.50,
-        "battery_charge_efficiency": 0.95,
-        "battery_discharge_efficiency": 0.95,
-        "diesel_variable_cost_per_kwh": 1.20,
+        "battery_initial_soc": assumption(0.50, "fraction", "operator confirmation"),
+        "battery_charge_efficiency": assumption(0.95, "fraction", "battery datasheet"),
+        "battery_discharge_efficiency": assumption(0.95, "fraction", "battery datasheet"),
+        "diesel_variable_cost_per_kwh": assumption(1.20, "USD/kWh", "fuel cost model"),
     },
 )
 ```
