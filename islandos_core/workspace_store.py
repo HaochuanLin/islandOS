@@ -656,6 +656,12 @@ def list_asset_records(
         try:
             record = AssetRecord.from_mapping(json.loads(row["record_json"]))
             readiness = json.loads(row["readiness_json"])
+            computed_readiness = evaluate_asset_readiness(record)
+            if _json(readiness) != _json(computed_readiness):
+                raise AuditIntegrityError("asset readiness snapshot mismatch: " + row["asset_id"] + " v" + str(row["version"]))
+            if (record.asset_id, record.site_id, record.asset_type) != (row["asset_id"], row["site_id"], row["asset_type"]):
+                raise AuditIntegrityError("asset registry metadata mismatch: " + row["asset_id"] + " v" + str(row["version"]))
+            readiness = computed_readiness
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             raise AuditIntegrityError(f"stored asset record is invalid: {row['asset_id']} v{row['version']}") from exc
         results.append({"record_version_id": row["record_version_id"],
