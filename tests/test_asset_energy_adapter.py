@@ -565,7 +565,7 @@ def test_provenance_backed_nonlinear_diesel_fuel_curve_maps_to_engine():
     assumptions = {
         "diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh"),
         "diesel_initial_fuel_liters": assumption(120, "L"),
-        "diesel_fuel_price_per_liter": assumption(1.45, "USD/L"),
+        "diesel_fuel_price_per_liter": assumption(1.45, "CNY/L"),
         "diesel_fuel_curve_0_power_kw": assumption(0, "kW"),
         "diesel_fuel_curve_0_fuel_l_per_hour": assumption(0, "L/h"),
         "diesel_fuel_curve_1_power_kw": assumption(15, "kW"),
