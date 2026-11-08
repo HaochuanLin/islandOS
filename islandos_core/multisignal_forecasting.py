@@ -432,7 +432,7 @@ def rolling_origin_backtest(
     *,
     initial_history: int,
     history_window: int | None = None,
-    seasonal_lag_steps: int = 24,
+    seasonal_lag_steps: int | None = None,
 ) -> dict[str, object]:
     """Compare a plugin with persistence and seasonal-naive on identical timestamps.
 
@@ -461,8 +461,16 @@ def rolling_origin_backtest(
         isinstance(history_window, bool) or not isinstance(history_window, int) or history_window < 1
     ):
         raise ValueError("history_window must be a positive integer")
-    if isinstance(seasonal_lag_steps, bool) or not isinstance(seasonal_lag_steps, int) or seasonal_lag_steps < 1:
-        raise ValueError("seasonal_lag_steps must be a positive integer")
+    if seasonal_lag_steps is not None and (
+        isinstance(seasonal_lag_steps, bool)
+        or not isinstance(seasonal_lag_steps, int)
+        or seasonal_lag_steps < 1
+    ):
+        raise ValueError("seasonal_lag_steps must be a positive integer when supplied")
+    effective_seasonal_lag = (
+        max(1, round(86400.0 / cadence))
+        if seasonal_lag_steps is None else seasonal_lag_steps
+    )
 
     registry = SignalForecastRegistry()
     registry.register(plugin)
@@ -486,7 +494,10 @@ def rolling_origin_backtest(
         result = registry.forecast(plugin.model_id, request)
         predicted = result.points[0].predicted_value
         persistence_value = history[-1].value
-        seasonal_value = series[index - seasonal_lag_steps].value if index >= seasonal_lag_steps else None
+        seasonal_value = (
+            series[index - effective_seasonal_lag].value
+            if index >= effective_seasonal_lag else None
+        )
         actuals.append(target.value)
         predictions.append(predicted)
         persistence.append(persistence_value)
@@ -538,6 +549,7 @@ def rolling_origin_backtest(
             "persistence_baseline": persistence_metrics,
             "seasonal_naive_baseline": seasonal_metrics,
             "plugin_on_seasonal_comparable_window": seasonal_plugin_metrics,
+            "seasonal_lag_steps": effective_seasonal_lag,
         },
         "skill_vs_persistence_mae": skill,
         "forecast_rows": rows,
