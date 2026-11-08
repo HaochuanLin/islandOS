@@ -241,7 +241,6 @@ def evaluate_site_operational_readiness(
     topology: Any = None,
 ) -> dict[str, Any]:
     """Evaluate fresh, confirmed operating states via the shared app boundary."""
-    from datetime import timedelta
     from islandos_core.operational_state import evaluate_operational_readiness
 
     options = {}
