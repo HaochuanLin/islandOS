@@ -27,11 +27,11 @@ The adapter requires:
   is present;
 - explicit diesel variable energy cost when a diesel generator is present.
 
-It rejects diesel generators with a non-zero minimum stable loading because
-the current energy dispatch model does not yet represent that constraint.
-Flexible loads are also rejected until their dispatch semantics are integrated
-into the multi-resource model. Multiple PV, wind, and grid-connection assets are summed only after each
-asset independently passes readiness and hard-constraint validation. The
+A single diesel generator's confirmed minimum stable loading is mapped into the
+energy model. Flexible loads are rejected until their dispatch semantics are
+integrated into the multi-resource model. Multiple PV, wind, and grid-connection
+assets are summed only after each asset independently passes readiness and
+hard-constraint validation. The
 effective contribution of each asset is the lower of its confirmed installed
 power and its confirmed hard upper limit. Unavailable or incomplete assets
 block the whole site conversion rather than silently disappearing. Batteries
@@ -56,7 +56,8 @@ minimum loading, ramping, and start behavior are modeled.
 - Battery capacity comes from confirmed usable installed energy capacity;
   charge/discharge limits and SOC bounds come from confirmed hard constraints.
 - Diesel rated power comes from the lower of confirmed installed power and
-  confirmed hard maximum power.
+  confirmed hard maximum power; minimum stable output comes from its confirmed
+  hard minimum constraint.
 
 Battery efficiencies, initial SOC, and diesel variable cost are explicit
 operating assumptions passed by the caller as provenance-bearing
@@ -97,7 +98,8 @@ Before this becomes a general site model, IslandOS still needs:
   manifests, plus per-device battery states;
 - electrical topology and connection constraints;
 - flexible-load adapters and scheduling semantics;
-- diesel minimum stable output, ramp/start constraints and fuel inventory;
+- diesel ramp-down dynamics, per-unit commitment for multiple generators,
+  fuel inventory, and provenance-bearing asset assumptions for ramp/start costs;
 - grid export settlement, tariff calendars, and interconnection validation;
 - explicit provenance records for every operating assumption;
 - model-specific readiness gates and tests against public/field data.
