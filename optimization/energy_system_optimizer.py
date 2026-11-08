@@ -485,6 +485,7 @@ def optimize_battery_power_schedule(
                     grid_export_available=inputs.grid_export_available,
                     diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
                     battery_power_setpoint_kw=genome,
+                    diesel_commitment_schedule=inputs.diesel_commitment_schedule,
                 ),
                 config,
                 policy="battery_first",
