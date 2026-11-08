@@ -96,6 +96,11 @@ def evaluate_operational_readiness(
     if topology is not None:
         if any(asset.site_id != topology.site_id for asset in assets):
             blockers.append("asset_topology_site_mismatch")
+        from islandos_core.electrical_topology import validate_electrical_topology
+
+        topology_readiness = validate_electrical_topology(topology, assets)
+        if not topology_readiness["is_structurally_ready"]:
+            blockers.extend("topology:" + item for item in topology_readiness["blockers"])
         connected_ids = {item.asset_id for item in topology.asset_connections}
         target_assets = {asset_id: asset for asset_id, asset in asset_by_id.items() if asset_id in connected_ids}
     else:
@@ -127,6 +132,9 @@ def evaluate_operational_readiness(
         "warnings": warnings,
         "evaluated_asset_count": len(target_assets),
         "observed_asset_count": sum(asset_id in observation_by_id for asset_id in target_assets),
+        "topology_structurally_ready": (
+            topology_readiness["is_structurally_ready"] if topology is not None else None
+        ),
         "max_observation_age_seconds": max_age.total_seconds(),
         "scope": "read_only_operational_state_readiness",
         "limitations": [
