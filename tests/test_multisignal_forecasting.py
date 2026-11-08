@@ -108,6 +108,29 @@ class TestMultiSignalForecasting(unittest.TestCase):
                 ],
             )
 
+
+
+    def test_interval_calibration_rejects_future_or_unordered_residuals(self):
+        registry = SignalForecastRegistry()
+        registry.register(PersistencePlugin())
+        request = self.request()
+        future = tuple(
+            CalibrationResidual(
+                request.target_timestamps[0] + timedelta(hours=i), 0.5
+            )
+            for i in range(20)
+        )
+        with self.assertRaisesRegex(ValueError, "before the forecast window"):
+            registry.forecast("persistence", request, calibration_residuals=future)
+        unordered = tuple(
+            CalibrationResidual(
+                request.history[-1 - i].timestamp, 0.5
+            )
+            for i in range(20)
+        )
+        with self.assertRaisesRegex(ValueError, "strictly increasing"):
+            registry.forecast("persistence", request, calibration_residuals=unordered)
+
     def test_rejects_bad_timestamps_units_gaps_and_cadence(self):
         history = self.observations(count=48)
         targets = (history[-1].timestamp + timedelta(hours=1),)
