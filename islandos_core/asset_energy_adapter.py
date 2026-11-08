@@ -306,9 +306,28 @@ def build_energy_system_config_from_assets(
             raise AssetEnergyAdapterError(
                 "diesel_fuel_tank_capacity_liters requires a fuel model and initial inventory"
             )
+        rated_diesel_power_kw = min(installed, max_power)
+        if curve_points:
+            if curve_points[-1][0] + 1e-9 < rated_diesel_power_kw:
+                raise AssetEnergyAdapterError(
+                    "diesel fuel curve does not cover the installed rated power"
+                )
+            if curve_points[-1][0] > rated_diesel_power_kw + 1e-9:
+                clipped_points = [
+                    point for point in curve_points if point[0] < rated_diesel_power_kw
+                ]
+                for left, right in zip(curve_points, curve_points[1:]):
+                    if left[0] <= rated_diesel_power_kw <= right[0]:
+                        fraction = (
+                            (rated_diesel_power_kw - left[0]) / (right[0] - left[0])
+                        )
+                        rate = left[1] + fraction * (right[1] - left[1])
+                        clipped_points.append((rated_diesel_power_kw, rate))
+                        break
+                curve_points = clipped_points
         try:
             diesel_spec = DieselSpec(
-                rated_power_kw=min(installed, max_power),
+                rated_power_kw=rated_diesel_power_kw,
                 min_stable_power_kw=min_stable,
                 variable_cost_per_kwh=_required_assumption(
                     assumptions, "diesel_variable_cost_per_kwh"
