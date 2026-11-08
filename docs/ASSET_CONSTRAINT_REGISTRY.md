@@ -64,10 +64,7 @@ hard limits. A missing or unconfirmed hard limit blocks asset screening.
 streamlit run pages/4_Asset_Constraint_Lab.py
 ```
 
-The page stores records only in Streamlit session state and can export a JSON
-registry. It does not create a persistent customer workspace, connect to
-equipment, validate the source document, certify equipment settings, or issue
-control commands.
+The Streamlit lab currently keeps its interactive form records in session state and can export a JSON registry. The shared local application core also supports consent-based, project-scoped SQLite asset persistence through `register_project_asset` and `list_project_assets`. Each save appends an immutable version with a content hash, readiness snapshot, and audit event; the latest version can be loaded and the full version history inspected. The current Streamlit form is not yet wired to that local persistence workflow. Neither path connects to equipment, verifies source documents, certifies equipment settings, or issues control commands.
 
 ## Current limitations
 
