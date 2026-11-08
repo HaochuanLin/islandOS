@@ -274,28 +274,33 @@ def build_energy_system_config_from_assets(
                 "diesel_fuel_tank_capacity_liters requires both fuel-consumption "
                 "and initial-inventory assumptions"
             )
-        diesel_spec = DieselSpec(
-            rated_power_kw=min(installed, max_power),
-            min_stable_power_kw=min_stable,
-            variable_cost_per_kwh=_required_assumption(
-                assumptions, "diesel_variable_cost_per_kwh"
-            ),
-            fuel_consumption_l_per_kwh=(
-                _required_assumption(
-                    assumptions, "diesel_fuel_consumption_l_per_kwh", unit="L/kWh"
-                ) if "diesel_fuel_consumption_l_per_kwh" in assumptions else None
-            ),
-            initial_fuel_liters=(
-                _required_assumption(
-                    assumptions, "diesel_initial_fuel_liters", unit="L"
-                ) if "diesel_initial_fuel_liters" in assumptions else None
-            ),
-            fuel_tank_capacity_liters=(
-                _required_assumption(
-                    assumptions, "diesel_fuel_tank_capacity_liters", unit="L"
-                ) if "diesel_fuel_tank_capacity_liters" in assumptions else None
-            ),
-        )
+        try:
+            diesel_spec = DieselSpec(
+                rated_power_kw=min(installed, max_power),
+                min_stable_power_kw=min_stable,
+                variable_cost_per_kwh=_required_assumption(
+                    assumptions, "diesel_variable_cost_per_kwh"
+                ),
+                fuel_consumption_l_per_kwh=(
+                    _required_assumption(
+                        assumptions, "diesel_fuel_consumption_l_per_kwh", unit="L/kWh"
+                    ) if "diesel_fuel_consumption_l_per_kwh" in assumptions else None
+                ),
+                initial_fuel_liters=(
+                    _required_assumption(
+                        assumptions, "diesel_initial_fuel_liters", unit="L"
+                    ) if "diesel_initial_fuel_liters" in assumptions else None
+                ),
+                fuel_tank_capacity_liters=(
+                    _required_assumption(
+                        assumptions, "diesel_fuel_tank_capacity_liters", unit="L"
+                    ) if "diesel_fuel_tank_capacity_liters" in assumptions else None
+                ),
+            )
+        except EnergyModelError as exc:
+            raise AssetEnergyAdapterError(
+                f"invalid diesel asset-derived configuration: {exc}"
+            ) from exc
 
     try:
         return EnergySystemConfig(
