@@ -34,9 +34,13 @@ class BatterySpec:
     max_soc: float = 0.95
     charge_efficiency: float = 0.95
     discharge_efficiency: float = 0.95
+    throughput_cost_per_kwh: float = 0.0
 
     def __post_init__(self) -> None:
-        for name in ("capacity_kwh", "max_charge_kw", "max_discharge_kw"):
+        for name in (
+            "capacity_kwh", "max_charge_kw", "max_discharge_kw",
+            "throughput_cost_per_kwh",
+        ):
             _number(name, getattr(self, name))
         for name in ("initial_soc", "min_soc", "max_soc",
                      "charge_efficiency", "discharge_efficiency"):
@@ -262,6 +266,8 @@ def dispatch_energy_system(
         "diesel_stop_cost": 0.0, "grid_energy_cost": 0.0,
         "diesel_energy_cost": 0.0, "grid_export_energy_kwh": 0.0,
         "grid_export_revenue": 0.0,
+        "battery_throughput_kwh": 0.0,
+        "battery_degradation_cost": 0.0,
         "diesel_fuel_delivered_liters": 0.0,
     }
 
@@ -369,6 +375,11 @@ def dispatch_energy_system(
             totals["diesel_stop_count"] += 1
             totals["diesel_stop_cost"] += config.diesel.stop_cost_per_stop
         previous_diesel_kw = diesel_kw
+        battery_throughput_kwh = (charge_kw + discharge_kw) * config.dt_hours
+        battery_degradation_cost = (
+            battery_throughput_kwh * battery.throughput_cost_per_kwh
+            if battery else 0.0
+        )
         diesel_fuel_used_liters = (
             diesel_kw * config.dt_hours * config.diesel.fuel_consumption_l_per_kwh
             if config.diesel and config.diesel.fuel_consumption_l_per_kwh is not None
@@ -398,6 +409,8 @@ def dispatch_energy_system(
             "timestep": t, "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
+            "battery_throughput_kwh": battery_throughput_kwh,
+            "battery_degradation_cost": battery_degradation_cost,
             "grid_available": grid_ok[t],
             "grid_export_available": export_ok[t],
             "diesel_available": diesel_ok[t],
@@ -430,6 +443,8 @@ def dispatch_energy_system(
         totals["renewable_curtailed_kwh"] += curtailed_kw * scale
         totals["battery_charge_input_kwh"] += charge_kw * scale
         totals["battery_discharge_output_kwh"] += discharge_kw * scale
+        totals["battery_throughput_kwh"] += battery_throughput_kwh
+        totals["battery_degradation_cost"] += battery_degradation_cost
         totals["grid_import_kwh"] += grid_kw * scale
         totals["grid_export_energy_kwh"] += export_kw * scale
         totals["grid_export_revenue"] += export_kw * scale * export_price[t]
@@ -449,7 +464,8 @@ def dispatch_energy_system(
     )
     totals["gross_energy_cost"] = round(
         totals["grid_energy_cost"] + totals["diesel_energy_cost"]
-        + totals["diesel_start_cost"] + totals["diesel_stop_cost"], 8
+        + totals["diesel_start_cost"] + totals["diesel_stop_cost"]
+        + totals["battery_degradation_cost"], 8
     )
     totals["estimated_energy_cost"] = round(
         totals["gross_energy_cost"] - totals["grid_export_revenue"], 8
@@ -467,6 +483,10 @@ def dispatch_energy_system(
             "not_a_controller": True,
             "synthetic_or_user_supplied_inputs_only": True,
             "grid_export_enabled": config.grid_export_limit_kw > 0,
+            "battery_throughput_cost_enabled": bool(
+                battery and battery.throughput_cost_per_kwh > 0
+            ),
+            "battery_degradation_is_physical_capacity_fade": False,
             "interconnection_permission_validated": False,
             "network_power_flow_modeled": False,
         },
