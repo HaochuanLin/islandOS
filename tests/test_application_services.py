@@ -10,6 +10,8 @@ from islandos_core.application import (
     inspect_upload,
     open_local_project,
     register_inspected_import,
+    register_project_asset,
+    list_project_assets,
 )
 from islandos_core.workspace_store import list_import_artifacts, verify_audit_chain
 
@@ -139,3 +141,29 @@ def test_application_service_does_not_accept_raw_bytes_for_metadata_registration
             inspection_result={"inspection": b"raw customer bytes"},
             actor_id="user-a", consent_to_store_metadata=True, imported_at=NOW,
         )
+
+
+def test_application_service_persists_and_reloads_versioned_asset_registry(tmp_path):
+    from islandos_core.assets import AssetParameter, AssetRecord, OperatingConstraint
+    db = tmp_path / "workspace.sqlite3"
+    create_local_project(
+        db, workspace_id="workspace-a", project_id="site-a",
+        display_name="Site A", actor_id="user-a",
+        consent_to_store_metadata=True, created_at=NOW,
+    )
+    asset = AssetRecord(
+        asset_id="pv-01", site_id="site-a", asset_type="pv",
+        nameplate_parameters={"rated_power_kw": AssetParameter(100, "kW", "vendor_specification", "datasheet", True)},
+        installed_parameters={"configured_power_kw": AssetParameter(80, "kW", "customer_provided", "site schedule", True)},
+        observed_parameters={},
+        constraints=(OperatingConstraint(
+            constraint_id="pv-max", parameter="max_power_kw", severity="hard",
+            unit="kW", operator="max", upper_bound=80,
+            source_type="customer_provided", source_reference="approved schedule", confirmed=True,
+        ),),
+    )
+    saved = register_project_asset(db, project_id="site-a", asset=asset, actor_id="user-a", saved_at=NOW)
+    restored = list_project_assets(db, project_id="site-a")
+    assert saved["version"] == 1
+    assert restored[0]["asset"] == asset
+    assert restored[0]["readiness"]["can_screen"] is True
