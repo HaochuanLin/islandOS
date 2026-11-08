@@ -27,7 +27,8 @@ The adapter requires:
   is present;
 - explicit diesel variable energy cost when a diesel generator is present;
 - optional paired, provenance-bearing diesel fuel-consumption rate (L/kWh)
-  and initial fuel inventory (L) assumptions.
+  and initial fuel inventory (L) assumptions; an optional confirmed tank
+  capacity (L) can additionally bound inventory and scheduled deliveries.
 
 A single diesel generator's confirmed minimum stable loading is mapped into the
 energy model. Flexible loads are rejected until their dispatch semantics are
