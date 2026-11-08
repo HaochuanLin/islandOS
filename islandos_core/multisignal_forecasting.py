@@ -494,3 +494,42 @@ def forecast_values_for_dispatch(
     if not values or any(value is None for value in values):
         raise ValueError(f"Forecast {bound} bounds are unavailable; calibrated intervals are required")
     return tuple(float(value) for value in values)
+
+
+def evaluate_prediction_intervals(
+    actual: Sequence[float],
+    lower: Sequence[float],
+    upper: Sequence[float],
+    *,
+    nominal_coverage: float | None = None,
+) -> dict[str, float | int | None]:
+    """Measure empirical coverage and width; this is diagnostic, not a guarantee."""
+    truth = _finite_values(actual, "actual")
+    lower_values = _finite_values(lower, "lower")
+    upper_values = _finite_values(upper, "upper")
+    if not truth or len(truth) != len(lower_values) or len(truth) != len(upper_values):
+        raise ValueError("actual, lower, and upper must be non-empty and equally sized")
+    if any(lo > hi for lo, hi in zip(lower_values, upper_values)):
+        raise ValueError("Each lower interval bound must be less than or equal to its upper bound")
+    if nominal_coverage is not None and (
+        isinstance(nominal_coverage, bool)
+        or not isinstance(nominal_coverage, (int, float))
+        or not math.isfinite(float(nominal_coverage))
+        or not 0.5 < nominal_coverage < 1.0
+    ):
+        raise ValueError("nominal_coverage must be greater than 0.5 and less than 1.0")
+    covered = [
+        lo <= observed <= hi
+        for observed, lo, hi in zip(truth, lower_values, upper_values)
+    ]
+    empirical = sum(covered) / len(covered)
+    result: dict[str, float | int | None] = {
+        "samples": len(truth),
+        "empirical_coverage": empirical,
+        "mean_interval_width": mean(hi - lo for lo, hi in zip(lower_values, upper_values)),
+        "lower_bound_exceedance_rate": sum(observed < lo for observed, lo in zip(truth, lower_values)) / len(truth),
+        "upper_bound_exceedance_rate": sum(observed > hi for observed, hi in zip(truth, upper_values)) / len(truth),
+        "nominal_coverage": float(nominal_coverage) if nominal_coverage is not None else None,
+        "coverage_gap": empirical - float(nominal_coverage) if nominal_coverage is not None else None,
+    }
+    return result
