@@ -220,6 +220,8 @@ class EnergySystemInputs:
     grid_export_price_per_kwh: Sequence[float] | None = None
     grid_export_available: Sequence[bool] | None = None
     diesel_fuel_delivery_liters: Sequence[float] | None = None
+    # Negative charges from renewable surplus; positive discharges to load.
+    battery_power_setpoint_kw: Sequence[float] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -271,12 +273,14 @@ def dispatch_energy_system(
     policy: str = "battery_first",
     policy_schedule: Sequence[str] | None = None,
 ) -> dict:
-    """Run a transparent rule-based dispatch and return hourly audit rows + summary.
+    """Run auditable dispatch; optional signed battery set-points override battery priority.
 
     Policies are explicit operating priorities, not optimized schedules:
     - battery_first: renewables -> battery -> grid -> diesel
     - grid_first: renewables -> grid -> battery -> diesel
 
+    A signed set-point is positive for discharge and negative for charging.
+    Charging from set-points is limited to renewable surplus; grid charging is not modeled.
     Renewable surplus charges the battery first, then exports up to the explicit
     grid export limit when the grid is available. Remaining surplus is curtailed.
     Export requires an explicit feed-in price series. Diesel minimum stable
@@ -298,9 +302,23 @@ def dispatch_energy_system(
         _series("diesel_fuel_delivery_liters", inputs.diesel_fuel_delivery_liters)
         if inputs.diesel_fuel_delivery_liters is not None else [0.0] * len(load)
     )
+    battery_setpoints = (
+        _signed_series("battery_power_setpoint_kw", inputs.battery_power_setpoint_kw)
+        if inputs.battery_power_setpoint_kw is not None else None
+    )
     n = len(load)
     if any(len(values) != n for values in (pv, wind, price, export_price, fuel_deliveries)):
         raise EnergyModelError("all numeric input series must have equal lengths")
+    if battery_setpoints is not None and len(battery_setpoints) != n:
+        raise EnergyModelError(f"battery_power_setpoint_kw must contain exactly {n} values")
+    if battery_setpoints is not None and config.battery is None:
+        raise EnergyModelError("battery_power_setpoint_kw requires a configured battery")
+    if battery_setpoints is not None and any(
+        value < -config.battery.max_charge_kw - 1e-9
+        or value > config.battery.max_discharge_kw + 1e-9
+        for value in battery_setpoints
+    ):
+        raise EnergyModelError("battery_power_setpoint_kw exceeds configured power limits")
     if any(value > config.pv_rated_kw + 1e-9 for value in pv):
         raise EnergyModelError("PV generation exceeds configured rated power")
     if any(value > config.wind_rated_kw + 1e-9 for value in wind):
@@ -401,10 +419,12 @@ def dispatch_energy_system(
         charge_kw = discharge_kw = grid_kw = diesel_kw = 0.0
         diesel_started = diesel_stopped = False
 
+        requested_setpoint = battery_setpoints[t] if battery_setpoints is not None else None
         if battery and surplus > 0:
             soc_room_kwh = (battery.max_soc - soc) * battery_effective_capacity_kwh
+            requested_charge_kw = max(0.0, -requested_setpoint) if requested_setpoint is not None else battery.max_charge_kw
             charge_kw = min(
-                surplus, battery.max_charge_kw,
+                surplus, battery.max_charge_kw, requested_charge_kw,
                 soc_room_kwh / (battery.charge_efficiency * config.dt_hours),
             )
             soc += (
@@ -463,7 +483,14 @@ def dispatch_energy_system(
                 target = min(target, previous_diesel_kw + spec.ramp_up_kw_per_hour * config.dt_hours)
             return target
 
-        if deficit > 0 and active_policy == "battery_first":
+        if deficit > 0 and requested_setpoint is not None:
+            discharge_kw = discharge(min(deficit, max(0.0, requested_setpoint)))
+            deficit -= discharge_kw
+            grid_kw = import_grid(deficit)
+            deficit -= grid_kw
+            diesel_kw = run_diesel(deficit)
+            deficit -= diesel_kw
+        elif deficit > 0 and active_policy == "battery_first":
             discharge_kw = discharge(deficit)
             deficit -= discharge_kw
             grid_kw = import_grid(deficit)
@@ -562,6 +589,7 @@ def dispatch_energy_system(
 
         row = {
             "timestep": t, "dispatch_priority": active_policy,
+            "battery_power_setpoint_kw": requested_setpoint,
             "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
