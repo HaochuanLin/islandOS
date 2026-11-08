@@ -381,11 +381,12 @@ def optimize_energy_system_schedule(
     archive = pareto_front(list(cache.values()))
     if not archive:
         raise OptimizationError("No schedule passed the physical dispatch audit")
-    archive.sort(
+    archive = sorted(
+        archive,
         key=lambda row: (
             score(row, archive),
             tuple(row["genome"]),
-        )
+        ),
     )
     recommended = archive[0]
     return {
