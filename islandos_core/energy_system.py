@@ -119,6 +119,7 @@ class EnergySystemInputs:
     diesel_available: Sequence[bool] | None = None
     grid_export_price_per_kwh: Sequence[float] | None = None
     grid_export_available: Sequence[bool] | None = None
+    diesel_fuel_delivery_liters: Sequence[float] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -192,8 +193,12 @@ def dispatch_energy_system(
         _signed_series("grid_export_price_per_kwh", inputs.grid_export_price_per_kwh)
         if inputs.grid_export_price_per_kwh is not None else [0.0] * len(load)
     )
+    fuel_deliveries = (
+        _series("diesel_fuel_delivery_liters", inputs.diesel_fuel_delivery_liters)
+        if inputs.diesel_fuel_delivery_liters is not None else [0.0] * len(load)
+    )
     n = len(load)
-    if any(len(values) != n for values in (pv, wind, price, export_price)):
+    if any(len(values) != n for values in (pv, wind, price, export_price, fuel_deliveries)):
         raise EnergyModelError("all numeric input series must have equal lengths")
     if any(value > config.pv_rated_kw + 1e-9 for value in pv):
         raise EnergyModelError("PV generation exceeds configured rated power")
@@ -218,6 +223,12 @@ def dispatch_energy_system(
         raise EnergyModelError(
             "diesel_available must be explicitly supplied when diesel is configured"
         )
+    if inputs.diesel_fuel_delivery_liters is not None and (
+        config.diesel is None or config.diesel.initial_fuel_liters is None
+    ):
+        raise EnergyModelError(
+            "diesel_fuel_delivery_liters requires a diesel fuel-inventory model"
+        )
     grid_ok = _flags("grid_available", inputs.grid_available, n, default=False)
     # An unconfigured diesel unit is never implicitly treated as available.
     diesel_ok = _flags("diesel_available", inputs.diesel_available, n, default=False)
@@ -238,6 +249,7 @@ def dispatch_energy_system(
         "diesel_stop_cost": 0.0, "grid_energy_cost": 0.0,
         "diesel_energy_cost": 0.0, "grid_export_energy_kwh": 0.0,
         "grid_export_revenue": 0.0,
+        "diesel_fuel_delivered_liters": 0.0,
     }
 
     previous_diesel_kw = 0.0
@@ -249,6 +261,9 @@ def dispatch_energy_system(
     totals["diesel_fuel_used_liters"] = 0.0
 
     for t in range(n):
+        diesel_fuel_delivered_liters = fuel_deliveries[t]
+        if fuel_remaining_liters is not None:
+            fuel_remaining_liters += diesel_fuel_delivered_liters
         renewable = pv[t] + wind[t]
         direct_renewable = min(renewable, load[t])
         surplus = renewable - direct_renewable
@@ -344,6 +359,7 @@ def dispatch_energy_system(
         if fuel_remaining_liters is not None:
             fuel_remaining_liters = max(0.0, fuel_remaining_liters - diesel_fuel_used_liters)
         totals["diesel_fuel_used_liters"] += diesel_fuel_used_liters
+        totals["diesel_fuel_delivered_liters"] += diesel_fuel_delivered_liters
 
         export_kw = (
             min(surplus, config.grid_export_limit_kw)
@@ -371,6 +387,7 @@ def dispatch_energy_system(
             "grid_export_price_per_kwh": export_price[t],
             "grid_export_revenue": export_kw * config.dt_hours * export_price[t],
             "diesel_generation_kw": diesel_kw,
+            "diesel_fuel_delivered_liters": diesel_fuel_delivered_liters,
             "diesel_fuel_used_liters": diesel_fuel_used_liters,
             "diesel_fuel_remaining_liters": fuel_remaining_liters,
             "diesel_started": diesel_started,
