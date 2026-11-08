@@ -591,3 +591,19 @@ def test_diesel_fuel_delivery_series_must_match_dispatch_horizon():
     )
     with pytest.raises(EnergyModelError, match="equal lengths"):
         dispatch_energy_system(inputs, config)
+
+def test_diesel_fuel_delivery_rejects_negative_liters():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            fuel_consumption_l_per_kwh=0.5, initial_fuel_liters=10,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0], grid_available=[False],
+        diesel_available=[True], diesel_fuel_delivery_liters=[-1],
+    )
+    with pytest.raises(EnergyModelError, match=r"diesel_fuel_delivery_liters\[0\]"):
+        dispatch_energy_system(inputs, config)
