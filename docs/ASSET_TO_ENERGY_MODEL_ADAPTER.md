@@ -72,8 +72,13 @@ Battery efficiencies, initial SOC, and diesel variable cost are explicit
 operating assumptions passed by the caller as provenance-bearing
 `AssetParameter` records. An optional battery throughput wear-cost rate is
 mapped only when supplied as a confirmed currency-per-kWh assumption; absent
-means the wear-cost proxy remains disabled at zero. An optional diesel tank
-capacity is likewise accepted only as a confirmed liter-valued assumption.
+means the wear-cost proxy remains disabled at zero. Optional battery lifecycle
+assumptions include confirmed `battery_initial_state_of_health` (fraction),
+`battery_cycle_life_efc` (EFC), and
+`battery_end_of_life_capacity_fraction` (fraction). Cycle life enables the
+simplified throughput-driven capacity-fade model; absent cycle-life data, the
+physical aging model remains disabled. An optional diesel tank capacity is
+likewise accepted only as a confirmed liter-valued assumption.
 Each supplied assumption must have a unit, source type, source reference, and
 explicit confirmation. They are not invented from the asset registry. The
 caller must carry these records into the future run manifest.
