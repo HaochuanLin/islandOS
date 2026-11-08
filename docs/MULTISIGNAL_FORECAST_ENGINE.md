@@ -63,3 +63,7 @@ python -m pytest tests/test_multisignal_forecasting.py tests/test_forecast_plugi
 ```
 
 The tests cover PV/wind/load signal reuse, sub-hourly/hourly/daily cadence, malformed timestamps and gaps, non-negative physical signals, calibrated intervals, and rolling-origin comparisons. Test fixtures are synthetic. They demonstrate software contract behavior, not forecast accuracy, field validation, or safe control.
+
+## Forecast-to-dispatch boundary
+
+Use `forecast_values_for_dispatch` to extract point, lower, or upper series for a downstream simulator. It verifies signal ID, unit label, and exact target timestamp alignment, and refuses lower/upper extraction when no calibrated interval exists. It returns values only; the caller remains responsible for selecting the appropriate conservative direction (for example, lower renewable generation or upper load), passing them to the physical model, and preserving the realized series separately for outcome scoring. No unit conversion or live command is performed.
