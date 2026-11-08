@@ -520,3 +520,35 @@ def test_diesel_tank_capacity_below_initial_inventory_fails_adapter_closed():
                 "diesel_fuel_tank_capacity_liters": assumption(80, "L"),
             },
         )
+
+def test_optional_battery_throughput_cost_requires_provenance_and_maps():
+    battery = asset(
+        "battery",
+        {
+            "configured_power_kw": (20, "kW"),
+            "usable_energy_capacity_kwh": (40, "kWh"),
+        },
+        {
+            "max_charge_kw": ("max", 20, "kW"),
+            "max_discharge_kw": ("max", 20, "kW"),
+            "soc_min_pct": ("min", 10, "%"),
+            "soc_max_pct": ("max", 90, "%"),
+        },
+    )
+    base = {
+        "battery_initial_soc": assumption(0.5, "fraction"),
+        "battery_charge_efficiency": assumption(0.95, "fraction"),
+        "battery_discharge_efficiency": assumption(0.95, "fraction"),
+    }
+    config = build_energy_system_config_from_assets(
+        [battery],
+        operating_assumptions={
+            **base,
+            "battery_throughput_cost_per_kwh": assumption(0.08, "USD/kWh"),
+        },
+    )
+    assert config.battery.throughput_cost_per_kwh == pytest.approx(0.08)
+    default_config = build_energy_system_config_from_assets(
+        [battery], operating_assumptions=base,
+    )
+    assert default_config.battery.throughput_cost_per_kwh == 0
