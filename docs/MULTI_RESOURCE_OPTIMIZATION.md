@@ -163,3 +163,16 @@ power output remains residual-load-driven; this increment does not optimize
 diesel kW set-points. Grid import/export and flexible-load schedules also
 remain outside the decision vector. The evolutionary method is stochastic and
 does not guarantee a global optimum.
+
+
+## Explicit battery-wear preference in recommendation scoring
+
+All optimizer variants expose four independently weighted objectives:
+estimated operating cost, unmet load (reliability), renewable curtailment,
+and battery throughput (a wear proxy). Configure `OptimizationWeights.battery_wear`
+to express a preference for lower battery throughput. Its default remains
+zero for backward compatibility; this is a normalized decision preference,
+not a currency-valued degradation model. When a provenance-backed battery
+throughput cost is configured in the physical simulator, that cost is also
+included in estimated operating cost. Do not interpret the normalized wear
+weight as a measured replacement cost.
