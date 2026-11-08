@@ -41,9 +41,9 @@ efficiencies and is constrained by configured minimum and maximum SOC. An
 optional user-supplied throughput wear-cost rate prices each kWh charged plus
 each kWh discharged; the resulting estimate is included in timestep audit rows,
 policy comparisons, and gross/estimated energy cost. This is a transparent
-cost proxy only: it does not calculate physical capacity fade, cycle-life,
-calendar aging, temperature effects, or replacement timing. The default rate is
-zero, which means battery wear cost is not included unless explicitly supplied.
+economic cost proxy and is separate from the optional cycle-throughput capacity-
+fade model below. The default rate is zero, which means this wear-cost estimate
+is not included unless explicitly supplied.
 
 An optional cycle-aging model can be enabled with `cycle_life_efc` and an
 end-of-life capacity fraction (default 0.8). Equivalent full cycles are computed
