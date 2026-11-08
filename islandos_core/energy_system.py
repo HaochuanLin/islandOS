@@ -63,6 +63,7 @@ class DieselSpec:
     stop_cost_per_stop: float = 0.0
     fuel_consumption_l_per_kwh: float | None = None
     initial_fuel_liters: float | None = None
+    fuel_tank_capacity_liters: float | None = None
 
     def __post_init__(self) -> None:
         for name in ("rated_power_kw", "variable_cost_per_kwh",
@@ -82,6 +83,18 @@ class DieselSpec:
             if self.fuel_consumption_l_per_kwh <= 0:
                 raise EnergyModelError("diesel fuel_consumption_l_per_kwh must be > 0")
             _number("diesel initial_fuel_liters", self.initial_fuel_liters)
+        if self.fuel_tank_capacity_liters is not None:
+            _number("diesel fuel_tank_capacity_liters", self.fuel_tank_capacity_liters)
+            if self.fuel_tank_capacity_liters <= 0:
+                raise EnergyModelError("diesel fuel_tank_capacity_liters must be > 0")
+            if self.initial_fuel_liters is None:
+                raise EnergyModelError(
+                    "diesel fuel_tank_capacity_liters requires a fuel-inventory model"
+                )
+            if self.initial_fuel_liters > self.fuel_tank_capacity_liters:
+                raise EnergyModelError(
+                    "diesel initial_fuel_liters cannot exceed fuel_tank_capacity_liters"
+                )
         if self.rated_power_kw <= 0:
             raise EnergyModelError("diesel rated_power_kw must be > 0")
         if self.min_stable_power_kw > self.rated_power_kw:
@@ -264,6 +277,11 @@ def dispatch_energy_system(
         diesel_fuel_delivered_liters = fuel_deliveries[t]
         if fuel_remaining_liters is not None:
             fuel_remaining_liters += diesel_fuel_delivered_liters
+            tank_capacity = config.diesel.fuel_tank_capacity_liters
+            if tank_capacity is not None and fuel_remaining_liters > tank_capacity + 1e-9:
+                raise EnergyModelError(
+                    f"diesel fuel delivery exceeds tank capacity at timestep {t}"
+                )
         renewable = pv[t] + wind[t]
         direct_renewable = min(renewable, load[t])
         surplus = renewable - direct_renewable
