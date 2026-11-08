@@ -67,3 +67,9 @@ The tests cover PV/wind/load signal reuse, sub-hourly/hourly/daily cadence, malf
 ## Forecast-to-dispatch boundary
 
 Use `forecast_values_for_dispatch` to extract point, lower, or upper series for a downstream simulator. It verifies signal ID, unit label, and exact target timestamp alignment, and refuses lower/upper extraction when no calibrated interval exists. It returns values only; the caller remains responsible for selecting the appropriate conservative direction (for example, lower renewable generation or upper load), passing them to the physical model, and preserving the realized series separately for outcome scoring. No unit conversion or live command is performed.
+
+## Built-in baselines and interval diagnostics
+
+The module includes `PersistenceSignalPlugin` and `SeasonalNaiveSignalPlugin`, so simple baselines can pass through the same registry and result schema as third-party or trained models. The seasonal plugin repeats the most recent configured profile; it is a benchmark, not an AI model.
+
+Use `evaluate_prediction_intervals(actual, lower, upper, nominal_coverage=0.90)` to report empirical coverage, mean width, lower/upper miss rates, and the gap from nominal coverage. This is an evaluation diagnostic; do not claim calibrated confidence merely because bounds were produced.
