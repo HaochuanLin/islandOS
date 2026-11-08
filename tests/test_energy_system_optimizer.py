@@ -199,3 +199,15 @@ def test_evolutionary_schedule_optimizer_enforces_horizon_limit():
         optimize_energy_system_schedule(
             inputs, config, max_horizon_steps=1
         )
+
+
+def test_synthetic_24_hour_optimizer_example_is_reproducible():
+    from examples.multi_resource_schedule_optimization import run_demo
+
+    first = run_demo(seed=2026)
+    second = run_demo(seed=2026)
+    assert first == second
+    assert first["data_status"].startswith("synthetic")
+    assert len(first["optimizer"]["recommendation"]["policy_schedule"]) == 24
+    assert first["optimizer"]["candidate_count"] >= 2
+    assert first["scope"]["not_a_controller"] is True
