@@ -532,3 +532,62 @@ def test_diesel_fuel_exactly_supporting_minimum_load_then_exhaustion_stops_clean
     assert second["unmet_load_kw"] == pytest.approx(2)
     assert result["summary"]["diesel_fuel_used_liters"] == pytest.approx(0.5)
     assert result["summary"]["ending_diesel_fuel_liters"] == pytest.approx(0)
+
+
+def test_diesel_fuel_delivery_is_added_before_dispatch_and_audited():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2,
+            fuel_consumption_l_per_kwh=0.5,
+            initial_fuel_liters=0,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[4, 4], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_fuel_delivery_liters=[1.0, 0.0],
+    )
+    result = dispatch_energy_system(inputs, config)
+    first, second = result["rows"]
+    assert first["diesel_fuel_delivered_liters"] == pytest.approx(1.0)
+    assert first["diesel_generation_kw"] == pytest.approx(2)
+    assert first["diesel_fuel_used_liters"] == pytest.approx(1.0)
+    assert first["diesel_fuel_remaining_liters"] == pytest.approx(0)
+    assert second["diesel_generation_kw"] == 0
+    assert second["diesel_fuel_delivered_liters"] == 0
+    assert result["summary"]["diesel_fuel_delivered_liters"] == pytest.approx(1.0)
+    assert result["summary"]["diesel_fuel_used_liters"] == pytest.approx(1.0)
+
+
+def test_diesel_fuel_delivery_requires_configured_fuel_inventory():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(rated_power_kw=10, variable_cost_per_kwh=1.0),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0], grid_available=[False],
+        diesel_available=[True], diesel_fuel_delivery_liters=[10],
+    )
+    with pytest.raises(EnergyModelError, match="requires a diesel fuel-inventory model"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_diesel_fuel_delivery_series_must_match_dispatch_horizon():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            fuel_consumption_l_per_kwh=0.5, initial_fuel_liters=10,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0], load_kw=[1, 1],
+        grid_price_per_kwh=[0, 0], grid_available=[False, False],
+        diesel_available=[True, True], diesel_fuel_delivery_liters=[1],
+    )
+    with pytest.raises(EnergyModelError, match="equal lengths"):
+        dispatch_energy_system(inputs, config)
