@@ -8,6 +8,7 @@ This does not imply equipment compatibility, field validation, or control author
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import re
 
 from islandos_core.assets import AssetParameter, AssetRecord, evaluate_asset_readiness
 from islandos_core.energy_system import (
@@ -263,25 +264,47 @@ def build_energy_system_config_from_assets(
             raise AssetEnergyAdapterError(
                 "explicit diesel_variable_cost_per_kwh assumption is required"
             )
-        fuel_assumption_names = (
-            "diesel_fuel_consumption_l_per_kwh",
-            "diesel_initial_fuel_liters",
-        )
-        supplied_fuel_assumptions = [
-            name for name in fuel_assumption_names if name in assumptions
-        ]
-        if len(supplied_fuel_assumptions) == 1:
+        constant_rate_supplied = "diesel_fuel_consumption_l_per_kwh" in assumptions
+        initial_fuel_supplied = "diesel_initial_fuel_liters" in assumptions
+        curve_keys = [name for name in assumptions if name.startswith("diesel_fuel_curve_")]
+        curve_indices = sorted({
+            int(match.group(1))
+            for name in curve_keys
+            if (match := re.fullmatch(
+                r"diesel_fuel_curve_(\\d+)_(?:power_kw|fuel_l_per_hour)", name
+            ))
+        })
+        curve_points = []
+        if curve_keys:
+            if len(curve_indices) < 2 or curve_indices != list(range(len(curve_indices))):
+                raise AssetEnergyAdapterError(
+                    "diesel fuel curve assumptions must contain contiguous indices starting at 0 and at least two points"
+                )
+            for index in curve_indices:
+                power_name = f"diesel_fuel_curve_{index}_power_kw"
+                rate_name = f"diesel_fuel_curve_{index}_fuel_l_per_hour"
+                if (power_name in assumptions) != (rate_name in assumptions):
+                    raise AssetEnergyAdapterError(
+                        f"diesel fuel curve point {index} requires both power and fuel-rate assumptions"
+                    )
+                curve_points.append((
+                    _required_assumption(assumptions, power_name, unit="kW"),
+                    _required_assumption(assumptions, rate_name, unit="L/h"),
+                ))
+            if len(curve_keys) != 2 * len(curve_indices):
+                raise AssetEnergyAdapterError("unrecognized diesel fuel curve assumption name")
+        if constant_rate_supplied and curve_keys:
             raise AssetEnergyAdapterError(
-                "diesel_fuel_consumption_l_per_kwh and "
-                "diesel_initial_fuel_liters must be supplied together"
+                "constant diesel fuel rate and nonlinear fuel curve cannot both be supplied"
             )
-        if (
-            "diesel_fuel_tank_capacity_liters" in assumptions
-            and len(supplied_fuel_assumptions) != 2
-        ):
+        has_fuel_model = constant_rate_supplied or bool(curve_keys)
+        if has_fuel_model != initial_fuel_supplied:
             raise AssetEnergyAdapterError(
-                "diesel_fuel_tank_capacity_liters requires both fuel-consumption "
-                "and initial-inventory assumptions"
+                "diesel fuel model and diesel_initial_fuel_liters must be supplied together"
+            )
+        if "diesel_fuel_tank_capacity_liters" in assumptions and not has_fuel_model:
+            raise AssetEnergyAdapterError(
+                "diesel_fuel_tank_capacity_liters requires a fuel model and initial inventory"
             )
         try:
             diesel_spec = DieselSpec(
@@ -293,8 +316,9 @@ def build_energy_system_config_from_assets(
                 fuel_consumption_l_per_kwh=(
                     _required_assumption(
                         assumptions, "diesel_fuel_consumption_l_per_kwh", unit="L/kWh"
-                    ) if "diesel_fuel_consumption_l_per_kwh" in assumptions else None
+                    ) if constant_rate_supplied else None
                 ),
+                fuel_curve_liters_per_hour=tuple(curve_points) if curve_points else None,
                 initial_fuel_liters=(
                     _required_assumption(
                         assumptions, "diesel_initial_fuel_liters", unit="L"
