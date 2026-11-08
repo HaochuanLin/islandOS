@@ -175,6 +175,52 @@ def _conformal_radius(residuals: Sequence[CalibrationResidual], coverage: float)
     return errors[rank - 1]
 
 
+
+class PersistenceSignalPlugin:
+    """Dependency-free next-step baseline that repeats the latest observation."""
+
+    model_id = "persistence"
+    version = "1.0"
+
+    def predict(
+        self,
+        history: Sequence[SignalObservation],
+        target_timestamps: Sequence[datetime],
+    ) -> Sequence[float]:
+        if not history:
+            raise ValueError("Persistence forecast requires non-empty history")
+        return [float(history[-1].value)] * len(target_timestamps)
+
+
+class SeasonalNaiveSignalPlugin:
+    """Dependency-free seasonal baseline for any non-negative hourly/sub-hourly signal."""
+
+    model_id = "seasonal_naive"
+    version = "1.0"
+
+    def __init__(self, season_length_steps: int = 24) -> None:
+        if (
+            isinstance(season_length_steps, bool)
+            or not isinstance(season_length_steps, int)
+            or season_length_steps < 1
+        ):
+            raise ValueError("season_length_steps must be a positive integer")
+        self.season_length_steps = season_length_steps
+
+    def predict(
+        self,
+        history: Sequence[SignalObservation],
+        target_timestamps: Sequence[datetime],
+    ) -> Sequence[float]:
+        if not history:
+            raise ValueError("Seasonal-naive forecast requires non-empty history")
+        profile = history[-min(self.season_length_steps, len(history)):]
+        return [
+            float(profile[index % len(profile)].value)
+            for index, _ in enumerate(target_timestamps)
+        ]
+
+
 class SignalForecastRegistry:
     """Register signal-agnostic models and validate predictions/provenance."""
 
