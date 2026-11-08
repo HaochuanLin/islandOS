@@ -79,3 +79,5 @@ Use `evaluate_prediction_intervals(actual, lower, upper, nominal_coverage=0.90)`
 `AutoregressiveRidgeSignalPlugin` is a lightweight per-signal machine-learning candidate using lagged observations and UTC calendar-cycle features. It infers the number of steps in a 24-hour cycle from the request cadence, fits ridge regression using only the history passed to each prediction call, and recursively produces the requested horizon. The rolling-origin backtest therefore refits from prior data at each test origin. Predictions are clipped at zero because this contract is for non-negative physical signals.
 
 This is a transparent candidate to benchmark, not a claim that ridge regression is the best PV, wind, or load model. It can underperform persistence or seasonal-naive baselines; inspect the measured metrics and do not promote it automatically. It requires the repository's existing NumPy dependency.
+
+The generic backtest infers a one-day seasonal lag from the cadence by default (for example, 96 steps at 15-minute cadence, 24 steps hourly, and one step daily). Supply `seasonal_lag_steps` explicitly only when a different seasonal cycle is intended.
