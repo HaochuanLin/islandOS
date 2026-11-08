@@ -180,6 +180,7 @@ The following table distinguishes deterministic simulation policies, optimizatio
 | Module | What it is | Machine learning? | Current scope |
 |---|---|---|---|
 | Integrated microgrid physical model | Deterministic PV/wind, essential-load, battery, grid, diesel, RO, and water-inventory accounting | No | Implemented simulation baseline |
+| Shared-core multi-resource energy balance | Deterministic PV/wind, load, battery, grid import/export, diesel, curtailment, and net energy-cost accounting | No | Offline fixed-step screening baseline; explicit export limits and feed-in prices; not an optimizer or power-flow model |
 | Priority-based flexible-load policies | Fixed-priority rules | No | Experimental dispatch policies |
 | Rolling-horizon dispatch prototype | Receding-horizon planning, re-planned each step | No | Experimental planning workflow |
 | NSGA-II / grid search | Evolutionary multi-objective optimization / enumerated parameter search | No | Experimental; not yet coupled to the integrated model |

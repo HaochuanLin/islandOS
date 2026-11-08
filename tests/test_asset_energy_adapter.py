@@ -393,3 +393,38 @@ def test_multiple_export_capable_grid_connections_are_not_summed_without_shared_
     )
     with pytest.raises(AssetEnergyAdapterError, match="shared point-of-connection"):
         build_energy_system_config_from_assets([first, second])
+
+
+def test_confirmed_asset_export_limit_flows_into_energy_dispatch():
+    pv = asset(
+        "pv",
+        {"configured_power_kw": (10, "kW")},
+        {"max_power_kw": ("max", 10, "kW")},
+        asset_id="pv-01",
+    )
+    connection = asset(
+        "grid_connection",
+        {"configured_power_kw": (5, "kW")},
+        {
+            "import_limit_kw": ("max", 5, "kW"),
+            "export_limit_kw": ("max", 2, "kW"),
+        },
+        asset_id="grid-01",
+    )
+    config = build_energy_system_config_from_assets([pv, connection])
+    result = dispatch_energy_system(
+        EnergySystemInputs(
+            pv_generation_kw=[5],
+            wind_generation_kw=[0],
+            load_kw=[2],
+            grid_price_per_kwh=[0.3],
+            grid_available=[True],
+            grid_export_price_per_kwh=[0.1],
+        ),
+        config,
+    )
+    row = result["rows"][0]
+    assert row["grid_export_kw"] == 2
+    assert row["renewable_curtailed_kw"] == 1
+    assert row["grid_export_revenue"] == pytest.approx(0.2)
+    assert row["energy_balance_residual_kw"] == pytest.approx(0)
