@@ -73,3 +73,9 @@ Use `forecast_values_for_dispatch` to extract point, lower, or upper series for 
 The module includes `PersistenceSignalPlugin` and `SeasonalNaiveSignalPlugin`, so simple baselines can pass through the same registry and result schema as third-party or trained models. The seasonal plugin repeats the most recent configured profile; it is a benchmark, not an AI model.
 
 Use `evaluate_prediction_intervals(actual, lower, upper, nominal_coverage=0.90)` to report empirical coverage, mean width, lower/upper miss rates, and the gap from nominal coverage. This is an evaluation diagnostic; do not claim calibrated confidence merely because bounds were produced.
+
+## Built-in ML candidate
+
+`AutoregressiveRidgeSignalPlugin` is a lightweight per-signal machine-learning candidate using lagged observations and UTC calendar-cycle features. It infers the number of steps in a 24-hour cycle from the request cadence, fits ridge regression using only the history passed to each prediction call, and recursively produces the requested horizon. The rolling-origin backtest therefore refits from prior data at each test origin. Predictions are clipped at zero because this contract is for non-negative physical signals.
+
+This is a transparent candidate to benchmark, not a claim that ridge regression is the best PV, wind, or load model. It can underperform persistence or seasonal-naive baselines; inspect the measured metrics and do not promote it automatically. It requires the repository's existing NumPy dependency.
