@@ -138,3 +138,24 @@ or flexible-load service. It is a stochastic heuristic, not a guaranteed
 global optimum. All candidates are evaluated through the same physical
 simulator and its configured constraints. Results remain offline decision
 support, not a controller or a claim of measured savings.
+
+
+## Joint battery and diesel commitment search (experimental)
+
+The simulator now accepts an explicit \`diesel_commitment_schedule\`, a
+horizon-aligned boolean series. A false value prevents the generator from
+starting or remaining online for that timestep. A true value permits the
+existing residual-load dispatch rule to use the generator, subject to its
+availability, minimum stable load, ramp-up, fuel inventory, and startup/stop
+cost assumptions.
+
+\`optimize_battery_and_diesel_schedule\` jointly searches:
+
+- A continuous signed battery power set-point in kW at each timestep.
+- A binary diesel on/off commitment decision at each timestep.
+
+Both decision families are evaluated in the same physical simulator. Diesel
+power output remains residual-load-driven; this increment does not optimize
+diesel kW set-points. Grid import/export and flexible-load schedules also
+remain outside the decision vector. The evolutionary method is stochastic and
+does not guarantee a global optimum.
