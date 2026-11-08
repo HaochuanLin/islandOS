@@ -7,6 +7,8 @@ offline model for hourly (or fixed-step) energy balancing across:
 - site electrical load;
 - battery charge/discharge with SOC and efficiency limits;
 - grid imports with an import-power limit and availability flag;
+- optional grid exports with a separately configured export-power limit, explicit
+  feed-in price series, and grid-availability gating;
 - diesel generation with a rated-power limit and explicit variable energy cost;
 - renewable curtailment and unmet load.
 
@@ -17,7 +19,9 @@ Two transparent rule-based policies are currently available:
 1. `battery_first`: renewable generation, battery discharge, grid imports, then diesel.
 2. `grid_first`: renewable generation, grid imports, battery discharge, then diesel.
 
-Both policies charge the battery from renewable surplus before curtailing it.
+Both policies charge the battery from renewable surplus first. If grid export
+is enabled and the grid is available, remaining surplus is exported up to the
+configured export limit; anything left is curtailed.
 These are comparison baselines, not an optimizer. The model does not claim that
 either policy is globally cost-optimal.
 
@@ -27,7 +31,7 @@ At each timestep, the model checks:
 
 ```text
 PV + wind + battery discharge + grid import + diesel
-= load served + battery charge + renewable curtailment
+= load served + battery charge + grid export + renewable curtailment
 ```
 
 Battery state of charge is updated with separate charge and discharge
@@ -38,13 +42,19 @@ When a diesel generator is configured, diesel availability must also be
 supplied explicitly. An unconfigured diesel unit is never treated as available.
 Missing availability is rejected rather than silently assumed.
 
-The output includes per-step audit rows and aggregate energy, cost, curtailment,
-unmet-load and ending-SOC metrics. Grid and diesel costs are estimates from
-user-supplied prices/cost assumptions; they are not a tariff settlement.
+The output includes per-step audit rows and aggregate energy, import cost,
+export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
+metrics. Export is disabled by default. Enabling it requires a positive explicit
+grid export limit and a same-length feed-in price series; negative feed-in prices
+are allowed and correctly increase net cost. Export is blocked whenever the grid
+availability flag is false. These are estimates from user-supplied assumptions,
+not a tariff settlement or proof of interconnection permission.
 
 ## Important limitations before site use
 
-This first increment does not yet model grid export, network voltage/frequency,
+This increment models bounded grid export in the energy balance, but does not
+validate interconnection permission, anti-islanding protection, export
+certification, settlement rules, or network voltage/frequency.
 power factor, generator minimum stable loading, ramp/start constraints, fuel
 inventory, battery degradation/replacement, demand charges, tariff calendars,
 forecast uncertainty, equipment outages beyond availability flags, or safety

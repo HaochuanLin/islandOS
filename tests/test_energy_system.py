@@ -180,3 +180,85 @@ def test_configured_diesel_requires_explicit_availability():
     )
     with pytest.raises(EnergyModelError, match="diesel_available must be explicitly supplied"):
         dispatch_energy_system(inputs, config)
+
+
+def test_grid_export_respects_limit_and_reconciles_energy_and_revenue():
+    config = EnergySystemConfig(
+        pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=5,
+        dt_hours=0.5, grid_export_limit_kw=3,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[4],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.2],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    summary = result["summary"]
+    assert row["grid_export_kw"] == pytest.approx(3)
+    assert row["renewable_curtailed_kw"] == pytest.approx(3)
+    assert row["energy_balance_residual_kw"] == pytest.approx(0)
+    assert summary["grid_export_energy_kwh"] == pytest.approx(1.5)
+    assert summary["grid_export_revenue"] == pytest.approx(0.3)
+    assert summary["gross_energy_cost"] == pytest.approx(0)
+    assert summary["estimated_energy_cost"] == pytest.approx(-0.3)
+
+
+def test_grid_export_is_blocked_when_grid_is_unavailable():
+    config = EnergySystemConfig(
+        pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=5,
+        grid_export_limit_kw=5,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[4],
+        grid_price_per_kwh=[0.2], grid_available=[False],
+        grid_export_price_per_kwh=[0.1],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["rows"][0]["grid_export_kw"] == 0
+    assert result["summary"]["grid_export_revenue"] == 0
+    assert result["summary"]["renewable_curtailed_kwh"] == pytest.approx(6)
+
+
+def test_grid_export_requires_explicit_price_series_and_matching_length():
+    config = EnergySystemConfig(
+        pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=5,
+        grid_export_limit_kw=5,
+    )
+    base = dict(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[4],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+    )
+    with pytest.raises(EnergyModelError, match="grid_export_price_per_kwh must be explicitly supplied"):
+        dispatch_energy_system(EnergySystemInputs(**base), config)
+    with pytest.raises(EnergyModelError, match="equal lengths"):
+        dispatch_energy_system(
+            EnergySystemInputs(**base, grid_export_price_per_kwh=[0.1, 0.2]),
+            config,
+        )
+
+
+def test_export_price_without_export_capacity_is_rejected():
+    config = EnergySystemConfig(pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=5)
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[4],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.1],
+    )
+    with pytest.raises(EnergyModelError, match="grid_export_limit_kw is zero"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_negative_export_price_is_accounted_as_a_cost_not_revenue():
+    config = EnergySystemConfig(
+        pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=5,
+        grid_export_limit_kw=5,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[4],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[-0.1],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["summary"]["grid_export_revenue"] == pytest.approx(-0.6)
+    assert result["summary"]["estimated_energy_cost"] == pytest.approx(0.6)

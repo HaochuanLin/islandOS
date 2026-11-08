@@ -73,9 +73,13 @@ class EnergySystemConfig:
     dt_hours: float = 1.0
     battery: BatterySpec | None = None
     diesel: DieselSpec | None = None
+    grid_export_limit_kw: float = 0.0
 
     def __post_init__(self) -> None:
-        for name in ("pv_rated_kw", "wind_rated_kw", "grid_import_limit_kw"):
+        for name in (
+            "pv_rated_kw", "wind_rated_kw", "grid_import_limit_kw",
+            "grid_export_limit_kw",
+        ):
             _number(name, getattr(self, name))
         _number("dt_hours", self.dt_hours)
         if self.dt_hours <= 0:
@@ -90,6 +94,7 @@ class EnergySystemInputs:
     grid_price_per_kwh: Sequence[float]
     grid_available: Sequence[bool]
     diesel_available: Sequence[bool] | None = None
+    grid_export_price_per_kwh: Sequence[float] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -102,6 +107,26 @@ def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> l
     normalized = [_number(f"{name}[{i}]", value) for i, value in enumerate(result)]
     if not allow_zero and any(value <= 0 for value in normalized):
         raise EnergyModelError(f"{name} values must be > 0")
+    return normalized
+
+
+
+def _signed_series(name: str, values: Sequence[float]) -> list[float]:
+    """Validate finite numeric values while allowing negative market prices."""
+    try:
+        result = list(values)
+    except TypeError as exc:
+        raise EnergyModelError(f"{name} must be a one-dimensional series") from exc
+    if not result:
+        raise EnergyModelError(f"{name} must contain at least one time step")
+    normalized = []
+    for index, value in enumerate(result):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise EnergyModelError(f"{name}[{index}] must be numeric")
+        number = float(value)
+        if not math.isfinite(number):
+            raise EnergyModelError(f"{name}[{index}] must be finite")
+        normalized.append(number)
     return normalized
 
 
@@ -126,9 +151,10 @@ def dispatch_energy_system(
     - battery_first: renewables -> battery -> grid -> diesel
     - grid_first: renewables -> grid -> battery -> diesel
 
-    No grid export, diesel minimum-load, ramp, start-cost, degradation-cost, or
-    network constraints are modeled. Those omissions must be addressed before
-    using the model for a specific site or equipment procurement decision.
+    Renewable surplus charges the battery first, then exports up to the explicit
+    grid export limit when the grid is available. Remaining surplus is curtailed.
+    Export requires an explicit feed-in price series. Diesel minimum-load, ramp,
+    start-cost, degradation-cost, and network constraints are not modeled.
     """
     if policy not in {"battery_first", "grid_first"}:
         raise EnergyModelError("policy must be 'battery_first' or 'grid_first'")
@@ -136,8 +162,12 @@ def dispatch_energy_system(
     wind = _series("wind_generation_kw", inputs.wind_generation_kw)
     load = _series("load_kw", inputs.load_kw)
     price = _series("grid_price_per_kwh", inputs.grid_price_per_kwh)
+    export_price = (
+        _signed_series("grid_export_price_per_kwh", inputs.grid_export_price_per_kwh)
+        if inputs.grid_export_price_per_kwh is not None else [0.0] * len(load)
+    )
     n = len(load)
-    if any(len(values) != n for values in (pv, wind, price)):
+    if any(len(values) != n for values in (pv, wind, price, export_price)):
         raise EnergyModelError("all numeric input series must have equal lengths")
     if any(value > config.pv_rated_kw + 1e-9 for value in pv):
         raise EnergyModelError("PV generation exceeds configured rated power")
@@ -145,6 +175,14 @@ def dispatch_energy_system(
         raise EnergyModelError("wind generation exceeds configured rated power")
     if inputs.grid_available is None:
         raise EnergyModelError("grid_available must be explicitly supplied")
+    if config.grid_export_limit_kw > 0 and inputs.grid_export_price_per_kwh is None:
+        raise EnergyModelError(
+            "grid_export_price_per_kwh must be explicitly supplied when grid export is enabled"
+        )
+    if config.grid_export_limit_kw == 0 and inputs.grid_export_price_per_kwh is not None:
+        raise EnergyModelError(
+            "grid_export_price_per_kwh was supplied but grid_export_limit_kw is zero"
+        )
     if config.diesel is not None and inputs.diesel_available is None:
         raise EnergyModelError(
             "diesel_available must be explicitly supplied when diesel is configured"
@@ -162,7 +200,8 @@ def dispatch_energy_system(
         "renewable_curtailed_kwh": 0.0, "battery_charge_input_kwh": 0.0,
         "battery_discharge_output_kwh": 0.0, "grid_import_kwh": 0.0,
         "diesel_generation_kwh": 0.0, "grid_energy_cost": 0.0,
-        "diesel_energy_cost": 0.0,
+        "diesel_energy_cost": 0.0, "grid_export_energy_kwh": 0.0,
+        "grid_export_revenue": 0.0,
     }
 
     for t in range(n):
@@ -216,11 +255,15 @@ def dispatch_energy_system(
             diesel_kw = run_diesel(deficit)
             deficit -= diesel_kw
 
-        curtailed_kw = max(0.0, surplus)
+        export_kw = (
+            min(surplus, config.grid_export_limit_kw)
+            if grid_ok[t] and config.grid_export_limit_kw > 0 else 0.0
+        )
+        curtailed_kw = max(0.0, surplus - export_kw)
         served_kw = load[t] - max(0.0, deficit)
         balance_residual = (
             pv[t] + wind[t] + discharge_kw + grid_kw + diesel_kw
-            - served_kw - charge_kw - curtailed_kw
+            - served_kw - charge_kw - export_kw - curtailed_kw
         )
         if abs(balance_residual) > 1e-7:
             raise RuntimeError(f"energy balance failed at timestep {t}: {balance_residual}")
@@ -231,7 +274,10 @@ def dispatch_energy_system(
             "timestep": t, "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
-            "grid_import_kw": grid_kw, "diesel_generation_kw": diesel_kw,
+            "grid_import_kw": grid_kw, "grid_export_kw": export_kw,
+            "grid_export_price_per_kwh": export_price[t],
+            "grid_export_revenue": export_kw * config.dt_hours * export_price[t],
+            "diesel_generation_kw": diesel_kw,
             "load_served_kw": served_kw, "unmet_load_kw": max(0.0, deficit),
             "renewable_curtailed_kw": curtailed_kw, "battery_soc": soc,
             "grid_price_per_kwh": price[t], "energy_balance_residual_kw": balance_residual,
@@ -247,6 +293,8 @@ def dispatch_energy_system(
         totals["battery_charge_input_kwh"] += charge_kw * scale
         totals["battery_discharge_output_kwh"] += discharge_kw * scale
         totals["grid_import_kwh"] += grid_kw * scale
+        totals["grid_export_energy_kwh"] += export_kw * scale
+        totals["grid_export_revenue"] += export_kw * scale * export_price[t]
         totals["diesel_generation_kwh"] += diesel_kw * scale
         totals["grid_energy_cost"] += grid_kw * scale * price[t]
         if config.diesel:
@@ -258,8 +306,11 @@ def dispatch_energy_system(
         if totals["load_energy_kwh"] else 0.0
     )
     totals["ending_battery_soc"] = round(soc, 8) if battery else None
-    totals["estimated_energy_cost"] = round(
+    totals["gross_energy_cost"] = round(
         totals["grid_energy_cost"] + totals["diesel_energy_cost"], 8
+    )
+    totals["estimated_energy_cost"] = round(
+        totals["gross_energy_cost"] - totals["grid_export_revenue"], 8
     )
     return {
         "policy": policy,
@@ -285,8 +336,9 @@ def compare_energy_policies(
     battery_first = dispatch_energy_system(inputs, config, policy="battery_first")
     grid_first = dispatch_energy_system(inputs, config, policy="grid_first")
     metrics = (
-        "estimated_energy_cost", "grid_import_kwh", "diesel_generation_kwh",
-        "renewable_curtailed_kwh", "unmet_load_kwh", "battery_discharge_output_kwh",
+        "estimated_energy_cost", "grid_import_kwh", "grid_export_energy_kwh",
+        "grid_export_revenue", "diesel_generation_kwh", "renewable_curtailed_kwh",
+        "unmet_load_kwh", "battery_discharge_output_kwh",
     )
     differences = {
         key: round(

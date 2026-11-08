@@ -44,11 +44,18 @@ def build_demo_case() -> tuple[EnergySystemInputs, EnergySystemConfig]:
             True, True, True, True, True, True,
         ],
         diesel_available=[True] * 24,
+        grid_export_price_per_kwh=[
+            0.08, 0.08, 0.08, 0.08, 0.08, 0.08,
+            0.10, 0.10, 0.12, 0.12, 0.12, 0.12,
+            0.12, 0.12, 0.10, 0.10, 0.12, 0.15,
+            0.15, 0.15, 0.12, 0.10, 0.09, 0.08,
+        ],
     )
     config = EnergySystemConfig(
         pv_rated_kw=80,
         wind_rated_kw=40,
         grid_import_limit_kw=75,
+        grid_export_limit_kw=12,
         dt_hours=1.0,
         battery=BatterySpec(
             capacity_kwh=160,

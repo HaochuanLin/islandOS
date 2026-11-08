@@ -41,3 +41,22 @@ def test_application_service_does_not_hide_unmet_load_tradeoffs():
     result = run_energy_policy_comparison(inputs, config)
     assert result["battery_first"]["summary"]["unmet_load_kwh"] == pytest.approx(2)
     assert result["grid_first"]["summary"]["unmet_load_kwh"] == pytest.approx(2)
+
+
+def test_application_service_exposes_grid_export_revenue_and_net_cost():
+    config = EnergySystemConfig(
+        pv_rated_kw=8, wind_rated_kw=0, grid_import_limit_kw=4,
+        grid_export_limit_kw=2,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[8], wind_generation_kw=[0], load_kw=[2],
+        grid_price_per_kwh=[0.3], grid_available=[True],
+        grid_export_price_per_kwh=[0.12],
+    )
+    result = run_energy_policy_comparison(inputs, config)
+    for policy in ("battery_first", "grid_first"):
+        summary = result[policy]["summary"]
+        assert summary["grid_export_energy_kwh"] == pytest.approx(2)
+        assert summary["grid_export_revenue"] == pytest.approx(0.24)
+        assert summary["estimated_energy_cost"] == pytest.approx(-0.24)
+    assert "grid_export_revenue" in result["difference_battery_first_minus_grid_first"]
