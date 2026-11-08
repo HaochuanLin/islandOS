@@ -481,7 +481,7 @@ def test_diesel_tank_capacity_requires_and_maps_confirmed_fuel_assumption():
         },
     )
     base = {"diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh")}
-    with pytest.raises(AssetEnergyAdapterError, match="requires both fuel-consumption"):
+    with pytest.raises(AssetEnergyAdapterError, match="requires a fuel model and initial inventory"):
         build_energy_system_config_from_assets(
             [generator],
             operating_assumptions={
@@ -635,7 +635,7 @@ def test_diesel_fuel_curve_is_interpolated_at_derated_installed_rating():
         "diesel_generator",
         {"configured_power_kw": (25, "kW")},
         {
-            "max_power_kw": ("max", 30, "kW"),
+            "max_power_kw": ("max", 25, "kW"),
             "min_stable_power_kw": ("min", 5, "kW"),
         },
     )
