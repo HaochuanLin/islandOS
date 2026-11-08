@@ -249,3 +249,14 @@ def evaluate_site_operational_readiness(
     return evaluate_operational_readiness(
         assets, observations, as_of=as_of, topology=topology, **options,
     )
+
+
+def evaluate_project_lifecycle_economics(
+    inputs: LifecycleEconomicsInputs,
+) -> dict[str, Any]:
+    """Expose the auditable lifecycle screening model to all client interfaces.
+
+    Monetary assumptions and their provenance must be collected and validated
+    by the calling workflow; this service does not invent customer prices.
+    """
+    return evaluate_lifecycle_economics(inputs)
