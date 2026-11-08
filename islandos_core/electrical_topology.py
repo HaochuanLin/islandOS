@@ -175,8 +175,11 @@ def validate_electrical_topology(topology: ElectricalTopology, assets: Sequence[
         bus = bus_by_id.get(connection.bus_id)
         if asset is None:
             blockers.append(f"connection_asset_missing:{connection.connection_id}")
-        elif asset.site_id != topology.site_id:
-            blockers.append(f"connection_asset_site_mismatch:{connection.connection_id}")
+        else:
+            if asset.site_id != topology.site_id:
+                blockers.append(f"connection_asset_site_mismatch:{connection.connection_id}")
+            if not asset.available:
+                blockers.append(f"connection_asset_unavailable:{connection.connection_id}")
         if bus is None:
             blockers.append(f"connection_bus_missing:{connection.connection_id}")
         else:
