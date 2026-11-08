@@ -65,6 +65,23 @@ def _required_assumption(
     return float(assumption.value)
 
 
+def _required_currency_per_liter(
+    assumptions: Mapping[str, AssetParameter], name: str
+) -> float:
+    assumption = assumptions.get(name)
+    if not isinstance(assumption, AssetParameter):
+        raise AssetEnergyAdapterError(
+            f"{name} must be supplied as a provenance-bearing AssetParameter"
+        )
+    if not assumption.confirmed:
+        raise AssetEnergyAdapterError(f"{name} is not confirmed")
+    if not re.fullmatch(r"[A-Z]{3}/L", assumption.unit):
+        raise AssetEnergyAdapterError(
+            f"{name} unit must be an ISO currency code per liter, such as USD/L or CNY/L"
+        )
+    return float(assumption.value)
+
+
 def _required_constraint(asset: AssetRecord, parameter: str, operator: str) -> float:
     matches = [
         item for item in asset.constraints
@@ -349,8 +366,8 @@ def build_energy_system_config_from_assets(
                     ) if "diesel_fuel_tank_capacity_liters" in assumptions else None
                 ),
                 fuel_price_per_liter=(
-                    _required_assumption(
-                        assumptions, "diesel_fuel_price_per_liter", unit="USD/L"
+                    _required_currency_per_liter(
+                        assumptions, "diesel_fuel_price_per_liter"
                     ) if "diesel_fuel_price_per_liter" in assumptions else None
                 ),
             )
