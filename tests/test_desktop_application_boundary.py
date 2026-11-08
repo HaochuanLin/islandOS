@@ -40,3 +40,10 @@ def test_desktop_shell_exposes_persistent_asset_registry_workflow():
     assert "register_project_asset" in source
     assert "list_project_assets" in source
     assert "AssetRecord.from_mapping" in source
+
+
+def test_desktop_asset_registry_requires_explicit_storage_consent():
+    source = (ROOT / "desktop_app" / "main.py").read_text(encoding="utf-8")
+    assert "self.asset_consent = QCheckBox" in source
+    assert "if not self.asset_consent.isChecked()" in source
+    assert "consent_to_store_assets=True" in source
