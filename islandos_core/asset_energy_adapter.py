@@ -1,8 +1,9 @@
 """Fail-closed adapter from confirmed asset records to the offline energy model.
 
-This adapter is deliberately narrow: one asset per supported resource type.
-It never guesses efficiencies, initial SOC, or diesel variable cost. It does
-not imply device compatibility, field validation, or authorization for control.
+PV, wind, and grid import capacities can be summed after each asset independently
+passes readiness and constraint checks. Batteries and diesel units remain
+single-instance until per-device state and commitment constraints are modeled.
+This does not imply equipment compatibility, field validation, or control authority.
 """
 from __future__ import annotations
 
@@ -111,6 +112,9 @@ def build_energy_system_config_from_assets(
     site_ids = {asset.site_id for asset in assets}
     if len(site_ids) != 1:
         raise AssetEnergyAdapterError("all assets must belong to the same site")
+    asset_ids = [asset.asset_id for asset in assets]
+    if len(asset_ids) != len(set(asset_ids)):
+        raise AssetEnergyAdapterError("asset_id values must be unique within a site")
 
     grouped: dict[str, list[AssetRecord]] = {}
     for asset in assets:
@@ -120,11 +124,15 @@ def build_energy_system_config_from_assets(
             )
         grouped.setdefault(asset.asset_type, []).append(asset)
 
-    duplicates = sorted(kind for kind, items in grouped.items() if len(items) > 1)
-    if duplicates:
+    aggregatable = {"pv", "wind", "grid_connection"}
+    unsupported_duplicates = sorted(
+        kind for kind, items in grouped.items()
+        if len(items) > 1 and kind not in aggregatable
+    )
+    if unsupported_duplicates:
         raise AssetEnergyAdapterError(
-            "multiple assets of the same type require aggregation support first: "
-            + ", ".join(duplicates)
+            "multiple assets of these types require per-device state or "
+            "commitment modeling first: " + ", ".join(unsupported_duplicates)
         )
 
     for asset in assets:
@@ -144,23 +152,22 @@ def build_energy_system_config_from_assets(
     battery_spec = None
     diesel_spec = None
 
-    if "pv" in grouped:
-        asset = grouped["pv"][0]
+    # Aggregate only additive nameplate/connection capacities. Every component
+    # is validated independently before it contributes to the site total.
+    for asset in grouped.get("pv", []):
         installed = _required_parameter(asset, "configured_power_kw", "kW")
         hard_limit = _required_constraint(asset, "max_power_kw", "max")
-        pv_rated_kw = min(installed, hard_limit)
+        pv_rated_kw += min(installed, hard_limit)
 
-    if "wind" in grouped:
-        asset = grouped["wind"][0]
+    for asset in grouped.get("wind", []):
         installed = _required_parameter(asset, "configured_power_kw", "kW")
         hard_limit = _required_constraint(asset, "max_power_kw", "max")
-        wind_rated_kw = min(installed, hard_limit)
+        wind_rated_kw += min(installed, hard_limit)
 
-    if "grid_connection" in grouped:
-        asset = grouped["grid_connection"][0]
+    for asset in grouped.get("grid_connection", []):
         installed = _required_parameter(asset, "configured_power_kw", "kW")
         hard_limit = _required_constraint(asset, "import_limit_kw", "max")
-        grid_import_limit_kw = min(installed, hard_limit)
+        grid_import_limit_kw += min(installed, hard_limit)
 
     if "battery" in grouped:
         asset = grouped["battery"][0]
