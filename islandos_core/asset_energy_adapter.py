@@ -266,6 +266,14 @@ def build_energy_system_config_from_assets(
                 "diesel_fuel_consumption_l_per_kwh and "
                 "diesel_initial_fuel_liters must be supplied together"
             )
+        if (
+            "diesel_fuel_tank_capacity_liters" in assumptions
+            and len(supplied_fuel_assumptions) != 2
+        ):
+            raise AssetEnergyAdapterError(
+                "diesel_fuel_tank_capacity_liters requires both fuel-consumption "
+                "and initial-inventory assumptions"
+            )
         diesel_spec = DieselSpec(
             rated_power_kw=min(installed, max_power),
             min_stable_power_kw=min_stable,
@@ -281,6 +289,11 @@ def build_energy_system_config_from_assets(
                 _required_assumption(
                     assumptions, "diesel_initial_fuel_liters", unit="L"
                 ) if "diesel_initial_fuel_liters" in assumptions else None
+            ),
+            fuel_tank_capacity_liters=(
+                _required_assumption(
+                    assumptions, "diesel_fuel_tank_capacity_liters", unit="L"
+                ) if "diesel_fuel_tank_capacity_liters" in assumptions else None
             ),
         )
 
