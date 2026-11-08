@@ -68,6 +68,8 @@ def evaluate_operational_readiness(
         raise OperationalStateError("observations must contain AssetOperationalState values")
     if not isinstance(as_of, datetime) or as_of.tzinfo is None or as_of.utcoffset() is None:
         raise OperationalStateError("as_of must be timezone-aware")
+    if topology is not None and not isinstance(topology, ElectricalTopology):
+        raise OperationalStateError("topology must be an ElectricalTopology")
     if not isinstance(max_age, timedelta) or max_age <= timedelta(0):
         raise OperationalStateError("max_age must be a positive timedelta")
     asset_by_id = {asset.asset_id: asset for asset in assets}
@@ -90,8 +92,6 @@ def evaluate_operational_readiness(
         if topology is not None and observation.site_id != topology.site_id:
             blockers.append(f"operational_state_topology_site_mismatch:{observation.asset_id}")
     if topology is not None:
-        if not isinstance(topology, ElectricalTopology):
-            raise OperationalStateError("topology must be an ElectricalTopology")
         if any(asset.site_id != topology.site_id for asset in assets):
             blockers.append("asset_topology_site_mismatch")
         connected_ids = {item.asset_id for item in topology.asset_connections}
