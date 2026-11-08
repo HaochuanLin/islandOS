@@ -4,7 +4,7 @@ from islandos_core.asset_energy_adapter import (
     AssetEnergyAdapterError,
     build_energy_system_config_from_assets,
 )
-from islandos_core.assets import AssetParameter, AssetRecord, OperatingConstraint
+from islandos_core.assets import AssetParameter, AssetRecord, AssetValidationError, OperatingConstraint
 from islandos_core.energy_system import EnergySystemInputs, dispatch_energy_system
 
 
@@ -216,10 +216,9 @@ def test_rejects_mixed_sites_duplicate_types_and_unsupported_assets():
 
 
 def test_rejects_wrong_installed_units_instead_of_converting_silently():
-    pv = asset("pv", {"configured_power_kw": (20, "MW")},
-               {"max_power_kw": ("max", 20, "kW")})
-    with pytest.raises(AssetEnergyAdapterError, match="must use kW"):
-        build_energy_system_config_from_assets([pv])
+    with pytest.raises(AssetValidationError, match="installed_parameters.configured_power_kw must use kW"):
+        asset("pv", {"configured_power_kw": (20, "MW")},
+              {"max_power_kw": ("max", 20, "kW")})
 
 
 
