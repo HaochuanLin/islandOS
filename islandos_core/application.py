@@ -22,6 +22,8 @@ from islandos_core.workspace_store import (
     initialize_workspace,
     list_projects,
     record_import_artifact,
+    save_asset_record as _save_asset_record,
+    list_asset_records as _list_asset_records,
     verify_audit_chain,
 )
 
@@ -264,3 +266,23 @@ def evaluate_project_lifecycle_economics(
     by the calling workflow; this service does not invent customer prices.
     """
     return evaluate_lifecycle_economics(inputs)
+
+
+def register_project_asset(
+    db_path: str | Path, *, project_id: str, asset: Any, actor_id: str,
+    saved_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Append one immutable asset configuration version to a local project."""
+    from islandos_core.assets import AssetRecord
+    if not isinstance(asset, AssetRecord):
+        raise ValueError("asset must be a validated AssetRecord")
+    return _save_asset_record(
+        db_path, project_id=project_id, asset=asset, actor_id=actor_id, saved_at=saved_at,
+    )
+
+
+def list_project_assets(
+    db_path: str | Path, *, project_id: str, include_history: bool = False,
+) -> list[dict[str, Any]]:
+    """Read the latest verified asset records or their complete version history."""
+    return _list_asset_records(db_path, project_id=project_id, include_history=include_history)
