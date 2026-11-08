@@ -219,3 +219,14 @@ def run_energy_policy_comparison(
     and task-specific readiness before presenting results as site-relevant.
     """
     return compare_energy_policies(inputs, configuration)
+
+
+def validate_site_electrical_topology(topology: Any, assets: Sequence[Any]) -> dict[str, Any]:
+    """Validate a site's declared electrical topology through the app boundary.
+
+    The returned report is structural only; it is not a power-flow result,
+    electrical certification, or authorization to control connected assets.
+    """
+    from islandos_core.electrical_topology import validate_electrical_topology
+
+    return validate_electrical_topology(topology, assets)
