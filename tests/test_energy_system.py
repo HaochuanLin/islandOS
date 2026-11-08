@@ -743,6 +743,7 @@ def test_nonlinear_diesel_fuel_curve_requires_enough_fuel_for_stable_minimum():
         (((0.0, 0.0), (5.0, 2.5)), "must end at rated_power_kw"),
         (((0.0, 0.0), (5.0, 2.5), (4.0, 3.0), (10.0, 6.0)), "power must increase"),
         (((0.0, 0.0), (5.0, 3.0), (10.0, 2.0)), "fuel rate must not decrease"),
+        (((0.0, 0.0), (10.0, 0.0)), "rated-power fuel rate must be > 0"),
     ],
 )
 def test_nonlinear_diesel_fuel_curve_rejects_invalid_shapes(curve, message):
