@@ -760,3 +760,40 @@ def test_diesel_constant_rate_and_curve_cannot_be_configured_together():
             fuel_curve_liters_per_hour=((0.0, 0.0), (10.0, 3.0)),
             initial_fuel_liters=20,
         )
+
+def test_diesel_fuel_price_is_accounted_separately_from_nonfuel_variable_cost():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=0.1,
+            fuel_curve_liters_per_hour=((0.0, 0.0), (10.0, 6.0)),
+            initial_fuel_liters=10,
+            fuel_price_per_liter=1.5,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[10],
+        grid_price_per_kwh=[0], grid_available=[False], diesel_available=[True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    assert row["diesel_fuel_used_liters"] == pytest.approx(6)
+    assert row["diesel_fuel_cost"] == pytest.approx(9)
+    assert result["summary"]["diesel_energy_cost"] == pytest.approx(1)
+    assert result["summary"]["diesel_fuel_cost"] == pytest.approx(9)
+    assert result["summary"]["gross_energy_cost"] == pytest.approx(10)
+    assert result["model_scope"]["diesel_fuel_cost_enabled"] is True
+
+
+def test_diesel_fuel_price_requires_inventory_model_and_nonnegative_value():
+    with pytest.raises(EnergyModelError, match="requires a configured fuel model"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=0.1,
+            fuel_price_per_liter=1.5,
+        )
+    with pytest.raises(EnergyModelError, match="fuel_price_per_liter"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=0.1,
+            fuel_consumption_l_per_kwh=0.25, initial_fuel_liters=10,
+            fuel_price_per_liter=-0.1,
+        )
