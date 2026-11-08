@@ -168,8 +168,33 @@ def test_rejects_mixed_sites_duplicate_types_and_unsupported_assets():
                {"max_power_kw": ("max", 20, "kW")})
     second_pv = asset("pv", {"configured_power_kw": (10, "kW")},
                       {"max_power_kw": ("max", 10, "kW")}, asset_id="pv-02")
-    with pytest.raises(AssetEnergyAdapterError, match="multiple assets"):
-        build_energy_system_config_from_assets([pv, second_pv])
+    # PV capacities are additive only after each PV asset passes validation.
+    assert build_energy_system_config_from_assets([pv, second_pv]).pv_rated_kw == 30
+
+    battery_a = asset(
+        "battery",
+        {"configured_power_kw": (10, "kW"), "usable_energy_capacity_kwh": (20, "kWh")},
+        {
+            "max_charge_kw": ("max", 10, "kW"),
+            "max_discharge_kw": ("max", 10, "kW"),
+            "soc_min_pct": ("min", 10, "%"),
+            "soc_max_pct": ("max", 90, "%"),
+        },
+        asset_id="battery-a",
+    )
+    battery_b = asset(
+        "battery",
+        {"configured_power_kw": (10, "kW"), "usable_energy_capacity_kwh": (20, "kWh")},
+        {
+            "max_charge_kw": ("max", 10, "kW"),
+            "max_discharge_kw": ("max", 10, "kW"),
+            "soc_min_pct": ("min", 10, "%"),
+            "soc_max_pct": ("max", 90, "%"),
+        },
+        asset_id="battery-b",
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="per-device state"):
+        build_energy_system_config_from_assets([battery_a, battery_b])
 
     other_site = AssetRecord(
         asset_id="wind-01", site_id="site-02", asset_type="wind",
@@ -253,3 +278,46 @@ def test_asset_registry_output_runs_through_offline_energy_dispatch():
     assert row["grid_import_kw"] == 3
     assert row["unmet_load_kw"] == 0
     assert abs(row["energy_balance_residual_kw"]) < 1e-8
+
+
+
+def test_aggregates_multiple_pv_wind_and_grid_assets_after_individual_validation():
+    assets = [
+        asset("pv", {"configured_power_kw": (12, "kW")},
+              {"max_power_kw": ("max", 10, "kW")}, asset_id="pv-a"),
+        asset("pv", {"configured_power_kw": (8, "kW")},
+              {"max_power_kw": ("max", 7, "kW")}, asset_id="pv-b"),
+        asset("wind", {"configured_power_kw": (30, "kW")},
+              {"max_power_kw": ("max", 25, "kW")}, asset_id="wind-a"),
+        asset("wind", {"configured_power_kw": (20, "kW")},
+              {"max_power_kw": ("max", 18, "kW")}, asset_id="wind-b"),
+        asset("grid_connection", {"configured_power_kw": (50, "kW")},
+              {"import_limit_kw": ("max", 45, "kW")}, asset_id="grid-a"),
+        asset("grid_connection", {"configured_power_kw": (40, "kW")},
+              {"import_limit_kw": ("max", 35, "kW")}, asset_id="grid-b"),
+    ]
+    config = build_energy_system_config_from_assets(assets)
+    assert config.pv_rated_kw == 17
+    assert config.wind_rated_kw == 43
+    assert config.grid_import_limit_kw == 80
+
+
+def test_duplicate_asset_ids_are_rejected_before_aggregation():
+    pv_a = asset("pv", {"configured_power_kw": (12, "kW")},
+                 {"max_power_kw": ("max", 10, "kW")}, asset_id="same-id")
+    pv_b = asset("pv", {"configured_power_kw": (8, "kW")},
+                 {"max_power_kw": ("max", 7, "kW")}, asset_id="same-id")
+    with pytest.raises(AssetEnergyAdapterError, match="asset_id values must be unique"):
+        build_energy_system_config_from_assets([pv_a, pv_b])
+
+
+def test_unavailable_member_blocks_aggregate_instead_of_being_silently_ignored():
+    available = asset("pv", {"configured_power_kw": (12, "kW")},
+                      {"max_power_kw": ("max", 10, "kW")}, asset_id="pv-a")
+    unavailable = AssetRecord(
+        asset_id="pv-b", site_id="site-01", asset_type="pv",
+        nameplate_parameters={}, installed_parameters={}, observed_parameters={},
+        constraints=(), available=False,
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="not ready for offline screening"):
+        build_energy_system_config_from_assets([available, unavailable])
