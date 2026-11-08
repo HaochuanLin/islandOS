@@ -27,6 +27,15 @@ configured export limit; anything left is curtailed.
 These are comparison baselines, not an optimizer. The model does not claim that
 either policy is globally cost-optimal.
 
+The dispatch function also accepts an optional `policy_schedule` containing
+one of those two policy names for each timestep. This allows an offline
+optimizer to test a time-varying priority schedule while retaining the same
+per-step physical accounting and component constraints. The schedule changes
+only the order in which battery discharge and grid imports are considered; it
+does not create arbitrary charge/discharge set-points or change the surplus
+charging rule. Schedule search is documented separately in
+`MULTI_RESOURCE_OPTIMIZATION.md`.
+
 ## Physics and accounting
 
 At each timestep, the model checks:
