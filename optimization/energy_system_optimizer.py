@@ -26,9 +26,10 @@ class OptimizationWeights:
     cost: float = 0.70
     reliability: float = 0.20
     curtailment: float = 0.10
+    battery_wear: float = 0.0
 
     def __post_init__(self) -> None:
-        values = (self.cost, self.reliability, self.curtailment)
+        values = (self.cost, self.reliability, self.curtailment, self.battery_wear)
         if any(isinstance(v, bool) or not isinstance(v, (int, float))
                or not math.isfinite(float(v)) or v < 0 for v in values):
             raise OptimizationError("objective weights must be finite and non-negative")
@@ -171,7 +172,7 @@ def optimize_energy_system(
     keys = ("estimated_energy_cost", "unmet_load_kwh",
             "renewable_curtailed_kwh", "battery_throughput_kwh")
     weight_values = (weights.cost, weights.reliability,
-                     weights.curtailment, 0.0)
+                     weights.curtailment, weights.battery_wear)
     ranges = {
         key: (min(row["objectives"][key] for row in pareto),
               max(row["objectives"][key] for row in pareto))
@@ -199,7 +200,7 @@ def optimize_energy_system(
             "weights": {
                 "cost": weights.cost, "reliability": weights.reliability,
                 "curtailment": weights.curtailment,
-                "battery_throughput_tiebreak_only": 0.0,
+                "battery_wear": weights.battery_wear,
             },
             "objectives": recommended["objectives"],
         },
@@ -311,8 +312,8 @@ def optimize_energy_system_schedule(
 
     def score(row: dict, front: list[dict]) -> float:
         keys = ("estimated_energy_cost", "unmet_load_kwh",
-                "renewable_curtailed_kwh")
-        weight_values = (weights.cost, weights.reliability, weights.curtailment)
+                "renewable_curtailed_kwh", "battery_throughput_kwh")
+        weight_values = (weights.cost, weights.reliability, weights.curtailment, weights.battery_wear)
         total = 0.0
         for key, weight in zip(keys, weight_values):
             low = min(item["objectives"][key] for item in front)
@@ -412,6 +413,7 @@ def optimize_energy_system_schedule(
                 "cost": weights.cost,
                 "reliability": weights.reliability,
                 "curtailment": weights.curtailment,
+                "battery_wear": weights.battery_wear,
             },
             "objectives": recommended["objectives"],
             "dispatch": recommended["dispatch"],
@@ -526,7 +528,7 @@ def optimize_battery_power_schedule(
             "renewable_curtailed_kwh", "battery_throughput_kwh",
         )
         objective_weights = (
-            weights.cost, weights.reliability, weights.curtailment, 0.0,
+            weights.cost, weights.reliability, weights.curtailment, weights.battery_wear,
         )
         total = 0.0
         for key, weight in zip(keys, objective_weights):
@@ -632,6 +634,7 @@ def optimize_battery_power_schedule(
                 "cost": weights.cost,
                 "reliability": weights.reliability,
                 "curtailment": weights.curtailment,
+                "battery_wear": weights.battery_wear,
             },
             "objectives": recommended["objectives"],
             "dispatch": recommended["dispatch"],
@@ -745,7 +748,7 @@ def optimize_battery_and_diesel_schedule(
             "estimated_energy_cost", "unmet_load_kwh",
             "renewable_curtailed_kwh", "battery_throughput_kwh",
         )
-        objective_weights = (weights.cost, weights.reliability, weights.curtailment, 0.0)
+        objective_weights = (weights.cost, weights.reliability, weights.curtailment, weights.battery_wear)
         total = 0.0
         for key, weight in zip(keys, objective_weights):
             low = min(item["objectives"][key] for item in front)
@@ -896,6 +899,7 @@ def optimize_battery_and_diesel_schedule(
                 "cost": weights.cost,
                 "reliability": weights.reliability,
                 "curtailment": weights.curtailment,
+                "battery_wear": weights.battery_wear,
             },
             "objectives": recommended["objectives"],
             "dispatch": recommended["dispatch"],
