@@ -689,3 +689,72 @@ def test_battery_throughput_cost_rejects_negative_values():
             capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
             throughput_cost_per_kwh=-0.01,
         )
+
+def test_nonlinear_diesel_fuel_curve_interpolates_and_limits_output_by_inventory():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2,
+            fuel_curve_liters_per_hour=((0.0, 0.0), (5.0, 2.5), (10.0, 6.0)),
+            initial_fuel_liters=3.5,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[10],
+        grid_price_per_kwh=[0], grid_available=[False], diesel_available=[True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    # The 3.5 L inventory supports exactly 6.25 kW on the upper curve segment.
+    assert row["diesel_generation_kw"] == pytest.approx(6.25, abs=1e-7)
+    assert row["diesel_fuel_used_liters"] == pytest.approx(3.5, abs=1e-7)
+    assert row["diesel_fuel_remaining_liters"] == pytest.approx(0, abs=1e-7)
+    assert row["unmet_load_kw"] == pytest.approx(3.75, abs=1e-7)
+    assert result["summary"]["diesel_fuel_used_liters"] == pytest.approx(3.5)
+
+
+def test_nonlinear_diesel_fuel_curve_requires_enough_fuel_for_stable_minimum():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=5,
+            fuel_curve_liters_per_hour=((0.0, 0.0), (5.0, 2.5), (10.0, 6.0)),
+            initial_fuel_liters=2.49,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[8],
+        grid_price_per_kwh=[0], grid_available=[False], diesel_available=[True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["rows"][0]["diesel_generation_kw"] == 0
+    assert result["rows"][0]["unmet_load_kw"] == pytest.approx(8)
+
+
+@pytest.mark.parametrize(
+    "curve, message",
+    [
+        (((1.0, 1.0), (10.0, 6.0)), "must start at"),
+        (((0.0, 0.0), (5.0, 2.5)), "must end at rated_power_kw"),
+        (((0.0, 0.0), (5.0, 2.5), (4.0, 3.0), (10.0, 6.0)), "power must increase"),
+        (((0.0, 0.0), (5.0, 3.0), (10.0, 2.0)), "fuel rate must not decrease"),
+    ],
+)
+def test_nonlinear_diesel_fuel_curve_rejects_invalid_shapes(curve, message):
+    with pytest.raises(EnergyModelError, match=message):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            fuel_curve_liters_per_hour=curve, initial_fuel_liters=20,
+        )
+
+
+def test_diesel_constant_rate_and_curve_cannot_be_configured_together():
+    with pytest.raises(EnergyModelError, match="mutually exclusive"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            fuel_consumption_l_per_kwh=0.25,
+            fuel_curve_liters_per_hour=((0.0, 0.0), (10.0, 3.0)),
+            initial_fuel_liters=20,
+        )
