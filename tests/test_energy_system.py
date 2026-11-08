@@ -446,3 +446,61 @@ def test_diesel_startup_reaches_stable_minimum_before_ramp_limit_applies():
     )
     rows = dispatch_energy_system(inputs, config)["rows"]
     assert [row["diesel_generation_kw"] for row in rows] == pytest.approx([8, 10])
+
+
+
+def test_diesel_fuel_inventory_limits_generation_and_tracks_remaining_fuel():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        dt_hours=1,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2,
+            fuel_consumption_l_per_kwh=0.25,
+            initial_fuel_liters=3.0,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[8, 8], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    rows = result["rows"]
+    assert rows[0]["diesel_generation_kw"] == pytest.approx(8)
+    assert rows[0]["diesel_fuel_used_liters"] == pytest.approx(2)
+    assert rows[0]["diesel_fuel_remaining_liters"] == pytest.approx(1)
+    # Remaining fuel can only support 4 kWh, but that is above the stable minimum.
+    assert rows[1]["diesel_generation_kw"] == pytest.approx(4)
+    assert rows[1]["unmet_load_kw"] == pytest.approx(4)
+    assert rows[1]["diesel_fuel_remaining_liters"] == pytest.approx(0)
+    assert result["summary"]["diesel_fuel_used_liters"] == pytest.approx(3)
+    assert result["summary"]["ending_diesel_fuel_liters"] == pytest.approx(0)
+
+
+def test_diesel_does_not_start_when_remaining_fuel_cannot_support_minimum_load():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=3,
+            fuel_consumption_l_per_kwh=0.5,
+            initial_fuel_liters=1.0,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[8],
+        grid_price_per_kwh=[0], grid_available=[False], diesel_available=[True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["rows"][0]["diesel_generation_kw"] == 0
+    assert result["rows"][0]["unmet_load_kw"] == 8
+    assert result["summary"]["diesel_fuel_used_liters"] == 0
+
+
+def test_diesel_fuel_configuration_requires_both_inventory_and_consumption_rate():
+    with pytest.raises(EnergyModelError, match="must be supplied together"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            fuel_consumption_l_per_kwh=0.25,
+        )

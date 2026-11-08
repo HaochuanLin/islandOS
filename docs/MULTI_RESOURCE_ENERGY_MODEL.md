@@ -10,7 +10,8 @@ offline model for hourly (or fixed-step) energy balancing across:
 - optional grid exports with a separately configured export-power limit, explicit
   feed-in price series, and grid-availability gating;
 - diesel generation with rated and minimum-stable power limits, explicit availability,
-  optional ramp-up limit, variable energy cost, and per-start/per-stop costs;
+  optional ramp-up limit, variable energy cost, per-start/per-stop costs,
+  and optional finite fuel-inventory accounting;
 - renewable curtailment and unmet load.
 
 ## Explicit dispatch policies
@@ -52,6 +53,13 @@ cost. Ramp-down dynamics are not yet modeled; when demand falls or availability
 is lost, the unit is stopped immediately. Multiple diesel units are still
 rejected by the asset adapter until per-device commitment is supported.
 
+When both a confirmed initial tank inventory and a fuel-consumption rate are
+provided, diesel output is capped by the remaining fuel in each timestep.
+Fuel use and remaining inventory are included in the audit rows and summary.
+The model does not simulate refuelling deliveries, tank measurement error,
+fuel-quality effects, or nonlinear fuel curves; a constant L/kWh rate is a
+screening assumption and must be explicitly supplied.
+
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
 metrics. Export is disabled by default. Enabling it requires all three of:
@@ -68,8 +76,8 @@ interconnection permission.
 This increment models bounded grid export in the energy balance, but does not
 validate interconnection permission, anti-islanding protection, export
 certification, or settlement rules. It also does not model network
-voltage/frequency, power factor, generator minimum stable loading, ramp/start
-constraints, fuel inventory, battery degradation/replacement, demand charges,
+voltage/frequency, power factor, diesel ramp-down dynamics, nonlinear fuel curves/refuelling, battery
+degradation/replacement, demand charges,
 tariff calendars, forecast uncertainty, equipment outages beyond availability
 flags, or safety interlocks. It is not connected to devices and cannot issue
 commands.

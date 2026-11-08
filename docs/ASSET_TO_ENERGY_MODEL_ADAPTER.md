@@ -25,7 +25,9 @@ The adapter requires:
 - canonical units for installed ratings and operating limits;
 - explicit battery initial SOC and charge/discharge efficiencies when a battery
   is present;
-- explicit diesel variable energy cost when a diesel generator is present.
+- explicit diesel variable energy cost when a diesel generator is present;
+- optional paired, provenance-bearing diesel fuel-consumption rate (L/kWh)
+  and initial fuel inventory (L) assumptions.
 
 A single diesel generator's confirmed minimum stable loading is mapped into the
 energy model. Flexible loads are rejected until their dispatch semantics are
@@ -85,6 +87,8 @@ config = build_energy_system_config_from_assets(
         "battery_charge_efficiency": assumption(0.95, "fraction", "battery datasheet"),
         "battery_discharge_efficiency": assumption(0.95, "fraction", "battery datasheet"),
         "diesel_variable_cost_per_kwh": assumption(1.20, "USD/kWh", "fuel cost model"),
+        "diesel_fuel_consumption_l_per_kwh": assumption(0.25, "L/kWh", "generator datasheet"),
+        "diesel_initial_fuel_liters": assumption(500, "L", "operator tank reading"),
     },
 )
 ```
@@ -99,7 +103,8 @@ Before this becomes a general site model, IslandOS still needs:
 - electrical topology and connection constraints;
 - flexible-load adapters and scheduling semantics;
 - diesel ramp-down dynamics, per-unit commitment for multiple generators,
-  fuel inventory, and provenance-bearing asset assumptions for ramp/start costs;
+  fuel delivery/refuelling schedules, nonlinear fuel curves, and provenance-bearing
+  asset assumptions for ramp/start costs;
 - grid export settlement, tariff calendars, and interconnection validation;
 - explicit provenance records for every operating assumption;
 - model-specific readiness gates and tests against public/field data.

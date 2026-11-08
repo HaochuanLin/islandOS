@@ -61,6 +61,8 @@ class DieselSpec:
     ramp_up_kw_per_hour: float | None = None
     start_cost_per_start: float = 0.0
     stop_cost_per_stop: float = 0.0
+    fuel_consumption_l_per_kwh: float | None = None
+    initial_fuel_liters: float | None = None
 
     def __post_init__(self) -> None:
         for name in ("rated_power_kw", "variable_cost_per_kwh",
@@ -71,6 +73,15 @@ class DieselSpec:
             _number("diesel ramp_up_kw_per_hour", self.ramp_up_kw_per_hour)
             if self.ramp_up_kw_per_hour <= 0:
                 raise EnergyModelError("diesel ramp_up_kw_per_hour must be > 0 when specified")
+        if (self.fuel_consumption_l_per_kwh is None) != (self.initial_fuel_liters is None):
+            raise EnergyModelError(
+                "diesel fuel_consumption_l_per_kwh and initial_fuel_liters must be supplied together"
+            )
+        if self.fuel_consumption_l_per_kwh is not None:
+            _number("diesel fuel_consumption_l_per_kwh", self.fuel_consumption_l_per_kwh)
+            if self.fuel_consumption_l_per_kwh <= 0:
+                raise EnergyModelError("diesel fuel_consumption_l_per_kwh must be > 0")
+            _number("diesel initial_fuel_liters", self.initial_fuel_liters)
         if self.rated_power_kw <= 0:
             raise EnergyModelError("diesel rated_power_kw must be > 0")
         if self.min_stable_power_kw > self.rated_power_kw:
@@ -230,6 +241,12 @@ def dispatch_energy_system(
     }
 
     previous_diesel_kw = 0.0
+    fuel_remaining_liters = (
+        config.diesel.initial_fuel_liters
+        if config.diesel and config.diesel.initial_fuel_liters is not None
+        else None
+    )
+    totals["diesel_fuel_used_liters"] = 0.0
 
     for t in range(n):
         renewable = pv[t] + wind[t]
@@ -274,6 +291,14 @@ def dispatch_energy_system(
                 diesel_stopped = previous_diesel_kw > 0
                 return 0.0
             target = min(remaining_kw, spec.rated_power_kw)
+            if fuel_remaining_liters is not None and spec.fuel_consumption_l_per_kwh:
+                fuel_limited_kw = fuel_remaining_liters / (
+                    spec.fuel_consumption_l_per_kwh * config.dt_hours
+                )
+                target = min(target, fuel_limited_kw)
+                if target + 1e-9 < spec.min_stable_power_kw:
+                    diesel_stopped = previous_diesel_kw > 0
+                    return 0.0
             if previous_diesel_kw <= 0:
                 # Startup is represented as reaching the stable operating point
                 # within this timestep; the ramp limit applies to later increases.
@@ -311,6 +336,14 @@ def dispatch_energy_system(
             totals["diesel_stop_count"] += 1
             totals["diesel_stop_cost"] += config.diesel.stop_cost_per_stop
         previous_diesel_kw = diesel_kw
+        diesel_fuel_used_liters = (
+            diesel_kw * config.dt_hours * config.diesel.fuel_consumption_l_per_kwh
+            if config.diesel and config.diesel.fuel_consumption_l_per_kwh is not None
+            else 0.0
+        )
+        if fuel_remaining_liters is not None:
+            fuel_remaining_liters = max(0.0, fuel_remaining_liters - diesel_fuel_used_liters)
+        totals["diesel_fuel_used_liters"] += diesel_fuel_used_liters
 
         export_kw = (
             min(surplus, config.grid_export_limit_kw)
@@ -338,6 +371,8 @@ def dispatch_energy_system(
             "grid_export_price_per_kwh": export_price[t],
             "grid_export_revenue": export_kw * config.dt_hours * export_price[t],
             "diesel_generation_kw": diesel_kw,
+            "diesel_fuel_used_liters": diesel_fuel_used_liters,
+            "diesel_fuel_remaining_liters": fuel_remaining_liters,
             "diesel_started": diesel_started,
             "diesel_stopped": diesel_stopped,
             "diesel_start_cost": (
@@ -374,6 +409,9 @@ def dispatch_energy_system(
         if totals["load_energy_kwh"] else 0.0
     )
     totals["ending_battery_soc"] = round(soc, 8) if battery else None
+    totals["ending_diesel_fuel_liters"] = (
+        round(fuel_remaining_liters, 8) if fuel_remaining_liters is not None else None
+    )
     totals["gross_energy_cost"] = round(
         totals["grid_energy_cost"] + totals["diesel_energy_cost"]
         + totals["diesel_start_cost"] + totals["diesel_stop_cost"], 8

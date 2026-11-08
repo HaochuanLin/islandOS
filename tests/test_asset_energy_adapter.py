@@ -431,3 +431,34 @@ def test_confirmed_asset_export_limit_flows_into_energy_dispatch():
     assert row["renewable_curtailed_kw"] == 1
     assert row["grid_export_revenue"] == pytest.approx(0.2)
     assert row["energy_balance_residual_kw"] == pytest.approx(0)
+
+
+
+def test_diesel_fuel_assumptions_are_mapped_only_as_confirmed_provenance():
+    generator = asset(
+        "diesel_generator",
+        {"configured_power_kw": (30, "kW")},
+        {
+            "max_power_kw": ("max", 30, "kW"),
+            "min_stable_power_kw": ("min", 5, "kW"),
+        },
+    )
+    base = {"diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh")}
+    with pytest.raises(AssetEnergyAdapterError, match="must be supplied together"):
+        build_energy_system_config_from_assets(
+            [generator],
+            operating_assumptions={
+                **base,
+                "diesel_fuel_consumption_l_per_kwh": assumption(0.25, "L/kWh"),
+            },
+        )
+    config = build_energy_system_config_from_assets(
+        [generator],
+        operating_assumptions={
+            **base,
+            "diesel_fuel_consumption_l_per_kwh": assumption(0.25, "L/kWh"),
+            "diesel_initial_fuel_liters": assumption(100, "L"),
+        },
+    )
+    assert config.diesel.fuel_consumption_l_per_kwh == pytest.approx(0.25)
+    assert config.diesel.initial_fuel_liters == pytest.approx(100)

@@ -126,7 +126,8 @@ def build_energy_system_config_from_assets(
       battery_initial_soc, battery_charge_efficiency,
       battery_discharge_efficiency.
     Required explicit assumption when a diesel generator exists:
-      diesel_variable_cost_per_kwh.
+      diesel_variable_cost_per_kwh. Optional paired assumptions:
+      diesel_fuel_consumption_l_per_kwh and diesel_initial_fuel_liters.
 
     The initial SOC is a fraction in [0, 1]. Efficiencies are fractions in
     (0, 1]. Diesel minimum stable loading is not modeled by the current engine;
@@ -258,6 +259,16 @@ def build_energy_system_config_from_assets(
             min_stable_power_kw=min_stable,
             variable_cost_per_kwh=_required_assumption(
                 assumptions, "diesel_variable_cost_per_kwh"
+            ),
+            fuel_consumption_l_per_kwh=(
+                _required_assumption(
+                    assumptions, "diesel_fuel_consumption_l_per_kwh", unit="L/kWh"
+                ) if "diesel_fuel_consumption_l_per_kwh" in assumptions else None
+            ),
+            initial_fuel_liters=(
+                _required_assumption(
+                    assumptions, "diesel_initial_fuel_liters", unit="L"
+                ) if "diesel_initial_fuel_liters" in assumptions else None
             ),
         )
 
