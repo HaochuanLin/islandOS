@@ -166,10 +166,10 @@ def dispatch_energy_system(
 
     Renewable surplus charges the battery first, then exports up to the explicit
     grid export limit when the grid is available. Remaining surplus is curtailed.
-    Export requires an explicit feed-in price series. Diesel minimum-load, ramp,
-    degradation-cost, ramp-down, and network constraints are not modeled. Diesel
-    minimum stable loading, optional ramp-up, and per-start/per-stop costs are
-    modeled explicitly.
+    Export requires an explicit feed-in price series. Diesel minimum stable
+    loading, optional ramp-up after startup, and per-start/per-stop costs are
+    modeled explicitly. Ramp-down, degradation-cost, and network constraints
+    are not modeled.
     """
     if policy not in {"battery_first", "grid_first"}:
         raise EnergyModelError("policy must be 'battery_first' or 'grid_first'")
