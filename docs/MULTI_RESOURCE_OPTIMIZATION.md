@@ -78,3 +78,17 @@ set-points, or flexible-load service schedules. It is stochastic and does not
 guarantee a global optimum. The default maximum horizon is 168 steps to keep
 the search bounded; adjust only after performance testing. The evolutionary
 result remains offline decision support, not a controller.
+
+
+## Reproducible synthetic demonstration
+
+Run the 24-hour end-to-end example from the repository root:
+
+```bash
+python examples/multi_resource_schedule_optimization.py
+```
+
+It compares both fixed-policy baselines with the evolutionary schedule search
+using identical PV, wind, load, tariff, battery, and grid-availability inputs.
+The output is JSON and explicitly labels the profile as synthetic. It is a
+software demonstration, not a customer-site result or a savings guarantee.
