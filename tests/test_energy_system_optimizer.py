@@ -342,3 +342,123 @@ def test_continuous_battery_optimizer_requires_battery_and_bounds_horizon():
     )
     with pytest.raises(OptimizationError, match="maximum"):
         optimize_battery_power_schedule(inputs, with_battery, max_horizon_steps=1)
+
+
+
+def test_diesel_commitment_schedule_is_explicit_and_enforced():
+    from islandos_core.energy_system import DieselSpec, EnergyModelError, dispatch_energy_system
+
+    config = EnergySystemConfig(
+        pv_rated_kw=0,
+        wind_rated_kw=0,
+        grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10,
+            variable_cost_per_kwh=0.2,
+            min_stable_power_kw=2,
+            ramp_up_kw_per_hour=10,
+        ),
+    )
+    off = dispatch_energy_system(
+        EnergySystemInputs(
+            pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[5],
+            grid_price_per_kwh=[0.2], grid_available=[True],
+            diesel_available=[True], diesel_commitment_schedule=[False],
+        ),
+        config,
+    )
+    on = dispatch_energy_system(
+        EnergySystemInputs(
+            pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[5],
+            grid_price_per_kwh=[0.2], grid_available=[True],
+            diesel_available=[True], diesel_commitment_schedule=[True],
+        ),
+        config,
+    )
+    assert off["rows"][0]["diesel_committed"] is False
+    assert off["summary"]["unmet_load_kwh"] == 5
+    assert on["rows"][0]["diesel_committed"] is True
+    assert on["summary"]["unmet_load_kwh"] == 0
+    assert on["rows"][0]["diesel_generation_kw"] == 5
+
+    with pytest.raises(EnergyModelError, match="boolean values"):
+        dispatch_energy_system(
+            EnergySystemInputs(
+                pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[5],
+                grid_price_per_kwh=[0.2], grid_available=[True],
+                diesel_available=[True], diesel_commitment_schedule=[1],
+            ),
+            config,
+        )
+
+
+def test_joint_battery_diesel_optimizer_is_reproducible_and_audited():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 2, 0],
+        wind_generation_kw=[0, 0, 0, 0],
+        load_kw=[7, 7, 7, 7],
+        grid_price_per_kwh=[0.2, 0.4, 0.3, 0.1],
+        grid_available=[True, True, True, True],
+        diesel_available=[True, True, True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=2,
+        wind_rated_kw=0,
+        grid_import_limit_kw=0,
+        battery=BatterySpec(
+            capacity_kwh=8,
+            max_charge_kw=2,
+            max_discharge_kw=2,
+            initial_soc=0.6,
+            min_soc=0.1,
+            max_soc=0.95,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=10,
+            variable_cost_per_kwh=0.25,
+            min_stable_power_kw=2,
+            ramp_up_kw_per_hour=10,
+            start_cost_per_start=0.2,
+            stop_cost_per_stop=0.1,
+        ),
+    )
+    kwargs = {"population_size": 8, "generations": 3, "seed": 2026}
+    first = optimize_battery_and_diesel_schedule(inputs, config, **kwargs)
+    second = optimize_battery_and_diesel_schedule(inputs, config, **kwargs)
+    assert first == second
+    assert first["candidate_count"] >= 8
+    assert first["pareto_count"] >= 1
+    rec = first["recommendation"]
+    assert len(rec["battery_setpoints_kw"]) == 4
+    assert len(rec["diesel_commitment_schedule"]) == 4
+    assert all(isinstance(value, bool) for value in rec["diesel_commitment_schedule"])
+    assert all(-2 <= value <= 2 for value in rec["battery_setpoints_kw"])
+    assert all(abs(row["energy_balance_residual_kw"]) < 1e-7 for row in rec["dispatch"]["rows"])
+    assert first["model_scope"]["diesel_minimum_load_ramp_up_fuel_and_availability_enforced"] is True
+
+
+def test_joint_optimizer_requires_both_resources_and_diesel_availability():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+    )
+    battery_only = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+        battery=BatterySpec(capacity_kwh=5, max_charge_kw=2, max_discharge_kw=2),
+    )
+    with pytest.raises(OptimizationError, match="battery and diesel"):
+        optimize_battery_and_diesel_schedule(inputs, battery_only)
+
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+        battery=BatterySpec(capacity_kwh=5, max_charge_kw=2, max_discharge_kw=2),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.2),
+    )
+    with pytest.raises(OptimizationError, match="diesel_available"):
+        optimize_battery_and_diesel_schedule(inputs, config)
