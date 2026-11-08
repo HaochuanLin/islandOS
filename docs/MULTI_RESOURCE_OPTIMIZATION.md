@@ -89,7 +89,11 @@ python examples/multi_resource_schedule_optimization.py
 ```
 
 It compares both fixed-policy baselines with the evolutionary schedule search
-using identical PV, wind, load, tariff, battery, and grid-availability inputs.
+using identical PV, wind, load, tariff, battery, diesel, and grid-availability inputs.
+The synthetic case includes a two-step grid outage so the diesel commitment
+choice is exercised rather than remaining an unused variable. It reports the
+binary policy schedule, continuous battery power schedule, and joint battery-
+and-diesel schedule separately.
 The JSON includes recommended-minus-baseline deltas for estimated energy cost,
 unmet load, renewable curtailment, and battery throughput. Negative deltas mean
 the recommended schedule is lower on that metric in this synthetic run; they
