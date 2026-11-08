@@ -126,3 +126,23 @@ def test_empty_asset_set_fails_closed():
 def test_invalid_topology_argument_raises_domain_error():
     with pytest.raises(OperationalStateError):
         evaluate_operational_readiness([asset()], [], as_of=NOW, topology=object())
+
+
+
+def test_unconfirmed_topology_blocks_topology_scoped_operational_readiness():
+    good = topology_for()
+    unconfirmed_bus = ElectricalBus(
+        "main", "site-1", 400, "AC", "line_to_line", 3,
+        "unverified drawing", False,
+    )
+    unconfirmed_port = AssetPortConnection(
+        "port-1", "site-1", "pv-1", "main", "main", "AC",
+        400, "line_to_line", 3, "unverified vendor drawing", False,
+    )
+    unconfirmed = ElectricalTopology("site-1", (unconfirmed_bus,), (), (unconfirmed_port,))
+    result = evaluate_operational_readiness(
+        [asset()], [observation()], as_of=NOW, topology=unconfirmed,
+    )
+    assert result["can_dispatch_screen"] is False
+    assert result["topology_structurally_ready"] is False
+    assert any(item.startswith("topology:") for item in result["blockers"])
