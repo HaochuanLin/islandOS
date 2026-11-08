@@ -211,6 +211,8 @@ def test_synthetic_24_hour_optimizer_example_is_reproducible():
     assert len(first["optimizer"]["recommendation"]["policy_schedule"]) == 24
     assert len(first["battery_power_optimizer"]["recommendation"]["setpoints_kw"]) == 24
     assert first["battery_power_optimizer"]["decision_variable"] == "signed battery power set-point in kW per timestep"
+    assert len(first["joint_battery_diesel_optimizer"]["recommendation"]["battery_setpoints_kw"]) == 24
+    assert len(first["joint_battery_diesel_optimizer"]["recommendation"]["diesel_commitment_schedule"]) == 24
     assert first["optimizer"]["candidate_count"] >= 2
     assert set(first["recommended_minus_baseline_deltas"]) == {"battery_first", "grid_first"}
     assert all(
