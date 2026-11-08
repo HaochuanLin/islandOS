@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from islandos_core.assets import AssetRecord, evaluate_asset_readiness
+from islandos_core.assets import AssetParameter, AssetRecord, evaluate_asset_readiness
 from islandos_core.energy_system import (
     BatterySpec,
     DieselSpec,
@@ -44,6 +44,26 @@ def _required_parameter(asset: AssetRecord, name: str, unit: str) -> float:
     return float(parameter.value)
 
 
+def _required_assumption(
+    assumptions: Mapping[str, AssetParameter],
+    name: str,
+    *,
+    unit: str | None = None,
+) -> float:
+    assumption = assumptions.get(name)
+    if not isinstance(assumption, AssetParameter):
+        raise AssetEnergyAdapterError(
+            f"{name} must be supplied as a provenance-bearing AssetParameter"
+        )
+    if not assumption.confirmed:
+        raise AssetEnergyAdapterError(f"{name} is not confirmed")
+    if unit is not None and assumption.unit != unit:
+        raise AssetEnergyAdapterError(f"{name} must use {unit}")
+    if unit is None and not assumption.unit.endswith("/kWh"):
+        raise AssetEnergyAdapterError(f"{name} unit must be a currency per kWh")
+    return float(assumption.value)
+
+
 def _required_constraint(asset: AssetRecord, parameter: str, operator: str) -> float:
     matches = [
         item for item in asset.constraints
@@ -70,7 +90,7 @@ def build_energy_system_config_from_assets(
     assets: Sequence[AssetRecord],
     *,
     dt_hours: float = 1.0,
-    operating_assumptions: Mapping[str, Any] | None = None,
+    operating_assumptions: Mapping[str, AssetParameter] | None = None,
 ) -> EnergySystemConfig:
     """Build an offline energy model config from confirmed, compatible assets.
 
@@ -117,6 +137,10 @@ def build_energy_system_config_from_assets(
             )
 
     assumptions = dict(operating_assumptions or {})
+    if any(not isinstance(value, AssetParameter) for value in assumptions.values()):
+        raise AssetEnergyAdapterError(
+            "operating assumptions must be provenance-bearing AssetParameter records"
+        )
     pv_rated_kw = wind_rated_kw = grid_import_limit_kw = 0.0
     battery_spec = None
     diesel_spec = None
@@ -165,11 +189,15 @@ def build_energy_system_config_from_assets(
             capacity_kwh=capacity,
             max_charge_kw=max_charge,
             max_discharge_kw=max_discharge,
-            initial_soc=assumptions["battery_initial_soc"],
+            initial_soc=_required_assumption(assumptions, "battery_initial_soc", unit="fraction"),
             min_soc=min_soc_pct / 100.0,
             max_soc=max_soc_pct / 100.0,
-            charge_efficiency=assumptions["battery_charge_efficiency"],
-            discharge_efficiency=assumptions["battery_discharge_efficiency"],
+            charge_efficiency=_required_assumption(
+                assumptions, "battery_charge_efficiency", unit="fraction"
+            ),
+            discharge_efficiency=_required_assumption(
+                assumptions, "battery_discharge_efficiency", unit="fraction"
+            ),
         )
 
     if "diesel_generator" in grouped:
@@ -188,7 +216,9 @@ def build_energy_system_config_from_assets(
             )
         diesel_spec = DieselSpec(
             rated_power_kw=min(installed, max_power),
-            variable_cost_per_kwh=assumptions["diesel_variable_cost_per_kwh"],
+            variable_cost_per_kwh=_required_assumption(
+                assumptions, "diesel_variable_cost_per_kwh"
+            ),
         )
 
     try:
