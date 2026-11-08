@@ -162,23 +162,23 @@ def test_duplicate_confirmed_hard_constraints_block_asset_readiness():
 
 
 def test_required_installed_parameter_must_have_expected_unit_and_positive_value():
-    wrong_unit = AssetRecord(
-        asset_id="pv-bad-unit", site_id="site-01", asset_type="pv",
-        nameplate_parameters={},
-        installed_parameters={"configured_power_kw": parameter(20, "MW")},
-        observed_parameters={},
-        constraints=(constraint("max_power_kw", "max", 20, "kW"),),
-    )
-    assert "installed_parameter_unit_mismatch:configured_power_kw" in evaluate_asset_readiness(wrong_unit)["blockers"]
+    with pytest.raises(AssetValidationError, match="installed_parameters.configured_power_kw must use kW"):
+        AssetRecord(
+            asset_id="pv-bad-unit", site_id="site-01", asset_type="pv",
+            nameplate_parameters={},
+            installed_parameters={"configured_power_kw": parameter(20, "MW")},
+            observed_parameters={},
+            constraints=(constraint("max_power_kw", "max", 20, "kW"),),
+        )
 
-    zero_capacity = AssetRecord(
-        asset_id="pv-zero", site_id="site-01", asset_type="pv",
-        nameplate_parameters={},
-        installed_parameters={"configured_power_kw": parameter(0, "kW")},
-        observed_parameters={},
-        constraints=(constraint("max_power_kw", "max", 0, "kW"),),
-    )
-    assert "installed_parameter_must_be_positive:configured_power_kw" in evaluate_asset_readiness(zero_capacity)["blockers"]
+    with pytest.raises(AssetValidationError, match="installed_parameters.configured_power_kw must be positive"):
+        AssetRecord(
+            asset_id="pv-zero", site_id="site-01", asset_type="pv",
+            nameplate_parameters={},
+            installed_parameters={"configured_power_kw": parameter(0, "kW")},
+            observed_parameters={},
+            constraints=(constraint("max_power_kw", "max", 0, "kW"),),
+        )
 
 
 def test_soc_constraints_outside_physical_percentage_range_are_rejected():
