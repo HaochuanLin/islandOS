@@ -114,3 +114,15 @@ def test_topology_limits_evaluation_to_connected_assets():
 def test_naive_timestamps_are_rejected():
     with pytest.raises(OperationalStateError):
         observation(at=datetime(2026, 11, 8, 12, 0))
+
+
+
+def test_empty_asset_set_fails_closed():
+    result = evaluate_operational_readiness([], [], as_of=NOW)
+    assert result["can_dispatch_screen"] is False
+    assert "at_least_one_asset_required" in result["blockers"]
+
+
+def test_invalid_topology_argument_raises_domain_error():
+    with pytest.raises(OperationalStateError):
+        evaluate_operational_readiness([asset()], [], as_of=NOW, topology=object())
