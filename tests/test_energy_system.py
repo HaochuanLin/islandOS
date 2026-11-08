@@ -380,7 +380,7 @@ def test_diesel_ramp_up_and_start_stop_costs_are_audited():
     )
     inputs = EnergySystemInputs(
         pv_generation_kw=[0, 0, 0], wind_generation_kw=[0, 0, 0],
-        load_kw=[8, 8, 0], grid_price_per_kwh=[0, 0, 0],
+        load_kw=[2, 8, 0], grid_price_per_kwh=[0, 0, 0],
         grid_available=[False, False, False],
         diesel_available=[True, True, True],
     )
@@ -441,8 +441,8 @@ def test_diesel_startup_reaches_stable_minimum_before_ramp_limit_applies():
     )
     inputs = EnergySystemInputs(
         pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
-        load_kw=[8, 8], grid_price_per_kwh=[0, 0],
+        load_kw=[8, 10], grid_price_per_kwh=[0, 0],
         grid_available=[False, False], diesel_available=[True, True],
     )
     rows = dispatch_energy_system(inputs, config)["rows"]
-    assert [row["diesel_generation_kw"] for row in rows] == pytest.approx([8, 8])
+    assert [row["diesel_generation_kw"] for row in rows] == pytest.approx([8, 10])
