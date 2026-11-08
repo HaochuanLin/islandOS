@@ -112,6 +112,10 @@ class IslandOSDesktopWindow(QMainWindow):
         asset_row.addWidget(import_assets_button)
         asset_row.addWidget(view_assets_button)
         layout.addLayout(asset_row)
+        self.asset_consent = QCheckBox(
+            "I consent to saving the equipment configuration and its source references in this local project."
+        )
+        layout.addWidget(self.asset_consent)
 
         layout.addWidget(QLabel("Data onboarding"))
         controls = QHBoxLayout()
@@ -152,6 +156,9 @@ class IslandOSDesktopWindow(QMainWindow):
         if self.database_path is None or self.project_id is None:
             QMessageBox.warning(self, "No active project", "Create or open a local project first.")
             return
+        if not self.asset_consent.isChecked():
+            QMessageBox.warning(self, "Consent required", "Confirm local equipment-configuration storage before importing.")
+            return
         path, _ = QFileDialog.getOpenFileName(
             self, "Import IslandOS asset registry", "", "JSON files (*.json)",
         )
@@ -172,6 +179,7 @@ class IslandOSDesktopWindow(QMainWindow):
                 register_project_asset(
                     self.database_path, project_id=self.project_id, asset=asset,
                     actor_id=self.actor_edit.text().strip(),
+                    consent_to_store_assets=True,
                 )
                 for asset in assets
             ]
