@@ -73,10 +73,23 @@ def run_demo(*, seed: int = 20261108) -> dict:
         mutation_rate=0.08,
         seed=seed,
     )
+    recommended_objectives = optimized["recommendation"]["objectives"]
+    comparison_deltas = {
+        policy: {
+            key: round(recommended_objectives[key] - float(summary[key]), 8)
+            for key in (
+                "estimated_energy_cost", "unmet_load_kwh",
+                "renewable_curtailed_kwh", "battery_throughput_kwh",
+            )
+        }
+        for policy, summary in baselines.items()
+    }
     return {
         "data_status": "synthetic illustrative 24-hour profile; not measured site data",
         "seed": seed,
         "baselines": baselines,
+        "recommended_minus_baseline_deltas": comparison_deltas,
+        "delta_interpretation": "Negative values are lower than the named baseline for that metric; these are synthetic model comparisons, not measured savings.",
         "optimizer": {
             "algorithm": optimized["algorithm"],
             "candidate_count": optimized["candidate_count"],
