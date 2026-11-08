@@ -253,3 +253,25 @@ def test_asset_registry_persists_immutable_versions_and_audit_history(tmp_path):
     with sqlite3.connect(db) as connection:
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
             connection.execute("DELETE FROM asset_record_versions")
+
+
+def test_asset_registry_detects_readiness_snapshot_tampering(tmp_path):
+    from islandos_core.assets import AssetParameter, AssetRecord, OperatingConstraint
+    db = ready_project(tmp_path)
+    asset = AssetRecord(
+        asset_id="pv-tamper", site_id="site-01", asset_type="pv",
+        nameplate_parameters={},
+        installed_parameters={"configured_power_kw": AssetParameter(20, "kW", "customer_provided", "site schedule", True)},
+        observed_parameters={},
+        constraints=(OperatingConstraint(
+            constraint_id="pv-max", parameter="max_power_kw", severity="hard",
+            unit="kW", operator="max", upper_bound=20,
+            source_type="customer_provided", source_reference="site schedule", confirmed=True,
+        ),),
+    )
+    save_asset_record(db, project_id="site-01", asset=asset, actor_id="local-user", saved_at=NOW)
+    with sqlite3.connect(db) as connection:
+        connection.execute("DROP TRIGGER asset_record_versions_no_update")
+        connection.execute("UPDATE asset_record_versions SET readiness_json='{}'")
+    with pytest.raises(AuditIntegrityError, match="readiness snapshot mismatch"):
+        list_asset_records(db, project_id="site-01")
