@@ -192,3 +192,37 @@ def test_rejects_wrong_installed_units_instead_of_converting_silently():
                {"max_power_kw": ("max", 20, "kW")})
     with pytest.raises(AssetEnergyAdapterError, match="must use kW"):
         build_energy_system_config_from_assets([pv])
+
+
+
+def test_operating_assumptions_must_carry_confirmed_provenance():
+    pv = asset("pv", {"configured_power_kw": (20, "kW")},
+               {"max_power_kw": ("max", 20, "kW")})
+    with pytest.raises(AssetEnergyAdapterError, match="provenance-bearing"):
+        build_energy_system_config_from_assets(
+            [pv], operating_assumptions={"unrelated": 0.5}
+        )
+
+    battery = asset(
+        "battery",
+        {
+            "configured_power_kw": (10, "kW"),
+            "usable_energy_capacity_kwh": (20, "kWh"),
+        },
+        {
+            "max_charge_kw": ("max", 10, "kW"),
+            "max_discharge_kw": ("max", 10, "kW"),
+            "soc_min_pct": ("min", 10, "%"),
+            "soc_max_pct": ("max", 90, "%"),
+        },
+    )
+    assumptions = {
+        "battery_initial_soc": assumption(0.5, "fraction"),
+        "battery_charge_efficiency": assumption(0.95, "fraction"),
+        "battery_discharge_efficiency": AssetParameter(
+            value=0.95, unit="fraction", source_type="customer_provided",
+            source_reference="unapproved estimate", confirmed=False,
+        ),
+    }
+    with pytest.raises(AssetEnergyAdapterError, match="not confirmed"):
+        build_energy_system_config_from_assets([battery], operating_assumptions=assumptions)
