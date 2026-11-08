@@ -56,3 +56,14 @@ normally-closed flag is descriptive metadata, not a switching command.
 Do not connect this module to control writes. Real-site use requires qualified
 site-engineering verification, calibrated device data, and a separate safety
 and cybersecurity process.
+
+
+## Application integration
+
+Client interfaces should call
+`islandos_core.application.validate_site_electrical_topology(topology, assets)`
+rather than duplicating validation logic. The service returns the same
+machine-readable structural report and preserves the explicit non-certification
+boundary. This service is not yet wired into the desktop UI or energy dispatch
+configuration; network constraints are not represented in the current energy
+balance engine.
