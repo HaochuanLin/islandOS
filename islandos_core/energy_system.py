@@ -534,6 +534,14 @@ def dispatch_energy_system(
                 battery and battery.throughput_cost_per_kwh > 0
             ),
             "battery_degradation_is_physical_capacity_fade": False,
+            "diesel_nonlinear_fuel_curve_enabled": bool(
+                config.diesel and config.diesel.fuel_curve_liters_per_hour is not None
+            ),
+            "diesel_fuel_consumption_model": (
+                "piecewise_linear_curve" if config.diesel and config.diesel.fuel_curve_liters_per_hour is not None
+                else "constant_l_per_kwh" if config.diesel and config.diesel.fuel_consumption_l_per_kwh is not None
+                else "not_configured"
+            ),
             "interconnection_permission_validated": False,
             "network_power_flow_modeled": False,
         },
