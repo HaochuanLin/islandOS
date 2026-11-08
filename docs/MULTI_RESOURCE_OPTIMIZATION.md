@@ -90,5 +90,9 @@ python examples/multi_resource_schedule_optimization.py
 
 It compares both fixed-policy baselines with the evolutionary schedule search
 using identical PV, wind, load, tariff, battery, and grid-availability inputs.
-The output is JSON and explicitly labels the profile as synthetic. It is a
-software demonstration, not a customer-site result or a savings guarantee.
+The JSON includes recommended-minus-baseline deltas for estimated energy cost,
+unmet load, renewable curtailment, and battery throughput. Negative deltas mean
+the recommended schedule is lower on that metric in this synthetic run; they
+are not measured savings or a guarantee. The output explicitly labels the
+profile as synthetic. It is a software demonstration, not a customer-site
+result.
