@@ -473,6 +473,20 @@ def test_battery_wear_is_an_explicit_validated_recommendation_weight():
         cost=0.5, reliability=0.2, curtailment=0.1, battery_wear=0.2
     )
     assert weights.battery_wear == pytest.approx(0.2)
+    from optimization.energy_system_optimizer import optimize_battery_power_schedule
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[5, 0], wind_generation_kw=[0, 0],
+        load_kw=[2, 4], grid_price_per_kwh=[0.2, 0.4],
+        grid_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=5, wind_rated_kw=0, grid_import_limit_kw=5,
+        battery=BatterySpec(capacity_kwh=6, max_charge_kw=2, max_discharge_kw=2),
+    )
+    result = optimize_battery_power_schedule(
+        inputs, config, weights=weights, population_size=4, generations=1, seed=5
+    )
+    assert result["recommendation"]["weights"]["battery_wear"] == pytest.approx(0.2)
     with pytest.raises(OptimizationError, match="finite and non-negative"):
         OptimizationWeights(battery_wear=-0.1)
     with pytest.raises(OptimizationError, match="at least one objective"):
