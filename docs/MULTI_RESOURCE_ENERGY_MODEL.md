@@ -76,6 +76,11 @@ curve and solves the maximum output supported by remaining inventory; it does
 not extrapolate beyond rated power. Curves should come from the exact generator
 model's certified datasheet or measured fuel test, with source and revision
 recorded. Generic curves are not a substitute for a site-specific fuel test.
+When a confirmed `fuel_price_per_liter` is supplied, the model separately
+calculates fuel expenditure from liters consumed; in that configuration,
+`variable_cost_per_kwh` is treated as non-fuel variable O&M to avoid double
+counting. Without a fuel price, legacy variable-cost accounting is unchanged.
+Fuel-price units must use the same currency as grid tariffs and export revenue.
 
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
