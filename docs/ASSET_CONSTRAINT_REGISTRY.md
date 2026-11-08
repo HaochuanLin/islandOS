@@ -53,7 +53,10 @@ hard limits. A missing or unconfirmed hard limit blocks asset screening.
 - Min, max, and range operators must have the appropriate bounds.
 - Range lower bound cannot exceed upper bound.
 - Required hard constraints must use the correct direction (for example,
-  maximum charge power is a max constraint).
+  maximum charge power is a max constraint), and exactly one confirmed hard
+  constraint must exist for each required parameter; ambiguous duplicates block screening.
+- Nameplate and installed power/energy ratings must use canonical units and
+  be positive; SOC bounds must remain within 0–100%; known power limits cannot be negative.
 - Battery minimum SOC must be below maximum SOC.
 - Duplicate constraint IDs are rejected.
 - An unavailable asset cannot be screened.
@@ -69,7 +72,7 @@ The Streamlit lab currently keeps its interactive form records in session state 
 ## Current limitations
 
 The first form captures the minimum hard constraints for common asset types.
-It does not yet provide a complete asset lifecycle, approval workflow,
-maintenance calendar, vendor catalogue, automatic datasheet extraction,
-cross-asset electrical topology, or live device discovery. Those should be
-separate tested capabilities before the desktop application adopts them.
+It does not yet provide a complete asset lifecycle, maintenance calendar,
+vendor catalogue, automatic datasheet extraction, or live device discovery.
+Electrical topology is currently a separate structural validation service; it
+does not perform power flow or electrical safety analysis.
