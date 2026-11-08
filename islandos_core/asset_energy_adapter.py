@@ -348,6 +348,11 @@ def build_energy_system_config_from_assets(
                         assumptions, "diesel_fuel_tank_capacity_liters", unit="L"
                     ) if "diesel_fuel_tank_capacity_liters" in assumptions else None
                 ),
+                fuel_price_per_liter=(
+                    _required_assumption(
+                        assumptions, "diesel_fuel_price_per_liter", unit="USD/L"
+                    ) if "diesel_fuel_price_per_liter" in assumptions else None
+                ),
             )
         except EnergyModelError as exc:
             raise AssetEnergyAdapterError(
