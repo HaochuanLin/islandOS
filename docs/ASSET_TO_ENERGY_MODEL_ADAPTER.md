@@ -15,7 +15,11 @@ mechanism, optimizer, compatibility certification, or control interface.
 The adapter requires:
 - all assets to belong to one site;
 - supported asset types only (PV, wind, battery, grid connection, diesel generator);
-- no more than one asset of each supported type in this first adapter version;
+- unique asset IDs within the site;
+- PV, wind, and grid-connection assets may be aggregated by summing each
+  individually validated effective capacity;
+- battery and diesel assets remain single-instance until per-device state and
+  unit-commitment constraints are represented;
 - each asset to pass the existing confirmed-installed-parameter and confirmed
   hard-constraint readiness gate;
 - canonical units for installed ratings and operating limits;
@@ -26,9 +30,14 @@ The adapter requires:
 It rejects diesel generators with a non-zero minimum stable loading because
 the current energy dispatch model does not yet represent that constraint.
 Flexible loads are also rejected until their dispatch semantics are integrated
-into the multi-resource model. Multiple same-type assets are not silently
-summed: batteries in particular cannot safely be aggregated without preserving
-individual SOC, efficiency, and operating limits.
+into the multi-resource model. Multiple PV, wind, and grid-connection assets are summed only after each
+asset independently passes readiness and hard-constraint validation. The
+effective contribution of each asset is the lower of its confirmed installed
+power and its confirmed hard upper limit. Unavailable or incomplete assets
+block the whole site conversion rather than silently disappearing. Batteries
+cannot yet be aggregated because individual SOC and efficiency states must be
+preserved. Multiple diesel units also remain blocked until per-unit commitment,
+minimum loading, ramping, and start behavior are modeled.
 
 ## Parameter interpretation
 
@@ -76,7 +85,8 @@ Only assumptions relevant to assets present in the site are required.
 ## Remaining work
 
 Before this becomes a general site model, IslandOS still needs:
-- versioned multi-instance asset aggregation with per-device battery states;
+- versioned multi-instance aggregation provenance retained in immutable run
+  manifests, plus per-device battery states;
 - electrical topology and connection constraints;
 - flexible-load adapters and scheduling semantics;
 - diesel minimum stable output, ramp/start constraints and fuel inventory;
