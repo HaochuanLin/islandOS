@@ -10,7 +10,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean
 from typing import Protocol, Sequence
 
@@ -174,6 +174,97 @@ def _conformal_radius(residuals: Sequence[CalibrationResidual], coverage: float)
     rank = min(len(errors), max(1, math.ceil((len(errors) + 1) * coverage)))
     return errors[rank - 1]
 
+
+
+
+class AutoregressiveRidgeSignalPlugin:
+    """Small per-signal ML candidate with lag and calendar features.
+
+    The model is refit from the history supplied to each predict call. During a
+    rolling-origin backtest this means each forecast is trained on past data
+    only. It is a transparent baseline candidate, not a universal best model.
+    """
+
+    model_id = "autoregressive_ridge"
+    version = "1.0"
+
+    def __init__(self, ridge_alpha: float = 1.0) -> None:
+        if (
+            isinstance(ridge_alpha, bool)
+            or not isinstance(ridge_alpha, (int, float))
+            or not math.isfinite(float(ridge_alpha))
+            or ridge_alpha <= 0
+        ):
+            raise ValueError("ridge_alpha must be finite and greater than zero")
+        self.ridge_alpha = float(ridge_alpha)
+
+    @staticmethod
+    def _feature_row(index: int, timestamp: datetime, values: Sequence[float], lags: Sequence[int]) -> list[float]:
+        stamp = timestamp.astimezone(timezone.utc)
+        hour = stamp.hour + stamp.minute / 60.0 + stamp.second / 3600.0
+        day_fraction = stamp.weekday() / 7.0
+        return [
+            1.0,
+            *[float(values[index - lag]) for lag in lags],
+            math.sin(2.0 * math.pi * hour / 24.0),
+            math.cos(2.0 * math.pi * hour / 24.0),
+            math.sin(2.0 * math.pi * day_fraction),
+            math.cos(2.0 * math.pi * day_fraction),
+        ]
+
+    def predict(
+        self,
+        history: Sequence[SignalObservation],
+        target_timestamps: Sequence[datetime],
+    ) -> Sequence[float]:
+        if len(history) < 3 or not target_timestamps:
+            raise ValueError("Ridge forecast requires history and at least one target")
+        cadence = (history[1].timestamp - history[0].timestamp).total_seconds()
+        if cadence <= 0 or any(
+            (right.timestamp - left.timestamp).total_seconds() != cadence
+            for left, right in zip(history, history[1:])
+        ):
+            raise ValueError("Ridge forecast history must be continuous at one cadence")
+        season_steps = max(1, round(86400.0 / cadence))
+        lags = tuple(sorted({1, 2, season_steps}))
+        max_lag = max(lags)
+        if len(history) < max_lag + 8:
+            raise ValueError(
+                f"Ridge forecast needs at least {max_lag + 8} history rows for its daily lag"
+            )
+
+        import numpy as np
+
+        values = [float(item.value) for item in history]
+        train_x = np.asarray([
+            self._feature_row(index, history[index].timestamp, values, lags)
+            for index in range(max_lag, len(history))
+        ], dtype=float)
+        train_y = np.asarray(values[max_lag:], dtype=float)
+        if not np.all(np.isfinite(train_x)) or not np.all(np.isfinite(train_y)):
+            raise ValueError("Ridge training data contain non-finite values")
+        penalty = np.eye(train_x.shape[1], dtype=float) * math.sqrt(self.ridge_alpha)
+        penalty[0, 0] = 0.0
+        augmented_x = np.vstack((train_x, penalty))
+        augmented_y = np.concatenate((train_y, np.zeros(train_x.shape[1], dtype=float)))
+        coefficients, *_ = np.linalg.lstsq(augmented_x, augmented_y, rcond=None)
+        if not np.all(np.isfinite(coefficients)):
+            raise ValueError("Ridge model produced non-finite coefficients")
+
+        extended = values.copy()
+        predictions: list[float] = []
+        for stamp in target_timestamps:
+            features = np.asarray(
+                self._feature_row(len(extended), stamp, extended, lags),
+                dtype=float,
+            )
+            prediction = float(features @ coefficients)
+            if not math.isfinite(prediction):
+                raise ValueError("Ridge model produced a non-finite prediction")
+            prediction = max(0.0, prediction)
+            predictions.append(prediction)
+            extended.append(prediction)
+        return predictions
 
 
 class PersistenceSignalPlugin:
