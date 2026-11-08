@@ -220,3 +220,123 @@ def test_synthetic_24_hour_optimizer_example_is_reproducible():
     )
     assert "not measured savings" in first["delta_interpretation"]
     assert first["scope"]["not_a_controller"] is True
+
+
+
+def test_battery_power_setpoints_are_signed_bounded_and_audited():
+    from islandos_core.energy_system import dispatch_energy_system, EnergyModelError
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10, 0],
+        wind_generation_kw=[0, 0],
+        load_kw=[2, 8],
+        grid_price_per_kwh=[0.2, 0.2],
+        grid_available=[True, True],
+        battery_power_setpoint_kw=[-3, 2],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=10,
+        wind_rated_kw=0,
+        grid_import_limit_kw=10,
+        battery=BatterySpec(
+            capacity_kwh=10,
+            max_charge_kw=5,
+            max_discharge_kw=5,
+            initial_soc=0.5,
+            min_soc=0.1,
+            max_soc=0.95,
+            charge_efficiency=1.0,
+            discharge_efficiency=1.0,
+        ),
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert [row["battery_power_setpoint_kw"] for row in result["rows"]] == [-3, 2]
+    assert result["rows"][0]["battery_charge_kw"] == pytest.approx(3)
+    assert result["rows"][1]["battery_discharge_kw"] == pytest.approx(2)
+    assert result["rows"][1]["grid_import_kw"] == pytest.approx(6)
+    assert all(abs(row["energy_balance_residual_kw"]) < 1e-8 for row in result["rows"])
+
+    with pytest.raises(EnergyModelError, match="exactly 2"):
+        dispatch_energy_system(
+            EnergySystemInputs(
+                pv_generation_kw=[10, 0], wind_generation_kw=[0, 0],
+                load_kw=[2, 8], grid_price_per_kwh=[0.2, 0.2],
+                grid_available=[True, True], battery_power_setpoint_kw=[-2],
+            ),
+            config,
+        )
+    with pytest.raises(EnergyModelError, match="power limits"):
+        dispatch_energy_system(
+            EnergySystemInputs(
+                pv_generation_kw=[10, 0], wind_generation_kw=[0, 0],
+                load_kw=[2, 8], grid_price_per_kwh=[0.2, 0.2],
+                grid_available=[True, True], battery_power_setpoint_kw=[-6, 0],
+            ),
+            config,
+        )
+
+
+def test_continuous_battery_schedule_optimizer_is_reproducible_and_physical():
+    from optimization.energy_system_optimizer import optimize_battery_power_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[8, 0, 0, 4],
+        wind_generation_kw=[0, 0, 0, 0],
+        load_kw=[3, 8, 8, 3],
+        grid_price_per_kwh=[0.1, 0.5, 0.4, 0.1],
+        grid_available=[True, True, True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=10,
+        wind_rated_kw=0,
+        grid_import_limit_kw=10,
+        battery=BatterySpec(
+            capacity_kwh=12,
+            max_charge_kw=4,
+            max_discharge_kw=4,
+            initial_soc=0.65,
+            min_soc=0.1,
+            max_soc=0.95,
+            charge_efficiency=0.95,
+            discharge_efficiency=0.95,
+            throughput_cost_per_kwh=0.01,
+        ),
+    )
+    kwargs = {"population_size": 8, "generations": 3, "seed": 91}
+    first = optimize_battery_power_schedule(inputs, config, **kwargs)
+    second = optimize_battery_power_schedule(inputs, config, **kwargs)
+    assert first == second
+    assert first["candidate_count"] >= 8
+    assert first["pareto_count"] >= 1
+    setpoints = first["recommendation"]["setpoints_kw"]
+    assert len(setpoints) == 4
+    assert all(-4 <= value <= 4 for value in setpoints)
+    dispatch = first["recommendation"]["dispatch"]
+    assert all(abs(row["energy_balance_residual_kw"]) < 1e-7 for row in dispatch["rows"])
+    assert all(0.1 - 1e-9 <= row["battery_soc"] <= 0.95 + 1e-9 for row in dispatch["rows"])
+    assert first["model_scope"]["grid_charging_not_modeled"] is True
+    assert first["model_scope"]["not_a_controller"] is True
+
+
+def test_continuous_battery_optimizer_requires_battery_and_bounds_horizon():
+    from optimization.energy_system_optimizer import optimize_battery_power_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 1], grid_price_per_kwh=[0.2, 0.2],
+        grid_available=[True, True],
+    )
+    no_battery = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=2,
+    )
+    with pytest.raises(OptimizationError, match="configured battery"):
+        optimize_battery_power_schedule(inputs, no_battery)
+
+    with_battery = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=2,
+        battery=BatterySpec(
+            capacity_kwh=5, max_charge_kw=2, max_discharge_kw=2,
+        ),
+    )
+    with pytest.raises(OptimizationError, match="maximum"):
+        optimize_battery_power_schedule(inputs, with_battery, max_horizon_steps=1)
