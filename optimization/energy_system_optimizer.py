@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import random
 from typing import Sequence
 
 from islandos_core.energy_system import (
@@ -208,6 +209,222 @@ def optimize_energy_system(
             "uses_shared_physical_dispatch_engine": True,
             "same_inputs_for_all_candidates": True,
             "synthetic_or_user_supplied_inputs_only": True,
+            "not_a_controller": True,
+        },
+    }
+
+
+
+def optimize_energy_system_schedule(
+    inputs: EnergySystemInputs,
+    config: EnergySystemConfig,
+    *,
+    weights: OptimizationWeights = OptimizationWeights(),
+    population_size: int = 32,
+    generations: int = 20,
+    mutation_rate: float = 0.08,
+    seed: int = 20261108,
+    max_horizon_steps: int = 168,
+) -> dict:
+    """Search timestep-specific battery/grid priority schedules with NSGA-II.
+
+    Each gene selects one of the physical simulator's two dispatch priorities
+    for one timestep. This is a real horizon-dependent schedule search, but
+    not a search over arbitrary kW set-points or unit commitment binaries.
+    """
+    n = len(inputs.load_kw)
+    if n < 1:
+        raise OptimizationError("optimization horizon must contain at least one step")
+    if n > max_horizon_steps:
+        raise OptimizationError(
+            f"optimization horizon has {n} steps; configured maximum is {max_horizon_steps}"
+        )
+    if population_size < 4:
+        raise OptimizationError("population_size must be >= 4")
+    if generations < 1:
+        raise OptimizationError("generations must be >= 1")
+    if isinstance(mutation_rate, bool) or not isinstance(mutation_rate, (int, float)) or not 0 <= mutation_rate <= 1:
+        raise OptimizationError("mutation_rate must be within [0, 1]")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise OptimizationError("seed must be an integer")
+    rng = random.Random(seed)
+    cache: dict[tuple[int, ...], dict] = {}
+
+    def evaluate(genome: tuple[int, ...]) -> dict:
+        if genome not in cache:
+            schedule = tuple(
+                "battery_first" if gene == 0 else "grid_first" for gene in genome
+            )
+            dispatch = dispatch_energy_system(
+                inputs, config, policy_schedule=schedule
+            )
+            audit = _audit(dispatch)
+            summary = dispatch["summary"]
+            objectives = {
+                "estimated_energy_cost": float(summary["estimated_energy_cost"]),
+                "unmet_load_kwh": float(summary["unmet_load_kwh"]),
+                "renewable_curtailed_kwh": float(summary["renewable_curtailed_kwh"]),
+                "battery_throughput_kwh": float(summary["battery_throughput_kwh"]),
+            }
+            cache[genome] = {
+                "genome": list(genome),
+                "policy_schedule": list(schedule),
+                "objectives": objectives,
+                "summary": summary,
+                "audit": audit,
+                "feasible": audit["passed"],
+                "dispatch": dispatch,
+            }
+        return cache[genome]
+
+    def dominates_candidate(a: dict, b: dict) -> bool:
+        keys = ("estimated_energy_cost", "unmet_load_kwh",
+                "renewable_curtailed_kwh", "battery_throughput_kwh")
+        av = [a["objectives"][key] for key in keys]
+        bv = [b["objectives"][key] for key in keys]
+        if a["feasible"] != b["feasible"]:
+            return a["feasible"]
+        if not a["feasible"]:
+            return False
+        return all(x <= y + 1e-9 for x, y in zip(av, bv)) and any(
+            x < y - 1e-9 for x, y in zip(av, bv)
+        )
+
+    def pareto_front(rows: list[dict]) -> list[dict]:
+        feasible_rows = [row for row in rows if row["feasible"]]
+        return [row for row in feasible_rows if not any(
+            other is not row and dominates_candidate(other, row)
+            for other in feasible_rows
+        )]
+
+    zero = tuple(0 for _ in range(n))
+    one = tuple(1 for _ in range(n))
+    evaluate(zero)
+    evaluate(one)
+    population = [zero, one]
+    while len(population) < population_size:
+        genome = tuple(rng.randrange(2) for _ in range(n))
+        evaluate(genome)
+        population.append(genome)
+    population = list(dict.fromkeys(population))
+    while len(population) < population_size:
+        genome = tuple(rng.randrange(2) for _ in range(n))
+        evaluate(genome)
+        population.append(genome)
+
+    def score(row: dict, front: list[dict]) -> float:
+        keys = ("estimated_energy_cost", "unmet_load_kwh",
+                "renewable_curtailed_kwh")
+        weight_values = (weights.cost, weights.reliability, weights.curtailment)
+        total = 0.0
+        for key, weight in zip(keys, weight_values):
+            low = min(item["objectives"][key] for item in front)
+            high = max(item["objectives"][key] for item in front)
+            value = row["objectives"][key]
+            normalized = 0.0 if high - low <= 1e-12 else (value - low) / (high - low)
+            total += weight * normalized
+        return total
+
+    for _ in range(generations):
+        front = pareto_front([evaluate(genome) for genome in population])
+        if not front:
+            raise OptimizationError("No schedule passed the physical dispatch audit")
+        # Tournament selection by Pareto dominance, then normalized objective score.
+        offspring: list[tuple[int, ...]] = []
+        while len(offspring) < population_size:
+            parents = rng.sample(population, 2)
+            a, b = evaluate(parents[0]), evaluate(parents[1])
+            if dominates_candidate(a, b):
+                parent = parents[0]
+            elif dominates_candidate(b, a):
+                parent = parents[1]
+            else:
+                parent = min(
+                    parents,
+                    key=lambda genome: (score(evaluate(genome), front), genome),
+                )
+            mate = rng.choice(population)
+            cut = rng.randrange(n) if n > 1 else 0
+            child = tuple(
+                (parent[i] if i <= cut else mate[i]) for i in range(n)
+            )
+            child = tuple(
+                1 - gene if rng.random() < mutation_rate else gene
+                for gene in child
+            )
+            offspring.append(child)
+            evaluate(child)
+        combined = list(dict.fromkeys(population + offspring))
+        combined_rows = [evaluate(genome) for genome in combined]
+        next_front = pareto_front(combined_rows)
+        # Keep Pareto members first; fill remaining slots with best scalar score.
+        selected = sorted(
+            next_front,
+            key=lambda row: (score(row, next_front), tuple(row["genome"])),
+        )
+        selected_genomes = [tuple(row["genome"]) for row in selected[:population_size]]
+        if len(selected_genomes) < population_size:
+            remaining = [
+                row for row in combined_rows
+                if tuple(row["genome"]) not in selected_genomes
+            ]
+            remaining.sort(
+                key=lambda row: (
+                    not row["feasible"],
+                    score(row, next_front) if row["feasible"] else float("inf"),
+                    tuple(row["genome"]),
+                )
+            )
+            selected_genomes.extend(
+                tuple(row["genome"])
+                for row in remaining[:population_size - len(selected_genomes)]
+            )
+        population = selected_genomes
+
+    archive = pareto_front(list(cache.values()))
+    if not archive:
+        raise OptimizationError("No schedule passed the physical dispatch audit")
+    archive.sort(
+        key=lambda row: (
+            score(row, archive),
+            tuple(row["genome"]),
+        )
+    )
+    recommended = archive[0]
+    return {
+        "algorithm": "seeded_binary_schedule_evolutionary_pareto_search",
+        "candidate_count": len(cache),
+        "feasible_count": sum(row["feasible"] for row in cache.values()),
+        "pareto_count": len(archive),
+        "population_size": population_size,
+        "generations": generations,
+        "seed": seed,
+        "horizon_steps": n,
+        "pareto_schedules": [
+            {
+                "policy_schedule": row["policy_schedule"],
+                "objectives": row["objectives"],
+            }
+            for row in archive
+        ],
+        "recommendation": {
+            "policy_schedule": recommended["policy_schedule"],
+            "weighted_score": score(recommended, archive),
+            "weights": {
+                "cost": weights.cost,
+                "reliability": weights.reliability,
+                "curtailment": weights.curtailment,
+            },
+            "objectives": recommended["objectives"],
+            "dispatch": recommended["dispatch"],
+        },
+        "model_scope": {
+            "decision_variables": "one binary battery_first/grid_first priority per timestep",
+            "search": "stochastic evolutionary heuristic; not guaranteed global optimum",
+            "uses_shared_physical_dispatch_engine": True,
+            "same_inputs_for_all_candidates": True,
+            "synthetic_or_user_supplied_inputs_only": True,
+            "not_arbitrary_kw_setpoint_optimization": True,
             "not_a_controller": True,
         },
     }
