@@ -376,6 +376,26 @@ class TestMultiSignalForecasting(unittest.TestCase):
             first["evaluation_series_sha256"], second["evaluation_series_sha256"]
         )
 
+
+
+    def test_backtest_infers_one_day_seasonal_lag_for_subhourly_series(self):
+        series = tuple(
+            SignalObservation(
+                self.start + timedelta(minutes=15 * i),
+                "wind_power", float(i % 96), "kW",
+            )
+            for i in range(120)
+        )
+        report = rolling_origin_backtest(
+            series, PersistencePlugin(), initial_history=100
+        )
+        self.assertEqual(report["metrics"]["seasonal_lag_steps"], 96)
+        self.assertEqual(report["metrics"]["seasonal_naive_baseline"]["samples"], 20)
+        self.assertEqual(
+            report["forecast_rows"][0]["seasonal_naive_baseline"],
+            series[4].value,
+        )
+
     def test_backtest_rejects_gapped_or_mixed_signal_series(self):
         series = list(self.observations(count=30))
         series[10] = SignalObservation(
