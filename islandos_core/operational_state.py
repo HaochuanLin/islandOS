@@ -75,6 +75,8 @@ def evaluate_operational_readiness(
     asset_by_id = {asset.asset_id: asset for asset in assets}
     blockers: list[str] = []
     warnings: list[str] = []
+    if not assets:
+        blockers.append("at_least_one_asset_required")
     if len(asset_by_id) != len(assets):
         blockers.append("duplicate_asset_ids")
     observation_by_id: dict[str, AssetOperationalState] = {}
