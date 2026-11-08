@@ -51,6 +51,9 @@ class BatterySpec:
     charge_efficiency: float = 0.95
     discharge_efficiency: float = 0.95
     throughput_cost_per_kwh: float = 0.0
+    initial_state_of_health: float = 1.0
+    cycle_life_efc: float | None = None
+    end_of_life_capacity_fraction: float = 0.8
 
     def __post_init__(self) -> None:
         for name in (
@@ -58,8 +61,10 @@ class BatterySpec:
             "throughput_cost_per_kwh",
         ):
             _number(name, getattr(self, name))
-        for name in ("initial_soc", "min_soc", "max_soc",
-                     "charge_efficiency", "discharge_efficiency"):
+        for name in (
+            "initial_soc", "min_soc", "max_soc", "charge_efficiency",
+            "discharge_efficiency", "initial_state_of_health",
+        ):
             value = _number(name, getattr(self, name))
             if value > 1:
                 raise EnergyModelError(f"{name} must be <= 1")
@@ -71,6 +76,28 @@ class BatterySpec:
             raise EnergyModelError("battery initial_soc must be within SOC limits")
         if self.charge_efficiency <= 0 or self.discharge_efficiency <= 0:
             raise EnergyModelError("battery efficiencies must be > 0")
+        if self.initial_state_of_health <= 0:
+            raise EnergyModelError("battery initial_state_of_health must be > 0")
+        if self.cycle_life_efc is not None:
+            _number("battery cycle_life_efc", self.cycle_life_efc)
+            if self.cycle_life_efc <= 0:
+                raise EnergyModelError("battery cycle_life_efc must be > 0")
+            _number(
+                "battery end_of_life_capacity_fraction",
+                self.end_of_life_capacity_fraction,
+            )
+            if not 0 < self.end_of_life_capacity_fraction < 1:
+                raise EnergyModelError(
+                    "battery end_of_life_capacity_fraction must be between 0 and 1"
+                )
+            if self.initial_state_of_health < self.end_of_life_capacity_fraction:
+                raise EnergyModelError(
+                    "battery initial_state_of_health cannot be below end-of-life fraction"
+                )
+        elif self.end_of_life_capacity_fraction != 0.8:
+            raise EnergyModelError(
+                "battery end_of_life_capacity_fraction requires cycle_life_efc"
+            )
 
 
 @dataclass(frozen=True)
@@ -304,6 +331,11 @@ def dispatch_energy_system(
     )
 
     battery = config.battery
+    battery_state_of_health = battery.initial_state_of_health if battery else 1.0
+    battery_effective_capacity_kwh = (
+        battery.capacity_kwh * battery_state_of_health if battery else 0.0
+    )
+    battery_efc_cumulative = 0.0
     soc = battery.initial_soc if battery else 0.0
     rows: list[dict] = []
     totals = {
@@ -319,6 +351,9 @@ def dispatch_energy_system(
         "grid_export_revenue": 0.0,
         "battery_throughput_kwh": 0.0,
         "battery_degradation_cost": 0.0,
+        "battery_capacity_fade_kwh": 0.0,
+        "battery_capacity_fade_spill_kwh": 0.0,
+        "battery_equivalent_full_cycles": 0.0,
         "diesel_fuel_delivered_liters": 0.0,
     }
 
@@ -347,23 +382,26 @@ def dispatch_energy_system(
         diesel_started = diesel_stopped = False
 
         if battery and surplus > 0:
-            soc_room_kwh = (battery.max_soc - soc) * battery.capacity_kwh
+            soc_room_kwh = (battery.max_soc - soc) * battery_effective_capacity_kwh
             charge_kw = min(
                 surplus, battery.max_charge_kw,
                 soc_room_kwh / (battery.charge_efficiency * config.dt_hours),
             )
-            soc += charge_kw * config.dt_hours * battery.charge_efficiency / battery.capacity_kwh
+            soc += (
+                charge_kw * config.dt_hours * battery.charge_efficiency
+                / battery_effective_capacity_kwh
+            )
             surplus -= charge_kw
 
         def discharge(remaining_kw: float) -> float:
             nonlocal soc
             if not battery or remaining_kw <= 0:
                 return 0.0
-            available_kwh = (soc - battery.min_soc) * battery.capacity_kwh
+            available_kwh = (soc - battery.min_soc) * battery_effective_capacity_kwh
             output_limit_kw = available_kwh * battery.discharge_efficiency / config.dt_hours
             delivered = min(remaining_kw, battery.max_discharge_kw, output_limit_kw)
             soc -= delivered * config.dt_hours / (
-                battery.discharge_efficiency * battery.capacity_kwh
+                battery.discharge_efficiency * battery_effective_capacity_kwh
             )
             return delivered
 
@@ -437,6 +475,37 @@ def dispatch_energy_system(
             battery_throughput_kwh * battery.throughput_cost_per_kwh
             if battery else 0.0
         )
+        battery_efc_increment = (
+            battery_throughput_kwh / (2 * battery.capacity_kwh)
+            if battery else 0.0
+        )
+        battery_capacity_fade_kwh = 0.0
+        battery_capacity_fade_spill_kwh = 0.0
+        if battery and battery.cycle_life_efc is not None:
+            previous_capacity = battery_effective_capacity_kwh
+            stored_energy_kwh = soc * battery_effective_capacity_kwh
+            fade_per_efc = (
+                (1 - battery.end_of_life_capacity_fraction) / battery.cycle_life_efc
+            )
+            battery_state_of_health = max(
+                battery.end_of_life_capacity_fraction,
+                battery_state_of_health - battery_efc_increment * fade_per_efc,
+            )
+            battery_effective_capacity_kwh = (
+                battery.capacity_kwh * battery_state_of_health
+            )
+            battery_capacity_fade_kwh = (
+                previous_capacity - battery_effective_capacity_kwh
+            )
+            maximum_stored_energy = (
+                battery_effective_capacity_kwh * battery.max_soc
+            )
+            battery_capacity_fade_spill_kwh = max(
+                0.0, stored_energy_kwh - maximum_stored_energy
+            )
+            stored_energy_kwh -= battery_capacity_fade_spill_kwh
+            soc = stored_energy_kwh / battery_effective_capacity_kwh
+        battery_efc_cumulative += battery_efc_increment
         diesel_fuel_used_liters = (
             _diesel_fuel_rate_lph(config.diesel, diesel_kw) * config.dt_hours
             if config.diesel and config.diesel.initial_fuel_liters is not None
@@ -474,6 +543,12 @@ def dispatch_energy_system(
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
             "battery_throughput_kwh": battery_throughput_kwh,
             "battery_degradation_cost": battery_degradation_cost,
+            "battery_state_of_health": battery_state_of_health if battery else None,
+            "battery_effective_capacity_kwh": battery_effective_capacity_kwh if battery else None,
+            "battery_efc_increment": battery_efc_increment,
+            "battery_efc_cumulative": battery_efc_cumulative,
+            "battery_capacity_fade_kwh": battery_capacity_fade_kwh,
+            "battery_capacity_fade_spill_kwh": battery_capacity_fade_spill_kwh,
             "grid_available": grid_ok[t],
             "grid_export_available": export_ok[t],
             "diesel_available": diesel_ok[t],
@@ -509,6 +584,9 @@ def dispatch_energy_system(
         totals["battery_discharge_output_kwh"] += discharge_kw * scale
         totals["battery_throughput_kwh"] += battery_throughput_kwh
         totals["battery_degradation_cost"] += battery_degradation_cost
+        totals["battery_capacity_fade_kwh"] += battery_capacity_fade_kwh
+        totals["battery_capacity_fade_spill_kwh"] += battery_capacity_fade_spill_kwh
+        totals["battery_equivalent_full_cycles"] += battery_efc_increment
         totals["grid_import_kwh"] += grid_kw * scale
         totals["grid_export_energy_kwh"] += export_kw * scale
         totals["grid_export_revenue"] += export_kw * scale * export_price[t]
@@ -523,6 +601,12 @@ def dispatch_energy_system(
         if totals["load_energy_kwh"] else 0.0
     )
     totals["ending_battery_soc"] = round(soc, 8) if battery else None
+    totals["ending_battery_state_of_health"] = (
+        round(battery_state_of_health, 8) if battery else None
+    )
+    totals["ending_battery_effective_capacity_kwh"] = (
+        round(battery_effective_capacity_kwh, 8) if battery else None
+    )
     totals["ending_diesel_fuel_liters"] = (
         round(fuel_remaining_liters, 8) if fuel_remaining_liters is not None else None
     )
@@ -550,7 +634,14 @@ def dispatch_energy_system(
             "battery_throughput_cost_enabled": bool(
                 battery and battery.throughput_cost_per_kwh > 0
             ),
-            "battery_degradation_is_physical_capacity_fade": False,
+            "battery_degradation_is_physical_capacity_fade": bool(
+                battery and battery.cycle_life_efc is not None
+            ),
+            "battery_cycle_aging_enabled": bool(
+                battery and battery.cycle_life_efc is not None
+            ),
+            "battery_calendar_aging_modeled": False,
+            "battery_temperature_aging_modeled": False,
             "diesel_nonlinear_fuel_curve_enabled": bool(
                 config.diesel and config.diesel.fuel_curve_liters_per_hour is not None
             ),
@@ -582,6 +673,8 @@ def compare_energy_policies(
         "diesel_fuel_used_liters", "diesel_fuel_cost", "diesel_energy_cost",
         "renewable_curtailed_kwh", "unmet_load_kwh", "battery_discharge_output_kwh",
         "battery_throughput_kwh", "battery_degradation_cost",
+        "battery_capacity_fade_kwh", "battery_capacity_fade_spill_kwh",
+        "battery_equivalent_full_cycles",
     )
     differences = {
         key: round(
