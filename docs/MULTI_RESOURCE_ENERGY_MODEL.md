@@ -118,9 +118,10 @@ interconnection permission.
 This increment models bounded grid export in the energy balance, but does not
 validate interconnection permission, anti-islanding protection, export
 certification, or settlement rules. It also does not model network
-voltage/frequency, power factor, diesel ramp-down dynamics, nonlinear fuel
-curves, fuel-delivery reliability, tank measurement error, physical battery
-capacity fade/replacement, demand charges,
+voltage/frequency, power factor, diesel ramp-down dynamics, calendar- or
+temperature-driven battery aging, nonlinear battery aging effects, battery
+replacement economics, fuel-delivery reliability, tank measurement error,
+demand charges,
 tariff calendars, forecast uncertainty, equipment outages beyond availability
 flags, or safety interlocks. It is not connected to devices and cannot issue
 commands.
