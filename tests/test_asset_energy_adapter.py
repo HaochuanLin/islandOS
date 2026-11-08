@@ -17,6 +17,16 @@ def parameter(value, unit, *, confirmed=True):
     )
 
 
+def assumption(value, unit):
+    return AssetParameter(
+        value=value,
+        unit=unit,
+        source_type="customer_provided",
+        source_reference="approved operating assumption sheet",
+        confirmed=True,
+    )
+
+
 def constraint(name, operator, value, unit):
     return OperatingConstraint(
         constraint_id=f"{name}-constraint",
@@ -91,9 +101,9 @@ def test_battery_requires_explicit_efficiency_and_initial_soc_assumptions():
     config = build_energy_system_config_from_assets(
         [battery],
         operating_assumptions={
-            "battery_initial_soc": 0.5,
-            "battery_charge_efficiency": 0.94,
-            "battery_discharge_efficiency": 0.93,
+            "battery_initial_soc": assumption(0.5, "fraction"),
+            "battery_charge_efficiency": assumption(0.94, "fraction"),
+            "battery_discharge_efficiency": assumption(0.93, "fraction"),
         },
     )
     assert config.battery.capacity_kwh == 240
@@ -114,7 +124,7 @@ def test_diesel_requires_explicit_cost_and_blocks_unmodeled_minimum_loading():
     )
     with pytest.raises(AssetEnergyAdapterError, match="minimum stable loading is not modeled"):
         build_energy_system_config_from_assets(
-            [generator], operating_assumptions={"diesel_variable_cost_per_kwh": 1.2}
+            [generator], operating_assumptions={"diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh")}
         )
 
 
@@ -130,7 +140,7 @@ def test_diesel_zero_minimum_stable_loading_still_requires_explicit_cost():
     with pytest.raises(AssetEnergyAdapterError, match="explicit diesel_variable_cost"):
         build_energy_system_config_from_assets([generator])
     config = build_energy_system_config_from_assets(
-        [generator], operating_assumptions={"diesel_variable_cost_per_kwh": 1.25}
+        [generator], operating_assumptions={"diesel_variable_cost_per_kwh": assumption(1.25, "USD/kWh")}
     )
     assert config.diesel.rated_power_kw == 28
     assert config.diesel.variable_cost_per_kwh == 1.25
