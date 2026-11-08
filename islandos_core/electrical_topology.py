@@ -48,8 +48,12 @@ class ElectricalBus:
         if self.current_type == "AC":
             if self.voltage_basis not in {"line_to_line", "line_to_neutral"}:
                 raise TopologyValidationError("AC voltage_basis must be line_to_line or line_to_neutral")
-            if self.phases not in {1, 2, 3}:
-                raise TopologyValidationError("AC phases must be 1, 2, or 3")
+            if (
+                isinstance(self.phases, bool)
+                or not isinstance(self.phases, int)
+                or self.phases not in {1, 2, 3}
+            ):
+                raise TopologyValidationError("AC phases must be the integer 1, 2, or 3")
         elif self.voltage_basis != "dc" or self.phases is not None:
             raise TopologyValidationError("DC bus requires voltage_basis='dc' and phases=None")
         if not isinstance(self.confirmed, bool):
@@ -94,8 +98,14 @@ class AssetPortConnection:
         if self.current_type not in {"AC", "DC"}:
             raise TopologyValidationError("connection current_type must be AC or DC")
         if self.current_type == "AC":
-            if self.voltage_basis not in {"line_to_line", "line_to_neutral"} or self.phases not in {1, 2, 3}:
-                raise TopologyValidationError("invalid AC connection interface")
+            if self.voltage_basis not in {"line_to_line", "line_to_neutral"}:
+                raise TopologyValidationError("invalid AC connection voltage basis")
+            if (
+                isinstance(self.phases, bool)
+                or not isinstance(self.phases, int)
+                or self.phases not in {1, 2, 3}
+            ):
+                raise TopologyValidationError("AC connection phases must be the integer 1, 2, or 3")
         elif self.voltage_basis != "dc" or self.phases is not None:
             raise TopologyValidationError("DC connection requires voltage_basis='dc' and phases=None")
         if not isinstance(self.confirmed, bool):

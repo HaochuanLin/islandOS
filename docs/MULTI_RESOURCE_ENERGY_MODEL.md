@@ -33,9 +33,10 @@ PV + wind + battery discharge + grid import + diesel
 Battery state of charge is updated with separate charge and discharge
 efficiencies and is constrained by configured minimum and maximum SOC. PV and
 wind inputs above their configured nameplate ratings are rejected rather than
-silently clipped. Missing availability is not inferred: grid and diesel
-availability are explicit boolean series (grid defaults available only when
-the caller omits the optional diesel series; grid availability is required).
+silently clipped. Grid availability must always be supplied as an explicit boolean series.
+When a diesel generator is configured, diesel availability must also be
+supplied explicitly. An unconfigured diesel unit is never treated as available.
+Missing availability is rejected rather than silently assumed.
 
 The output includes per-step audit rows and aggregate energy, cost, curtailment,
 unmet-load and ending-SOC metrics. Grid and diesel costs are estimates from

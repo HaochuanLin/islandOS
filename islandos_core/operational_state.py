@@ -158,7 +158,7 @@ def evaluate_operational_readiness(
         "evaluated_asset_count": len(target_assets),
         "observed_asset_count": len(selected_observations),
         "selected_observation_timestamps": {
-            asset_id: item.observed_at.isoformat()
+            asset_id: item.observed_at.astimezone(timezone.utc).isoformat()
             for asset_id, item in sorted(selected_observations.items())
         },
         "topology_structurally_ready": (

@@ -147,3 +147,19 @@ def test_duplicate_branch_and_connection_ids_are_blocked():
     assert "duplicate_branch_ids" in result["blockers"]
     assert "duplicate_connection_ids" in result["blockers"]
     assert "duplicate_asset_port_connections" in result["blockers"]
+
+
+@pytest.mark.parametrize("phases", [True, False, 1.0, 2.0, "3"])
+def test_bus_rejects_non_integer_ac_phase_counts(phases):
+    with pytest.raises(TopologyValidationError, match="AC phases"):
+        bus(phases=phases)
+
+
+@pytest.mark.parametrize("phases", [True, False, 1.0, 2.0, "3"])
+def test_asset_port_rejects_non_integer_ac_phase_counts(phases):
+    with pytest.raises(TopologyValidationError, match="AC connection phases"):
+        AssetPortConnection(
+            "port-invalid", "site-1", "pv-1", "main", "bus-a",
+            "AC", 400, "line_to_line", phases,
+            "vendor interface drawing rev B", True,
+        )

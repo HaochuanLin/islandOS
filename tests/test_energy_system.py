@@ -44,7 +44,7 @@ def test_battery_grid_and_diesel_cover_deficit_without_double_counting():
     )
     inputs = EnergySystemInputs(
         pv_generation_kw=[2], wind_generation_kw=[0], load_kw=[10],
-        grid_price_per_kwh=[0.4], grid_available=[True],
+        grid_price_per_kwh=[0.4], grid_available=[True], diesel_available=[True],
     )
     result = dispatch_energy_system(inputs, config)
     row = result["rows"][0]
@@ -157,3 +157,26 @@ def test_rejects_unknown_dispatch_policy():
     )
     with pytest.raises(EnergyModelError, match="policy"):
         dispatch_energy_system(inputs, config, policy="ai_magic")
+
+
+def test_grid_availability_must_be_explicit():
+    config = EnergySystemConfig(pv_rated_kw=1, wind_rated_kw=0, grid_import_limit_kw=5)
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=None,
+    )
+    with pytest.raises(EnergyModelError, match="grid_available must be explicitly supplied"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_configured_diesel_requires_explicit_availability():
+    config = EnergySystemConfig(
+        pv_rated_kw=1, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=1.0),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[False],
+    )
+    with pytest.raises(EnergyModelError, match="diesel_available must be explicitly supplied"):
+        dispatch_energy_system(inputs, config)

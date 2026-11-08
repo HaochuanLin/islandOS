@@ -26,8 +26,13 @@ configurable screening policy, not a universal industrial standard.
 
 For assets in scope (all supplied assets, or only assets connected in an
 optional site topology):
-- missing or unknown-asset observations are blockers; historical observations are allowed and the latest timestamp is selected independent of input order;\n- multiple records at the latest timestamp are blockers, distinguishing conflicting states from duplicate records; cross-site observations are blockers;
-- stale or future-dated observations are blockers;
+- missing or unknown-asset observations are blockers;
+- historical observations are allowed and the latest timestamp is selected
+  independent of input order;
+- multiple records at the latest timestamp are blockers, distinguishing
+  conflicting states from duplicate records;
+- cross-site observations are blockers;
+- stale or future-dated latest observations are blockers;
 - unconfirmed observations are blockers;
 - unavailable assets and any state other than `online` are blockers;
 - no state is silently inferred from asset category or static nameplate data;
@@ -47,8 +52,12 @@ rather than duplicating it in Streamlit and the desktop shell.
 
 ## Boundaries and next work
 
-The current layer does not ingest telemetry protocols, establish clock
-synchronization, debounce state transitions, reconcile conflicting sources,
-or persist state history. Those need explicit source adapters, clock-quality
-metadata, conflict policy, and audit retention. The state is a snapshot input
-to future simulation/optimization readiness, not a physical simulation itself.
+The current layer accepts a caller-supplied sequence of timestamped observations
+and selects the newest timestamp per asset. It blocks multiple records tied at
+that newest timestamp rather than guessing which source wins. It does not ingest
+telemetry protocols, establish clock synchronization, debounce state
+transitions, reconcile different sources using a priority policy, or persist
+state history. Those need explicit source adapters, clock-quality metadata, a
+governed source-priority policy, and audit retention. The state is a snapshot
+input to future simulation/optimization readiness, not a physical simulation
+itself.

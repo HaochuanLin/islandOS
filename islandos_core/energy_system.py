@@ -143,8 +143,15 @@ def dispatch_energy_system(
         raise EnergyModelError("PV generation exceeds configured rated power")
     if any(value > config.wind_rated_kw + 1e-9 for value in wind):
         raise EnergyModelError("wind generation exceeds configured rated power")
-    grid_ok = _flags("grid_available", inputs.grid_available, n, default=True)
-    diesel_ok = _flags("diesel_available", inputs.diesel_available, n, default=True)
+    if inputs.grid_available is None:
+        raise EnergyModelError("grid_available must be explicitly supplied")
+    if config.diesel is not None and inputs.diesel_available is None:
+        raise EnergyModelError(
+            "diesel_available must be explicitly supplied when diesel is configured"
+        )
+    grid_ok = _flags("grid_available", inputs.grid_available, n, default=False)
+    # An unconfigured diesel unit is never implicitly treated as available.
+    diesel_ok = _flags("diesel_available", inputs.diesel_available, n, default=False)
 
     battery = config.battery
     soc = battery.initial_soc if battery else 0.0
