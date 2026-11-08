@@ -505,6 +505,7 @@ def compare_energy_policies(
         "estimated_energy_cost", "grid_import_kwh", "grid_export_energy_kwh",
         "grid_export_revenue", "diesel_generation_kwh", "renewable_curtailed_kwh",
         "unmet_load_kwh", "battery_discharge_output_kwh",
+        "battery_throughput_kwh", "battery_degradation_cost",
     )
     differences = {
         key: round(
