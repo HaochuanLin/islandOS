@@ -262,3 +262,26 @@ def test_negative_export_price_is_accounted_as_a_cost_not_revenue():
     result = dispatch_energy_system(inputs, config)
     assert result["summary"]["grid_export_revenue"] == pytest.approx(-0.6)
     assert result["summary"]["estimated_energy_cost"] == pytest.approx(0.6)
+
+
+def test_battery_is_charged_before_remaining_surplus_is_exported():
+    config = EnergySystemConfig(
+        pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=5,
+        grid_export_limit_kw=4,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=2, max_discharge_kw=2,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+            charge_efficiency=1.0, discharge_efficiency=1.0,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[4],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.1],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    assert row["battery_charge_kw"] == pytest.approx(1.6)
+    assert row["grid_export_kw"] == pytest.approx(4)
+    assert row["renewable_curtailed_kw"] == pytest.approx(0.4)
+    assert row["energy_balance_residual_kw"] == pytest.approx(0)

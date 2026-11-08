@@ -86,6 +86,34 @@ def _required_constraint(asset: AssetRecord, parameter: str, operator: str) -> f
     return float(item.lower_bound if operator == "min" else item.upper_bound)
 
 
+
+def _optional_grid_export_limit(asset: AssetRecord, installed_power_kw: float) -> float:
+    """Use export capacity only when one confirmed hard limit is explicitly declared."""
+    matches = [
+        item for item in asset.constraints
+        if item.parameter == "export_limit_kw"
+    ]
+    if not matches:
+        return 0.0
+    if len(matches) != 1:
+        raise AssetEnergyAdapterError(
+            f"{asset.asset_id}: expected at most one export_limit_kw constraint"
+        )
+    item = matches[0]
+    if (
+        item.severity != "hard"
+        or item.operator != "max"
+        or not item.confirmed
+    ):
+        raise AssetEnergyAdapterError(
+            f"{asset.asset_id}: export_limit_kw must be one confirmed hard max constraint"
+        )
+    if item.unit != "kW":
+        raise AssetEnergyAdapterError(
+            f"{asset.asset_id}: export_limit_kw constraint must use kW"
+        )
+    return min(installed_power_kw, float(item.upper_bound))
+
 def build_energy_system_config_from_assets(
     assets: Sequence[AssetRecord],
     *,
@@ -148,7 +176,7 @@ def build_energy_system_config_from_assets(
         raise AssetEnergyAdapterError(
             "operating assumptions must be provenance-bearing AssetParameter records"
         )
-    pv_rated_kw = wind_rated_kw = grid_import_limit_kw = 0.0
+    pv_rated_kw = wind_rated_kw = grid_import_limit_kw = grid_export_limit_kw = 0.0
     battery_spec = None
     diesel_spec = None
 
@@ -168,6 +196,7 @@ def build_energy_system_config_from_assets(
         installed = _required_parameter(asset, "configured_power_kw", "kW")
         hard_limit = _required_constraint(asset, "import_limit_kw", "max")
         grid_import_limit_kw += min(installed, hard_limit)
+        grid_export_limit_kw += _optional_grid_export_limit(asset, installed)
 
     if "battery" in grouped:
         asset = grouped["battery"][0]
@@ -232,6 +261,7 @@ def build_energy_system_config_from_assets(
             pv_rated_kw=pv_rated_kw,
             wind_rated_kw=wind_rated_kw,
             grid_import_limit_kw=grid_import_limit_kw,
+            grid_export_limit_kw=grid_export_limit_kw,
             dt_hours=dt_hours,
             battery=battery_spec,
             diesel=diesel_spec,

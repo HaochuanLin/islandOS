@@ -45,6 +45,12 @@ minimum loading, ramping, and start behavior are modeled.
   and the confirmed hard maximum-power constraint.
 - Grid import capacity is capped at the lower of confirmed installed power
   and the confirmed hard import limit.
+- Grid export is disabled unless a grid connection also carries exactly one
+  confirmed hard `export_limit_kw` maximum constraint in kW. Its effective
+  contribution is capped at the lower of confirmed installed power and that
+  export limit. Missing export constraints contribute zero export capacity;
+  present but unconfirmed, duplicated, or malformed export constraints block
+  conversion rather than being guessed.
 - Battery capacity comes from confirmed usable installed energy capacity;
   charge/discharge limits and SOC bounds come from confirmed hard constraints.
 - Diesel rated power comes from the lower of confirmed installed power and
@@ -90,7 +96,7 @@ Before this becomes a general site model, IslandOS still needs:
 - electrical topology and connection constraints;
 - flexible-load adapters and scheduling semantics;
 - diesel minimum stable output, ramp/start constraints and fuel inventory;
-- grid export and tariff structures;
+- grid export settlement, tariff calendars, and interconnection validation;
 - explicit provenance records for every operating assumption;
 - model-specific readiness gates and tests against public/field data.
 

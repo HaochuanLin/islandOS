@@ -321,3 +321,52 @@ def test_unavailable_member_blocks_aggregate_instead_of_being_silently_ignored()
     )
     with pytest.raises(AssetEnergyAdapterError, match="not ready for offline screening"):
         build_energy_system_config_from_assets([available, unavailable])
+
+
+def test_grid_export_capacity_is_mapped_only_from_confirmed_hard_asset_limit():
+    connection = asset(
+        "grid_connection",
+        {"configured_power_kw": (50, "kW")},
+        {
+            "import_limit_kw": ("max", 45, "kW"),
+            "export_limit_kw": ("max", 30, "kW"),
+        },
+    )
+    config = build_energy_system_config_from_assets([connection])
+    assert config.grid_import_limit_kw == 45
+    assert config.grid_export_limit_kw == 30
+
+    no_export_record = asset(
+        "grid_connection",
+        {"configured_power_kw": (50, "kW")},
+        {"import_limit_kw": ("max", 45, "kW")},
+    )
+    no_export_config = build_energy_system_config_from_assets([no_export_record])
+    assert no_export_config.grid_export_limit_kw == 0
+
+
+def test_unconfirmed_or_duplicate_grid_export_limit_blocks_asset_conversion():
+    connection = AssetRecord(
+        asset_id="grid-01",
+        site_id="site-01",
+        asset_type="grid_connection",
+        nameplate_parameters={},
+        installed_parameters={"configured_power_kw": parameter(50, "kW")},
+        observed_parameters={},
+        constraints=(
+            constraint("import_limit_kw", "max", 45, "kW"),
+            OperatingConstraint(
+                constraint_id="export-unconfirmed",
+                parameter="export_limit_kw",
+                severity="hard",
+                unit="kW",
+                operator="max",
+                upper_bound=30,
+                source_type="customer_provided",
+                source_reference="draft interconnection application",
+                confirmed=False,
+            ),
+        ),
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="confirmed hard max"):
+        build_energy_system_config_from_assets([connection])
