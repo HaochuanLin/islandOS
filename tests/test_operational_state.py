@@ -85,14 +85,54 @@ def test_unavailable_asset_blocks_even_with_online_observation():
     assert "asset_unavailable:pv-1" in result["blockers"]
 
 
-def test_duplicate_and_unknown_asset_observations_are_reported():
+def test_historical_observations_select_latest_independent_of_input_order():
+    older = observation(state="offline", at=NOW - timedelta(minutes=2))
+    latest = observation(state="online", at=NOW)
+    result = evaluate_operational_readiness(
+        [asset()], [latest, older], as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is True
+    assert result["observed_asset_count"] == 1
+    assert result["selected_observation_timestamps"]["pv-1"] == NOW.isoformat()
+
+
+def test_unknown_asset_observation_is_reported():
+    result = evaluate_operational_readiness(
+        [asset()], [observation(), observation("ghost")], as_of=NOW,
+    )
+    assert "operational_state_asset_missing:ghost" in result["blockers"]
+
+
+def test_conflicting_states_at_latest_timestamp_block_readiness():
     result = evaluate_operational_readiness(
         [asset()],
-        [observation(), observation(at=NOW - timedelta(seconds=1)), observation("ghost")],
+        [observation(state="online"), observation(state="fault")],
         as_of=NOW,
     )
-    assert "duplicate_operational_state:pv-1" in result["blockers"]
-    assert "operational_state_asset_missing:ghost" in result["blockers"]
+    assert result["can_dispatch_screen"] is False
+    assert "conflicting_operational_state_at_latest_timestamp:pv-1" in result["blockers"]
+
+
+def test_duplicate_latest_timestamp_blocks_readiness_even_if_state_matches():
+    result = evaluate_operational_readiness(
+        [asset()],
+        [observation(), observation()],
+        as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is False
+    assert "duplicate_operational_state_at_latest_timestamp:pv-1" in result["blockers"]
+
+
+def test_stale_historical_record_does_not_override_newer_fresh_state():
+    result = evaluate_operational_readiness(
+        [asset()],
+        [
+            observation(state="offline", at=NOW - timedelta(hours=2)),
+            observation(state="online", at=NOW - timedelta(minutes=1)),
+        ],
+        as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is True
 
 
 def test_site_mismatch_blocks_readiness():
