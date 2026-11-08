@@ -67,9 +67,9 @@ and rejected unless the diesel fuel-inventory model is enabled. An optional
 confirmed tank-capacity assumption bounds initial inventory and rejects any
 scheduled delivery that would overfill the tank. Delivered, consumed, and
 remaining fuel are retained in per-step audit rows and aggregate summary values. This is a user-supplied schedule, not a delivery forecast or
-proof that a supplier can fulfil it. The model does not simulate tank capacity,
-tank measurement error, fuel-quality effects, or nonlinear fuel curves; a
-constant L/kWh rate is a screening assumption and must be explicitly supplied.
+proof that a supplier can fulfil it. The model does not simulate tank
+measurement error, fuel-quality effects, or nonlinear fuel curves; a constant
+L/kWh rate is a screening assumption and must be explicitly supplied.
 
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
@@ -78,8 +78,10 @@ metrics. Export is disabled by default. Enabling it requires all three of:
 series, and (3) a same-length `grid_export_available` boolean series. Grid
 uptime does not imply permission to export. Export is blocked whenever either
 the grid-availability flag or the separate export-permission flag is false.
-Negative feed-in prices are allowed and correctly increase net cost. These are
-estimates from user-supplied assumptions, not a tariff settlement or proof of
+Negative feed-in prices are allowed and correctly increase net cost. Grid,
+diesel, export, and battery wear-cost inputs must use a consistent currency and
+energy basis; no foreign-exchange conversion is performed. These are estimates
+from user-supplied assumptions, not a tariff settlement or proof of
 interconnection permission.
 
 ## Important limitations before site use
@@ -87,8 +89,9 @@ interconnection permission.
 This increment models bounded grid export in the energy balance, but does not
 validate interconnection permission, anti-islanding protection, export
 certification, or settlement rules. It also does not model network
-voltage/frequency, power factor, diesel ramp-down dynamics, nonlinear fuel curves/refuelling, battery
-degradation/replacement, demand charges,
+voltage/frequency, power factor, diesel ramp-down dynamics, nonlinear fuel
+curves, fuel-delivery reliability, tank measurement error, physical battery
+capacity fade/replacement, demand charges,
 tariff calendars, forecast uncertainty, equipment outages beyond availability
 flags, or safety interlocks. It is not connected to devices and cannot issue
 commands.
