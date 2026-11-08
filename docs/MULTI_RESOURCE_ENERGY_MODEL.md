@@ -54,11 +54,12 @@ not a tariff settlement or proof of interconnection permission.
 
 This increment models bounded grid export in the energy balance, but does not
 validate interconnection permission, anti-islanding protection, export
-certification, settlement rules, or network voltage/frequency.
-power factor, generator minimum stable loading, ramp/start constraints, fuel
-inventory, battery degradation/replacement, demand charges, tariff calendars,
-forecast uncertainty, equipment outages beyond availability flags, or safety
-interlocks. It is not connected to devices and cannot issue commands.
+certification, or settlement rules. It also does not model network
+voltage/frequency, power factor, generator minimum stable loading, ramp/start
+constraints, fuel inventory, battery degradation/replacement, demand charges,
+tariff calendars, forecast uncertainty, equipment outages beyond availability
+flags, or safety interlocks. It is not connected to devices and cannot issue
+commands.
 
 All examples and tests use synthetic fixtures. Passing tests demonstrates
 software consistency against those fixtures, not field validation, measured
