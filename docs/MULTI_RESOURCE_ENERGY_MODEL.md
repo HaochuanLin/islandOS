@@ -46,7 +46,7 @@ Missing availability is rejected rather than silently assumed.
 A diesel unit starts only when the residual demand can accept at least its
 configured minimum stable output; otherwise that residual remains unmet rather
 than operating the generator below its declared stable limit. Optional ramp-up
-limits constrain startup and subsequent upward changes. Start/stop events and
+limits constrain upward changes after the initial stable startup point. Start/stop events and
 their fixed costs are recorded per timestep and included in estimated energy
 cost. Ramp-down dynamics are not yet modeled; when demand falls or availability
 is lost, the unit is stopped immediately. Multiple diesel units are still

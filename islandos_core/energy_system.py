@@ -273,8 +273,8 @@ def dispatch_energy_system(
                 return 0.0
             target = min(remaining_kw, spec.rated_power_kw)
             if previous_diesel_kw <= 0:
-                if spec.ramp_up_kw_per_hour is not None:
-                    target = min(target, spec.ramp_up_kw_per_hour * config.dt_hours)
+                # Startup is represented as reaching the stable operating point
+                # within this timestep; the ramp limit applies to later increases.
                 if target + 1e-9 < spec.min_stable_power_kw:
                     return 0.0
                 diesel_started = target > 0
@@ -297,6 +297,11 @@ def dispatch_energy_system(
             diesel_kw = run_diesel(deficit)
             deficit -= diesel_kw
 
+        # A unit that supplied the previous step but receives no dispatch now
+        # has stopped, even when the residual load was already covered by grid
+        # or battery and run_diesel() was therefore never called.
+        if previous_diesel_kw > 0 and diesel_kw <= 0 and not diesel_stopped:
+            diesel_stopped = True
         if diesel_started and config.diesel:
             totals["diesel_start_count"] += 1
             totals["diesel_start_cost"] += config.diesel.start_cost_per_start

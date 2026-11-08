@@ -407,3 +407,42 @@ def test_diesel_rejects_minimum_above_rated_and_invalid_ramp():
             rated_power_kw=10, variable_cost_per_kwh=1,
             ramp_up_kw_per_hour=0,
         )
+
+
+
+def test_diesel_stops_and_records_cost_when_other_sources_cover_load():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=10,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, stop_cost_per_stop=2.5,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[8, 5], grid_price_per_kwh=[0.2, 0.2],
+        grid_available=[False, True], diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config, policy="grid_first")
+    assert result["rows"][0]["diesel_generation_kw"] == pytest.approx(8)
+    assert result["rows"][1]["diesel_generation_kw"] == 0
+    assert result["rows"][1]["diesel_stopped"] is True
+    assert result["summary"]["diesel_stop_count"] == 1
+    assert result["summary"]["diesel_stop_cost"] == pytest.approx(2.5)
+
+
+def test_diesel_startup_reaches_stable_minimum_before_ramp_limit_applies():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=5, ramp_up_kw_per_hour=2,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[8, 8], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    rows = dispatch_energy_system(inputs, config)["rows"]
+    assert [row["diesel_generation_kw"] for row in rows] == pytest.approx([8, 8])
