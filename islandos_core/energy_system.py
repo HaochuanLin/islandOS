@@ -274,6 +274,8 @@ def dispatch_energy_system(
             "timestep": t, "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
+            "grid_available": grid_ok[t],
+            "diesel_available": diesel_ok[t],
             "grid_import_kw": grid_kw, "grid_export_kw": export_kw,
             "grid_export_price_per_kwh": export_price[t],
             "grid_export_revenue": export_kw * config.dt_hours * export_price[t],
@@ -316,6 +318,7 @@ def dispatch_energy_system(
         "policy": policy,
         "time_steps": n,
         "dt_hours": config.dt_hours,
+        "grid_export_limit_kw": config.grid_export_limit_kw,
         "summary": totals,
         "rows": rows,
         "model_scope": {
@@ -323,6 +326,9 @@ def dispatch_energy_system(
             "not_an_optimizer": True,
             "not_a_controller": True,
             "synthetic_or_user_supplied_inputs_only": True,
+            "grid_export_enabled": config.grid_export_limit_kw > 0,
+            "interconnection_permission_validated": False,
+            "network_power_flow_modeled": False,
         },
     }
 

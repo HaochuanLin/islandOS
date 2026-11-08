@@ -195,7 +195,9 @@ def test_grid_export_respects_limit_and_reconciles_energy_and_revenue():
     result = dispatch_energy_system(inputs, config)
     row = result["rows"][0]
     summary = result["summary"]
+    assert row["grid_available"] is True
     assert row["grid_export_kw"] == pytest.approx(3)
+    assert row["grid_import_kw"] == 0
     assert row["renewable_curtailed_kw"] == pytest.approx(3)
     assert row["energy_balance_residual_kw"] == pytest.approx(0)
     assert summary["grid_export_energy_kwh"] == pytest.approx(1.5)
@@ -215,6 +217,7 @@ def test_grid_export_is_blocked_when_grid_is_unavailable():
         grid_export_price_per_kwh=[0.1],
     )
     result = dispatch_energy_system(inputs, config)
+    assert result["rows"][0]["grid_available"] is False
     assert result["rows"][0]["grid_export_kw"] == 0
     assert result["summary"]["grid_export_revenue"] == 0
     assert result["summary"]["renewable_curtailed_kwh"] == pytest.approx(6)
@@ -285,3 +288,20 @@ def test_battery_is_charged_before_remaining_surplus_is_exported():
     assert row["grid_export_kw"] == pytest.approx(4)
     assert row["renewable_curtailed_kw"] == pytest.approx(0.4)
     assert row["energy_balance_residual_kw"] == pytest.approx(0)
+
+
+def test_model_scope_discloses_export_configuration_without_claiming_interconnection_approval():
+    config = EnergySystemConfig(
+        pv_rated_kw=1, wind_rated_kw=0, grid_import_limit_kw=1,
+        grid_export_limit_kw=1,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[0],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.1],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["grid_export_limit_kw"] == 1
+    assert result["model_scope"]["grid_export_enabled"] is True
+    assert result["model_scope"]["interconnection_permission_validated"] is False
+    assert result["model_scope"]["network_power_flow_modeled"] is False
