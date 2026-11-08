@@ -820,3 +820,49 @@ def test_policy_comparison_reports_diesel_fuel_cost_and_consumption_differences(
     assert "diesel_energy_cost" in differences
     assert differences["diesel_fuel_cost"] == pytest.approx(0)
     assert comparison["battery_first"]["summary"]["diesel_fuel_cost"] == pytest.approx(4.5)
+
+def test_battery_cycle_aging_tracks_efc_state_of_health_and_capacity_fade():
+    config = EnergySystemConfig(
+        pv_rated_kw=5, wind_rated_kw=0, grid_import_limit_kw=0,
+        battery=BatterySpec(
+            capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.95,
+            charge_efficiency=1, discharge_efficiency=1,
+            cycle_life_efc=100, end_of_life_capacity_fraction=0.8,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[5, 0], wind_generation_kw=[0, 0],
+        load_kw=[0, 5], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False],
+    )
+    result = dispatch_energy_system(inputs, config, policy="battery_first")
+    first, second = result["rows"]
+    summary = result["summary"]
+    assert first["battery_efc_increment"] == pytest.approx(0.225)
+    assert second["battery_efc_increment"] == pytest.approx(0.25)
+    assert summary["battery_equivalent_full_cycles"] == pytest.approx(0.475)
+    assert summary["battery_capacity_fade_kwh"] == pytest.approx(0.0095)
+    assert summary["ending_battery_state_of_health"] == pytest.approx(0.99905)
+    assert summary["ending_battery_effective_capacity_kwh"] == pytest.approx(9.9905)
+    assert first["battery_capacity_fade_spill_kwh"] > 0
+    assert result["model_scope"]["battery_cycle_aging_enabled"] is True
+    assert result["model_scope"]["battery_calendar_aging_modeled"] is False
+    assert result["model_scope"]["battery_temperature_aging_modeled"] is False
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"cycle_life_efc": 0}, "cycle_life_efc must be > 0"),
+        ({"cycle_life_efc": 100, "end_of_life_capacity_fraction": 1}, "must be between 0 and 1"),
+        ({"cycle_life_efc": 100, "initial_state_of_health": 0.7}, "cannot be below end-of-life"),
+        ({"end_of_life_capacity_fraction": 0.75}, "requires cycle_life_efc"),
+    ],
+)
+def test_battery_cycle_aging_rejects_invalid_lifecycle_parameters(kwargs, message):
+    with pytest.raises(EnergyModelError, match=message):
+        BatterySpec(
+            capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+            **kwargs,
+        )
