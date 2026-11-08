@@ -118,3 +118,32 @@ def test_normally_open_branch_does_not_join_components():
     )
     result = validate_electrical_topology(topology, [])
     assert result["normally_connected_component_count"] == 2
+
+
+
+def test_unavailable_connected_asset_blocks_topology_readiness():
+    unavailable = AssetRecord(
+        asset_id="pv-1", site_id="site-1", asset_type="generic",
+        nameplate_parameters={}, installed_parameters={}, observed_parameters={},
+        constraints=(), available=False,
+    )
+    topology = ElectricalTopology("site-1", (bus(),), (), (connection("pv-1"),))
+    result = validate_electrical_topology(topology, [unavailable])
+    assert "connection_asset_unavailable:port-1" in result["blockers"]
+    assert result["is_structurally_ready"] is False
+
+
+def test_duplicate_branch_and_connection_ids_are_blocked():
+    topology = ElectricalTopology(
+        "site-1",
+        (bus(), bus("bus-b")),
+        (branch("same", "bus-a", "bus-b"), branch("same", "bus-a", "bus-b")),
+        (
+            connection("pv-1", connection_id="same-port"),
+            connection("pv-1", connection_id="same-port", bus_id="bus-b"),
+        ),
+    )
+    result = validate_electrical_topology(topology, [asset()])
+    assert "duplicate_branch_ids" in result["blockers"]
+    assert "duplicate_connection_ids" in result["blockers"]
+    assert "duplicate_asset_port_connections" in result["blockers"]
