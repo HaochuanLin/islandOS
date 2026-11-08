@@ -627,3 +627,53 @@ def test_nonlinear_diesel_curve_cannot_be_mixed_with_legacy_constant_rate():
         build_energy_system_config_from_assets(
             [generator], operating_assumptions=assumptions,
         )
+
+def test_diesel_fuel_curve_is_interpolated_at_derated_installed_rating():
+    generator = asset(
+        "diesel_generator",
+        {"configured_power_kw": (25, "kW")},
+        {
+            "max_power_kw": ("max", 30, "kW"),
+            "min_stable_power_kw": ("min", 5, "kW"),
+        },
+    )
+    assumptions = {
+        "diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh"),
+        "diesel_initial_fuel_liters": assumption(120, "L"),
+        "diesel_fuel_curve_0_power_kw": assumption(0, "kW"),
+        "diesel_fuel_curve_0_fuel_l_per_hour": assumption(0, "L/h"),
+        "diesel_fuel_curve_1_power_kw": assumption(15, "kW"),
+        "diesel_fuel_curve_1_fuel_l_per_hour": assumption(4.2, "L/h"),
+        "diesel_fuel_curve_2_power_kw": assumption(30, "kW"),
+        "diesel_fuel_curve_2_fuel_l_per_hour": assumption(9.0, "L/h"),
+    }
+    config = build_energy_system_config_from_assets(
+        [generator], operating_assumptions=assumptions,
+    )
+    assert config.diesel.rated_power_kw == pytest.approx(25)
+    assert config.diesel.fuel_curve_liters_per_hour[-1] == pytest.approx((25, 7.4))
+
+
+def test_diesel_fuel_curve_must_cover_installed_rated_power():
+    generator = asset(
+        "diesel_generator",
+        {"configured_power_kw": (30, "kW")},
+        {
+            "max_power_kw": ("max", 30, "kW"),
+            "min_stable_power_kw": ("min", 5, "kW"),
+        },
+    )
+    assumptions = {
+        "diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh"),
+        "diesel_initial_fuel_liters": assumption(120, "L"),
+        "diesel_fuel_curve_0_power_kw": assumption(0, "kW"),
+        "diesel_fuel_curve_0_fuel_l_per_hour": assumption(0, "L/h"),
+        "diesel_fuel_curve_1_power_kw": assumption(15, "kW"),
+        "diesel_fuel_curve_1_fuel_l_per_hour": assumption(4.2, "L/h"),
+        "diesel_fuel_curve_2_power_kw": assumption(25, "kW"),
+        "diesel_fuel_curve_2_fuel_l_per_hour": assumption(7.4, "L/h"),
+    }
+    with pytest.raises(AssetEnergyAdapterError, match="does not cover the installed rated power"):
+        build_energy_system_config_from_assets(
+            [generator], operating_assumptions=assumptions,
+        )
