@@ -229,6 +229,8 @@ def dispatch_energy_system(
         "grid_export_revenue": 0.0,
     }
 
+    previous_diesel_kw = 0.0
+
     for t in range(n):
         renewable = pv[t] + wind[t]
         direct_renewable = min(renewable, load[t])
