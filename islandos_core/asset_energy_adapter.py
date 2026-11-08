@@ -7,7 +7,6 @@ not imply device compatibility, field validation, or authorization for control.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 from islandos_core.assets import AssetParameter, AssetRecord, evaluate_asset_readiness
 from islandos_core.energy_system import (
