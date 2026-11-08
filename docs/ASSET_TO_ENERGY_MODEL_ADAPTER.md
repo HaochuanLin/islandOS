@@ -64,9 +64,13 @@ minimum loading, ramping, and start behavior are modeled.
 
 Battery efficiencies, initial SOC, and diesel variable cost are explicit
 operating assumptions passed by the caller as provenance-bearing
-`AssetParameter` records. Each must have a unit, source type, source reference,
-and explicit confirmation. They are not invented from the asset registry.
-The caller must carry these records into the future run manifest.
+`AssetParameter` records. An optional battery throughput wear-cost rate is
+mapped only when supplied as a confirmed currency-per-kWh assumption; absent
+means the wear-cost proxy remains disabled at zero. An optional diesel tank
+capacity is likewise accepted only as a confirmed liter-valued assumption.
+Each supplied assumption must have a unit, source type, source reference, and
+explicit confirmation. They are not invented from the asset registry. The
+caller must carry these records into the future run manifest.
 
 ## Example
 
