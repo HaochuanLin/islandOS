@@ -162,8 +162,29 @@ def test_application_service_persists_and_reloads_versioned_asset_registry(tmp_p
             source_type="customer_provided", source_reference="approved schedule", confirmed=True,
         ),),
     )
-    saved = register_project_asset(db, project_id="site-a", asset=asset, actor_id="user-a", saved_at=NOW)
+    saved = register_project_asset(db, project_id="site-a", asset=asset, actor_id="user-a", consent_to_store_assets=True, saved_at=NOW)
     restored = list_project_assets(db, project_id="site-a")
     assert saved["version"] == 1
     assert restored[0]["asset"] == asset
     assert restored[0]["readiness"]["can_screen"] is True
+
+
+def test_application_service_requires_explicit_consent_to_store_asset_configuration(tmp_path):
+    from islandos_core.assets import AssetParameter, AssetRecord
+    db = tmp_path / "workspace.sqlite3"
+    create_local_project(
+        db, workspace_id="workspace-a", project_id="site-a",
+        display_name="Site A", actor_id="user-a",
+        consent_to_store_metadata=True, created_at=NOW,
+    )
+    asset = AssetRecord(
+        asset_id="pv-01", site_id="site-a", asset_type="pv",
+        nameplate_parameters={}, installed_parameters={
+            "configured_power_kw": AssetParameter(10, "kW", "customer_provided", "site schedule", True)
+        }, observed_parameters={}, constraints=(),
+    )
+    with pytest.raises(ValueError, match="explicit consent"):
+        register_project_asset(
+            db, project_id="site-a", asset=asset, actor_id="user-a",
+            consent_to_store_assets=False, saved_at=NOW,
+        )
