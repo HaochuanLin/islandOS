@@ -210,4 +210,13 @@ def test_synthetic_24_hour_optimizer_example_is_reproducible():
     assert first["data_status"].startswith("synthetic")
     assert len(first["optimizer"]["recommendation"]["policy_schedule"]) == 24
     assert first["optimizer"]["candidate_count"] >= 2
+    assert set(first["recommended_minus_baseline_deltas"]) == {"battery_first", "grid_first"}
+    assert all(
+        set(delta) == {
+            "estimated_energy_cost", "unmet_load_kwh",
+            "renewable_curtailed_kwh", "battery_throughput_kwh",
+        }
+        for delta in first["recommended_minus_baseline_deltas"].values()
+    )
+    assert "not measured savings" in first["delta_interpretation"]
     assert first["scope"]["not_a_controller"] is True
