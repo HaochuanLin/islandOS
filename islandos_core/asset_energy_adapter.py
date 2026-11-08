@@ -266,6 +266,20 @@ def build_energy_system_config_from_assets(
                     _required_assumption(assumptions, "battery_throughput_cost_per_kwh")
                     if "battery_throughput_cost_per_kwh" in assumptions else 0.0
                 ),
+                initial_state_of_health=(
+                    _required_assumption(
+                        assumptions, "battery_initial_state_of_health", unit="fraction"
+                    ) if "battery_initial_state_of_health" in assumptions else 1.0
+                ),
+                cycle_life_efc=(
+                    _required_assumption(assumptions, "battery_cycle_life_efc", unit="EFC")
+                    if "battery_cycle_life_efc" in assumptions else None
+                ),
+                end_of_life_capacity_fraction=(
+                    _required_assumption(
+                        assumptions, "battery_end_of_life_capacity_fraction", unit="fraction"
+                    ) if "battery_end_of_life_capacity_fraction" in assumptions else 0.8
+                ),
             )
         except EnergyModelError as exc:
             raise AssetEnergyAdapterError(
