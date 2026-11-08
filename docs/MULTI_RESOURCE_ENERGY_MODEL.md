@@ -44,6 +44,24 @@ policy comparisons, and gross/estimated energy cost. This is a transparent
 cost proxy only: it does not calculate physical capacity fade, cycle-life,
 calendar aging, temperature effects, or replacement timing. The default rate is
 zero, which means battery wear cost is not included unless explicitly supplied.
+
+An optional cycle-aging model can be enabled with `cycle_life_efc` and an
+end-of-life capacity fraction (default 0.8). Equivalent full cycles are computed
+from cell-side energy throughput (charge energy stored plus discharge energy
+removed, divided by twice beginning-of-life capacity). Capacity fades linearly
+from the supplied initial state of health toward the end-of-life fraction.
+Effective capacity is updated each timestep and is used for SOC and power
+availability calculations. If capacity fade would leave stored energy above the
+new maximum SOC, the excess is explicitly reported as
+`battery_capacity_fade_spill_kwh`. The output records EFC increments,
+cumulative EFC, SOH, effective capacity, capacity fade, and any spill.
+
+This is a transparent cycle-throughput aging approximation, not a chemistry-
+specific electrochemical model. Calendar aging, temperature, depth-of-discharge
+nonlinearity, C-rate dependence, rest periods, balancing, warranty conditions,
+and replacement economics are not yet modeled. Supply cycle-life and initial
+SOH from the exact battery model's datasheet or validated test history; do not
+use generic values as verified site performance.
 PV and wind inputs above their configured nameplate ratings are rejected rather
 than silently clipped. Grid availability must always be supplied as an explicit boolean series.
 When a diesel generator is configured, diesel availability must also be
