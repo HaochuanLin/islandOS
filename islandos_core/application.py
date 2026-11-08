@@ -270,9 +270,11 @@ def evaluate_project_lifecycle_economics(
 
 def register_project_asset(
     db_path: str | Path, *, project_id: str, asset: Any, actor_id: str,
-    saved_at: datetime | None = None,
+    consent_to_store_assets: bool, saved_at: datetime | None = None,
 ) -> dict[str, Any]:
-    """Append one immutable asset configuration version to a local project."""
+    """Append one immutable asset configuration version after explicit consent."""
+    if consent_to_store_assets is not True:
+        raise ValueError("explicit consent is required before saving asset configuration")
     from islandos_core.assets import AssetRecord
     if not isinstance(asset, AssetRecord):
         raise ValueError("asset must be a validated AssetRecord")
