@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from islandos_core.multisignal_forecasting import (
+    CalibrationResidual,
     SignalForecastRegistry,
     SignalForecastRequest,
     SignalObservation,
@@ -64,9 +65,16 @@ class TestMultiSignalForecasting(unittest.TestCase):
     def test_calibrated_intervals_use_separate_past_residuals(self):
         registry = SignalForecastRegistry()
         registry.register(PersistencePlugin())
-        residuals = [float(i) for i in range(-10, 10)] + [10.0]
+        request = self.request()
+        residuals = tuple(
+            CalibrationResidual(
+                timestamp=request.history[-21 + i].timestamp,
+                residual=float(i - 10),
+            )
+            for i in range(21)
+        )
         result = registry.forecast(
-            "persistence", self.request(),
+            "persistence", request,
             calibration_residuals=residuals, interval_coverage=0.90,
         )
         self.assertEqual(result.calibration_sample_count, 21)
@@ -81,16 +89,23 @@ class TestMultiSignalForecasting(unittest.TestCase):
         registry = SignalForecastRegistry()
         registry.register(PersistencePlugin())
         with self.assertRaisesRegex(ValueError, "At least 20"):
-            registry.forecast("persistence", self.request(), calibration_residuals=[1.0] * 19)
+            registry.forecast("persistence", self.request(), calibration_residuals=[
+                CalibrationResidual(self.start + timedelta(hours=i), 1.0) for i in range(19)
+            ])
         with self.assertRaisesRegex(ValueError, "interval_coverage"):
             registry.forecast(
                 "persistence", self.request(),
-                calibration_residuals=[1.0] * 20, interval_coverage=1.0,
+                calibration_residuals=[
+                    CalibrationResidual(self.start + timedelta(hours=i), 1.0) for i in range(20)
+                ], interval_coverage=1.0,
             )
         with self.assertRaisesRegex(ValueError, "finite"):
             registry.forecast(
                 "persistence", self.request(),
-                calibration_residuals=[1.0] * 19 + [float("nan")],
+                calibration_residuals=[
+                    CalibrationResidual(self.start + timedelta(hours=i), float("nan") if i == 19 else 1.0)
+                    for i in range(20)
+                ],
             )
 
     def test_rejects_bad_timestamps_units_gaps_and_cadence(self):
