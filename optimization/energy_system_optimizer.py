@@ -474,10 +474,6 @@ def optimize_battery_power_schedule(
     def evaluate(genome: tuple[float, ...]) -> dict:
         if genome not in cache:
             dispatch = dispatch_energy_system(
-                inputs,
-                config,
-                policy="battery_first",
-            ) if False else dispatch_energy_system(
                 EnergySystemInputs(
                     pv_generation_kw=inputs.pv_generation_kw,
                     wind_generation_kw=inputs.wind_generation_kw,
