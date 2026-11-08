@@ -37,9 +37,15 @@ PV + wind + battery discharge + grid import + diesel
 ```
 
 Battery state of charge is updated with separate charge and discharge
-efficiencies and is constrained by configured minimum and maximum SOC. PV and
-wind inputs above their configured nameplate ratings are rejected rather than
-silently clipped. Grid availability must always be supplied as an explicit boolean series.
+efficiencies and is constrained by configured minimum and maximum SOC. An
+optional user-supplied throughput wear-cost rate prices each kWh charged plus
+each kWh discharged; the resulting estimate is included in timestep audit rows,
+policy comparisons, and gross/estimated energy cost. This is a transparent
+cost proxy only: it does not calculate physical capacity fade, cycle-life,
+calendar aging, temperature effects, or replacement timing. The default rate is
+zero, which means battery wear cost is not included unless explicitly supplied.
+PV and wind inputs above their configured nameplate ratings are rejected rather
+than silently clipped. Grid availability must always be supplied as an explicit boolean series.
 When a diesel generator is configured, diesel availability must also be
 supplied explicitly. An unconfigured diesel unit is never treated as available.
 Missing availability is rejected rather than silently assumed.
