@@ -5,6 +5,7 @@ from islandos_core.asset_energy_adapter import (
     build_energy_system_config_from_assets,
 )
 from islandos_core.assets import AssetParameter, AssetRecord, OperatingConstraint
+from islandos_core.energy_system import EnergySystemInputs, dispatch_energy_system
 
 
 def parameter(value, unit, *, confirmed=True):
@@ -226,3 +227,29 @@ def test_operating_assumptions_must_carry_confirmed_provenance():
     }
     with pytest.raises(AssetEnergyAdapterError, match="not confirmed"):
         build_energy_system_config_from_assets([battery], operating_assumptions=assumptions)
+
+
+
+def test_asset_registry_output_runs_through_offline_energy_dispatch():
+    assets = [
+        asset("pv", {"configured_power_kw": (10, "kW")},
+              {"max_power_kw": ("max", 10, "kW")}),
+        asset("grid_connection", {"configured_power_kw": (5, "kW")},
+              {"import_limit_kw": ("max", 5, "kW")}),
+    ]
+    config = build_energy_system_config_from_assets(assets)
+    result = dispatch_energy_system(
+        EnergySystemInputs(
+            pv_generation_kw=[5],
+            wind_generation_kw=[0],
+            load_kw=[8],
+            grid_price_per_kwh=[0.3],
+            grid_available=[True],
+        ),
+        config,
+    )
+    row = result["rows"][0]
+    assert row["pv_generation_kw"] == 5
+    assert row["grid_import_kw"] == 3
+    assert row["unmet_load_kw"] == 0
+    assert abs(row["energy_balance_residual_kw"]) < 1e-8
