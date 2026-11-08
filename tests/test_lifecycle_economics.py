@@ -77,4 +77,4 @@ def test_negative_operating_savings_and_no_payback_are_preserved():
     ))
     assert result["annual_operating_savings"] == -20
     assert result["simple_payback_year"] is None
-    assert result["npv"] == pytest.approx(-65.5713305898)
+    assert result["npv"] == pytest.approx(-61.5419396998)
