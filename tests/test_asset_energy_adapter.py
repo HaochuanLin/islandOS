@@ -370,3 +370,26 @@ def test_unconfirmed_or_duplicate_grid_export_limit_blocks_asset_conversion():
     )
     with pytest.raises(AssetEnergyAdapterError, match="confirmed hard max"):
         build_energy_system_config_from_assets([connection])
+
+
+def test_multiple_export_capable_grid_connections_are_not_summed_without_shared_poi_model():
+    first = asset(
+        "grid_connection",
+        {"configured_power_kw": (50, "kW")},
+        {
+            "import_limit_kw": ("max", 45, "kW"),
+            "export_limit_kw": ("max", 20, "kW"),
+        },
+        asset_id="grid-a",
+    )
+    second = asset(
+        "grid_connection",
+        {"configured_power_kw": (40, "kW")},
+        {
+            "import_limit_kw": ("max", 35, "kW"),
+            "export_limit_kw": ("max", 15, "kW"),
+        },
+        asset_id="grid-b",
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="shared point-of-connection"):
+        build_energy_system_config_from_assets([first, second])

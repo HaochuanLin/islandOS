@@ -50,7 +50,9 @@ minimum loading, ramping, and start behavior are modeled.
   contribution is capped at the lower of confirmed installed power and that
   export limit. Missing export constraints contribute zero export capacity;
   present but unconfirmed, duplicated, or malformed export constraints block
-  conversion rather than being guessed.
+  conversion rather than being guessed. Until a shared point-of-connection
+  capacity model exists, more than one export-capable grid connection blocks
+  conversion rather than having its limits summed and potentially overstated.
 - Battery capacity comes from confirmed usable installed energy capacity;
   charge/discharge limits and SOC bounds come from confirmed hard constraints.
 - Diesel rated power comes from the lower of confirmed installed power and

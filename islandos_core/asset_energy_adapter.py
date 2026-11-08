@@ -176,7 +176,8 @@ def build_energy_system_config_from_assets(
         raise AssetEnergyAdapterError(
             "operating assumptions must be provenance-bearing AssetParameter records"
         )
-    pv_rated_kw = wind_rated_kw = grid_import_limit_kw = grid_export_limit_kw = 0.0
+    pv_rated_kw = wind_rated_kw = grid_import_limit_kw = 0.0
+    export_limits: list[float] = []
     battery_spec = None
     diesel_spec = None
 
@@ -196,7 +197,15 @@ def build_energy_system_config_from_assets(
         installed = _required_parameter(asset, "configured_power_kw", "kW")
         hard_limit = _required_constraint(asset, "import_limit_kw", "max")
         grid_import_limit_kw += min(installed, hard_limit)
-        grid_export_limit_kw += _optional_grid_export_limit(asset, installed)
+        export_limits.append(_optional_grid_export_limit(asset, installed))
+
+    positive_export_limits = [limit for limit in export_limits if limit > 0]
+    if len(positive_export_limits) > 1:
+        raise AssetEnergyAdapterError(
+            "multiple export-capable grid connections require an explicit "
+            "shared point-of-connection aggregation model"
+        )
+    grid_export_limit_kw = positive_export_limits[0] if positive_export_limits else 0.0
 
     if "battery" in grouped:
         asset = grouped["battery"][0]
