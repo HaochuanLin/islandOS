@@ -45,9 +45,13 @@ Missing availability is rejected rather than silently assumed.
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
 metrics. Export is disabled by default. Enabling it requires a positive explicit
-grid export limit and a same-length feed-in price series; negative feed-in prices
+grid export limit and a same-length feed-in price series and export-permission series;
+negative feed-in prices
 are allowed and correctly increase net cost. Export is blocked whenever the grid
-availability flag is false. These are estimates from user-supplied assumptions,
+availability flag or the separate explicit export-permission flag is false.
+A grid that is online is not automatically assumed to permit reverse power
+flow. Export requires both a same-length feed-in price series and a same-length
+`grid_export_available` boolean series. These are estimates from user-supplied assumptions,
 not a tariff settlement or proof of interconnection permission.
 
 ## Important limitations before site use

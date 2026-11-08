@@ -50,6 +50,7 @@ def build_demo_case() -> tuple[EnergySystemInputs, EnergySystemConfig]:
             0.12, 0.12, 0.10, 0.10, 0.12, 0.15,
             0.15, 0.15, 0.12, 0.10, 0.09, 0.08,
         ],
+        grid_export_available=[True] * 24,
     )
     config = EnergySystemConfig(
         pv_rated_kw=80,

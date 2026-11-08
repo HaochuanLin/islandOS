@@ -420,6 +420,7 @@ def test_confirmed_asset_export_limit_flows_into_energy_dispatch():
             grid_price_per_kwh=[0.3],
             grid_available=[True],
             grid_export_price_per_kwh=[0.1],
+            grid_export_available=[True],
         ),
         config,
     )

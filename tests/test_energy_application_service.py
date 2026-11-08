@@ -52,6 +52,7 @@ def test_application_service_exposes_grid_export_revenue_and_net_cost():
         pv_generation_kw=[8], wind_generation_kw=[0], load_kw=[2],
         grid_price_per_kwh=[0.3], grid_available=[True],
         grid_export_price_per_kwh=[0.12],
+        grid_export_available=[True],
     )
     result = run_energy_policy_comparison(inputs, config)
     for policy in ("battery_first", "grid_first"):

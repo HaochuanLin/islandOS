@@ -95,6 +95,7 @@ class EnergySystemInputs:
     grid_available: Sequence[bool]
     diesel_available: Sequence[bool] | None = None
     grid_export_price_per_kwh: Sequence[float] | None = None
+    grid_export_available: Sequence[bool] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -175,13 +176,18 @@ def dispatch_energy_system(
         raise EnergyModelError("wind generation exceeds configured rated power")
     if inputs.grid_available is None:
         raise EnergyModelError("grid_available must be explicitly supplied")
-    if config.grid_export_limit_kw > 0 and inputs.grid_export_price_per_kwh is None:
+    if config.grid_export_limit_kw > 0:
+        if inputs.grid_export_price_per_kwh is None:
+            raise EnergyModelError(
+                "grid_export_price_per_kwh must be explicitly supplied when grid export is enabled"
+            )
+        if inputs.grid_export_available is None:
+            raise EnergyModelError(
+                "grid_export_available must be explicitly supplied when grid export is enabled"
+            )
+    elif inputs.grid_export_price_per_kwh is not None or inputs.grid_export_available is not None:
         raise EnergyModelError(
-            "grid_export_price_per_kwh must be explicitly supplied when grid export is enabled"
-        )
-    if config.grid_export_limit_kw == 0 and inputs.grid_export_price_per_kwh is not None:
-        raise EnergyModelError(
-            "grid_export_price_per_kwh was supplied but grid_export_limit_kw is zero"
+            "grid export price/availability was supplied but grid_export_limit_kw is zero"
         )
     if config.diesel is not None and inputs.diesel_available is None:
         raise EnergyModelError(
@@ -190,6 +196,9 @@ def dispatch_energy_system(
     grid_ok = _flags("grid_available", inputs.grid_available, n, default=False)
     # An unconfigured diesel unit is never implicitly treated as available.
     diesel_ok = _flags("diesel_available", inputs.diesel_available, n, default=False)
+    export_ok = _flags(
+        "grid_export_available", inputs.grid_export_available, n, default=False
+    )
 
     battery = config.battery
     soc = battery.initial_soc if battery else 0.0
@@ -257,7 +266,7 @@ def dispatch_energy_system(
 
         export_kw = (
             min(surplus, config.grid_export_limit_kw)
-            if grid_ok[t] and config.grid_export_limit_kw > 0 else 0.0
+            if grid_ok[t] and export_ok[t] and config.grid_export_limit_kw > 0 else 0.0
         )
         curtailed_kw = max(0.0, surplus - export_kw)
         served_kw = load[t] - max(0.0, deficit)
@@ -275,6 +284,7 @@ def dispatch_energy_system(
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
             "grid_available": grid_ok[t],
+            "grid_export_available": export_ok[t],
             "diesel_available": diesel_ok[t],
             "grid_import_kw": grid_kw, "grid_export_kw": export_kw,
             "grid_export_price_per_kwh": export_price[t],
