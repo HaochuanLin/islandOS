@@ -648,3 +648,265 @@ def optimize_battery_power_schedule(
             "not_a_controller": True,
         },
     }
+
+
+
+def optimize_battery_and_diesel_schedule(
+    inputs: EnergySystemInputs,
+    config: EnergySystemConfig,
+    *,
+    weights: OptimizationWeights = OptimizationWeights(),
+    population_size: int = 32,
+    generations: int = 20,
+    mutation_rate: float = 0.12,
+    seed: int = 20261108,
+    max_horizon_steps: int = 168,
+) -> dict:
+    """Jointly search continuous battery set-points and binary diesel commitment.
+
+    The diesel generator still follows residual-load dispatch when committed;
+    its exact kW output is not a free decision variable. Physical startup,
+    minimum-load, ramp-up, fuel, availability, and cost rules stay in the
+    shared simulator.
+    """
+    if config.battery is None or config.diesel is None:
+        raise OptimizationError("both a configured battery and diesel unit are required")
+    if inputs.diesel_available is None:
+        raise OptimizationError("diesel_available must be explicitly supplied")
+    n = len(inputs.load_kw)
+    if n < 1:
+        raise OptimizationError("optimization horizon must contain at least one step")
+    if n > max_horizon_steps:
+        raise OptimizationError(
+            f"optimization horizon has {n} steps; configured maximum is {max_horizon_steps}"
+        )
+    if population_size < 4:
+        raise OptimizationError("population_size must be >= 4")
+    if generations < 1:
+        raise OptimizationError("generations must be >= 1")
+    if isinstance(mutation_rate, bool) or not isinstance(mutation_rate, (int, float)) or not math.isfinite(float(mutation_rate)) or not 0 <= mutation_rate <= 1:
+        raise OptimizationError("mutation_rate must be finite and within [0, 1]")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise OptimizationError("seed must be an integer")
+
+    lower = -float(config.battery.max_charge_kw)
+    upper = float(config.battery.max_discharge_kw)
+    span = upper - lower
+    rng = random.Random(seed)
+    # Genome: (signed battery kW schedule, diesel on/off schedule).
+    Genome = tuple[tuple[float, ...], tuple[bool, ...]]
+    cache: dict[Genome, dict] = {}
+
+    def evaluate(genome: Genome) -> dict:
+        if genome not in cache:
+            setpoints, commitments = genome
+            candidate_inputs = EnergySystemInputs(
+                pv_generation_kw=inputs.pv_generation_kw,
+                wind_generation_kw=inputs.wind_generation_kw,
+                load_kw=inputs.load_kw,
+                grid_price_per_kwh=inputs.grid_price_per_kwh,
+                grid_available=inputs.grid_available,
+                diesel_available=inputs.diesel_available,
+                grid_export_price_per_kwh=inputs.grid_export_price_per_kwh,
+                grid_export_available=inputs.grid_export_available,
+                diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
+                battery_power_setpoint_kw=setpoints,
+                diesel_commitment_schedule=commitments,
+            )
+            dispatch = dispatch_energy_system(candidate_inputs, config)
+            audit = _audit(dispatch)
+            summary = dispatch["summary"]
+            objectives = {
+                "estimated_energy_cost": float(summary["estimated_energy_cost"]),
+                "unmet_load_kwh": float(summary["unmet_load_kwh"]),
+                "renewable_curtailed_kwh": float(summary["renewable_curtailed_kwh"]),
+                "battery_throughput_kwh": float(summary["battery_throughput_kwh"]),
+            }
+            cache[genome] = {
+                "battery_setpoints_kw": list(setpoints),
+                "diesel_commitment_schedule": list(commitments),
+                "objectives": objectives,
+                "summary": summary,
+                "audit": audit,
+                "feasible": audit["passed"],
+                "dispatch": dispatch,
+            }
+        return cache[genome]
+
+    def pareto_front(rows: list[dict]) -> list[dict]:
+        feasible_rows = [row for row in rows if row["feasible"]]
+        return [
+            row for row in feasible_rows
+            if not any(other is not row and _dominates(other, row) for other in feasible_rows)
+        ]
+
+    def score(row: dict, front: list[dict]) -> float:
+        keys = (
+            "estimated_energy_cost", "unmet_load_kwh",
+            "renewable_curtailed_kwh", "battery_throughput_kwh",
+        )
+        objective_weights = (weights.cost, weights.reliability, weights.curtailment, 0.0)
+        total = 0.0
+        for key, weight in zip(keys, objective_weights):
+            low = min(item["objectives"][key] for item in front)
+            high = max(item["objectives"][key] for item in front)
+            value = row["objectives"][key]
+            normalized = 0.0 if high - low <= 1e-12 else (value - low) / (high - low)
+            total += weight * normalized
+        return total
+
+    zero = tuple(0.0 for _ in range(n))
+    off = tuple(False for _ in range(n))
+    on = tuple(True for _ in range(n))
+    population: list[Genome] = [(zero, off), (zero, on)]
+    while len(population) < population_size:
+        genome: Genome = (
+            tuple(round(rng.uniform(lower, upper), 8) for _ in range(n)),
+            tuple(bool(rng.getrandbits(1)) for _ in range(n)),
+        )
+        if genome not in population:
+            population.append(genome)
+            evaluate(genome)
+    for genome in population:
+        evaluate(genome)
+
+    for _ in range(generations):
+        front = pareto_front([evaluate(genome) for genome in population])
+        if not front:
+            raise OptimizationError("No joint battery/diesel schedule passed the physical audit")
+        offspring: list[Genome] = []
+        while len(offspring) < population_size:
+            parents = rng.sample(population, 2)
+            parent_rows = [evaluate(item) for item in parents]
+            if parent_rows[0]["feasible"] and not parent_rows[1]["feasible"]:
+                parent = parents[0]
+            elif parent_rows[1]["feasible"] and not parent_rows[0]["feasible"]:
+                parent = parents[1]
+            elif _dominates(parent_rows[0], parent_rows[1]):
+                parent = parents[0]
+            elif _dominates(parent_rows[1], parent_rows[0]):
+                parent = parents[1]
+            else:
+                parent = min(
+                    parents,
+                    key=lambda item: (
+                        score(evaluate(item), front) if evaluate(item)["feasible"] else float("inf"),
+                        item,
+                    ),
+                )
+            mate = rng.choice(population)
+            battery_child = []
+            diesel_child = []
+            for index in range(n):
+                alpha = rng.random()
+                value = alpha * parent[0][index] + (1 - alpha) * mate[0][index]
+                if rng.random() < mutation_rate:
+                    value += rng.gauss(0.0, span * 0.15)
+                battery_child.append(round(min(upper, max(lower, value)), 8))
+                diesel_gene = parent[1][index] if rng.random() < 0.5 else mate[1][index]
+                if rng.random() < mutation_rate:
+                    diesel_gene = not diesel_gene
+                diesel_child.append(diesel_gene)
+            child: Genome = (tuple(battery_child), tuple(diesel_child))
+            offspring.append(child)
+            evaluate(child)
+        combined = list(dict.fromkeys(population + offspring))
+        combined_rows = [evaluate(genome) for genome in combined]
+        next_front = pareto_front(combined_rows)
+        if not next_front:
+            raise OptimizationError("No joint battery/diesel schedule passed the physical audit")
+        selected = sorted(
+            next_front,
+            key=lambda row: (
+                score(row, next_front),
+                tuple(row["battery_setpoints_kw"]),
+                tuple(row["diesel_commitment_schedule"]),
+            ),
+        )
+        selected_genomes = [
+            (
+                tuple(row["battery_setpoints_kw"]),
+                tuple(row["diesel_commitment_schedule"]),
+            )
+            for row in selected[:population_size]
+        ]
+        if len(selected_genomes) < population_size:
+            remaining = [
+                row for row in combined_rows
+                if (
+                    tuple(row["battery_setpoints_kw"]),
+                    tuple(row["diesel_commitment_schedule"]),
+                ) not in selected_genomes
+            ]
+            remaining.sort(
+                key=lambda row: (
+                    not row["feasible"],
+                    score(row, next_front) if row["feasible"] else float("inf"),
+                    tuple(row["battery_setpoints_kw"]),
+                    tuple(row["diesel_commitment_schedule"]),
+                )
+            )
+            selected_genomes.extend(
+                (
+                    tuple(row["battery_setpoints_kw"]),
+                    tuple(row["diesel_commitment_schedule"]),
+                )
+                for row in remaining[:population_size - len(selected_genomes)]
+            )
+        population = selected_genomes
+
+    archive = pareto_front(list(cache.values()))
+    if not archive:
+        raise OptimizationError("No joint battery/diesel schedule passed the physical audit")
+    archive = sorted(
+        archive,
+        key=lambda row: (
+            score(row, archive),
+            tuple(row["battery_setpoints_kw"]),
+            tuple(row["diesel_commitment_schedule"]),
+        ),
+    )
+    recommended = archive[0]
+    return {
+        "algorithm": "seeded_mixed_real_binary_evolutionary_pareto_search",
+        "decision_variables": {
+            "battery": "signed continuous kW set-point per timestep",
+            "diesel": "binary on/off commitment per timestep",
+        },
+        "candidate_count": len(cache),
+        "feasible_count": sum(row["feasible"] for row in cache.values()),
+        "pareto_count": len(archive),
+        "population_size": population_size,
+        "generations": generations,
+        "seed": seed,
+        "horizon_steps": n,
+        "pareto_schedules": [
+            {
+                "battery_setpoints_kw": row["battery_setpoints_kw"],
+                "diesel_commitment_schedule": row["diesel_commitment_schedule"],
+                "objectives": row["objectives"],
+            }
+            for row in archive
+        ],
+        "recommendation": {
+            "battery_setpoints_kw": recommended["battery_setpoints_kw"],
+            "diesel_commitment_schedule": recommended["diesel_commitment_schedule"],
+            "weighted_score": score(recommended, archive),
+            "weights": {
+                "cost": weights.cost,
+                "reliability": weights.reliability,
+                "curtailment": weights.curtailment,
+            },
+            "objectives": recommended["objectives"],
+            "dispatch": recommended["dispatch"],
+        },
+        "model_scope": {
+            "uses_shared_physical_dispatch_engine": True,
+            "battery_soc_efficiency_and_capacity_fade_enforced": True,
+            "diesel_minimum_load_ramp_up_fuel_and_availability_enforced": True,
+            "diesel_power_setpoint_not_optimized": True,
+            "grid_import_export_setpoints_not_optimized": True,
+            "stochastic_heuristic_not_global_optimum": True,
+            "not_a_controller": True,
+        },
+    }
