@@ -53,7 +53,7 @@ class BatterySpec:
     throughput_cost_per_kwh: float = 0.0
     initial_state_of_health: float = 1.0
     cycle_life_efc: float | None = None
-    end_of_life_capacity_fraction: float = 0.8
+    end_of_life_capacity_fraction: float | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -82,19 +82,25 @@ class BatterySpec:
             _number("battery cycle_life_efc", self.cycle_life_efc)
             if self.cycle_life_efc <= 0:
                 raise EnergyModelError("battery cycle_life_efc must be > 0")
-            _number(
-                "battery end_of_life_capacity_fraction",
-                self.end_of_life_capacity_fraction,
+            end_of_life_fraction = (
+                0.8 if self.end_of_life_capacity_fraction is None
+                else self.end_of_life_capacity_fraction
             )
-            if not 0 < self.end_of_life_capacity_fraction < 1:
+            object.__setattr__(
+                self, "end_of_life_capacity_fraction", end_of_life_fraction
+            )
+            _number(
+                "battery end_of_life_capacity_fraction", end_of_life_fraction
+            )
+            if not 0 < end_of_life_fraction < 1:
                 raise EnergyModelError(
                     "battery end_of_life_capacity_fraction must be between 0 and 1"
                 )
-            if self.initial_state_of_health < self.end_of_life_capacity_fraction:
+            if self.initial_state_of_health < end_of_life_fraction:
                 raise EnergyModelError(
                     "battery initial_state_of_health cannot be below end-of-life fraction"
                 )
-        elif self.end_of_life_capacity_fraction != 0.8:
+        elif self.end_of_life_capacity_fraction is not None:
             raise EnergyModelError(
                 "battery end_of_life_capacity_fraction requires cycle_life_efc"
             )
