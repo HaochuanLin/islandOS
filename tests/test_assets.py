@@ -13,10 +13,10 @@ def parameter(value, unit, source="vendor_specification", confirmed=True):
     return AssetParameter(value, unit, source, "datasheet-or-site-record", confirmed)
 
 
-def constraint(name, operator, value, unit, confirmed=True):
+def constraint(name, operator, value, unit, confirmed=True, parameter_name=None):
     return OperatingConstraint(
         constraint_id=name,
-        parameter=name,
+        parameter=parameter_name or name,
         severity="hard",
         unit=unit,
         operator=operator,
@@ -150,8 +150,8 @@ def test_unavailable_asset_is_not_screened():
 
 def test_duplicate_confirmed_hard_constraints_block_asset_readiness():
     asset = battery_asset([
-        constraint("max_charge_kw_a", "max", 180, "kW"),
-        constraint("max_charge_kw_b", "max", 200, "kW"),
+        constraint("max_charge_kw_a", "max", 180, "kW", parameter_name="max_charge_kw"),
+        constraint("max_charge_kw_b", "max", 200, "kW", parameter_name="max_charge_kw"),
         constraint("max_discharge_kw", "max", 200, "kW"),
         constraint("soc_min_pct", "min", 15, "%"),
         constraint("soc_max_pct", "max", 90, "%"),
