@@ -288,7 +288,7 @@ def dispatch_energy_system(
     pv = _series("pv_generation_kw", inputs.pv_generation_kw)
     wind = _series("wind_generation_kw", inputs.wind_generation_kw)
     load = _series("load_kw", inputs.load_kw)
-    price = _series("grid_price_per_kwh", inputs.grid_price_per_kwh)
+    price = _signed_series("grid_price_per_kwh", inputs.grid_price_per_kwh)
     export_price = (
         _signed_series("grid_export_price_per_kwh", inputs.grid_export_price_per_kwh)
         if inputs.grid_export_price_per_kwh is not None else [0.0] * len(load)
