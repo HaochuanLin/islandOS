@@ -882,3 +882,48 @@ def test_negative_grid_import_price_is_accounted_as_a_credit():
     assert row["energy_balance_residual_kw"] == pytest.approx(0)
     assert result["summary"]["grid_energy_cost"] == pytest.approx(-0.36)
     assert result["summary"]["estimated_energy_cost"] == pytest.approx(-0.36)
+
+
+def test_seeded_multiresolution_dispatch_preserves_physical_invariants():
+    import random
+
+    rng = random.Random(20261108)
+    for dt_hours in (0.25, 0.5, 1.0, 2.0):
+        steps = 48
+        pv = [rng.uniform(0, 8) for _ in range(steps)]
+        wind = [rng.uniform(0, 4) for _ in range(steps)]
+        load = [rng.uniform(2, 10) for _ in range(steps)]
+        grid_available = [rng.random() > 0.12 for _ in range(steps)]
+        diesel_available = [rng.random() > 0.08 for _ in range(steps)]
+        config = EnergySystemConfig(
+            pv_rated_kw=8, wind_rated_kw=4, grid_import_limit_kw=3,
+            dt_hours=dt_hours,
+            battery=BatterySpec(
+                capacity_kwh=20, max_charge_kw=5, max_discharge_kw=5,
+                initial_soc=0.55, min_soc=0.15, max_soc=0.9,
+                charge_efficiency=0.94, discharge_efficiency=0.93,
+            ),
+            diesel=DieselSpec(
+                rated_power_kw=5, variable_cost_per_kwh=0.8,
+                min_stable_power_kw=1.0, ramp_up_kw_per_hour=2.0,
+            ),
+        )
+        inputs = EnergySystemInputs(
+            pv_generation_kw=pv, wind_generation_kw=wind, load_kw=load,
+            grid_price_per_kwh=[0.2 + 0.01 * (i % 5) for i in range(steps)],
+            grid_available=grid_available, diesel_available=diesel_available,
+        )
+        result = dispatch_energy_system(inputs, config)
+        rows = result["rows"]
+        assert len(rows) == steps
+        for index, row in enumerate(rows):
+            assert abs(row["energy_balance_residual_kw"]) <= 1e-7
+            assert 0.15 - 1e-9 <= row["battery_soc"] <= 0.9 + 1e-9
+            assert not (row["battery_charge_kw"] > 1e-9 and row["battery_discharge_kw"] > 1e-9)
+            diesel_kw = row["diesel_generation_kw"]
+            assert diesel_kw == pytest.approx(0) or diesel_kw >= 1.0 - 1e-9
+            assert diesel_kw <= 5.0 + 1e-9
+            if index and rows[index - 1]["diesel_generation_kw"] > 0 and diesel_kw > rows[index - 1]["diesel_generation_kw"]:
+                assert diesel_kw - rows[index - 1]["diesel_generation_kw"] <= 2.0 * dt_hours + 1e-9
+        assert result["summary"]["load_energy_kwh"] == pytest.approx(sum(load) * dt_hours)
+        assert result["summary"]["unmet_load_kwh"] >= 0
