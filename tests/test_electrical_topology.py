@@ -65,10 +65,16 @@ def test_missing_bus_or_asset_blocks_connection():
     assert "connection_bus_missing:port-1" in result["blockers"]
 
 
-def test_cross_site_asset_and_bus_are_rejected():
-    topology = ElectricalTopology("site-1", (bus(site="site-2"),), (), (connection("pv-1"),))
-    result = validate_electrical_topology(topology, [asset()])
+def test_cross_site_bus_is_rejected():
+    topology = ElectricalTopology("site-1", (bus(site="site-2"),), (), ())
+    result = validate_electrical_topology(topology, [])
     assert "bus_site_mismatch:bus-a" in result["blockers"]
+
+
+def test_cross_site_asset_connection_is_rejected():
+    topology = ElectricalTopology("site-1", (bus(),), (), (connection("pv-1"),))
+    result = validate_electrical_topology(topology, [asset(site_id="site-2")])
+    assert "connection_asset_site_mismatch:port-1" in result["blockers"]
 
 
 def test_connection_voltage_or_phase_mismatch_blocks_readiness():
