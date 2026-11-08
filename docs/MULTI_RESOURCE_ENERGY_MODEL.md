@@ -71,9 +71,9 @@ proof that a supplier can fulfil it. The model does not simulate tank
 measurement error, fuel-quality effects, or fuel-curve drift between maintenance intervals. The
 legacy constant L/kWh rate remains supported. Alternatively, a piecewise-linear
 `fuel_curve_liters_per_hour` can define `(output_kW, fuel_L_per_hour)` points,
-starting at `(0, 0)` and ending at rated power. The engine interpolates the
-curve and solves the maximum output supported by remaining inventory; it does
-not extrapolate beyond rated power. Curves should come from the exact generator
+starting at `(0, 0)` and ending at rated power with a positive rated-output
+fuel rate. The engine interpolates the curve and solves the maximum output
+supported by remaining inventory; it does not extrapolate beyond rated power. Curves should come from the exact generator
 model's certified datasheet or measured fuel test, with source and revision
 recorded. Generic curves are not a substitute for a site-specific fuel test.
 When a confirmed `fuel_price_per_liter` is supplied, the model separately
