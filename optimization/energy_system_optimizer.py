@@ -302,15 +302,12 @@ def optimize_energy_system_schedule(
     evaluate(zero)
     evaluate(one)
     population = [zero, one]
-    while len(population) < population_size:
+    maximum_unique_schedules = min(population_size, 2 ** n)
+    while len(population) < maximum_unique_schedules:
         genome = tuple(rng.randrange(2) for _ in range(n))
-        evaluate(genome)
-        population.append(genome)
-    population = list(dict.fromkeys(population))
-    while len(population) < population_size:
-        genome = tuple(rng.randrange(2) for _ in range(n))
-        evaluate(genome)
-        population.append(genome)
+        if genome not in population:
+            evaluate(genome)
+            population.append(genome)
 
     def score(row: dict, front: list[dict]) -> float:
         keys = ("estimated_energy_cost", "unmet_load_kwh",
