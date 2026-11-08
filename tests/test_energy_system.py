@@ -7,6 +7,7 @@ from islandos_core.energy_system import (
     EnergySystemConfig,
     EnergySystemInputs,
     dispatch_energy_system,
+    compare_energy_policies,
 )
 
 
@@ -797,3 +798,24 @@ def test_diesel_fuel_price_requires_inventory_model_and_nonnegative_value():
             fuel_consumption_l_per_kwh=0.25, initial_fuel_liters=10,
             fuel_price_per_liter=-0.1,
         )
+
+def test_policy_comparison_reports_diesel_fuel_cost_and_consumption_differences():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=0.1,
+            fuel_curve_liters_per_hour=((0.0, 0.0), (10.0, 6.0)),
+            initial_fuel_liters=10, fuel_price_per_liter=1.5,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[5],
+        grid_price_per_kwh=[0], grid_available=[False], diesel_available=[True],
+    )
+    comparison = compare_energy_policies(inputs, config)
+    differences = comparison["difference_battery_first_minus_grid_first"]
+    assert "diesel_fuel_used_liters" in differences
+    assert "diesel_fuel_cost" in differences
+    assert "diesel_energy_cost" in differences
+    assert differences["diesel_fuel_cost"] == pytest.approx(0)
+    assert comparison["battery_first"]["summary"]["diesel_fuel_cost"] == pytest.approx(4.5)
