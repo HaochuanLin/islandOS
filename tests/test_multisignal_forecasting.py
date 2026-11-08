@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from islandos_core.multisignal_forecasting import (
     CalibrationResidual,
+    AutoregressiveRidgeSignalPlugin,
     SignalForecastRegistry,
     SignalForecastRequest,
     SignalObservation,
@@ -47,6 +48,66 @@ class TestMultiSignalForecasting(unittest.TestCase):
         return SignalForecastRequest(signal, unit, history, targets, cadence)
 
 
+
+
+
+    def test_ridge_ml_plugin_forecasts_pv_wind_and_load_with_rolling_refit(self):
+        plugin = AutoregressiveRidgeSignalPlugin(ridge_alpha=2.0)
+        for signal, unit, scale in (
+            ("pv_power", "kW", 30.0),
+            ("wind_power", "kW", 12.0),
+            ("essential_load", "kW", 20.0),
+        ):
+            series = tuple(
+                SignalObservation(
+                    self.start + timedelta(hours=i),
+                    signal,
+                    max(0.0, scale * (0.5 + 0.25 * __import__("math").sin(2 * __import__("math").pi * (i % 24) / 24) + 0.02 * (i % 7))),
+                    unit,
+                )
+                for i in range(168)
+            )
+            report = rolling_origin_backtest(
+                series, plugin, initial_history=96,
+                history_window=168, seasonal_lag_steps=24,
+            )
+            self.assertEqual(report["model_id"], "autoregressive_ridge")
+            self.assertEqual(report["metrics"]["plugin"]["samples"], 72)
+            self.assertEqual(report["metrics"]["persistence_baseline"]["samples"], 72)
+            self.assertTrue(all(
+                row["plugin_forecast"] >= 0
+                for row in report["forecast_rows"]
+            ))
+
+    def test_ridge_plugin_supports_subhourly_data_and_rejects_short_history(self):
+        registry = SignalForecastRegistry()
+        plugin = AutoregressiveRidgeSignalPlugin()
+        registry.register(plugin)
+        history = tuple(
+            SignalObservation(
+                self.start + timedelta(minutes=15 * i),
+                "pv_power", 10.0 + 2.0 * __import__("math").sin(2 * __import__("math").pi * (i % 96) / 96),
+                "kW",
+            )
+            for i in range(120)
+        )
+        targets = tuple(
+            self.start + timedelta(minutes=15 * (120 + i)) for i in range(4)
+        )
+        request = SignalForecastRequest(
+            "pv_power", "kW", history, targets, cadence_seconds=900
+        )
+        result = registry.forecast("autoregressive_ridge", request)
+        self.assertEqual(len(result.points), 4)
+        self.assertTrue(all(point.predicted_value >= 0 for point in result.points))
+        short = history[:50]
+        short_request = SignalForecastRequest(
+            "pv_power", "kW", short,
+            (short[-1].timestamp + timedelta(minutes=15),),
+            cadence_seconds=900,
+        )
+        with self.assertRaisesRegex(ValueError, "needs at least"):
+            registry.forecast("autoregressive_ridge", short_request)
 
     def test_builtin_baselines_run_through_the_same_registry(self):
         registry = SignalForecastRegistry()
