@@ -679,3 +679,58 @@ def test_diesel_fuel_curve_must_cover_installed_rated_power():
         build_energy_system_config_from_assets(
             [generator], operating_assumptions=assumptions,
         )
+
+def test_confirmed_battery_cycle_life_and_initial_soh_map_to_engine():
+    battery = asset(
+        "battery",
+        {
+            "configured_power_kw": (20, "kW"),
+            "usable_energy_capacity_kwh": (40, "kWh"),
+        },
+        {
+            "max_charge_kw": ("max", 20, "kW"),
+            "max_discharge_kw": ("max", 20, "kW"),
+            "soc_min_pct": ("min", 10, "%"),
+            "soc_max_pct": ("max", 90, "%"),
+        },
+    )
+    assumptions = {
+        "battery_initial_soc": assumption(0.5, "fraction"),
+        "battery_charge_efficiency": assumption(0.95, "fraction"),
+        "battery_discharge_efficiency": assumption(0.95, "fraction"),
+        "battery_initial_state_of_health": assumption(0.96, "fraction"),
+        "battery_cycle_life_efc": assumption(6000, "EFC"),
+        "battery_end_of_life_capacity_fraction": assumption(0.8, "fraction"),
+    }
+    config = build_energy_system_config_from_assets(
+        [battery], operating_assumptions=assumptions,
+    )
+    assert config.battery.initial_state_of_health == pytest.approx(0.96)
+    assert config.battery.cycle_life_efc == pytest.approx(6000)
+    assert config.battery.end_of_life_capacity_fraction == pytest.approx(0.8)
+
+
+def test_battery_end_of_life_fraction_without_cycle_life_fails_closed():
+    battery = asset(
+        "battery",
+        {
+            "configured_power_kw": (20, "kW"),
+            "usable_energy_capacity_kwh": (40, "kWh"),
+        },
+        {
+            "max_charge_kw": ("max", 20, "kW"),
+            "max_discharge_kw": ("max", 20, "kW"),
+            "soc_min_pct": ("min", 10, "%"),
+            "soc_max_pct": ("max", 90, "%"),
+        },
+    )
+    assumptions = {
+        "battery_initial_soc": assumption(0.5, "fraction"),
+        "battery_charge_efficiency": assumption(0.95, "fraction"),
+        "battery_discharge_efficiency": assumption(0.95, "fraction"),
+        "battery_end_of_life_capacity_fraction": assumption(0.8, "fraction"),
+    }
+    with pytest.raises(AssetEnergyAdapterError, match="requires cycle_life_efc"):
+        build_energy_system_config_from_assets(
+            [battery], operating_assumptions=assumptions,
+        )
