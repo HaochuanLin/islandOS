@@ -31,3 +31,10 @@ The seasonal comparison uses the exact same timestamps for the plugin and season
 ## Evidence limits
 
 A lower error on one holdout does not prove generalization, causality, physical validity, or suitability for operating a real plant. Compare against simple baselines across multiple time periods and sites, preserve data provenance, inspect forecast bias and underforecasting, and validate the complete forecast-to-dispatch workflow before using results for planning. The report does not train a model, perform online learning, or automatically promote a candidate.
+
+
+## Multi-signal and multi-resolution API
+
+For a shared interface across PV, wind, and essential load, see [Unified multi-signal forecasting engine](MULTISIGNAL_FORECAST_ENGINE.md). Its request contract includes signal ID, unit, and explicit cadence seconds, and it can run one signal at a time at sub-hourly, hourly, or daily resolution. The rolling-origin evaluator compares the plugin against persistence and seasonal-naive baselines on aligned test timestamps.
+
+Optional prediction intervals require at least 20 chronologically ordered, timestamped prior out-of-sample residuals. The engine reports the nominal coverage and calibration sample count; this is not a guaranteed coverage level, especially under time-series dependence or distribution shift.
