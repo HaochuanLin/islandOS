@@ -230,20 +230,29 @@ def build_energy_system_config_from_assets(
             raise AssetEnergyAdapterError(
                 "explicit battery operating assumptions required: " + ", ".join(missing)
             )
-        battery_spec = BatterySpec(
-            capacity_kwh=capacity,
-            max_charge_kw=max_charge,
-            max_discharge_kw=max_discharge,
-            initial_soc=_required_assumption(assumptions, "battery_initial_soc", unit="fraction"),
-            min_soc=min_soc_pct / 100.0,
-            max_soc=max_soc_pct / 100.0,
-            charge_efficiency=_required_assumption(
-                assumptions, "battery_charge_efficiency", unit="fraction"
-            ),
-            discharge_efficiency=_required_assumption(
-                assumptions, "battery_discharge_efficiency", unit="fraction"
-            ),
-        )
+        try:
+            battery_spec = BatterySpec(
+                capacity_kwh=capacity,
+                max_charge_kw=max_charge,
+                max_discharge_kw=max_discharge,
+                initial_soc=_required_assumption(assumptions, "battery_initial_soc", unit="fraction"),
+                min_soc=min_soc_pct / 100.0,
+                max_soc=max_soc_pct / 100.0,
+                charge_efficiency=_required_assumption(
+                    assumptions, "battery_charge_efficiency", unit="fraction"
+                ),
+                discharge_efficiency=_required_assumption(
+                    assumptions, "battery_discharge_efficiency", unit="fraction"
+                ),
+                throughput_cost_per_kwh=(
+                    _required_assumption(assumptions, "battery_throughput_cost_per_kwh")
+                    if "battery_throughput_cost_per_kwh" in assumptions else 0.0
+                ),
+            )
+        except EnergyModelError as exc:
+            raise AssetEnergyAdapterError(
+                f"invalid battery asset-derived configuration: {exc}"
+            ) from exc
 
     if "diesel_generator" in grouped:
         asset = grouped["diesel_generator"][0]
