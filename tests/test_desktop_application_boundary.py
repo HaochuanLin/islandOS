@@ -31,3 +31,12 @@ def test_desktop_dependency_is_optional_and_separate():
     base_requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     assert "PySide6" in desktop_requirements
     assert "PySide6" not in base_requirements
+
+
+def test_desktop_shell_exposes_persistent_asset_registry_workflow():
+    source = (ROOT / "desktop_app" / "main.py").read_text(encoding="utf-8")
+    assert "Import asset registry JSON" in source
+    assert "View saved asset registry" in source
+    assert "register_project_asset" in source
+    assert "list_project_assets" in source
+    assert "AssetRecord.from_mapping" in source
