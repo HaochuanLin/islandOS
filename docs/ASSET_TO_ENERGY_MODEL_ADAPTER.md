@@ -26,9 +26,12 @@ The adapter requires:
 - explicit battery initial SOC and charge/discharge efficiencies when a battery
   is present;
 - explicit diesel variable energy cost when a diesel generator is present;
-- optional paired, provenance-bearing diesel fuel-consumption rate (L/kWh)
-  and initial fuel inventory (L) assumptions; an optional confirmed tank
-  capacity (L) can additionally bound inventory and scheduled deliveries.
+- optional diesel fuel model plus initial inventory: either a legacy constant
+  consumption rate (L/kWh), or a piecewise curve recorded as indexed confirmed
+  `diesel_fuel_curve_N_power_kw` (kW) and
+  `diesel_fuel_curve_N_fuel_l_per_hour` (L/h) assumptions. Curves require
+  contiguous point indices from zero and at least two points. An optional
+  confirmed tank capacity (L) can additionally bound inventory and deliveries.
 
 A single diesel generator's confirmed minimum stable loading is mapped into the
 energy model. Flexible loads are rejected until their dispatch semantics are
