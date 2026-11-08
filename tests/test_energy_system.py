@@ -344,3 +344,66 @@ def test_export_permission_can_be_false_while_grid_remains_available():
     assert row["grid_export_kw"] == 0
     assert row["grid_export_revenue"] == 0
     assert row["renewable_curtailed_kw"] == pytest.approx(6)
+
+
+
+def test_diesel_minimum_stable_output_blocks_uneconomic_partial_start():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=6,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[4, 8], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["rows"][0]["diesel_generation_kw"] == 0
+    assert result["rows"][0]["unmet_load_kw"] == 4
+    assert result["rows"][1]["diesel_generation_kw"] == 8
+    assert result["rows"][1]["diesel_started"] is True
+    assert result["summary"]["diesel_start_count"] == 1
+
+
+def test_diesel_ramp_up_and_start_stop_costs_are_audited():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        dt_hours=0.5,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_up_kw_per_hour=4,
+            start_cost_per_start=3.0, stop_cost_per_stop=1.5,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 0], wind_generation_kw=[0, 0, 0],
+        load_kw=[8, 8, 0], grid_price_per_kwh=[0, 0, 0],
+        grid_available=[False, False, False],
+        diesel_available=[True, True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    rows = result["rows"]
+    assert [row["diesel_generation_kw"] for row in rows] == pytest.approx([2, 4, 0])
+    assert rows[0]["diesel_started"] is True
+    assert rows[2]["diesel_stopped"] is True
+    assert result["summary"]["diesel_start_count"] == 1
+    assert result["summary"]["diesel_stop_count"] == 1
+    assert result["summary"]["diesel_start_cost"] == pytest.approx(3.0)
+    assert result["summary"]["diesel_stop_cost"] == pytest.approx(1.5)
+    assert result["summary"]["estimated_energy_cost"] == pytest.approx(7.5)
+
+
+def test_diesel_rejects_minimum_above_rated_and_invalid_ramp():
+    with pytest.raises(EnergyModelError, match="cannot exceed rated"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1,
+            min_stable_power_kw=11,
+        )
+    with pytest.raises(EnergyModelError, match="ramp_up_kw_per_hour"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1,
+            ramp_up_kw_per_hour=0,
+        )

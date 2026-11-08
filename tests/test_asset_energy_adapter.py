@@ -114,7 +114,7 @@ def test_battery_requires_explicit_efficiency_and_initial_soc_assumptions():
     assert config.battery.charge_efficiency == 0.94
 
 
-def test_diesel_requires_explicit_cost_and_blocks_unmodeled_minimum_loading():
+def test_diesel_maps_confirmed_minimum_stable_loading_and_requires_explicit_cost():
     generator = asset(
         "diesel_generator",
         {"configured_power_kw": (30, "kW")},
@@ -123,10 +123,11 @@ def test_diesel_requires_explicit_cost_and_blocks_unmodeled_minimum_loading():
             "min_stable_power_kw": ("min", 5, "kW"),
         },
     )
-    with pytest.raises(AssetEnergyAdapterError, match="minimum stable loading is not modeled"):
-        build_energy_system_config_from_assets(
-            [generator], operating_assumptions={"diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh")}
-        )
+    config_with_minimum = build_energy_system_config_from_assets(
+        [generator],
+        operating_assumptions={"diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh")},
+    )
+    assert config_with_minimum.diesel.min_stable_power_kw == 5
 
 
 def test_diesel_zero_minimum_stable_loading_still_requires_explicit_cost():
@@ -145,6 +146,7 @@ def test_diesel_zero_minimum_stable_loading_still_requires_explicit_cost():
     )
     assert config.diesel.rated_power_kw == 28
     assert config.diesel.variable_cost_per_kwh == 1.25
+    assert config.diesel.min_stable_power_kw == 0
 
 
 def test_unconfirmed_or_incomplete_asset_blocks_conversion():

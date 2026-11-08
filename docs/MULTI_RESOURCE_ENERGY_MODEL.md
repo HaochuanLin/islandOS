@@ -9,7 +9,8 @@ offline model for hourly (or fixed-step) energy balancing across:
 - grid imports with an import-power limit and availability flag;
 - optional grid exports with a separately configured export-power limit, explicit
   feed-in price series, and grid-availability gating;
-- diesel generation with a rated-power limit and explicit variable energy cost;
+- diesel generation with rated and minimum-stable power limits, explicit availability,
+  optional ramp-up limit, variable energy cost, and per-start/per-stop costs;
 - renewable curtailment and unmet load.
 
 ## Explicit dispatch policies
@@ -41,6 +42,15 @@ silently clipped. Grid availability must always be supplied as an explicit boole
 When a diesel generator is configured, diesel availability must also be
 supplied explicitly. An unconfigured diesel unit is never treated as available.
 Missing availability is rejected rather than silently assumed.
+
+A diesel unit starts only when the residual demand can accept at least its
+configured minimum stable output; otherwise that residual remains unmet rather
+than operating the generator below its declared stable limit. Optional ramp-up
+limits constrain startup and subsequent upward changes. Start/stop events and
+their fixed costs are recorded per timestep and included in estimated energy
+cost. Ramp-down dynamics are not yet modeled; when demand falls or availability
+is lost, the unit is stopped immediately. Multiple diesel units are still
+rejected by the asset adapter until per-device commitment is supported.
 
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC

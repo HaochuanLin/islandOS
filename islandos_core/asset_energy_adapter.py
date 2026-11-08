@@ -249,17 +249,13 @@ def build_energy_system_config_from_assets(
         installed = _required_parameter(asset, "configured_power_kw", "kW")
         max_power = _required_constraint(asset, "max_power_kw", "max")
         min_stable = _required_constraint(asset, "min_stable_power_kw", "min")
-        if min_stable > 0:
-            raise AssetEnergyAdapterError(
-                "diesel minimum stable loading is not modeled yet; "
-                "cannot safely convert this generator"
-            )
         if "diesel_variable_cost_per_kwh" not in assumptions:
             raise AssetEnergyAdapterError(
                 "explicit diesel_variable_cost_per_kwh assumption is required"
             )
         diesel_spec = DieselSpec(
             rated_power_kw=min(installed, max_power),
+            min_stable_power_kw=min_stable,
             variable_cost_per_kwh=_required_assumption(
                 assumptions, "diesel_variable_cost_per_kwh"
             ),

@@ -57,12 +57,24 @@ class BatterySpec:
 class DieselSpec:
     rated_power_kw: float
     variable_cost_per_kwh: float
+    min_stable_power_kw: float = 0.0
+    ramp_up_kw_per_hour: float | None = None
+    start_cost_per_start: float = 0.0
+    stop_cost_per_stop: float = 0.0
 
     def __post_init__(self) -> None:
-        _number("diesel rated_power_kw", self.rated_power_kw)
-        _number("diesel variable_cost_per_kwh", self.variable_cost_per_kwh)
+        for name in ("rated_power_kw", "variable_cost_per_kwh",
+                     "min_stable_power_kw", "start_cost_per_start",
+                     "stop_cost_per_stop"):
+            _number(f"diesel {name}", getattr(self, name))
+        if self.ramp_up_kw_per_hour is not None:
+            _number("diesel ramp_up_kw_per_hour", self.ramp_up_kw_per_hour)
+            if self.ramp_up_kw_per_hour <= 0:
+                raise EnergyModelError("diesel ramp_up_kw_per_hour must be > 0 when specified")
         if self.rated_power_kw <= 0:
             raise EnergyModelError("diesel rated_power_kw must be > 0")
+        if self.min_stable_power_kw > self.rated_power_kw:
+            raise EnergyModelError("diesel min_stable_power_kw cannot exceed rated power")
 
 
 @dataclass(frozen=True)
@@ -155,7 +167,9 @@ def dispatch_energy_system(
     Renewable surplus charges the battery first, then exports up to the explicit
     grid export limit when the grid is available. Remaining surplus is curtailed.
     Export requires an explicit feed-in price series. Diesel minimum-load, ramp,
-    start-cost, degradation-cost, and network constraints are not modeled.
+    degradation-cost, ramp-down, and network constraints are not modeled. Diesel
+    minimum stable loading, optional ramp-up, and per-start/per-stop costs are
+    modeled explicitly.
     """
     if policy not in {"battery_first", "grid_first"}:
         raise EnergyModelError("policy must be 'battery_first' or 'grid_first'")
@@ -208,7 +222,9 @@ def dispatch_energy_system(
         "pv_energy_kwh": 0.0, "wind_energy_kwh": 0.0,
         "renewable_curtailed_kwh": 0.0, "battery_charge_input_kwh": 0.0,
         "battery_discharge_output_kwh": 0.0, "grid_import_kwh": 0.0,
-        "diesel_generation_kwh": 0.0, "grid_energy_cost": 0.0,
+        "diesel_generation_kwh": 0.0, "diesel_start_count": 0.0,
+        "diesel_stop_count": 0.0, "diesel_start_cost": 0.0,
+        "diesel_stop_cost": 0.0, "grid_energy_cost": 0.0,
         "diesel_energy_cost": 0.0, "grid_export_energy_kwh": 0.0,
         "grid_export_revenue": 0.0,
     }
@@ -219,6 +235,7 @@ def dispatch_energy_system(
         surplus = renewable - direct_renewable
         deficit = load[t] - direct_renewable
         charge_kw = discharge_kw = grid_kw = diesel_kw = 0.0
+        diesel_started = diesel_stopped = False
 
         if battery and surplus > 0:
             soc_room_kwh = (battery.max_soc - soc) * battery.capacity_kwh
@@ -245,9 +262,25 @@ def dispatch_energy_system(
             return min(remaining_kw, config.grid_import_limit_kw) if grid_ok[t] else 0.0
 
         def run_diesel(remaining_kw: float) -> float:
-            if not config.diesel or not diesel_ok[t]:
+            nonlocal diesel_started, diesel_stopped
+            spec = config.diesel
+            if not spec or not diesel_ok[t] or remaining_kw <= 0:
+                diesel_stopped = previous_diesel_kw > 0
                 return 0.0
-            return min(remaining_kw, config.diesel.rated_power_kw)
+            # Do not start (or remain online) below the confirmed stable minimum.
+            if remaining_kw + 1e-9 < spec.min_stable_power_kw:
+                diesel_stopped = previous_diesel_kw > 0
+                return 0.0
+            target = min(remaining_kw, spec.rated_power_kw)
+            if previous_diesel_kw <= 0:
+                if spec.ramp_up_kw_per_hour is not None:
+                    target = min(target, spec.ramp_up_kw_per_hour * config.dt_hours)
+                if target + 1e-9 < spec.min_stable_power_kw:
+                    return 0.0
+                diesel_started = target > 0
+            elif spec.ramp_up_kw_per_hour is not None and target > previous_diesel_kw:
+                target = min(target, previous_diesel_kw + spec.ramp_up_kw_per_hour * config.dt_hours)
+            return target
 
         if deficit > 0 and policy == "battery_first":
             discharge_kw = discharge(deficit)
@@ -263,6 +296,14 @@ def dispatch_energy_system(
             deficit -= discharge_kw
             diesel_kw = run_diesel(deficit)
             deficit -= diesel_kw
+
+        if diesel_started and config.diesel:
+            totals["diesel_start_count"] += 1
+            totals["diesel_start_cost"] += config.diesel.start_cost_per_start
+        if diesel_stopped and config.diesel:
+            totals["diesel_stop_count"] += 1
+            totals["diesel_stop_cost"] += config.diesel.stop_cost_per_stop
+        previous_diesel_kw = diesel_kw
 
         export_kw = (
             min(surplus, config.grid_export_limit_kw)
@@ -290,6 +331,14 @@ def dispatch_energy_system(
             "grid_export_price_per_kwh": export_price[t],
             "grid_export_revenue": export_kw * config.dt_hours * export_price[t],
             "diesel_generation_kw": diesel_kw,
+            "diesel_started": diesel_started,
+            "diesel_stopped": diesel_stopped,
+            "diesel_start_cost": (
+                config.diesel.start_cost_per_start if diesel_started and config.diesel else 0.0
+            ),
+            "diesel_stop_cost": (
+                config.diesel.stop_cost_per_stop if diesel_stopped and config.diesel else 0.0
+            ),
             "load_served_kw": served_kw, "unmet_load_kw": max(0.0, deficit),
             "renewable_curtailed_kw": curtailed_kw, "battery_soc": soc,
             "grid_price_per_kwh": price[t], "energy_balance_residual_kw": balance_residual,
@@ -319,7 +368,8 @@ def dispatch_energy_system(
     )
     totals["ending_battery_soc"] = round(soc, 8) if battery else None
     totals["gross_energy_cost"] = round(
-        totals["grid_energy_cost"] + totals["diesel_energy_cost"], 8
+        totals["grid_energy_cost"] + totals["diesel_energy_cost"]
+        + totals["diesel_start_cost"] + totals["diesel_stop_cost"], 8
     )
     totals["estimated_energy_cost"] = round(
         totals["gross_energy_cost"] - totals["grid_export_revenue"], 8
