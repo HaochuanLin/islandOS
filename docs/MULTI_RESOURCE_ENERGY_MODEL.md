@@ -63,7 +63,7 @@ and replacement economics are not yet modeled. Supply cycle-life and initial
 SOH from the exact battery model's datasheet or validated test history; do not
 use generic values as verified site performance.
 PV and wind inputs above their configured nameplate ratings are rejected rather
-than silently clipped. Grid availability must always be supplied as an explicit boolean series.
+than silently clipped. Grid import tariffs are finite numeric values and may be negative to represent wholesale-market credits or special tariff periods; a negative price changes accounting only and does not relax import-power or grid-availability constraints. Grid availability must always be supplied as an explicit boolean series.
 When a diesel generator is configured, diesel availability must also be
 supplied explicitly. An unconfigured diesel unit is never treated as available.
 Missing availability is rejected rather than silently assumed.
