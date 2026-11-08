@@ -576,8 +576,9 @@ def compare_energy_policies(
     grid_first = dispatch_energy_system(inputs, config, policy="grid_first")
     metrics = (
         "estimated_energy_cost", "grid_import_kwh", "grid_export_energy_kwh",
-        "grid_export_revenue", "diesel_generation_kwh", "renewable_curtailed_kwh",
-        "unmet_load_kwh", "battery_discharge_output_kwh",
+        "grid_export_revenue", "diesel_generation_kwh",
+        "diesel_fuel_used_liters", "diesel_fuel_cost", "diesel_energy_cost",
+        "renewable_curtailed_kwh", "unmet_load_kwh", "battery_discharge_output_kwh",
         "battery_throughput_kwh", "battery_degradation_cost",
     )
     differences = {
