@@ -230,3 +230,23 @@ def validate_site_electrical_topology(topology: Any, assets: Sequence[Any]) -> d
     from islandos_core.electrical_topology import validate_electrical_topology
 
     return validate_electrical_topology(topology, assets)
+
+
+def evaluate_site_operational_readiness(
+    assets: Sequence[Any],
+    observations: Sequence[Any],
+    *,
+    as_of: datetime,
+    max_age: Any = None,
+    topology: Any = None,
+) -> dict[str, Any]:
+    """Evaluate fresh, confirmed operating states via the shared app boundary."""
+    from datetime import timedelta
+    from islandos_core.operational_state import evaluate_operational_readiness
+
+    options = {}
+    if max_age is not None:
+        options["max_age"] = max_age
+    return evaluate_operational_readiness(
+        assets, observations, as_of=as_of, topology=topology, **options,
+    )
