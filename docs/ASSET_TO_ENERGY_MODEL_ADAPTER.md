@@ -103,8 +103,9 @@ Before this becomes a general site model, IslandOS still needs:
 - electrical topology and connection constraints;
 - flexible-load adapters and scheduling semantics;
 - diesel ramp-down dynamics, per-unit commitment for multiple generators,
-  fuel delivery/refuelling schedules, nonlinear fuel curves, and provenance-bearing
-  asset assumptions for ramp/start costs;
+  tank-capacity checks, nonlinear fuel curves, and provenance-bearing asset
+  assumptions for ramp/start costs (explicit delivery series are supplied as
+  time-series inputs to each dispatch run, not inferred by this adapter);
 - grid export settlement, tariff calendars, and interconnection validation;
 - explicit provenance records for every operating assumption;
 - model-specific readiness gates and tests against public/field data.
