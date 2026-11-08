@@ -31,6 +31,10 @@ from islandos_core.energy_system import (
     EnergySystemInputs,
     compare_energy_policies,
 )
+from islandos_core.lifecycle_economics import (
+    LifecycleEconomicsInputs,
+    evaluate_lifecycle_economics,
+)
 
 
 SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".xlsx"}
