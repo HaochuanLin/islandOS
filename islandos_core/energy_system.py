@@ -127,6 +127,8 @@ class DieselSpec:
                 previous_power, previous_rate = power, rate
             if not math.isclose(curve[-1][0], self.rated_power_kw, rel_tol=0, abs_tol=1e-9):
                 raise EnergyModelError("diesel fuel curve must end at rated_power_kw")
+            if curve[-1][1] <= 0:
+                raise EnergyModelError("diesel fuel curve rated-power fuel rate must be > 0")
         if self.initial_fuel_liters is not None:
             _number("diesel initial_fuel_liters", self.initial_fuel_liters)
         if self.fuel_price_per_liter is not None:
