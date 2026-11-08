@@ -267,3 +267,33 @@ def dispatch_energy_system(
             "synthetic_or_user_supplied_inputs_only": True,
         },
     }
+
+
+
+def compare_energy_policies(
+    inputs: EnergySystemInputs,
+    config: EnergySystemConfig,
+) -> dict:
+    """Compare the two explicit dispatch baselines without declaring a winner."""
+    battery_first = dispatch_energy_system(inputs, config, policy="battery_first")
+    grid_first = dispatch_energy_system(inputs, config, policy="grid_first")
+    metrics = (
+        "estimated_energy_cost", "grid_import_kwh", "diesel_generation_kwh",
+        "renewable_curtailed_kwh", "unmet_load_kwh", "battery_discharge_output_kwh",
+    )
+    differences = {
+        key: round(
+            battery_first["summary"][key] - grid_first["summary"][key], 8
+        )
+        for key in metrics
+    }
+    return {
+        "battery_first": battery_first,
+        "grid_first": grid_first,
+        "difference_battery_first_minus_grid_first": differences,
+        "interpretation": (
+            "Compare cost, unmet load, curtailment and battery use together. "
+            "A lower estimated energy bill alone does not establish a better "
+            "or safer operating policy."
+        ),
+    }
