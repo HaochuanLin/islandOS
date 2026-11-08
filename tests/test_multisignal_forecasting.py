@@ -7,6 +7,8 @@ from islandos_core.multisignal_forecasting import (
     SignalForecastRegistry,
     SignalForecastRequest,
     SignalObservation,
+    PersistenceSignalPlugin,
+    SeasonalNaiveSignalPlugin,
     forecast_values_for_dispatch,
     rolling_origin_backtest,
 )
@@ -42,6 +44,27 @@ class TestMultiSignalForecasting(unittest.TestCase):
             for i in range(4)
         )
         return SignalForecastRequest(signal, unit, history, targets, cadence)
+
+
+
+    def test_builtin_baselines_run_through_the_same_registry(self):
+        registry = SignalForecastRegistry()
+        registry.register(PersistenceSignalPlugin())
+        registry.register(SeasonalNaiveSignalPlugin(season_length_steps=24))
+        request = self.request()
+        persistence = registry.forecast("persistence", request)
+        seasonal = registry.forecast("seasonal_naive", request)
+        self.assertEqual(
+            [point.predicted_value for point in persistence.points],
+            [request.history[-1].value] * 4,
+        )
+        expected_profile = [item.value for item in request.history[-24:]]
+        self.assertEqual(
+            [point.predicted_value for point in seasonal.points],
+            expected_profile[:4],
+        )
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            SeasonalNaiveSignalPlugin(season_length_steps=0)
 
     def test_one_registry_supports_pv_wind_and_load_with_shared_contract(self):
         registry = SignalForecastRegistry()
