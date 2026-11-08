@@ -254,6 +254,18 @@ def build_energy_system_config_from_assets(
             raise AssetEnergyAdapterError(
                 "explicit diesel_variable_cost_per_kwh assumption is required"
             )
+        fuel_assumption_names = (
+            "diesel_fuel_consumption_l_per_kwh",
+            "diesel_initial_fuel_liters",
+        )
+        supplied_fuel_assumptions = [
+            name for name in fuel_assumption_names if name in assumptions
+        ]
+        if len(supplied_fuel_assumptions) == 1:
+            raise AssetEnergyAdapterError(
+                "diesel_fuel_consumption_l_per_kwh and "
+                "diesel_initial_fuel_liters must be supplied together"
+            )
         diesel_spec = DieselSpec(
             rated_power_kw=min(installed, max_power),
             min_stable_power_kw=min_stable,
