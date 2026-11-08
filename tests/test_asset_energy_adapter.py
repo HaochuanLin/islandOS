@@ -452,6 +452,14 @@ def test_diesel_fuel_assumptions_are_mapped_only_as_confirmed_provenance():
                 "diesel_fuel_consumption_l_per_kwh": assumption(0.25, "L/kWh"),
             },
         )
+    with pytest.raises(AssetEnergyAdapterError, match="must be supplied together"):
+        build_energy_system_config_from_assets(
+            [generator],
+            operating_assumptions={
+                **base,
+                "diesel_initial_fuel_liters": assumption(100, "L"),
+            },
+        )
     config = build_energy_system_config_from_assets(
         [generator],
         operating_assumptions={
