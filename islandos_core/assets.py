@@ -38,6 +38,12 @@ REQUIRED_HARD_CONSTRAINTS = {
     "generic": {},
 }
 
+PARAMETER_UNITS = {
+    "rated_power_kw": "kW",
+    "configured_power_kw": "kW",
+    "energy_capacity_kwh": "kWh",
+    "usable_energy_capacity_kwh": "kWh",
+}
 INSTALLED_PARAMETER_UNITS = {
     "configured_power_kw": "kW",
     "usable_energy_capacity_kwh": "kWh",
@@ -200,6 +206,11 @@ class AssetRecord:
             for key, value in group.items():
                 if not isinstance(key, str) or not key.strip() or not isinstance(value, AssetParameter):
                     raise AssetValidationError(f"{group_name} entries must map names to AssetParameter")
+                expected_unit = PARAMETER_UNITS.get(key)
+                if expected_unit and value.unit != expected_unit:
+                    raise AssetValidationError(f"{group_name}.{key} must use {expected_unit}")
+                if group_name in {"nameplate_parameters", "installed_parameters"} and key in PARAMETER_UNITS and value.value <= 0:
+                    raise AssetValidationError(f"{group_name}.{key} must be positive")
         if not isinstance(self.constraints, tuple) or any(not isinstance(item, OperatingConstraint) for item in self.constraints):
             raise AssetValidationError("constraints must be a tuple of OperatingConstraint")
         ids = [item.constraint_id for item in self.constraints]
