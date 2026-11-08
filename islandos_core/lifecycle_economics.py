@@ -13,12 +13,19 @@ class LifecycleEconomicsError(ValueError):
     """Raised when lifecycle-economic assumptions are incomplete or invalid."""
 
 
-def _finite_nonnegative(name: str, value: float) -> float:
+def _finite(name: str, value: float) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise LifecycleEconomicsError(f"{name} must be numeric")
     number = float(value)
-    if not math.isfinite(number) or number < 0:
-        raise LifecycleEconomicsError(f"{name} must be finite and >= 0")
+    if not math.isfinite(number):
+        raise LifecycleEconomicsError(f"{name} must be finite")
+    return number
+
+
+def _finite_nonnegative(name: str, value: float) -> float:
+    number = _finite(name, value)
+    if number < 0:
+        raise LifecycleEconomicsError(f"{name} must be >= 0")
     return number
 
 
@@ -42,7 +49,8 @@ class LifecycleEconomicsInputs:
             "baseline_annual_energy_cost", "project_annual_energy_cost",
             "initial_capex", "annual_fixed_om",
         ):
-            _finite_nonnegative(name, getattr(self, name))
+            (_finite(name, getattr(self, name)) if name.endswith("energy_cost")
+             else _finite_nonnegative(name, getattr(self, name)))
         if isinstance(self.project_years, bool) or not isinstance(self.project_years, int):
             raise LifecycleEconomicsError("project_years must be an integer")
         if not 1 <= self.project_years <= 50:
