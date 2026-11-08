@@ -30,7 +30,9 @@ optional site topology):
 - stale or future-dated observations are blockers;
 - unconfirmed observations are blockers;
 - unavailable assets and any state other than `online` are blockers;
-- no state is silently inferred from asset category or static nameplate data.
+- no state is silently inferred from asset category or static nameplate data;
+- when a topology is supplied, its structural readiness is revalidated first;
+  unconfirmed or inconsistent topology blocks the operational gate.
 
 The result is a read-only `can_dispatch_screen` gate. It is not permission to
 control the system, nor does it certify electrical connectivity, safety, or
