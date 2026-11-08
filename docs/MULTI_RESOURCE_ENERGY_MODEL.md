@@ -55,10 +55,14 @@ rejected by the asset adapter until per-device commitment is supported.
 
 When both a confirmed initial tank inventory and a fuel-consumption rate are
 provided, diesel output is capped by the remaining fuel in each timestep.
-Fuel use and remaining inventory are included in the audit rows and summary.
-The model does not simulate refuelling deliveries, tank measurement error,
-fuel-quality effects, or nonlinear fuel curves; a constant L/kWh rate is a
-screening assumption and must be explicitly supplied.
+An optional `diesel_fuel_delivery_liters` series can add explicitly scheduled
+fuel at the start of each timestep; deliveries are non-negative, horizon-aligned,
+and rejected unless the diesel fuel-inventory model is enabled. Delivered,
+consumed, and remaining fuel are retained in per-step audit rows and aggregate
+summary values. This is a user-supplied schedule, not a delivery forecast or
+proof that a supplier can fulfil it. The model does not simulate tank capacity,
+tank measurement error, fuel-quality effects, or nonlinear fuel curves; a
+constant L/kWh rate is a screening assumption and must be explicitly supplied.
 
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
