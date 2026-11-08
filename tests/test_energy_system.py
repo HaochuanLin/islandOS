@@ -633,3 +633,59 @@ def test_diesel_initial_inventory_cannot_exceed_tank_capacity():
             fuel_consumption_l_per_kwh=0.5, initial_fuel_liters=11,
             fuel_tank_capacity_liters=10,
         )
+
+def test_battery_throughput_cost_counts_charge_and_discharge_energy():
+    config = EnergySystemConfig(
+        pv_rated_kw=5, wind_rated_kw=0, grid_import_limit_kw=0,
+        battery=BatterySpec(
+            capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+            initial_soc=0.2, min_soc=0.1, max_soc=0.95,
+            charge_efficiency=1, discharge_efficiency=1,
+            throughput_cost_per_kwh=0.1,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[5, 0], wind_generation_kw=[0, 0],
+        load_kw=[0, 5], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False],
+    )
+    result = dispatch_energy_system(inputs, config, policy="battery_first")
+    first, second = result["rows"]
+    assert first["battery_throughput_kwh"] == pytest.approx(5)
+    assert second["battery_throughput_kwh"] == pytest.approx(5)
+    assert first["battery_degradation_cost"] == pytest.approx(0.5)
+    assert second["battery_degradation_cost"] == pytest.approx(0.5)
+    assert result["summary"]["battery_throughput_kwh"] == pytest.approx(10)
+    assert result["summary"]["battery_degradation_cost"] == pytest.approx(1)
+    assert result["summary"]["gross_energy_cost"] == pytest.approx(1)
+    assert result["summary"]["estimated_energy_cost"] == pytest.approx(1)
+    assert result["model_scope"]["battery_throughput_cost_enabled"] is True
+    assert result["model_scope"]["battery_degradation_is_physical_capacity_fade"] is False
+
+
+def test_battery_throughput_cost_defaults_to_zero_for_backward_compatibility():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=10,
+        battery=BatterySpec(
+            capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+            initial_soc=0.8, min_soc=0.1, max_soc=0.95,
+            charge_efficiency=1, discharge_efficiency=1,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[5],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+    )
+    result = dispatch_energy_system(inputs, config, policy="battery_first")
+    assert result["summary"]["battery_throughput_kwh"] == pytest.approx(5)
+    assert result["summary"]["battery_degradation_cost"] == 0
+    assert result["summary"]["estimated_energy_cost"] == 0
+    assert result["model_scope"]["battery_throughput_cost_enabled"] is False
+
+
+def test_battery_throughput_cost_rejects_negative_values():
+    with pytest.raises(EnergyModelError, match="throughput_cost_per_kwh"):
+        BatterySpec(
+            capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+            throughput_cost_per_kwh=-0.01,
+        )
