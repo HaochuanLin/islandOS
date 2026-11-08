@@ -96,3 +96,45 @@ the recommended schedule is lower on that metric in this synthetic run; they
 are not measured savings or a guarantee. The output explicitly labels the
 profile as synthetic. It is a software demonstration, not a customer-site
 result.
+
+
+## Continuous battery power schedule search (experimental)
+
+The next optimizer increment adds signed, timestep-aligned battery power
+set-points to the shared physical simulator:
+
+- Negative kW requests charging, limited to available renewable surplus.
+- Positive kW requests discharge to serve load.
+- The simulator clips actual dispatch to SOC, efficiency, configured power,
+  and effective-capacity limits. Grid and configured diesel supply any residual
+  demand using their existing physical and availability constraints.
+- \`optimize_battery_power_schedule\` searches bounded real-valued schedules
+  using a seeded evolutionary Pareto heuristic and returns the objective
+  archive plus a weighted-score recommendation.
+
+Example:
+
+\`\`\`python
+from optimization.energy_system_optimizer import (
+    OptimizationWeights,
+    optimize_battery_power_schedule,
+)
+
+result = optimize_battery_power_schedule(
+    inputs,
+    energy_system_config,
+    weights=OptimizationWeights(cost=0.7, reliability=0.2, curtailment=0.1),
+    population_size=32,
+    generations=20,
+    seed=20261108,
+)
+print(result["recommendation"]["setpoints_kw"])
+\`\`\`
+
+This is the first continuous decision-variable increment, not a complete
+mixed-integer multi-resource optimizer. It does not optimize grid charging,
+diesel commitment or diesel power set-points, grid import/export set-points,
+or flexible-load service. It is a stochastic heuristic, not a guaranteed
+global optimum. All candidates are evaluated through the same physical
+simulator and its configured constraints. Results remain offline decision
+support, not a controller or a claim of measured savings.
