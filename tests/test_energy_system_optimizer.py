@@ -464,3 +464,16 @@ def test_joint_optimizer_requires_both_resources_and_diesel_availability():
     )
     with pytest.raises(OptimizationError, match="diesel_available"):
         optimize_battery_and_diesel_schedule(inputs, config)
+
+
+def test_battery_wear_is_an_explicit_validated_recommendation_weight():
+    from optimization.energy_system_optimizer import OptimizationWeights
+
+    weights = OptimizationWeights(
+        cost=0.5, reliability=0.2, curtailment=0.1, battery_wear=0.2
+    )
+    assert weights.battery_wear == pytest.approx(0.2)
+    with pytest.raises(OptimizationError, match="finite and non-negative"):
+        OptimizationWeights(battery_wear=-0.1)
+    with pytest.raises(OptimizationError, match="at least one objective"):
+        OptimizationWeights(cost=0, reliability=0, curtailment=0, battery_wear=0)
