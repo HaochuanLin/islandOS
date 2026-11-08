@@ -26,6 +26,13 @@ from islandos_core.workspace_store import (
 )
 
 
+from islandos_core.energy_system import (
+    EnergySystemConfig,
+    EnergySystemInputs,
+    compare_energy_policies,
+)
+
+
 SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".xlsx"}
 
 
@@ -198,3 +205,17 @@ def create_analysis_record(
         },
         actor_id=actor_id, random_seed=random_seed, created_at=created_at,
     )
+
+
+
+def run_energy_policy_comparison(
+    inputs: EnergySystemInputs,
+    configuration: EnergySystemConfig,
+) -> dict[str, Any]:
+    """Run the shared, deterministic baseline comparison for a client interface.
+
+    This service does not infer missing telemetry, persist customer data, or
+    issue equipment commands. The caller remains responsible for provenance
+    and task-specific readiness before presenting results as site-relevant.
+    """
+    return compare_energy_policies(inputs, configuration)
