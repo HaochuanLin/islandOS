@@ -7,6 +7,7 @@ from islandos_core.multisignal_forecasting import (
     SignalForecastRegistry,
     SignalForecastRequest,
     SignalObservation,
+    evaluate_prediction_intervals,
     PersistenceSignalPlugin,
     SeasonalNaiveSignalPlugin,
     forecast_values_for_dispatch,
@@ -236,6 +237,83 @@ class TestMultiSignalForecasting(unittest.TestCase):
         )
         self.assertEqual(len(report["forecast_rows"]), 72)
         self.assertEqual(report["forecast_rows"][0]["history_observation_count"], 48)
+
+
+
+    def test_registry_fails_closed_on_bad_plugin_outputs_and_mutated_identity(self):
+        class BadPlugin:
+            model_id = "bad"
+            version = "1.0"
+
+            def __init__(self, values):
+                self.values = values
+
+            def predict(self, history, target_timestamps):
+                return self.values
+
+        for values in ([1.0], [1.0, -1.0, 2.0, 3.0], [1.0, float("nan"), 2.0, 3.0]):
+            registry = SignalForecastRegistry()
+            registry.register(BadPlugin(values))
+            with self.assertRaises(ValueError):
+                registry.forecast("bad", self.request())
+
+        class GeneratorMutatingPlugin:
+            model_id = "mutating"
+            version = "1.0"
+
+            def predict(self, history, target_timestamps):
+                def generate():
+                    yield 1.0
+                    self.version = "2.0"
+                    yield 2.0
+                    yield 3.0
+                    yield 4.0
+                return generate()
+
+        registry = SignalForecastRegistry()
+        registry.register(GeneratorMutatingPlugin())
+        with self.assertRaisesRegex(ValueError, "identity changed during"):
+            registry.forecast("mutating", self.request())
+
+    def test_interval_coverage_metrics_report_misses_and_width(self):
+        metrics = evaluate_prediction_intervals(
+            actual=[1.0, 2.0, 5.0, 8.0],
+            lower=[0.0, 1.0, 2.0, 3.0],
+            upper=[2.0, 3.0, 4.0, 7.0],
+            nominal_coverage=0.90,
+        )
+        self.assertEqual(metrics["samples"], 4)
+        self.assertEqual(metrics["empirical_coverage"], 0.5)
+        self.assertEqual(metrics["lower_bound_exceedance_rate"], 0.0)
+        self.assertEqual(metrics["upper_bound_exceedance_rate"], 0.5)
+        self.assertEqual(metrics["mean_interval_width"], 2.5)
+        self.assertAlmostEqual(metrics["coverage_gap"], -0.4)
+        with self.assertRaisesRegex(ValueError, "equally sized"):
+            evaluate_prediction_intervals([1.0], [0.0, 0.5], [2.0])
+        with self.assertRaisesRegex(ValueError, "lower interval bound"):
+            evaluate_prediction_intervals([1.0], [2.0], [1.0])
+
+    def test_rolling_backtest_earlier_predictions_ignore_later_actual_changes(self):
+        original = list(self.observations(count=120))
+        altered = original.copy()
+        for index in range(80, len(altered)):
+            item = altered[index]
+            altered[index] = SignalObservation(
+                item.timestamp, item.signal_id, item.value + 1000.0, item.unit
+            )
+        first = rolling_origin_backtest(
+            original, PersistencePlugin(), initial_history=48, history_window=48
+        )
+        second = rolling_origin_backtest(
+            altered, PersistencePlugin(), initial_history=48, history_window=48
+        )
+        self.assertEqual(
+            first["forecast_rows"][10]["plugin_forecast"],
+            second["forecast_rows"][10]["plugin_forecast"],
+        )
+        self.assertNotEqual(
+            first["evaluation_series_sha256"], second["evaluation_series_sha256"]
+        )
 
     def test_backtest_rejects_gapped_or_mixed_signal_series(self):
         series = list(self.observations(count=30))
