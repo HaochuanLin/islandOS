@@ -68,8 +68,14 @@ confirmed tank-capacity assumption bounds initial inventory and rejects any
 scheduled delivery that would overfill the tank. Delivered, consumed, and
 remaining fuel are retained in per-step audit rows and aggregate summary values. This is a user-supplied schedule, not a delivery forecast or
 proof that a supplier can fulfil it. The model does not simulate tank
-measurement error, fuel-quality effects, or nonlinear fuel curves; a constant
-L/kWh rate is a screening assumption and must be explicitly supplied.
+measurement error, fuel-quality effects, or fuel-curve drift between maintenance intervals. The
+legacy constant L/kWh rate remains supported. Alternatively, a piecewise-linear
+`fuel_curve_liters_per_hour` can define `(output_kW, fuel_L_per_hour)` points,
+starting at `(0, 0)` and ending at rated power. The engine interpolates the
+curve and solves the maximum output supported by remaining inventory; it does
+not extrapolate beyond rated power. Curves should come from the exact generator
+model's certified datasheet or measured fuel test, with source and revision
+recorded. Generic curves are not a substitute for a site-specific fuel test.
 
 The output includes per-step audit rows and aggregate energy, import cost,
 export revenue, net estimated energy cost, curtailment, unmet-load and ending-SOC
