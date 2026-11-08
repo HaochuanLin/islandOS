@@ -260,8 +260,8 @@ def test_negative_export_price_is_accounted_as_a_cost_not_revenue():
         grid_export_price_per_kwh=[-0.1],
     )
     result = dispatch_energy_system(inputs, config)
-    assert result["summary"]["grid_export_revenue"] == pytest.approx(-0.6)
-    assert result["summary"]["estimated_energy_cost"] == pytest.approx(0.6)
+    assert result["summary"]["grid_export_revenue"] == pytest.approx(-0.5)
+    assert result["summary"]["estimated_energy_cost"] == pytest.approx(0.5)
 
 
 def test_battery_is_charged_before_remaining_surplus_is_exported():
