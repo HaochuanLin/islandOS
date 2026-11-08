@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from islandos_core.onboarding import CANONICAL_UNITS
+from islandos_core.assets import AssetRecord
 
 from islandos_core.application import (
     create_local_project,
@@ -40,6 +41,8 @@ from islandos_core.application import (
     list_excel_sheets,
     open_local_project,
     register_inspected_import,
+    register_project_asset,
+    list_project_assets,
 )
 
 
@@ -101,6 +104,15 @@ class IslandOSDesktopWindow(QMainWindow):
         self.project_status.setWordWrap(True)
         layout.addWidget(self.project_status)
 
+        asset_row = QHBoxLayout()
+        import_assets_button = QPushButton("Import asset registry JSON")
+        import_assets_button.clicked.connect(self.import_asset_registry)
+        view_assets_button = QPushButton("View saved asset registry")
+        view_assets_button.clicked.connect(self.view_asset_registry)
+        asset_row.addWidget(import_assets_button)
+        asset_row.addWidget(view_assets_button)
+        layout.addLayout(asset_row)
+
         layout.addWidget(QLabel("Data onboarding"))
         controls = QHBoxLayout()
         self.task_edit = QComboBox()
@@ -135,6 +147,62 @@ class IslandOSDesktopWindow(QMainWindow):
         footer.setStyleSheet("color: #9a3412;")
         footer.setAlignment(Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(footer)
+
+    def import_asset_registry(self) -> None:
+        if self.database_path is None or self.project_id is None:
+            QMessageBox.warning(self, "No active project", "Create or open a local project first.")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import IslandOS asset registry", "", "JSON files (*.json)",
+        )
+        if not path:
+            return
+        try:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or payload.get("schema_version") != "1.0":
+                raise ValueError("Unsupported asset registry schema version.")
+            raw_assets = payload.get("assets")
+            if not isinstance(raw_assets, list) or not raw_assets:
+                raise ValueError("Registry must contain a non-empty assets list.")
+            assets = [AssetRecord.from_mapping(item) for item in raw_assets]
+            ids = [asset.asset_id for asset in assets]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Registry contains duplicate asset IDs.")
+            saved = [
+                register_project_asset(
+                    self.database_path, project_id=self.project_id, asset=asset,
+                    actor_id=self.actor_edit.text().strip(),
+                )
+                for asset in assets
+            ]
+            self.output.setPlainText(json.dumps(saved, ensure_ascii=False, indent=2))
+            QMessageBox.information(
+                self, "Asset registry imported",
+                f"Saved {len(saved)} asset record(s) as immutable local versions. "
+                "Review readiness blockers in the output panel.",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Asset registry import failed", str(exc))
+
+    def view_asset_registry(self) -> None:
+        if self.database_path is None or self.project_id is None:
+            QMessageBox.warning(self, "No active project", "Create or open a local project first.")
+            return
+        try:
+            records = list_project_assets(self.database_path, project_id=self.project_id)
+            display = [
+                {
+                    "asset_id": item["asset_id"],
+                    "version": item["version"],
+                    "asset": item["asset"].to_mapping(),
+                    "readiness": item["readiness"],
+                }
+                for item in records
+            ]
+            self.output.setPlainText(json.dumps(display, ensure_ascii=False, indent=2))
+            QMessageBox.information(self, "Asset registry", f"Loaded {len(records)} saved asset record(s).")
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not load asset registry", str(exc))
 
     def choose_workspace(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
