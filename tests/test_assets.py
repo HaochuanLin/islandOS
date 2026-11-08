@@ -188,3 +188,25 @@ def test_soc_constraints_outside_physical_percentage_range_are_rejected():
             unit="%", operator="max", upper_bound=105,
             source_type="customer_provided", source_reference="commissioning record",
         )
+
+
+def test_nameplate_and_installed_rating_parameters_require_canonical_units():
+    with pytest.raises(AssetValidationError, match="nameplate_parameters.rated_power_kw must use kW"):
+        AssetRecord(
+            asset_id="pv-unit", site_id="site-01", asset_type="pv",
+            nameplate_parameters={"rated_power_kw": parameter(1, "MW")},
+            installed_parameters={"configured_power_kw": parameter(500, "kW")},
+            observed_parameters={},
+            constraints=(constraint("max_power_kw", "max", 500, "kW"),),
+        )
+
+
+def test_nameplate_and_installed_capacity_ratings_must_be_positive():
+    with pytest.raises(AssetValidationError, match="installed_parameters.configured_power_kw must be positive"):
+        AssetRecord(
+            asset_id="pv-negative", site_id="site-01", asset_type="pv",
+            nameplate_parameters={"rated_power_kw": parameter(100, "kW")},
+            installed_parameters={"configured_power_kw": parameter(-1, "kW")},
+            observed_parameters={},
+            constraints=(constraint("max_power_kw", "max", 10, "kW"),),
+        )
