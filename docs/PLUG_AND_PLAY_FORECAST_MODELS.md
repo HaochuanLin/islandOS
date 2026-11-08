@@ -83,3 +83,12 @@ The backtest uses a chronological test tail and gives the plugin only the prior 
 ## Minimal runnable plug-in example
 
 Run `python examples/forecast_plugin_example.py` from a clean checkout. The example registers a trailing-day-mean plugin, validates the request and output through the shared registry, and prints timestamped forecasts with the input-history digest. It uses synthetic observations only and demonstrates interface compatibility, not predictive skill.
+
+
+## Unified multi-signal forecast contract
+
+For new PV, wind, and electrical-load models, use `islandos_core/multisignal_forecasting.py` rather than adapting every signal into the water-only plugin contract. The shared API carries `signal_id`, `unit`, `cadence_seconds`, timestamped history, model identity, and an input-history SHA-256 digest. It supports continuous sub-hourly, hourly, or daily sequences; it does not perform resampling or unit conversion.
+
+The registry can attach prediction bounds only when supplied with at least 20 timestamped prior out-of-sample calibration residuals. Calibration timestamps must be ordered and earlier than the forecast window. Bounds use a finite-sample split-conformal absolute-residual quantile; nominal coverage is not a guarantee under time-series dependence or distribution shift. See [Unified multi-signal forecasting engine](MULTISIGNAL_FORECAST_ENGINE.md).
+
+The generic `rolling_origin_backtest` evaluates a plugin against persistence and seasonal-naive baselines using prior observations only. This complements the existing water-demand CLI and does not automatically train or promote a model.
