@@ -39,3 +39,42 @@ This is the first integration step for Stage 4, not a finished general-purpose o
 A recommendation is a model result, not a command. The optimizer is offline decision support only: it does not connect to or control equipment, certify electrical safety, establish grid-export permission, or prove field savings. Use synthetic or authorized customer data, retain source provenance, and obtain qualified engineering review before any operational use.
 
 The bundled tests validate software contracts and simulator accounting with synthetic inputs. They are not evidence of performance at a real site.
+
+
+## Timestep-varying schedule search (experimental Stage 4 increment)
+
+The shared physical simulator also accepts an explicit `policy_schedule`: one
+`battery_first` or `grid_first` priority per time step. The experimental
+`optimize_energy_system_schedule` function searches these binary schedules
+with a seeded evolutionary Pareto heuristic. It evaluates each candidate by
+calling the same physical simulator, keeps only candidates that pass the
+energy-balance audit, and returns the Pareto archive plus a weighted-score
+recommendation.
+
+Example:
+
+```python
+from optimization.energy_system_optimizer import (
+    OptimizationWeights,
+    optimize_energy_system_schedule,
+)
+
+result = optimize_energy_system_schedule(
+    inputs,
+    energy_system_config,
+    weights=OptimizationWeights(cost=0.7, reliability=0.2, curtailment=0.1),
+    population_size=32,
+    generations=20,
+    seed=20261108,
+)
+print(result["recommendation"]["policy_schedule"])
+```
+
+This is a meaningful horizon-dependent schedule search, but the decision
+variable is deliberately limited to choosing between the simulator's two
+priority rules at each time step. It does **not** directly optimize battery
+charge/discharge kW, diesel on/off and power set-points, grid import/export
+set-points, or flexible-load service schedules. It is stochastic and does not
+guarantee a global optimum. The default maximum horizon is 168 steps to keep
+the search bounded; adjust only after performance testing. The evolutionary
+result remains offline decision support, not a controller.
