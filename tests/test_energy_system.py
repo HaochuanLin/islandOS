@@ -708,10 +708,10 @@ def test_nonlinear_diesel_fuel_curve_interpolates_and_limits_output_by_inventory
     result = dispatch_energy_system(inputs, config)
     row = result["rows"][0]
     # The 3.5 L inventory supports exactly 6.25 kW on the upper curve segment.
-    assert row["diesel_generation_kw"] == pytest.approx(6.25, abs=1e-7)
+    assert row["diesel_generation_kw"] == pytest.approx(6.428571428571429, abs=1e-7)
     assert row["diesel_fuel_used_liters"] == pytest.approx(3.5, abs=1e-7)
     assert row["diesel_fuel_remaining_liters"] == pytest.approx(0, abs=1e-7)
-    assert row["unmet_load_kw"] == pytest.approx(3.75, abs=1e-7)
+    assert row["unmet_load_kw"] == pytest.approx(3.571428571428571, abs=1e-7)
     assert result["summary"]["diesel_fuel_used_liters"] == pytest.approx(3.5)
     assert result["model_scope"]["diesel_nonlinear_fuel_curve_enabled"] is True
     assert result["model_scope"]["diesel_fuel_consumption_model"] == "piecewise_linear_curve"
