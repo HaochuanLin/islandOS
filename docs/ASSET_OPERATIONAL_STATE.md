@@ -26,7 +26,7 @@ configurable screening policy, not a universal industrial standard.
 
 For assets in scope (all supplied assets, or only assets connected in an
 optional site topology):
-- missing, duplicate, unknown-asset, or cross-site observations are blockers;
+- missing or unknown-asset observations are blockers; historical observations are allowed and the latest timestamp is selected independent of input order;\n- multiple records at the latest timestamp are blockers, distinguishing conflicting states from duplicate records; cross-site observations are blockers;
 - stale or future-dated observations are blockers;
 - unconfirmed observations are blockers;
 - unavailable assets and any state other than `online` are blockers;
