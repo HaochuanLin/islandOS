@@ -426,3 +426,228 @@ def optimize_energy_system_schedule(
             "not_a_controller": True,
         },
     }
+
+
+
+def optimize_battery_power_schedule(
+    inputs: EnergySystemInputs,
+    config: EnergySystemConfig,
+    *,
+    weights: OptimizationWeights = OptimizationWeights(),
+    population_size: int = 32,
+    generations: int = 20,
+    mutation_rate: float = 0.12,
+    seed: int = 20261108,
+    max_horizon_steps: int = 168,
+) -> dict:
+    """Search bounded continuous battery charge/discharge set-points offline.
+
+    Negative genes request charging from renewable surplus only; positive genes
+    request discharge to serve load. Grid and configured diesel cover residual
+    demand through the shared physical simulator. This is not grid charging,
+    diesel commitment optimization, or a global mixed-integer solution.
+    """
+    if config.battery is None:
+        raise OptimizationError("a configured battery is required for battery set-point optimization")
+    n = len(inputs.load_kw)
+    if n < 1:
+        raise OptimizationError("optimization horizon must contain at least one step")
+    if n > max_horizon_steps:
+        raise OptimizationError(
+            f"optimization horizon has {n} steps; configured maximum is {max_horizon_steps}"
+        )
+    if population_size < 4:
+        raise OptimizationError("population_size must be >= 4")
+    if generations < 1:
+        raise OptimizationError("generations must be >= 1")
+    if isinstance(mutation_rate, bool) or not isinstance(mutation_rate, (int, float)) or not math.isfinite(float(mutation_rate)) or not 0 <= mutation_rate <= 1:
+        raise OptimizationError("mutation_rate must be finite and within [0, 1]")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise OptimizationError("seed must be an integer")
+
+    battery = config.battery
+    lower, upper = -float(battery.max_charge_kw), float(battery.max_discharge_kw)
+    span = upper - lower
+    rng = random.Random(seed)
+    cache: dict[tuple[float, ...], dict] = {}
+
+    def evaluate(genome: tuple[float, ...]) -> dict:
+        if genome not in cache:
+            dispatch = dispatch_energy_system(
+                inputs,
+                config,
+                policy="battery_first",
+            ) if False else dispatch_energy_system(
+                EnergySystemInputs(
+                    pv_generation_kw=inputs.pv_generation_kw,
+                    wind_generation_kw=inputs.wind_generation_kw,
+                    load_kw=inputs.load_kw,
+                    grid_price_per_kwh=inputs.grid_price_per_kwh,
+                    grid_available=inputs.grid_available,
+                    diesel_available=inputs.diesel_available,
+                    grid_export_price_per_kwh=inputs.grid_export_price_per_kwh,
+                    grid_export_available=inputs.grid_export_available,
+                    diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
+                    battery_power_setpoint_kw=genome,
+                ),
+                config,
+                policy="battery_first",
+            )
+            audit = _audit(dispatch)
+            summary = dispatch["summary"]
+            objectives = {
+                "estimated_energy_cost": float(summary["estimated_energy_cost"]),
+                "unmet_load_kwh": float(summary["unmet_load_kwh"]),
+                "renewable_curtailed_kwh": float(summary["renewable_curtailed_kwh"]),
+                "battery_throughput_kwh": float(summary["battery_throughput_kwh"]),
+            }
+            cache[genome] = {
+                "setpoints_kw": list(genome),
+                "objectives": objectives,
+                "summary": summary,
+                "audit": audit,
+                "feasible": audit["passed"],
+                "dispatch": dispatch,
+            }
+        return cache[genome]
+
+    def dominates_candidate(a: dict, b: dict) -> bool:
+        return a["feasible"] and (
+            not b["feasible"] or _dominates(a, b)
+        )
+
+    def pareto_front(rows: list[dict]) -> list[dict]:
+        feasible_rows = [row for row in rows if row["feasible"]]
+        return [
+            row for row in feasible_rows
+            if not any(other is not row and _dominates(other, row) for other in feasible_rows)
+        ]
+
+    def score(row: dict, front: list[dict]) -> float:
+        keys = (
+            "estimated_energy_cost", "unmet_load_kwh",
+            "renewable_curtailed_kwh", "battery_throughput_kwh",
+        )
+        objective_weights = (
+            weights.cost, weights.reliability, weights.curtailment, 0.0,
+        )
+        total = 0.0
+        for key, weight in zip(keys, objective_weights):
+            low = min(item["objectives"][key] for item in front)
+            high = max(item["objectives"][key] for item in front)
+            value = row["objectives"][key]
+            normalized = 0.0 if high - low <= 1e-12 else (value - low) / (high - low)
+            total += weight * normalized
+        return total
+
+    zero = tuple(0.0 for _ in range(n))
+    population = [zero]
+    while len(population) < population_size:
+        genome = tuple(rng.uniform(lower, upper) for _ in range(n))
+        if genome not in population:
+            population.append(genome)
+            evaluate(genome)
+    evaluate(zero)
+
+    for _ in range(generations):
+        current_front = pareto_front([evaluate(genome) for genome in population])
+        if not current_front:
+            raise OptimizationError("No battery schedule passed the physical dispatch audit")
+        offspring: list[tuple[float, ...]] = []
+        while len(offspring) < population_size:
+            parents = rng.sample(population, 2)
+            rows = [evaluate(genome) for genome in parents]
+            if dominates_candidate(rows[0], rows[1]):
+                parent = parents[0]
+            elif dominates_candidate(rows[1], rows[0]):
+                parent = parents[1]
+            else:
+                parent = min(
+                    parents,
+                    key=lambda genome: (score(evaluate(genome), current_front), genome),
+                )
+            mate = rng.choice(population)
+            child_values = []
+            for index in range(n):
+                alpha = rng.random()
+                value = alpha * parent[index] + (1.0 - alpha) * mate[index]
+                if rng.random() < mutation_rate:
+                    value += rng.gauss(0.0, span * 0.15)
+                child_values.append(round(min(upper, max(lower, value)), 8))
+            child = tuple(child_values)
+            offspring.append(child)
+            evaluate(child)
+        combined = list(dict.fromkeys(population + offspring))
+        combined_rows = [evaluate(genome) for genome in combined]
+        next_front = pareto_front(combined_rows)
+        if not next_front:
+            raise OptimizationError("No battery schedule passed the physical dispatch audit")
+        selected = sorted(
+            next_front,
+            key=lambda row: (score(row, next_front), tuple(row["setpoints_kw"])),
+        )
+        selected_genomes = [tuple(row["setpoints_kw"]) for row in selected[:population_size]]
+        if len(selected_genomes) < population_size:
+            remaining = [
+                row for row in combined_rows
+                if tuple(row["setpoints_kw"]) not in selected_genomes
+            ]
+            remaining.sort(
+                key=lambda row: (
+                    not row["feasible"],
+                    score(row, next_front) if row["feasible"] else float("inf"),
+                    tuple(row["setpoints_kw"]),
+                )
+            )
+            selected_genomes.extend(
+                tuple(row["setpoints_kw"])
+                for row in remaining[:population_size - len(selected_genomes)]
+            )
+        population = selected_genomes
+
+    archive = pareto_front(list(cache.values()))
+    if not archive:
+        raise OptimizationError("No battery schedule passed the physical dispatch audit")
+    archive = sorted(
+        archive,
+        key=lambda row: (score(row, archive), tuple(row["setpoints_kw"])),
+    )
+    recommended = archive[0]
+    return {
+        "algorithm": "seeded_real_valued_evolutionary_pareto_search",
+        "decision_variable": "signed battery power set-point in kW per timestep",
+        "sign_convention": "negative=charge from renewable surplus only; positive=discharge to load",
+        "candidate_count": len(cache),
+        "feasible_count": sum(row["feasible"] for row in cache.values()),
+        "pareto_count": len(archive),
+        "population_size": population_size,
+        "generations": generations,
+        "seed": seed,
+        "horizon_steps": n,
+        "pareto_schedules": [
+            {"setpoints_kw": row["setpoints_kw"], "objectives": row["objectives"]}
+            for row in archive
+        ],
+        "recommendation": {
+            "setpoints_kw": recommended["setpoints_kw"],
+            "weighted_score": score(recommended, archive),
+            "weights": {
+                "cost": weights.cost,
+                "reliability": weights.reliability,
+                "curtailment": weights.curtailment,
+            },
+            "objectives": recommended["objectives"],
+            "dispatch": recommended["dispatch"],
+        },
+        "model_scope": {
+            "uses_shared_physical_dispatch_engine": True,
+            "same_inputs_for_all_candidates": True,
+            "setpoints_clipped_to_configured_battery_power_limits": True,
+            "battery_soc_efficiency_and_capacity_fade_enforced_by_simulator": True,
+            "grid_and_diesel_cover_residual_load": True,
+            "grid_charging_not_modeled": True,
+            "diesel_commitment_not_optimized": True,
+            "not_global_mixed_integer_optimization": True,
+            "not_a_controller": True,
+        },
+    }
