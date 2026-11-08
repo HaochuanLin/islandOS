@@ -278,7 +278,7 @@ def build_energy_system_config_from_assets(
                 end_of_life_capacity_fraction=(
                     _required_assumption(
                         assumptions, "battery_end_of_life_capacity_fraction", unit="fraction"
-                    ) if "battery_end_of_life_capacity_fraction" in assumptions else 0.8
+                    ) if "battery_end_of_life_capacity_fraction" in assumptions else None
                 ),
             )
         except EnergyModelError as exc:
