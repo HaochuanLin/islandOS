@@ -866,3 +866,19 @@ def test_battery_cycle_aging_rejects_invalid_lifecycle_parameters(kwargs, messag
             capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
             **kwargs,
         )
+
+
+def test_negative_grid_import_price_is_accounted_as_a_credit():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=5,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[3],
+        grid_price_per_kwh=[-0.12], grid_available=[True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    assert row["grid_import_kw"] == pytest.approx(3)
+    assert row["energy_balance_residual_kw"] == pytest.approx(0)
+    assert result["summary"]["grid_energy_cost"] == pytest.approx(-0.36)
+    assert result["summary"]["estimated_energy_cost"] == pytest.approx(-0.36)
