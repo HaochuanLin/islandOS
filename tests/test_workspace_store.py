@@ -15,6 +15,8 @@ from islandos_core.workspace_store import (
     list_audit_events,
     record_import_artifact,
     record_operator_override,
+    save_asset_record,
+    list_asset_records,
     verify_audit_chain,
 )
 
@@ -220,3 +222,34 @@ def test_audit_events_are_append_only_at_sqlite_layer(tmp_path):
     with sqlite3.connect(db) as connection:
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             connection.execute("DELETE FROM audit_events")
+
+
+def test_asset_registry_persists_immutable_versions_and_audit_history(tmp_path):
+    from islandos_core.assets import AssetParameter, AssetRecord, OperatingConstraint
+
+    db = ready_project(tmp_path)
+    def make_asset(power):
+        return AssetRecord(
+            asset_id="pv-main", site_id="site-01", asset_type="pv",
+            nameplate_parameters={"rated_power_kw": AssetParameter(120, "kW", "vendor_specification", "datasheet rev 2", True)},
+            installed_parameters={"configured_power_kw": AssetParameter(power, "kW", "customer_provided", "site schedule rev 1", True)},
+            observed_parameters={},
+            constraints=(OperatingConstraint(
+                constraint_id="pv-max", parameter="max_power_kw", severity="hard",
+                unit="kW", operator="max", upper_bound=power,
+                source_type="customer_provided", source_reference="approved site schedule", confirmed=True,
+            ),),
+        )
+
+    first = save_asset_record(db, project_id="site-01", asset=make_asset(100), actor_id="local-user", saved_at=NOW)
+    second = save_asset_record(db, project_id="site-01", asset=make_asset(90), actor_id="local-user", saved_at=NOW)
+    latest = list_asset_records(db, project_id="site-01")
+    history = list_asset_records(db, project_id="site-01", include_history=True)
+    assert first["version"] == 1 and second["version"] == 2
+    assert len(latest) == 1 and latest[0]["version"] == 2
+    assert latest[0]["asset"].installed_parameters["configured_power_kw"].value == 90
+    assert [item["version"] for item in history] == [1, 2]
+    assert verify_audit_chain(db)["valid"] is True
+    with sqlite3.connect(db) as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            connection.execute("DELETE FROM asset_record_versions")
