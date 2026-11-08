@@ -38,6 +38,11 @@ REQUIRED_HARD_CONSTRAINTS = {
     "generic": {},
 }
 
+INSTALLED_PARAMETER_UNITS = {
+    "configured_power_kw": "kW",
+    "usable_energy_capacity_kwh": "kWh",
+}
+
 EXPECTED_UNITS = {
     "max_power_kw": "kW", "min_power_kw": "kW",
     "max_charge_kw": "kW", "max_discharge_kw": "kW",
@@ -143,6 +148,11 @@ class OperatingConstraint:
         expected = EXPECTED_UNITS.get(self.parameter)
         if expected and self.unit != expected:
             raise AssetValidationError(f"{self.parameter} unit must be {expected}")
+        bounded_values = [value for value in (self.lower_bound, self.upper_bound) if value is not None]
+        if self.parameter in {"soc_min_pct", "soc_max_pct"} and any(value < 0 or value > 100 for value in bounded_values):
+            raise AssetValidationError(f"{self.parameter} bounds must be between 0 and 100 percent")
+        if self.parameter in EXPECTED_UNITS and self.parameter not in {"soc_min_pct", "soc_max_pct"} and any(value < 0 for value in bounded_values):
+            raise AssetValidationError(f"{self.parameter} bounds cannot be negative")
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "OperatingConstraint":
@@ -260,6 +270,10 @@ def evaluate_asset_readiness(asset: AssetRecord) -> dict[str, Any]:
         installed = asset.installed_parameters.get(parameter)
         if installed is None or not installed.confirmed:
             blockers.append("confirmed_installed_parameter_required:" + parameter)
+        elif installed.unit != INSTALLED_PARAMETER_UNITS[parameter]:
+            blockers.append("installed_parameter_unit_mismatch:" + parameter)
+        elif installed.value <= 0:
+            blockers.append("installed_parameter_must_be_positive:" + parameter)
     nameplate_power = asset.nameplate_parameters.get("rated_power_kw")
     installed_power = asset.installed_parameters.get("configured_power_kw")
     if nameplate_power and installed_power and installed_power.value > nameplate_power.value:
@@ -279,9 +293,10 @@ def evaluate_asset_readiness(asset: AssetRecord) -> dict[str, Any]:
             item for item in candidates
             if item.severity == "hard" and item.confirmed and item.operator == expected_operator
         ]
-        if not hard_confirmed:
+        if len(hard_confirmed) != 1:
             blockers.append(
-                "confirmed_hard_constraint_required:" + parameter + ":" + expected_operator
+                ("confirmed_hard_constraint_required:" if not hard_confirmed else "ambiguous_confirmed_hard_constraints:")
+                + parameter + ":" + expected_operator
             )
     if installed_power:
         for parameter in ("max_power_kw", "max_charge_kw", "max_discharge_kw", "import_limit_kw", "min_stable_power_kw", "min_power_kw"):
