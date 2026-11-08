@@ -17,6 +17,8 @@ import sqlite3
 import uuid
 from typing import Any, Mapping, Sequence
 
+from islandos_core.assets import AssetRecord, evaluate_asset_readiness
+
 
 SCHEMA_VERSION = "1.0"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -150,6 +152,28 @@ def initialize_workspace(
                 worksheet TEXT,
                 retention_mode TEXT NOT NULL CHECK (retention_mode = 'metadata_only')
             );
+            CREATE TABLE IF NOT EXISTS asset_record_versions (
+                record_version_id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(project_id),
+                asset_id TEXT NOT NULL,
+                site_id TEXT NOT NULL,
+                asset_type TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK (version > 0),
+                created_at TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                record_json TEXT NOT NULL,
+                record_sha256 TEXT NOT NULL,
+                readiness_json TEXT NOT NULL,
+                UNIQUE(project_id, asset_id, version)
+            );
+            CREATE TRIGGER IF NOT EXISTS asset_record_versions_no_update
+            BEFORE UPDATE ON asset_record_versions BEGIN
+                SELECT RAISE(ABORT, 'asset record versions are immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS asset_record_versions_no_delete
+            BEFORE DELETE ON asset_record_versions BEGIN
+                SELECT RAISE(ABORT, 'asset record versions are immutable');
+            END;
             CREATE TABLE IF NOT EXISTS run_manifests (
                 run_id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL REFERENCES projects(project_id),
@@ -556,3 +580,88 @@ def list_audit_events(db_path: str | Path, *, project_id: str | None = None) -> 
         }
         for row in rows
     ]
+
+
+def save_asset_record(
+    db_path: str | Path, *, project_id: str, asset: AssetRecord, actor_id: str,
+    saved_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Append an immutable, provenance-bearing asset configuration version."""
+    if not isinstance(asset, AssetRecord):
+        raise WorkspaceStoreError("asset must be an AssetRecord")
+    if not all(isinstance(value, str) and value.strip() for value in (project_id, actor_id)):
+        raise WorkspaceStoreError("project_id and actor_id are required")
+    timestamp = _timestamp(saved_at)
+    record_json = _json(asset.to_mapping())
+    record_hash = _hash(record_json)
+    readiness = evaluate_asset_readiness(asset)
+    version_id = str(uuid.uuid4())
+    with _connect(db_path) as connection:
+        if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
+            raise WorkspaceStoreError("project_id does not exist")
+        row = connection.execute(
+            "SELECT COALESCE(MAX(version), 0) AS current_version FROM asset_record_versions WHERE project_id=? AND asset_id=?",
+            (project_id, asset.asset_id),
+        ).fetchone()
+        version = int(row["current_version"]) + 1
+        connection.execute(
+            """INSERT INTO asset_record_versions
+            (record_version_id, project_id, asset_id, site_id, asset_type, version,
+             created_at, actor_id, record_json, record_sha256, readiness_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (version_id, project_id, asset.asset_id, asset.site_id, asset.asset_type,
+             version, timestamp, actor_id.strip(), record_json, record_hash, _json(readiness)),
+        )
+        _append_event(
+            connection, actor_id=actor_id, event_type="asset_record_version_saved",
+            project_id=project_id,
+            payload={"record_version_id": version_id, "asset_id": asset.asset_id,
+                     "site_id": asset.site_id, "asset_type": asset.asset_type,
+                     "version": version, "record_sha256": record_hash,
+                     "can_screen": readiness["can_screen"]},
+            created_at=timestamp,
+        )
+    return {"record_version_id": version_id, "project_id": project_id,
+            "asset_id": asset.asset_id, "site_id": asset.site_id,
+            "asset_type": asset.asset_type, "version": version,
+            "created_at": timestamp, "actor_id": actor_id.strip(),
+            "record_sha256": record_hash, "readiness": readiness}
+
+
+def list_asset_records(
+    db_path: str | Path, *, project_id: str, include_history: bool = False,
+) -> list[dict[str, Any]]:
+    """List latest asset records, or all immutable versions, with hash verification."""
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise WorkspaceStoreError("project_id is required")
+    with _connect(db_path) as connection:
+        if include_history:
+            rows = connection.execute(
+                "SELECT * FROM asset_record_versions WHERE project_id=? ORDER BY asset_id, version",
+                (project_id,),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """SELECT v.* FROM asset_record_versions v
+                   JOIN (SELECT asset_id, MAX(version) AS version
+                         FROM asset_record_versions WHERE project_id=? GROUP BY asset_id) latest
+                   ON latest.asset_id=v.asset_id AND latest.version=v.version
+                   WHERE v.project_id=? ORDER BY v.asset_id""",
+                (project_id, project_id),
+            ).fetchall()
+    results = []
+    for row in rows:
+        if _hash(row["record_json"]) != row["record_sha256"]:
+            raise AuditIntegrityError(f"asset record hash does not match: {row['asset_id']} v{row['version']}")
+        try:
+            record = AssetRecord.from_mapping(json.loads(row["record_json"]))
+            readiness = json.loads(row["readiness_json"])
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise AuditIntegrityError(f"stored asset record is invalid: {row['asset_id']} v{row['version']}") from exc
+        results.append({"record_version_id": row["record_version_id"],
+                        "project_id": row["project_id"], "asset_id": row["asset_id"],
+                        "site_id": row["site_id"], "asset_type": row["asset_type"],
+                        "version": row["version"], "created_at": row["created_at"],
+                        "actor_id": row["actor_id"], "record_sha256": row["record_sha256"],
+                        "asset": record, "readiness": readiness})
+    return results
