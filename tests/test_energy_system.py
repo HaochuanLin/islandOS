@@ -504,3 +504,31 @@ def test_diesel_fuel_configuration_requires_both_inventory_and_consumption_rate(
             rated_power_kw=10, variable_cost_per_kwh=1.0,
             fuel_consumption_l_per_kwh=0.25,
         )
+
+
+def test_diesel_fuel_exactly_supporting_minimum_load_then_exhaustion_stops_cleanly():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        dt_hours=0.5,
+        diesel=DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2,
+            fuel_consumption_l_per_kwh=0.5,
+            initial_fuel_liters=0.5,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[2, 2], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    first, second = result["rows"]
+    assert first["diesel_generation_kw"] == pytest.approx(2)
+    assert first["diesel_fuel_used_liters"] == pytest.approx(0.5)
+    assert first["diesel_fuel_remaining_liters"] == pytest.approx(0)
+    assert second["diesel_generation_kw"] == 0
+    assert second["diesel_started"] is False
+    assert second["unmet_load_kw"] == pytest.approx(2)
+    assert result["summary"]["diesel_fuel_used_liters"] == pytest.approx(0.5)
+    assert result["summary"]["ending_diesel_fuel_liters"] == pytest.approx(0)
