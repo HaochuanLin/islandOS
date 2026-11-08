@@ -85,6 +85,7 @@ class DieselSpec:
     fuel_curve_liters_per_hour: tuple[tuple[float, float], ...] | None = None
     initial_fuel_liters: float | None = None
     fuel_tank_capacity_liters: float | None = None
+    fuel_price_per_liter: float | None = None
 
     def __post_init__(self) -> None:
         for name in ("rated_power_kw", "variable_cost_per_kwh",
@@ -128,6 +129,12 @@ class DieselSpec:
                 raise EnergyModelError("diesel fuel curve must end at rated_power_kw")
         if self.initial_fuel_liters is not None:
             _number("diesel initial_fuel_liters", self.initial_fuel_liters)
+        if self.fuel_price_per_liter is not None:
+            _number("diesel fuel_price_per_liter", self.fuel_price_per_liter)
+            if self.initial_fuel_liters is None:
+                raise EnergyModelError(
+                    "diesel fuel_price_per_liter requires a configured fuel model"
+                )
         if self.fuel_tank_capacity_liters is not None:
             _number("diesel fuel_tank_capacity_liters", self.fuel_tank_capacity_liters)
             if self.fuel_tank_capacity_liters <= 0:
@@ -305,7 +312,8 @@ def dispatch_energy_system(
         "diesel_generation_kwh": 0.0, "diesel_start_count": 0.0,
         "diesel_stop_count": 0.0, "diesel_start_cost": 0.0,
         "diesel_stop_cost": 0.0, "grid_energy_cost": 0.0,
-        "diesel_energy_cost": 0.0, "grid_export_energy_kwh": 0.0,
+        "diesel_energy_cost": 0.0, "diesel_fuel_cost": 0.0,
+        "grid_export_energy_kwh": 0.0,
         "grid_export_revenue": 0.0,
         "battery_throughput_kwh": 0.0,
         "battery_degradation_cost": 0.0,
@@ -432,9 +440,15 @@ def dispatch_energy_system(
             if config.diesel and config.diesel.initial_fuel_liters is not None
             else 0.0
         )
+        diesel_fuel_cost = (
+            diesel_fuel_used_liters * config.diesel.fuel_price_per_liter
+            if config.diesel and config.diesel.fuel_price_per_liter is not None
+            else 0.0
+        )
         if fuel_remaining_liters is not None:
             fuel_remaining_liters = max(0.0, fuel_remaining_liters - diesel_fuel_used_liters)
         totals["diesel_fuel_used_liters"] += diesel_fuel_used_liters
+        totals["diesel_fuel_cost"] += diesel_fuel_cost
         totals["diesel_fuel_delivered_liters"] += diesel_fuel_delivered_liters
 
         export_kw = (
@@ -467,6 +481,7 @@ def dispatch_energy_system(
             "diesel_generation_kw": diesel_kw,
             "diesel_fuel_delivered_liters": diesel_fuel_delivered_liters,
             "diesel_fuel_used_liters": diesel_fuel_used_liters,
+            "diesel_fuel_cost": diesel_fuel_cost,
             "diesel_fuel_remaining_liters": fuel_remaining_liters,
             "diesel_started": diesel_started,
             "diesel_stopped": diesel_stopped,
@@ -512,7 +527,7 @@ def dispatch_energy_system(
     totals["gross_energy_cost"] = round(
         totals["grid_energy_cost"] + totals["diesel_energy_cost"]
         + totals["diesel_start_cost"] + totals["diesel_stop_cost"]
-        + totals["battery_degradation_cost"], 8
+        + totals["diesel_fuel_cost"] + totals["battery_degradation_cost"], 8
     )
     totals["estimated_energy_cost"] = round(
         totals["gross_energy_cost"] - totals["grid_export_revenue"], 8
@@ -541,6 +556,9 @@ def dispatch_energy_system(
                 "piecewise_linear_curve" if config.diesel and config.diesel.fuel_curve_liters_per_hour is not None
                 else "constant_l_per_kwh" if config.diesel and config.diesel.fuel_consumption_l_per_kwh is not None
                 else "not_configured"
+            ),
+            "diesel_fuel_cost_enabled": bool(
+                config.diesel and config.diesel.fuel_price_per_liter is not None
             ),
             "interconnection_permission_validated": False,
             "network_power_flow_modeled": False,
