@@ -96,6 +96,24 @@ class SignalForecastPlugin(Protocol):
 
 
 @dataclass(frozen=True)
+class CalibrationResidual:
+    """A past out-of-sample prediction error used only for interval calibration."""
+
+    timestamp: datetime
+    residual: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.timestamp, datetime):
+            raise ValueError("Calibration residual timestamp must be a datetime")
+        if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
+            raise ValueError("Calibration residual timestamps must include a timezone")
+        if isinstance(self.residual, bool) or not isinstance(self.residual, (int, float)):
+            raise ValueError("Calibration residual must be numeric")
+        if not math.isfinite(float(self.residual)):
+            raise ValueError("Calibration residual must be finite")
+
+
+@dataclass(frozen=True)
 class SignalForecastPoint:
     timestamp: datetime
     predicted_value: float
@@ -150,9 +168,9 @@ def _finite_values(values: Sequence[float], name: str, *, allow_negative: bool =
     return clean
 
 
-def _conformal_radius(residuals: Sequence[float], coverage: float) -> float:
-    """Finite-sample absolute-residual quantile; calibration data must be past-only."""
-    errors = sorted(abs(value) for value in residuals)
+def _conformal_radius(residuals: Sequence[CalibrationResidual], coverage: float) -> float:
+    """Finite-sample absolute-residual quantile; callers enforce chronology."""
+    errors = sorted(abs(float(item.residual)) for item in residuals)
     rank = min(len(errors), max(1, math.ceil((len(errors) + 1) * coverage)))
     return errors[rank - 1]
 
@@ -185,7 +203,7 @@ class SignalForecastRegistry:
         model_id: str,
         request: SignalForecastRequest,
         *,
-        calibration_residuals: Sequence[float] | None = None,
+        calibration_residuals: Sequence[CalibrationResidual] | None = None,
         interval_coverage: float = 0.90,
     ) -> SignalForecastResult:
         try:
@@ -217,11 +235,16 @@ class SignalForecastRegistry:
                 or not 0.5 < interval_coverage < 1.0
             ):
                 raise ValueError("interval_coverage must be greater than 0.5 and less than 1.0")
-            residuals = _finite_values(
-                calibration_residuals, "calibration_residuals", allow_negative=True
-            )
+            residuals = tuple(calibration_residuals)
+            if any(not isinstance(item, CalibrationResidual) for item in residuals):
+                raise ValueError("calibration_residuals must contain CalibrationResidual instances")
             if len(residuals) < 20:
                 raise ValueError("At least 20 prior calibration residuals are required for prediction intervals")
+            for previous, current in zip(residuals, residuals[1:]):
+                if (current.timestamp - previous.timestamp).total_seconds() <= 0:
+                    raise ValueError("Calibration residual timestamps must be strictly increasing")
+            if any(item.timestamp >= request.target_timestamps[0] for item in residuals):
+                raise ValueError("Calibration residuals must be timestamped before the forecast window")
             radius = _conformal_radius(residuals, float(interval_coverage))
             calibration_count = len(residuals)
 
