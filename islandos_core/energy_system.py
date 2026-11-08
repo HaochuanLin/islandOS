@@ -269,6 +269,7 @@ def dispatch_energy_system(
     config: EnergySystemConfig,
     *,
     policy: str = "battery_first",
+    policy_schedule: Sequence[str] | None = None,
 ) -> dict:
     """Run a transparent rule-based dispatch and return hourly audit rows + summary.
 
@@ -371,7 +372,20 @@ def dispatch_energy_system(
     )
     totals["diesel_fuel_used_liters"] = 0.0
 
+    if policy_schedule is None:
+        active_policy_schedule = [policy] * n
+    else:
+        try:
+            active_policy_schedule = list(policy_schedule)
+        except TypeError as exc:
+            raise EnergyModelError("policy_schedule must be a sequence") from exc
+        if len(active_policy_schedule) != n:
+            raise EnergyModelError(f"policy_schedule must contain exactly {n} entries")
+        if any(item not in {"battery_first", "grid_first"} for item in active_policy_schedule):
+            raise EnergyModelError("policy_schedule entries must be 'battery_first' or 'grid_first'")
+
     for t in range(n):
+        active_policy = active_policy_schedule[t]
         diesel_fuel_delivered_liters = fuel_deliveries[t]
         if fuel_remaining_liters is not None:
             fuel_remaining_liters += diesel_fuel_delivered_liters
@@ -449,7 +463,7 @@ def dispatch_energy_system(
                 target = min(target, previous_diesel_kw + spec.ramp_up_kw_per_hour * config.dt_hours)
             return target
 
-        if deficit > 0 and policy == "battery_first":
+        if deficit > 0 and active_policy == "battery_first":
             discharge_kw = discharge(deficit)
             deficit -= discharge_kw
             grid_kw = import_grid(deficit)
@@ -547,7 +561,8 @@ def dispatch_energy_system(
             raise RuntimeError(f"battery SOC outside configured bounds at timestep {t}")
 
         row = {
-            "timestep": t, "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
+            "timestep": t, "dispatch_priority": active_policy,
+            "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
             "battery_throughput_kwh": battery_throughput_kwh,
@@ -628,7 +643,8 @@ def dispatch_energy_system(
         totals["gross_energy_cost"] - totals["grid_export_revenue"], 8
     )
     return {
-        "policy": policy,
+        "policy": policy if policy_schedule is None else "time_varying_priority_schedule",
+        "policy_schedule": active_policy_schedule,
         "time_steps": n,
         "dt_hours": config.dt_hours,
         "grid_export_limit_kw": config.grid_export_limit_kw,
