@@ -222,6 +222,7 @@ class EnergySystemInputs:
     diesel_fuel_delivery_liters: Sequence[float] | None = None
     # Negative charges from renewable surplus; positive discharges to load.
     battery_power_setpoint_kw: Sequence[float] | None = None
+    diesel_commitment_schedule: Sequence[bool] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -307,6 +308,14 @@ def dispatch_energy_system(
         if inputs.battery_power_setpoint_kw is not None else None
     )
     n = len(load)
+    if inputs.diesel_commitment_schedule is not None:
+        if config.diesel is None:
+            raise EnergyModelError("diesel_commitment_schedule requires a configured diesel unit")
+        diesel_commitment = list(inputs.diesel_commitment_schedule)
+        if len(diesel_commitment) != n or any(not isinstance(value, bool) for value in diesel_commitment):
+            raise EnergyModelError(f"diesel_commitment_schedule must contain exactly {n} boolean values")
+    else:
+        diesel_commitment = [True] * n
     if any(len(values) != n for values in (pv, wind, price, export_price, fuel_deliveries)):
         raise EnergyModelError("all numeric input series must have equal lengths")
     if battery_setpoints is not None and len(battery_setpoints) != n:
@@ -451,7 +460,7 @@ def dispatch_energy_system(
         def run_diesel(remaining_kw: float) -> float:
             nonlocal diesel_started, diesel_stopped
             spec = config.diesel
-            if not spec or not diesel_ok[t] or remaining_kw <= 0:
+            if not spec or not diesel_ok[t] or not diesel_commitment[t] or remaining_kw <= 0:
                 diesel_stopped = previous_diesel_kw > 0
                 return 0.0
             # Do not start (or remain online) below the confirmed stable minimum.
@@ -604,6 +613,7 @@ def dispatch_energy_system(
             "grid_available": grid_ok[t],
             "grid_export_available": export_ok[t],
             "diesel_available": diesel_ok[t],
+            "diesel_committed": diesel_commitment[t] if config.diesel else None,
             "grid_import_kw": grid_kw, "grid_export_kw": export_kw,
             "grid_export_price_per_kwh": export_price[t],
             "grid_export_revenue": export_kw * config.dt_hours * export_price[t],
