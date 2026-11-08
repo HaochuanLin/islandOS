@@ -222,7 +222,7 @@ class TestMultiSignalForecasting(unittest.TestCase):
         targets = (history[-1].timestamp + timedelta(hours=1),)
         with self.assertRaisesRegex(ValueError, "unit must"):
             SignalForecastRequest("pv_power", "", history, targets)
-        with self.assertRaisesRegex(ValueError, "continuous at the declared cadence"):
+        with self.assertRaisesRegex(ValueError, "strictly ordered at the declared cadence"):
             SignalForecastRequest(
                 "pv_power", "kW", (history[0], history[2]), targets
             )
