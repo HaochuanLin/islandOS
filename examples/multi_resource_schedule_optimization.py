@@ -9,6 +9,7 @@ from islandos_core.energy_system import (
 )
 from optimization.energy_system_optimizer import (
     OptimizationWeights, optimize_energy_system_schedule,
+    optimize_battery_power_schedule,
 )
 
 
@@ -73,6 +74,15 @@ def run_demo(*, seed: int = 20261108) -> dict:
         mutation_rate=0.08,
         seed=seed,
     )
+    battery_optimized = optimize_battery_power_schedule(
+        inputs,
+        config,
+        weights=OptimizationWeights(cost=0.65, reliability=0.25, curtailment=0.10),
+        population_size=20,
+        generations=12,
+        mutation_rate=0.12,
+        seed=seed,
+    )
     recommended_objectives = optimized["recommendation"]["objectives"]
     comparison_deltas = {
         policy: {
@@ -90,6 +100,16 @@ def run_demo(*, seed: int = 20261108) -> dict:
         "baselines": baselines,
         "recommended_minus_baseline_deltas": comparison_deltas,
         "delta_interpretation": "Negative values are lower than the named baseline for that metric; these are synthetic model comparisons, not measured savings.",
+        "battery_power_optimizer": {
+            "algorithm": battery_optimized["algorithm"],
+            "candidate_count": battery_optimized["candidate_count"],
+            "pareto_count": battery_optimized["pareto_count"],
+            "decision_variable": battery_optimized["decision_variable"],
+            "recommendation": {
+                "setpoints_kw": battery_optimized["recommendation"]["setpoints_kw"],
+                "objectives": battery_optimized["recommendation"]["objectives"],
+            },
+        },
         "optimizer": {
             "algorithm": optimized["algorithm"],
             "candidate_count": optimized["candidate_count"],
