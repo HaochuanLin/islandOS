@@ -476,7 +476,10 @@ def dispatch_energy_system(
             if battery else 0.0
         )
         battery_efc_increment = (
-            battery_throughput_kwh / (2 * battery.capacity_kwh)
+            (
+                charge_kw * config.dt_hours * battery.charge_efficiency
+                + discharge_kw * config.dt_hours / battery.discharge_efficiency
+            ) / (2 * battery.capacity_kwh)
             if battery else 0.0
         )
         battery_capacity_fade_kwh = 0.0
