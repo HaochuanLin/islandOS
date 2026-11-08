@@ -470,3 +470,53 @@ def test_diesel_fuel_assumptions_are_mapped_only_as_confirmed_provenance():
     )
     assert config.diesel.fuel_consumption_l_per_kwh == pytest.approx(0.25)
     assert config.diesel.initial_fuel_liters == pytest.approx(100)
+
+def test_diesel_tank_capacity_requires_and_maps_confirmed_fuel_assumption():
+    generator = asset(
+        "diesel_generator",
+        {"configured_power_kw": (30, "kW")},
+        {
+            "max_power_kw": ("max", 30, "kW"),
+            "min_stable_power_kw": ("min", 5, "kW"),
+        },
+    )
+    base = {"diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh")}
+    with pytest.raises(AssetEnergyAdapterError, match="requires both fuel-consumption"):
+        build_energy_system_config_from_assets(
+            [generator],
+            operating_assumptions={
+                **base,
+                "diesel_fuel_tank_capacity_liters": assumption(200, "L"),
+            },
+        )
+    config = build_energy_system_config_from_assets(
+        [generator],
+        operating_assumptions={
+            **base,
+            "diesel_fuel_consumption_l_per_kwh": assumption(0.25, "L/kWh"),
+            "diesel_initial_fuel_liters": assumption(100, "L"),
+            "diesel_fuel_tank_capacity_liters": assumption(200, "L"),
+        },
+    )
+    assert config.diesel.fuel_tank_capacity_liters == pytest.approx(200)
+
+
+def test_diesel_tank_capacity_below_initial_inventory_fails_adapter_closed():
+    generator = asset(
+        "diesel_generator",
+        {"configured_power_kw": (30, "kW")},
+        {
+            "max_power_kw": ("max", 30, "kW"),
+            "min_stable_power_kw": ("min", 5, "kW"),
+        },
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="cannot exceed fuel_tank_capacity_liters"):
+        build_energy_system_config_from_assets(
+            [generator],
+            operating_assumptions={
+                "diesel_variable_cost_per_kwh": assumption(1.2, "USD/kWh"),
+                "diesel_fuel_consumption_l_per_kwh": assumption(0.25, "L/kWh"),
+                "diesel_initial_fuel_liters": assumption(100, "L"),
+                "diesel_fuel_tank_capacity_liters": assumption(80, "L"),
+            },
+        )
