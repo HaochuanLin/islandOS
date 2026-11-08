@@ -7,6 +7,7 @@ from islandos_core.multisignal_forecasting import (
     SignalForecastRegistry,
     SignalForecastRequest,
     SignalObservation,
+    forecast_values_for_dispatch,
     rolling_origin_backtest,
 )
 
@@ -149,6 +150,51 @@ class TestMultiSignalForecasting(unittest.TestCase):
             SignalObservation(datetime(2026, 1, 1), "pv_power", 1, "kW")
         with self.assertRaisesRegex(ValueError, "non-negative"):
             SignalObservation(self.start, "pv_power", -1, "kW")
+
+
+
+    def test_dispatch_adapter_checks_signal_unit_timestamps_and_interval_bounds(self):
+        registry = SignalForecastRegistry()
+        registry.register(PersistencePlugin())
+        request = self.request()
+        residuals = tuple(
+            CalibrationResidual(request.history[-21 + i].timestamp, float(i - 10))
+            for i in range(21)
+        )
+        result = registry.forecast(
+            "persistence", request, calibration_residuals=residuals
+        )
+        points = forecast_values_for_dispatch(
+            result, expected_signal_id="pv_power", expected_unit="kW",
+            target_timestamps=request.target_timestamps,
+        )
+        upper = forecast_values_for_dispatch(
+            result, expected_signal_id="pv_power", expected_unit="kW",
+            target_timestamps=request.target_timestamps, bound="upper",
+        )
+        self.assertEqual(len(points), 4)
+        self.assertTrue(all(u >= p for p, u in zip(points, upper)))
+        with self.assertRaisesRegex(ValueError, "signal_id"):
+            forecast_values_for_dispatch(
+                result, expected_signal_id="wind_power", expected_unit="kW",
+                target_timestamps=request.target_timestamps,
+            )
+        with self.assertRaisesRegex(ValueError, "unit"):
+            forecast_values_for_dispatch(
+                result, expected_signal_id="pv_power", expected_unit="MW",
+                target_timestamps=request.target_timestamps,
+            )
+        with self.assertRaisesRegex(ValueError, "timestamps"):
+            forecast_values_for_dispatch(
+                result, expected_signal_id="pv_power", expected_unit="kW",
+                target_timestamps=request.target_timestamps[:-1],
+            )
+        point_only = registry.forecast("persistence", request)
+        with self.assertRaisesRegex(ValueError, "calibrated intervals"):
+            forecast_values_for_dispatch(
+                point_only, expected_signal_id="pv_power", expected_unit="kW",
+                target_timestamps=request.target_timestamps, bound="upper",
+            )
 
     def test_rolling_origin_backtest_compares_models_on_aligned_timestamps(self):
         series = self.observations(count=120)
