@@ -24,6 +24,22 @@ def _number(name: str, value: float, *, minimum: float = 0.0) -> float:
     return result
 
 
+def _diesel_fuel_rate_lph(spec: "DieselSpec", power_kw: float) -> float:
+    """Interpolate a confirmed piecewise-linear fuel-rate curve, or use legacy L/kWh."""
+    if power_kw <= 0:
+        return 0.0
+    if spec.fuel_curve_liters_per_hour is None:
+        return power_kw * float(spec.fuel_consumption_l_per_kwh or 0.0)
+    curve = spec.fuel_curve_liters_per_hour
+    if power_kw >= curve[-1][0]:
+        return curve[-1][1]
+    for (left_kw, left_rate), (right_kw, right_rate) in zip(curve, curve[1:]):
+        if power_kw <= right_kw:
+            fraction = (power_kw - left_kw) / (right_kw - left_kw)
+            return left_rate + fraction * (right_rate - left_rate)
+    raise EnergyModelError("diesel fuel curve does not cover requested output")
+
+
 @dataclass(frozen=True)
 class BatterySpec:
     capacity_kwh: float
@@ -66,6 +82,7 @@ class DieselSpec:
     start_cost_per_start: float = 0.0
     stop_cost_per_stop: float = 0.0
     fuel_consumption_l_per_kwh: float | None = None
+    fuel_curve_liters_per_hour: tuple[tuple[float, float], ...] | None = None
     initial_fuel_liters: float | None = None
     fuel_tank_capacity_liters: float | None = None
 
@@ -78,14 +95,38 @@ class DieselSpec:
             _number("diesel ramp_up_kw_per_hour", self.ramp_up_kw_per_hour)
             if self.ramp_up_kw_per_hour <= 0:
                 raise EnergyModelError("diesel ramp_up_kw_per_hour must be > 0 when specified")
-        if (self.fuel_consumption_l_per_kwh is None) != (self.initial_fuel_liters is None):
+        has_constant_fuel_rate = self.fuel_consumption_l_per_kwh is not None
+        has_fuel_curve = self.fuel_curve_liters_per_hour is not None
+        if has_constant_fuel_rate and has_fuel_curve:
             raise EnergyModelError(
-                "diesel fuel_consumption_l_per_kwh and initial_fuel_liters must be supplied together"
+                "diesel constant fuel rate and nonlinear fuel curve are mutually exclusive"
             )
-        if self.fuel_consumption_l_per_kwh is not None:
+        if (has_constant_fuel_rate or has_fuel_curve) != (self.initial_fuel_liters is not None):
+            raise EnergyModelError(
+                "diesel fuel model and initial_fuel_liters must be supplied together"
+            )
+        if has_constant_fuel_rate:
             _number("diesel fuel_consumption_l_per_kwh", self.fuel_consumption_l_per_kwh)
             if self.fuel_consumption_l_per_kwh <= 0:
                 raise EnergyModelError("diesel fuel_consumption_l_per_kwh must be > 0")
+        if has_fuel_curve:
+            curve = self.fuel_curve_liters_per_hour
+            if not isinstance(curve, tuple) or len(curve) < 2:
+                raise EnergyModelError("diesel fuel_curve_liters_per_hour must contain at least two points")
+            previous_power = previous_rate = -1.0
+            for index, point in enumerate(curve):
+                if not isinstance(point, tuple) or len(point) != 2:
+                    raise EnergyModelError(f"diesel fuel curve point {index} must be a (kW, L/h) tuple")
+                power = _number(f"diesel fuel curve power[{index}]", point[0])
+                rate = _number(f"diesel fuel curve rate[{index}]", point[1])
+                if index == 0 and (power != 0 or rate != 0):
+                    raise EnergyModelError("diesel fuel curve must start at (0 kW, 0 L/h)")
+                if power <= previous_power or rate < previous_rate:
+                    raise EnergyModelError("diesel fuel curve power must increase and fuel rate must not decrease")
+                previous_power, previous_rate = power, rate
+            if not math.isclose(curve[-1][0], self.rated_power_kw, rel_tol=0, abs_tol=1e-9):
+                raise EnergyModelError("diesel fuel curve must end at rated_power_kw")
+        if self.initial_fuel_liters is not None:
             _number("diesel initial_fuel_liters", self.initial_fuel_liters)
         if self.fuel_tank_capacity_liters is not None:
             _number("diesel fuel_tank_capacity_liters", self.fuel_tank_capacity_liters)
@@ -330,14 +371,20 @@ def dispatch_energy_system(
                 diesel_stopped = previous_diesel_kw > 0
                 return 0.0
             target = min(remaining_kw, spec.rated_power_kw)
-            if fuel_remaining_liters is not None and spec.fuel_consumption_l_per_kwh:
-                fuel_limited_kw = fuel_remaining_liters / (
-                    spec.fuel_consumption_l_per_kwh * config.dt_hours
-                )
-                target = min(target, fuel_limited_kw)
-                if target + 1e-9 < spec.min_stable_power_kw:
+            if fuel_remaining_liters is not None:
+                available_fuel = fuel_remaining_liters
+                if _diesel_fuel_rate_lph(spec, spec.min_stable_power_kw) * config.dt_hours > available_fuel + 1e-9:
                     diesel_stopped = previous_diesel_kw > 0
                     return 0.0
+                if _diesel_fuel_rate_lph(spec, target) * config.dt_hours > available_fuel + 1e-9:
+                    low, high = spec.min_stable_power_kw, target
+                    for _ in range(60):
+                        midpoint = (low + high) / 2
+                        if _diesel_fuel_rate_lph(spec, midpoint) * config.dt_hours <= available_fuel:
+                            low = midpoint
+                        else:
+                            high = midpoint
+                    target = low
             if previous_diesel_kw <= 0:
                 # Startup is represented as reaching the stable operating point
                 # within this timestep; the ramp limit applies to later increases.
@@ -381,8 +428,8 @@ def dispatch_energy_system(
             if battery else 0.0
         )
         diesel_fuel_used_liters = (
-            diesel_kw * config.dt_hours * config.diesel.fuel_consumption_l_per_kwh
-            if config.diesel and config.diesel.fuel_consumption_l_per_kwh is not None
+            _diesel_fuel_rate_lph(config.diesel, diesel_kw) * config.dt_hours
+            if config.diesel and config.diesel.initial_fuel_liters is not None
             else 0.0
         )
         if fuel_remaining_liters is not None:
