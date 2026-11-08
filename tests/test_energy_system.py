@@ -927,3 +927,54 @@ def test_seeded_multiresolution_dispatch_preserves_physical_invariants():
                 assert diesel_kw - rows[index - 1]["diesel_generation_kw"] <= 2.0 * dt_hours + 1e-9
         assert result["summary"]["load_energy_kwh"] == pytest.approx(sum(load) * dt_hours)
         assert result["summary"]["unmet_load_kwh"] >= 0
+
+
+
+def test_72_hour_grid_outage_exhausts_battery_and_diesel_fuel_without_violating_balance():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=5,
+        dt_hours=1.0,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=2, max_discharge_kw=3,
+            initial_soc=0.9, min_soc=0.2, max_soc=0.95,
+            charge_efficiency=0.95, discharge_efficiency=0.95,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=3, variable_cost_per_kwh=0.2,
+            min_stable_power_kw=1,
+            fuel_curve_liters_per_hour=((0.0, 0.0), (3.0, 1.5)),
+            initial_fuel_liters=3.0, fuel_tank_capacity_liters=3.0,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0.0] * 72,
+        wind_generation_kw=[0.0] * 72,
+        load_kw=[4.0] * 72,
+        grid_price_per_kwh=[0.2] * 72,
+        grid_available=[False] * 72,
+        diesel_available=[True] * 72,
+    )
+
+    result = dispatch_energy_system(inputs, config)
+    rows = result["rows"]
+    summary = result["summary"]
+
+    assert len(rows) == 72
+    assert any(row["battery_discharge_kw"] > 0 for row in rows)
+    assert any(row["diesel_generation_kw"] > 0 for row in rows)
+    assert rows[-1]["battery_soc"] == pytest.approx(0.2)
+    assert rows[-1]["diesel_fuel_remaining_liters"] == pytest.approx(0.0)
+    assert rows[-1]["diesel_generation_kw"] == pytest.approx(0.0)
+    assert rows[-1]["unmet_load_kw"] == pytest.approx(4.0)
+    for row in rows:
+        assert abs(row["energy_balance_residual_kw"]) <= 1e-7
+        assert 0.2 - 1e-9 <= row["battery_soc"] <= 0.95 + 1e-9
+        assert row["diesel_fuel_remaining_liters"] >= -1e-9
+        assert row["diesel_fuel_used_liters"] >= 0
+    remaining = [row["diesel_fuel_remaining_liters"] for row in rows]
+    assert remaining == sorted(remaining, reverse=True)
+    assert summary["diesel_fuel_used_liters"] == pytest.approx(3.0)
+    assert summary["diesel_fuel_delivered_liters"] == pytest.approx(0.0)
+    assert summary["unmet_load_kwh"] > 0
+    assert summary["load_energy_kwh"] == pytest.approx(288.0)
+    assert summary["load_served_kwh"] + summary["unmet_load_kwh"] == pytest.approx(288.0)
