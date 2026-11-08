@@ -32,6 +32,9 @@ The adapter requires:
   `diesel_fuel_curve_N_fuel_l_per_hour` (L/h) assumptions. Curves require
   contiguous point indices from zero and at least two points. An optional
   confirmed tank capacity (L) can additionally bound inventory and deliveries.
+  An optional `diesel_fuel_price_per_liter` assumption accepts an ISO
+  currency-per-liter unit (for example CNY/L or USD/L) and separates fuel
+  expenditure from non-fuel variable O&M in the model cost breakdown.
 
 A single diesel generator's confirmed minimum stable loading is mapped into the
 energy model. Flexible loads are rejected until their dispatch semantics are
