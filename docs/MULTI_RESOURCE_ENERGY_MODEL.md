@@ -57,9 +57,10 @@ When both a confirmed initial tank inventory and a fuel-consumption rate are
 provided, diesel output is capped by the remaining fuel in each timestep.
 An optional `diesel_fuel_delivery_liters` series can add explicitly scheduled
 fuel at the start of each timestep; deliveries are non-negative, horizon-aligned,
-and rejected unless the diesel fuel-inventory model is enabled. Delivered,
-consumed, and remaining fuel are retained in per-step audit rows and aggregate
-summary values. This is a user-supplied schedule, not a delivery forecast or
+and rejected unless the diesel fuel-inventory model is enabled. An optional
+confirmed tank-capacity assumption bounds initial inventory and rejects any
+scheduled delivery that would overfill the tank. Delivered, consumed, and
+remaining fuel are retained in per-step audit rows and aggregate summary values. This is a user-supplied schedule, not a delivery forecast or
 proof that a supplier can fulfil it. The model does not simulate tank capacity,
 tank measurement error, fuel-quality effects, or nonlinear fuel curves; a
 constant L/kWh rate is a screening assumption and must be explicitly supplied.
