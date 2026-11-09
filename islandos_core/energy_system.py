@@ -197,11 +197,12 @@ class EnergySystemConfig:
     battery: BatterySpec | None = None
     diesel: DieselSpec | None = None
     grid_export_limit_kw: float = 0.0
+    grid_demand_charge_per_kw: float = 0.0
 
     def __post_init__(self) -> None:
         for name in (
             "pv_rated_kw", "wind_rated_kw", "grid_import_limit_kw",
-            "grid_export_limit_kw",
+            "grid_export_limit_kw", "grid_demand_charge_per_kw",
         ):
             _number(name, getattr(self, name))
         _number("dt_hours", self.dt_hours)
@@ -224,6 +225,8 @@ class EnergySystemInputs:
     battery_power_setpoint_kw: Sequence[float] | None = None
     diesel_commitment_schedule: Sequence[bool] | None = None
     diesel_power_setpoint_kw: Sequence[float] | None = None
+    # Optional per-step cap; the physical balance still determines actual export.
+    grid_export_power_setpoint_kw: Sequence[float] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -312,6 +315,10 @@ def dispatch_energy_system(
         _series("diesel_power_setpoint_kw", inputs.diesel_power_setpoint_kw)
         if inputs.diesel_power_setpoint_kw is not None else None
     )
+    export_setpoints = (
+        _series("grid_export_power_setpoint_kw", inputs.grid_export_power_setpoint_kw)
+        if inputs.grid_export_power_setpoint_kw is not None else None
+    )
     n = len(load)
     if inputs.diesel_commitment_schedule is not None:
         if config.diesel is None:
@@ -332,6 +339,11 @@ def dispatch_energy_system(
             raise EnergyModelError(f"diesel_power_setpoint_kw must contain exactly {n} values")
         if any(value > config.diesel.rated_power_kw + 1e-9 for value in diesel_setpoints):
             raise EnergyModelError("diesel_power_setpoint_kw exceeds configured rated power")
+    if export_setpoints is not None:
+        if len(export_setpoints) != n:
+            raise EnergyModelError(f"grid_export_power_setpoint_kw must contain exactly {n} values")
+        if any(value > config.grid_export_limit_kw + 1e-9 for value in export_setpoints):
+            raise EnergyModelError("grid_export_power_setpoint_kw cannot exceed grid_export_limit_kw")
     if battery_setpoints is not None and config.battery is None:
         raise EnergyModelError("battery_power_setpoint_kw requires a configured battery")
     if battery_setpoints is not None and any(
@@ -395,6 +407,8 @@ def dispatch_energy_system(
         "diesel_energy_cost": 0.0, "diesel_fuel_cost": 0.0,
         "grid_export_energy_kwh": 0.0,
         "grid_export_revenue": 0.0,
+        "peak_grid_import_kw": 0.0,
+        "grid_demand_charge": 0.0,
         "battery_throughput_kwh": 0.0,
         "battery_degradation_cost": 0.0,
         "battery_capacity_fade_kwh": 0.0,
@@ -598,8 +612,12 @@ def dispatch_energy_system(
         totals["diesel_fuel_cost"] += diesel_fuel_cost
         totals["diesel_fuel_delivered_liters"] += diesel_fuel_delivered_liters
 
+        requested_export_kw = (
+            export_setpoints[t] if export_setpoints is not None
+            else config.grid_export_limit_kw
+        )
         export_kw = (
-            min(surplus, config.grid_export_limit_kw)
+            min(surplus, config.grid_export_limit_kw, requested_export_kw)
             if grid_ok[t] and export_ok[t] and config.grid_export_limit_kw > 0 else 0.0
         )
         curtailed_kw = max(0.0, surplus - export_kw)
@@ -668,6 +686,7 @@ def dispatch_energy_system(
         totals["battery_capacity_fade_spill_kwh"] += battery_capacity_fade_spill_kwh
         totals["battery_equivalent_full_cycles"] += battery_efc_increment
         totals["grid_import_kwh"] += grid_kw * scale
+        totals["peak_grid_import_kw"] = max(totals["peak_grid_import_kw"], grid_kw)
         totals["grid_export_energy_kwh"] += export_kw * scale
         totals["grid_export_revenue"] += export_kw * scale * export_price[t]
         totals["diesel_generation_kwh"] += diesel_kw * scale
@@ -675,6 +694,10 @@ def dispatch_energy_system(
         if config.diesel:
             totals["diesel_energy_cost"] += diesel_kw * scale * config.diesel.variable_cost_per_kwh
 
+    totals["grid_demand_charge"] = (
+        totals["peak_grid_import_kw"] * config.grid_demand_charge_per_kw
+    )
+    totals["grid_demand_charge_per_kw"] = config.grid_demand_charge_per_kw
     totals = {key: round(value, 8) for key, value in totals.items()}
     totals["unmet_load_fraction"] = (
         totals["unmet_load_kwh"] / totals["load_energy_kwh"]
@@ -693,7 +716,8 @@ def dispatch_energy_system(
     totals["gross_energy_cost"] = round(
         totals["grid_energy_cost"] + totals["diesel_energy_cost"]
         + totals["diesel_start_cost"] + totals["diesel_stop_cost"]
-        + totals["diesel_fuel_cost"] + totals["battery_degradation_cost"], 8
+        + totals["diesel_fuel_cost"] + totals["battery_degradation_cost"]
+        + totals["grid_demand_charge"], 8
     )
     totals["estimated_energy_cost"] = round(
         totals["gross_energy_cost"] - totals["grid_export_revenue"], 8
@@ -704,6 +728,7 @@ def dispatch_energy_system(
         "time_steps": n,
         "dt_hours": config.dt_hours,
         "grid_export_limit_kw": config.grid_export_limit_kw,
+        "grid_demand_charge_per_kw": config.grid_demand_charge_per_kw,
         "summary": totals,
         "rows": rows,
         "model_scope": {
@@ -712,6 +737,8 @@ def dispatch_energy_system(
             "not_a_controller": True,
             "synthetic_or_user_supplied_inputs_only": True,
             "grid_export_enabled": config.grid_export_limit_kw > 0,
+            "grid_export_power_setpoint_supported": export_setpoints is not None,
+            "grid_demand_charge_enabled": config.grid_demand_charge_per_kw > 0,
             "battery_throughput_cost_enabled": bool(
                 battery and battery.throughput_cost_per_kwh > 0
             ),
