@@ -311,3 +311,45 @@ automatically shed under shortage, and device-specific process precedence,
 minimum up/down times, and network power-flow constraints remain outside the
 model. The evolutionary search is stochastic and does not guarantee a global
 optimum. All results remain offline decision support.
+
+
+## Worst-case multi-scenario joint optimization (experimental)
+
+The joint optimizer also accepts an optional `additional_scenarios` mapping.
+The positional `inputs` remain the nominal case; every additional scenario
+must use the same horizon and provide explicit diesel availability. Each
+candidate genome—including battery, diesel, and optional flexible-load
+decisions—is replayed unchanged through the physical simulator for every
+scenario. Candidate feasibility requires every scenario's physical audit to
+pass.
+
+The Pareto objectives use the maximum (worst supplied case) of estimated
+energy cost, unmet load, renewable curtailment, and battery throughput across
+the scenario set. The recommendation reports each scenario's own summary and
+audit alongside the worst-case objective vector. No scenario probabilities
+are assumed, so this is not a probability-weighted expectation, confidence
+interval, or forecast quantile.
+
+Example:
+
+```python
+result = optimize_battery_and_diesel_schedule(
+    nominal_inputs,
+    energy_system_config,
+    additional_scenarios={
+        "low_renewables": low_renewables_inputs,
+        "grid_outage": grid_outage_inputs,
+    },
+    flexible_load_energy_kwh=120.0,
+    flexible_load_available_steps=flexible_load_window,
+    flexible_load_max_power_kw=20.0,
+)
+print(result["recommendation"]["scenario_results"])
+```
+
+This is a bounded worst-case search over the supplied scenarios, not a proof
+of global robust optimality. Scenario quality and coverage depend on the
+caller; omitted weather, load, outage, equipment-failure, or tariff cases are
+not protected against. The same flexible-load schedule is used in every case,
+and critical-load priority/shedding remains unmodeled. Outputs remain offline
+decision support, not a controller.
