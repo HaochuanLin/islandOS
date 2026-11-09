@@ -404,3 +404,21 @@ yet model individual device precedence, minimum run/off times, process
 interlocks, or automatic commands to shed physical equipment. The flexible
 schedule's required energy remains an optimization contract; any shortfall
 must be reviewed in the returned shedding metrics.
+
+
+## Fair rule-based baseline comparison
+
+The joint optimizer now replays two transparent baselines,
+`battery_first` and `grid_first`, across the same supplied scenario set.
+Both baselines use the same equipment configuration, source inputs, selected
+flexible-load profile (when enabled), and selected grid-export cap schedule
+as the evolutionary recommendation. Only their dispatch priority and
+absence of explicit optimized battery/diesel schedules differ.
+
+The result includes each baseline's per-scenario physical audit and summary,
+worst-case objective vector, and recommended-minus-baseline deltas for cost,
+unmet load, renewable curtailment, and battery throughput. Negative deltas
+mean the recommendation is lower on that metric for the supplied scenarios.
+This is a transparent benchmark, not proof that the evolutionary search
+beats every possible operating policy; conclusions remain limited to the
+provided scenarios and model assumptions.
