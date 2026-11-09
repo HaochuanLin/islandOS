@@ -176,3 +176,18 @@ not a currency-valued degradation model. When a provenance-backed battery
 throughput cost is configured in the physical simulator, that cost is also
 included in estimated operating cost. Do not interpret the normalized wear
 weight as a measured replacement cost.
+
+
+## Explicit diesel power set-points (physical engine interface)
+
+The shared dispatch input now accepts an optional horizon-aligned
+`diesel_power_setpoint_kw` series. Each request is capped by residual load,
+the generator rating, confirmed availability/commitment, minimum stable load,
+ramp-up behavior, and available fuel. A request below minimum stable output
+keeps the unit off rather than forcing an unstable partial-load point. The
+requested set-point is retained in each audit row and the run scope metadata.
+
+This is an input contract for explicit schedules; it does not yet mean the
+optimizer searches diesel kW set-points. Ramp-down and minimum up/down-time
+constraints remain outside the physical model. The interface is offline
+planning only and cannot command a real generator.
