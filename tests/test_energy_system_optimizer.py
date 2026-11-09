@@ -515,3 +515,70 @@ def test_joint_optimizer_searches_and_returns_diesel_power_setpoints():
     assert all(0 <= value <= 8 for value in recommendation["diesel_power_setpoint_kw"])
     assert result["model_scope"]["diesel_power_setpoint_optimized"] is True
     assert result["model_scope"]["not_a_controller"] is True
+
+
+def test_multi_scenario_robustness_replays_same_schedule_and_reports_worst_case():
+    from optimization.energy_system_optimizer import evaluate_schedule_robustness
+
+    config = EnergySystemConfig(
+        pv_rated_kw=2,
+        wind_rated_kw=0,
+        grid_import_limit_kw=2,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=2, max_discharge_kw=2,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+        ),
+    )
+    common = {
+        "pv_generation_kw": [0, 0],
+        "wind_generation_kw": [0, 0],
+        "load_kw": [2, 2],
+        "grid_price_per_kwh": [0.2, 0.3],
+    }
+    scenarios = {
+        "normal_grid": EnergySystemInputs(
+            **common, grid_available=[True, True],
+        ),
+        "grid_outage": EnergySystemInputs(
+            **common, grid_available=[False, False],
+        ),
+    }
+    result = evaluate_schedule_robustness(
+        scenarios, config, battery_power_setpoint_kw=[0, 0],
+    )
+    assert result["scenario_count"] == 2
+    assert result["all_physical_audits_passed"] is True
+    assert result["all_scenarios_fully_served"] is False
+    assert result["robust_service_feasible"] is False
+    assert result["scenario_results"]["normal_grid"]["objectives"]["unmet_load_kwh"] == 0
+    assert result["scenario_results"]["grid_outage"]["objectives"]["unmet_load_kwh"] == 4
+    assert result["worst_case_objectives"]["unmet_load_kwh"] == 4
+    assert result["mean_case_objectives"]["unmet_load_kwh"] == 2
+    assert result["model_scope"]["same_schedule_replayed_in_every_scenario"] is True
+    assert result["model_scope"]["not_a_stochastic_or_global_robust_optimizer"] is True
+
+
+def test_multi_scenario_robustness_rejects_empty_or_misaligned_scenarios():
+    from optimization.energy_system_optimizer import evaluate_schedule_robustness
+
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+    )
+    one_step = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+    )
+    two_steps = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0], load_kw=[1, 1],
+        grid_price_per_kwh=[0.2, 0.2], grid_available=[True, True],
+    )
+    with pytest.raises(OptimizationError, match="non-empty"):
+        evaluate_schedule_robustness({}, config)
+    with pytest.raises(OptimizationError, match="same horizon"):
+        evaluate_schedule_robustness(
+            {"short": one_step, "long": two_steps}, config
+        )
+    with pytest.raises(OptimizationError, match="exactly 1"):
+        evaluate_schedule_robustness(
+            {"normal": one_step}, config, battery_power_setpoint_kw=[0, 0]
+        )
