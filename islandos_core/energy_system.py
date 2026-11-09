@@ -227,6 +227,10 @@ class EnergySystemInputs:
     diesel_power_setpoint_kw: Sequence[float] | None = None
     # Optional per-step cap; the physical balance still determines actual export.
     grid_export_power_setpoint_kw: Sequence[float] | None = None
+    # Optional additional shiftable demand; shed before critical/base demand in a shortfall.
+    flexible_load_kw: Sequence[float] | None = None
+    # Critical subset of base load_kw; defaults to all base load being critical.
+    critical_load_kw: Sequence[float] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -297,7 +301,20 @@ def dispatch_energy_system(
         raise EnergyModelError("policy must be 'battery_first' or 'grid_first'")
     pv = _series("pv_generation_kw", inputs.pv_generation_kw)
     wind = _series("wind_generation_kw", inputs.wind_generation_kw)
-    load = _series("load_kw", inputs.load_kw)
+    base_load = _series("load_kw", inputs.load_kw)
+    flexible_load = (
+        _series("flexible_load_kw", inputs.flexible_load_kw)
+        if inputs.flexible_load_kw is not None else [0.0] * len(base_load)
+    )
+    critical_load = (
+        _series("critical_load_kw", inputs.critical_load_kw)
+        if inputs.critical_load_kw is not None else list(base_load)
+    )
+    if len(flexible_load) != len(base_load) or len(critical_load) != len(base_load):
+        raise EnergyModelError("base, flexible, and critical load series must have equal lengths")
+    if any(critical > base + 1e-9 for critical, base in zip(critical_load, base_load)):
+        raise EnergyModelError("critical_load_kw cannot exceed base load_kw at any timestep")
+    load = [base + flexible for base, flexible in zip(base_load, flexible_load)]
     price = _signed_series("grid_price_per_kwh", inputs.grid_price_per_kwh)
     export_price = (
         _signed_series("grid_export_price_per_kwh", inputs.grid_export_price_per_kwh)
@@ -398,6 +415,8 @@ def dispatch_energy_system(
     rows: list[dict] = []
     totals = {
         "load_energy_kwh": 0.0, "load_served_kwh": 0.0, "unmet_load_kwh": 0.0,
+        "critical_load_energy_kwh": 0.0, "flexible_load_energy_kwh": 0.0,
+        "critical_unmet_load_kwh": 0.0, "flexible_load_shed_kwh": 0.0,
         "pv_energy_kwh": 0.0, "wind_energy_kwh": 0.0,
         "renewable_curtailed_kwh": 0.0, "battery_charge_input_kwh": 0.0,
         "battery_discharge_output_kwh": 0.0, "grid_import_kwh": 0.0,
@@ -670,11 +689,27 @@ def dispatch_energy_system(
             "renewable_curtailed_kw": curtailed_kw, "battery_soc": soc,
             "grid_price_per_kwh": price[t], "energy_balance_residual_kw": balance_residual,
         }
+        critical_unmet_kw = max(0.0, critical_load[t] - served_kw)
+        flexible_served_kw = min(
+            flexible_load[t], max(0.0, served_kw - critical_load[t])
+        )
+        flexible_shed_kw = max(0.0, flexible_load[t] - flexible_served_kw)
+        row.update({
+            "base_load_kw": base_load[t],
+            "critical_load_kw": critical_load[t],
+            "flexible_load_kw": flexible_load[t],
+            "critical_unmet_kw": critical_unmet_kw,
+            "flexible_load_shed_kw": flexible_shed_kw,
+        })
         rows.append(row)
         scale = config.dt_hours
         totals["load_energy_kwh"] += load[t] * scale
         totals["load_served_kwh"] += served_kw * scale
         totals["unmet_load_kwh"] += max(0.0, deficit) * scale
+        totals["critical_load_energy_kwh"] += critical_load[t] * scale
+        totals["flexible_load_energy_kwh"] += flexible_load[t] * scale
+        totals["critical_unmet_load_kwh"] += critical_unmet_kw * scale
+        totals["flexible_load_shed_kwh"] += flexible_shed_kw * scale
         totals["pv_energy_kwh"] += pv[t] * scale
         totals["wind_energy_kwh"] += wind[t] * scale
         totals["renewable_curtailed_kwh"] += curtailed_kw * scale
@@ -702,6 +737,10 @@ def dispatch_energy_system(
     totals["unmet_load_fraction"] = (
         totals["unmet_load_kwh"] / totals["load_energy_kwh"]
         if totals["load_energy_kwh"] else 0.0
+    )
+    totals["critical_unmet_load_fraction"] = (
+        totals["critical_unmet_load_kwh"] / totals["critical_load_energy_kwh"]
+        if totals["critical_load_energy_kwh"] else 0.0
     )
     totals["ending_battery_soc"] = round(soc, 8) if battery else None
     totals["ending_battery_state_of_health"] = (
@@ -738,6 +777,8 @@ def dispatch_energy_system(
             "synthetic_or_user_supplied_inputs_only": True,
             "grid_export_enabled": config.grid_export_limit_kw > 0,
             "grid_export_power_setpoint_supported": export_setpoints is not None,
+            "critical_load_priority_reporting_enabled": True,
+            "flexible_load_shedding_accounted_separately": inputs.flexible_load_kw is not None,
             "grid_demand_charge_enabled": config.grid_demand_charge_per_kw > 0,
             "battery_throughput_cost_enabled": bool(
                 battery and battery.throughput_cost_per_kwh > 0
