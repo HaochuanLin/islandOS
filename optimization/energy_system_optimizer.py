@@ -1011,6 +1011,7 @@ def optimize_battery_and_diesel_schedule(
                 tuple(row["diesel_commitment_schedule"]),
                 tuple(row["diesel_power_setpoint_kw"]),
                 tuple(row["flexible_load_power_kw"]),
+                tuple(row["grid_export_power_setpoint_kw"]),
             )
             for row in selected[:population_size]
         ]
@@ -1022,6 +1023,7 @@ def optimize_battery_and_diesel_schedule(
                     tuple(row["diesel_commitment_schedule"]),
                     tuple(row["diesel_power_setpoint_kw"]),
                     tuple(row["flexible_load_power_kw"]),
+                    tuple(row["grid_export_power_setpoint_kw"]),
                 ) not in selected_genomes
             ]
             remaining.sort(
@@ -1038,6 +1040,7 @@ def optimize_battery_and_diesel_schedule(
                     tuple(row["diesel_commitment_schedule"]),
                     tuple(row["diesel_power_setpoint_kw"]),
                     tuple(row["flexible_load_power_kw"]),
+                    tuple(row["grid_export_power_setpoint_kw"]),
                 )
                 for row in remaining[:population_size - len(selected_genomes)]
             )
@@ -1053,6 +1056,7 @@ def optimize_battery_and_diesel_schedule(
             tuple(row["battery_setpoints_kw"]),
             tuple(row["diesel_commitment_schedule"]),
             tuple(row["flexible_load_power_kw"]),
+            tuple(row["grid_export_power_setpoint_kw"]),
         ),
     )
     recommended = archive[0]
