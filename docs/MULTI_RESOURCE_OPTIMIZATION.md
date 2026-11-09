@@ -34,7 +34,9 @@ print(result["recommendation"])
 
 ## Scope and limitations
 
-This is the first integration step for Stage 4, not a finished general-purpose optimizer. It searches two existing transparent dispatch policies; it does **not** optimize arbitrary per-timestep battery set-points, diesel commitment schedules, or grid import/export schedules. It does not yet expose a full infeasibility explanation engine, multi-scenario stochastic optimization, or customer-specific economic objective configuration. The shared simulator enforces its configured physical limits, but its own documented modeling simplifications still apply.
+This remains an experimental Stage 4 optimizer, not a finished general-purpose product. In addition to the earlier transparent policy search, the current joint optimizer searches per-timestep battery power, diesel commitment and power, optional flexible-load timing, and grid-export caps in one seeded evolutionary Pareto search. It can replay one common schedule across caller-supplied same-horizon scenarios and rank candidates by worst-case cost, unmet load, curtailment, and battery throughput. The physical simulator also includes an optional horizon peak-import demand charge.
+
+Grid import is still determined by physical residual balance rather than an independent import set-point. The demand-charge model is a single maximum-import proxy over the simulation horizon, not a complete utility tariff engine. Critical-load priority and automatic flexible-load shedding, device process precedence, minimum up/down times, full network power-flow constraints, and a complete infeasibility proof are not yet implemented. Scenario coverage depends on caller-supplied cases; the stochastic heuristic does not guarantee a global optimum.
 
 A recommendation is a model result, not a command. The optimizer is offline decision support only: it does not connect to or control equipment, certify electrical safety, establish grid-export permission, or prove field savings. Use synthetic or authorized customer data, retain source provenance, and obtain qualified engineering review before any operational use.
 
