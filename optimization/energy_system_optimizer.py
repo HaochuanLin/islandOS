@@ -832,12 +832,14 @@ def optimize_battery_and_diesel_schedule(
                 score(row, next_front),
                 tuple(row["battery_setpoints_kw"]),
                 tuple(row["diesel_commitment_schedule"]),
+                tuple(row["diesel_power_setpoint_kw"]),
             ),
         )
         selected_genomes = [
             (
                 tuple(row["battery_setpoints_kw"]),
                 tuple(row["diesel_commitment_schedule"]),
+                tuple(row["diesel_power_setpoint_kw"]),
                 tuple(row["diesel_power_setpoint_kw"]),
             )
             for row in selected[:population_size]
@@ -899,6 +901,7 @@ def optimize_battery_and_diesel_schedule(
             {
                 "battery_setpoints_kw": row["battery_setpoints_kw"],
                 "diesel_commitment_schedule": row["diesel_commitment_schedule"],
+                "diesel_power_setpoint_kw": row["diesel_power_setpoint_kw"],
                 "objectives": row["objectives"],
             }
             for row in archive
