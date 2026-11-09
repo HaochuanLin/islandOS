@@ -1205,6 +1205,8 @@ def optimize_flexible_load_schedule(
             "fixed_battery_and_diesel_schedules_preserved": True,
             "flexible_load_added_to_base_electrical_load": True,
             "not_jointly_optimized_with_battery_or_diesel_decisions": True,
+            "critical_vs_flexible_load_priority_modeled": False,
+            "flexible_load_shedding_modeled": False,
             "stochastic_heuristic_not_guaranteed_global_optimum": True,
             "not_a_controller": True,
         },
