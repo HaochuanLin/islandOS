@@ -667,6 +667,7 @@ def optimize_battery_and_diesel_schedule(
     flexible_load_energy_kwh: float | None = None,
     flexible_load_available_steps: Sequence[bool] | None = None,
     flexible_load_max_power_kw: float | None = None,
+    additional_scenarios: dict[str, EnergySystemInputs] | None = None,
 ) -> dict:
     """Jointly search battery, diesel, and optional aggregate flexible-load schedules.
 
@@ -685,6 +686,20 @@ def optimize_battery_and_diesel_schedule(
         raise OptimizationError(
             f"optimization horizon has {n} steps; configured maximum is {max_horizon_steps}"
         )
+    scenario_inputs = {"nominal": inputs}
+    if additional_scenarios is not None:
+        if not isinstance(additional_scenarios, dict) or not additional_scenarios:
+            raise OptimizationError("additional_scenarios must be a non-empty mapping when supplied")
+        for scenario_name, scenario in additional_scenarios.items():
+            if not isinstance(scenario_name, str) or not scenario_name.strip() or scenario_name == "nominal":
+                raise OptimizationError("additional scenario names must be non-empty and must not be 'nominal'")
+            if not isinstance(scenario, EnergySystemInputs):
+                raise OptimizationError(f"additional scenario {scenario_name!r} must use EnergySystemInputs")
+            if len(scenario.load_kw) != n:
+                raise OptimizationError("all robust optimization scenarios must use the same horizon length")
+            if scenario.diesel_available is None:
+                raise OptimizationError(f"diesel_available must be explicitly supplied for scenario {scenario_name!r}")
+            scenario_inputs[scenario_name] = scenario
     if population_size < 4:
         raise OptimizationError("population_size must be >= 4")
     if generations < 1:
@@ -768,42 +783,74 @@ def optimize_battery_and_diesel_schedule(
                 abs_tol=1e-6,
             ):
                 raise OptimizationError("joint candidate does not conserve flexible-load energy")
-            candidate_inputs = EnergySystemInputs(
-                pv_generation_kw=inputs.pv_generation_kw,
-                wind_generation_kw=inputs.wind_generation_kw,
-                load_kw=[
-                    float(base) + flexible
-                    for base, flexible in zip(inputs.load_kw, flexible_schedule)
-                ],
-                grid_price_per_kwh=inputs.grid_price_per_kwh,
-                grid_available=inputs.grid_available,
-                diesel_available=inputs.diesel_available,
-                grid_export_price_per_kwh=inputs.grid_export_price_per_kwh,
-                grid_export_available=inputs.grid_export_available,
-                diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
-                battery_power_setpoint_kw=setpoints,
-                diesel_commitment_schedule=commitments,
-                diesel_power_setpoint_kw=diesel_targets,
+            per_scenario = {}
+            audit_errors = []
+            dispatch_by_scenario = {}
+            for scenario_name, source in scenario_inputs.items():
+                candidate_inputs = EnergySystemInputs(
+                    pv_generation_kw=source.pv_generation_kw,
+                    wind_generation_kw=source.wind_generation_kw,
+                    load_kw=[
+                        float(base) + flexible
+                        for base, flexible in zip(source.load_kw, flexible_schedule)
+                    ],
+                    grid_price_per_kwh=source.grid_price_per_kwh,
+                    grid_available=source.grid_available,
+                    diesel_available=source.diesel_available,
+                    grid_export_price_per_kwh=source.grid_export_price_per_kwh,
+                    grid_export_available=source.grid_export_available,
+                    diesel_fuel_delivery_liters=source.diesel_fuel_delivery_liters,
+                    battery_power_setpoint_kw=setpoints,
+                    diesel_commitment_schedule=commitments,
+                    diesel_power_setpoint_kw=diesel_targets,
+                )
+                scenario_dispatch = dispatch_energy_system(candidate_inputs, config)
+                scenario_audit = _audit(scenario_dispatch)
+                scenario_summary = scenario_dispatch["summary"]
+                scenario_objectives = {
+                    "estimated_energy_cost": float(scenario_summary["estimated_energy_cost"]),
+                    "unmet_load_kwh": float(scenario_summary["unmet_load_kwh"]),
+                    "renewable_curtailed_kwh": float(scenario_summary["renewable_curtailed_kwh"]),
+                    "battery_throughput_kwh": float(scenario_summary["battery_throughput_kwh"]),
+                }
+                per_scenario[scenario_name] = {
+                    "objectives": scenario_objectives,
+                    "summary": scenario_summary,
+                    "audit": scenario_audit,
+                }
+                dispatch_by_scenario[scenario_name] = scenario_dispatch
+                if not scenario_audit["passed"]:
+                    audit_errors.extend(
+                        f"{scenario_name}:{error}"
+                        for error in scenario_audit["errors"]
+                    )
+            objective_keys = (
+                "estimated_energy_cost", "unmet_load_kwh",
+                "renewable_curtailed_kwh", "battery_throughput_kwh",
             )
-            dispatch = dispatch_energy_system(candidate_inputs, config)
-            audit = _audit(dispatch)
-            summary = dispatch["summary"]
-            objectives = {
-                "estimated_energy_cost": float(summary["estimated_energy_cost"]),
-                "unmet_load_kwh": float(summary["unmet_load_kwh"]),
-                "renewable_curtailed_kwh": float(summary["renewable_curtailed_kwh"]),
-                "battery_throughput_kwh": float(summary["battery_throughput_kwh"]),
+            worst_case_objectives = {
+                key: max(
+                    row["objectives"][key] for row in per_scenario.values()
+                )
+                for key in objective_keys
+            }
+            nominal_dispatch = dispatch_by_scenario["nominal"]
+            aggregate_audit = {
+                "passed": not audit_errors,
+                "errors": audit_errors,
+                "scope": "all supplied scenario dispatches independently passed the physical audit",
             }
             cache[genome] = {
                 "battery_setpoints_kw": list(setpoints),
                 "diesel_commitment_schedule": list(commitments),
                 "diesel_power_setpoint_kw": list(diesel_targets),
                 "flexible_load_power_kw": list(flexible_schedule),
-                "objectives": objectives,
-                "summary": summary,
-                "audit": audit,
-                "feasible": audit["passed"],
-                "dispatch": dispatch,
+                "objectives": worst_case_objectives,
+                "summary": nominal_dispatch["summary"],
+                "audit": aggregate_audit,
+                "feasible": aggregate_audit["passed"],
+                "dispatch": nominal_dispatch,
+                "scenario_results": per_scenario,
             }
         return cache[genome]
 
@@ -1011,6 +1058,9 @@ def optimize_battery_and_diesel_schedule(
         "generations": generations,
         "seed": seed,
         "horizon_steps": n,
+        "scenario_count": len(scenario_inputs),
+        "scenario_names": list(scenario_inputs),
+        "robust_objective_aggregation": "worst_case_maximum_across_supplied_scenarios",
         "pareto_schedules": [
             {
                 "battery_setpoints_kw": row["battery_setpoints_kw"],
@@ -1035,6 +1085,14 @@ def optimize_battery_and_diesel_schedule(
             },
             "objectives": recommended["objectives"],
             "dispatch": recommended["dispatch"],
+            "scenario_results": {
+                name: {
+                    "objectives": row["objectives"],
+                    "audit_passed": row["audit"]["passed"],
+                    "summary": row["summary"],
+                }
+                for name, row in recommended["scenario_results"].items()
+            },
         },
         "model_scope": {
             "uses_shared_physical_dispatch_engine": True,
@@ -1044,6 +1102,10 @@ def optimize_battery_and_diesel_schedule(
             "flexible_load_schedule_jointly_optimized": flexible_enabled,
             "flexible_load_energy_conserved": True,
             "flexible_load_availability_and_power_bounds_enforced": True,
+            "same_decisions_replayed_across_all_scenarios": True,
+            "objectives_use_worst_case_across_scenarios": True,
+            "scenario_probabilities_assumed": False,
+            "robust_optimization_enabled": len(scenario_inputs) > 1,
             "critical_vs_flexible_load_priority_modeled": False,
             "grid_import_export_setpoints_not_optimized": True,
             "stochastic_heuristic_not_global_optimum": True,
