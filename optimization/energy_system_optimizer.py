@@ -1238,6 +1238,7 @@ def optimize_battery_and_diesel_schedule(
         "constraint_diagnostics": {
             "configured_max_unmet_load_kwh": max_unmet_load_kwh,
             "configured_max_critical_unmet_load_kwh": max_critical_unmet_load_kwh,
+            "configured_terminal_battery_soc_min": terminal_battery_soc_min,
             "physical_audit_passed_candidate_count": sum(
                 row["audit"]["passed"] for row in cache.values()
             ),
