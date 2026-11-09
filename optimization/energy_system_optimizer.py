@@ -880,6 +880,7 @@ def optimize_battery_and_diesel_schedule(
             diesel_child = []
             diesel_power_child = []
             flexible_child = []
+            flexible_alpha = rng.random() if flexible_enabled else 0.5
             for index in range(n):
                 alpha = rng.random()
                 value = alpha * parent[0][index] + (1 - alpha) * mate[0][index]
@@ -894,12 +895,7 @@ def optimize_battery_and_diesel_schedule(
                 if rng.random() < mutation_rate:
                     diesel_power += rng.gauss(0.0, config.diesel.rated_power_kw * 0.15)
                 diesel_power_child.append(round(min(config.diesel.rated_power_kw, max(0.0, diesel_power)), 8))
-                flexible_value = (
-                    rng.random() * parent[3][index]
-                    + (1 - rng.random()) * mate[3][index]
-                )
-                # Convex blending with a shared alpha preserves total energy.
-                flexible_alpha = rng.random()
+                # One shared convex-combination coefficient preserves total energy.
                 flexible_value = (
                     flexible_alpha * parent[3][index]
                     + (1 - flexible_alpha) * mate[3][index]
