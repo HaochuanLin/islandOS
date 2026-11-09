@@ -582,3 +582,27 @@ def test_multi_scenario_robustness_rejects_empty_or_misaligned_scenarios():
         evaluate_schedule_robustness(
             {"normal": one_step}, config, battery_power_setpoint_kw=[0, 0]
         )
+
+
+def test_robustness_report_identifies_likely_grid_and_battery_limits():
+    from optimization.energy_system_optimizer import evaluate_schedule_robustness
+
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=2, max_discharge_kw=2,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+        ),
+    )
+    scenario = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[2],
+        grid_price_per_kwh=[0.2], grid_available=[False],
+    )
+    result = evaluate_schedule_robustness(
+        {"islanded_outage": scenario},
+        config,
+        battery_power_setpoint_kw=[0],
+    )
+    factors = result["scenario_results"]["islanded_outage"]["shortfall_diagnostics"][0]["likely_limiting_factors"]
+    assert "grid_unavailable" in factors
+    assert "battery_setpoint_restricts_discharge" in factors
