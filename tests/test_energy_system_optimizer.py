@@ -686,3 +686,79 @@ def test_flexible_load_optimizer_enforces_availability_and_capacity():
             available_steps=[0, True],
             max_power_kw=2,
         )
+
+
+def test_joint_battery_diesel_optimizer_can_jointly_schedule_flexible_load():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 2, 0],
+        wind_generation_kw=[0, 0, 0],
+        load_kw=[4, 4, 4],
+        grid_price_per_kwh=[0.4, 0.1, 0.3],
+        grid_available=[True, True, True],
+        diesel_available=[True, True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=2,
+        wind_rated_kw=0,
+        grid_import_limit_kw=2,
+        battery=BatterySpec(
+            capacity_kwh=6, max_charge_kw=2, max_discharge_kw=2,
+            initial_soc=0.6, min_soc=0.1, max_soc=0.95,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_stable_power_kw=1, ramp_up_kw_per_hour=5,
+        ),
+    )
+    kwargs = {
+        "population_size": 8,
+        "generations": 2,
+        "seed": 303,
+        "flexible_load_energy_kwh": 1.5,
+        "flexible_load_available_steps": [True, False, True],
+        "flexible_load_max_power_kw": 1.0,
+    }
+    first = optimize_battery_and_diesel_schedule(inputs, config, **kwargs)
+    second = optimize_battery_and_diesel_schedule(inputs, config, **kwargs)
+    assert first == second
+    recommendation = first["recommendation"]
+    flexible = recommendation["flexible_load_power_kw"]
+    assert len(flexible) == 3
+    assert flexible[1] == 0
+    assert all(0 <= value <= 1 for value in flexible)
+    assert sum(flexible) == pytest.approx(1.5, abs=1e-6)
+    assert len(recommendation["battery_setpoints_kw"]) == 3
+    assert len(recommendation["diesel_commitment_schedule"]) == 3
+    assert len(recommendation["diesel_power_setpoint_kw"]) == 3
+    assert recommendation["dispatch"]["summary"]["load_energy_kwh"] == pytest.approx(13.5)
+    assert first["decision_variables"]["flexible_load"] != "disabled"
+    assert first["model_scope"]["flexible_load_schedule_jointly_optimized"] is True
+
+
+def test_joint_optimizer_validates_flexible_load_parameters_as_a_complete_contract():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True], diesel_available=[True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+        battery=BatterySpec(capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.2),
+    )
+    with pytest.raises(OptimizationError, match="supplied together"):
+        optimize_battery_and_diesel_schedule(
+            inputs, config, flexible_load_energy_kwh=1,
+        )
+    with pytest.raises(OptimizationError, match="exceeds available-window"):
+        optimize_battery_and_diesel_schedule(
+            inputs, config,
+            flexible_load_energy_kwh=2,
+            flexible_load_available_steps=[True],
+            flexible_load_max_power_kw=1,
+        )
