@@ -206,3 +206,43 @@ requested diesel kW schedule for audit.
 This does not add ramp-down or minimum up/down-time constraints, and the
 heuristic is not a global optimum. A requested diesel set-point is not a
 control command. All results remain offline decision support.
+
+
+## Joint battery and diesel set-point optimization (current experimental increment)
+
+`optimize_battery_and_diesel_schedule` now searches three aligned decision
+families in one seeded evolutionary Pareto search:
+
+- Signed battery charge/discharge power set-points (kW per timestep).
+- Binary diesel commitment (on/off per timestep).
+- Continuous requested diesel power set-points (kW per timestep).
+
+Every candidate is replayed through the shared physical simulator. The
+simulator applies SOC and battery power limits, diesel availability,
+commitment, minimum stable output, ramp-up, rated power, fuel inventory,
+and start/stop costs. The selected next-generation genomes retain exactly
+these three decision schedules; the diesel power schedule is not duplicated.
+
+The method remains a bounded stochastic heuristic, not a guaranteed global
+optimum. Ramp-down and minimum up/down-time constraints are not yet modeled.
+
+## Multi-scenario schedule robustness and shortfall diagnosis
+
+`evaluate_schedule_robustness` replays one common schedule across multiple
+same-horizon `EnergySystemInputs` scenarios. It reports per-scenario cost,
+unmet load, renewable curtailment, battery throughput, physical audit status,
+mean-case metrics, and worst-case metrics. It assumes no scenario probabilities:
+the worst-case result is a maximum over the supplied cases, not a probability
+quantile or forecast confidence bound.
+
+When a scenario has unmet load, the report also includes timestep-level
+potential limiting factors, such as grid unavailability/import capacity,
+battery minimum SOC/power limits/set-point restrictions, and diesel
+availability, commitment, minimum stable output, fuel, ramp-up, or rated-power
+limits. These are diagnostic clues, not a unique causal determination; they
+must be reviewed against the configured assumptions and source data.
+
+This closes an important robustness-screening gap, but it is not yet a
+multi-scenario optimizer that searches one globally robust schedule, nor does
+it replace a full infeasibility proof for arbitrary network constraints.
+Results are offline decision support only.
