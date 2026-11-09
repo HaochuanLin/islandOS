@@ -1085,3 +1085,53 @@ def test_grid_export_setpoint_rejects_values_above_interconnection_limit():
     )
     with pytest.raises(EnergyModelError, match="cannot exceed grid_export_limit_kw"):
         dispatch_energy_system(inputs, config)
+
+
+def test_critical_load_is_served_before_flexible_load_and_shedding_is_separate():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=3,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[3],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        critical_load_kw=[2], flexible_load_kw=[2],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    summary = result["summary"]
+    assert row["load_kw"] == pytest.approx(5)
+    assert row["load_served_kw"] == pytest.approx(3)
+    assert row["critical_unmet_kw"] == pytest.approx(0)
+    assert row["flexible_load_shed_kw"] == pytest.approx(1)
+    assert summary["critical_unmet_load_kwh"] == pytest.approx(0)
+    assert summary["flexible_load_shed_kwh"] == pytest.approx(1)
+    assert summary["unmet_load_kwh"] == pytest.approx(2)
+    assert result["model_scope"]["critical_load_priority_reporting_enabled"] is True
+
+
+def test_critical_load_shortfall_is_reported_separately_from_flexible_shedding():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[3],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        critical_load_kw=[2], flexible_load_kw=[2],
+    )
+    result = dispatch_energy_system(inputs, config)
+    summary = result["summary"]
+    assert summary["critical_unmet_load_kwh"] == pytest.approx(1)
+    assert summary["flexible_load_shed_kwh"] == pytest.approx(2)
+    assert summary["critical_unmet_load_fraction"] == pytest.approx(0.5)
+
+
+def test_critical_load_cannot_exceed_base_load():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True], critical_load_kw=[2],
+    )
+    with pytest.raises(EnergyModelError, match="cannot exceed base load"):
+        dispatch_energy_system(inputs, config)
