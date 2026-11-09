@@ -670,6 +670,7 @@ def optimize_battery_and_diesel_schedule(
     additional_scenarios: dict[str, EnergySystemInputs] | None = None,
     max_unmet_load_kwh: float | None = None,
     max_critical_unmet_load_kwh: float | None = None,
+    terminal_battery_soc_min: float | None = None,
 ) -> dict:
     """Jointly search battery, diesel, and optional aggregate flexible-load schedules.
 
@@ -715,12 +716,19 @@ def optimize_battery_and_diesel_schedule(
     for name, value in (
         ("max_unmet_load_kwh", max_unmet_load_kwh),
         ("max_critical_unmet_load_kwh", max_critical_unmet_load_kwh),
+        ("terminal_battery_soc_min", terminal_battery_soc_min),
     ):
         if value is not None and (
             isinstance(value, bool) or not isinstance(value, (int, float))
             or not math.isfinite(float(value)) or value < 0
         ):
             raise OptimizationError(f"{name} must be finite and non-negative when supplied")
+    if terminal_battery_soc_min is not None and not (
+        config.battery.min_soc <= terminal_battery_soc_min <= config.battery.max_soc
+    ):
+        raise OptimizationError(
+            "terminal_battery_soc_min must be within configured battery SOC limits"
+        )
 
     flexible_enabled = any(value is not None for value in (
         flexible_load_energy_kwh,
@@ -845,6 +853,12 @@ def optimize_battery_and_diesel_schedule(
                     > max_critical_unmet_load_kwh + 1e-8
                 ):
                     constraint_violations.append("critical_unmet_load_exceeds_limit")
+                if (
+                    terminal_battery_soc_min is not None
+                    and float(scenario_summary["ending_battery_soc"])
+                    < terminal_battery_soc_min - 1e-8
+                ):
+                    constraint_violations.append("terminal_battery_soc_below_minimum")
                 per_scenario[scenario_name] = {
                     "objectives": scenario_objectives,
                     "summary": scenario_summary,
@@ -1121,6 +1135,7 @@ def optimize_battery_and_diesel_schedule(
             "best_candidate_scenarios": best_infeasible["scenario_results"],
             "configured_max_unmet_load_kwh": max_unmet_load_kwh,
             "configured_max_critical_unmet_load_kwh": max_critical_unmet_load_kwh,
+            "configured_terminal_battery_soc_min": terminal_battery_soc_min,
         }
         raise error
     archive = sorted(
@@ -1243,6 +1258,11 @@ def optimize_battery_and_diesel_schedule(
                         for item in row["scenario_results"].values())
                     for row in cache.values()
                 ),
+                "terminal_battery_soc": sum(
+                    any("terminal_battery_soc_below_minimum" in item["constraint_violations"]
+                        for item in row["scenario_results"].values())
+                    for row in cache.values()
+                ),
             },
         },
         "pareto_schedules": [
@@ -1292,6 +1312,7 @@ def optimize_battery_and_diesel_schedule(
             "objectives_use_worst_case_across_scenarios": True,
             "optional_hard_total_unmet_constraint": max_unmet_load_kwh is not None,
             "optional_hard_critical_unmet_constraint": max_critical_unmet_load_kwh is not None,
+            "optional_terminal_battery_soc_reserve_constraint": terminal_battery_soc_min is not None,
             "rule_based_baseline_comparison_included": True,
             "baseline_flexible_load_profile_held_equal": True,
             "scenario_probabilities_assumed": False,
