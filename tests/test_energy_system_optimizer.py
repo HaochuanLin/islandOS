@@ -648,6 +648,8 @@ def test_flexible_load_optimizer_conserves_energy_and_shifts_toward_cheaper_peri
     assert first["recommendation"]["objectives"]["estimated_energy_cost"] <= baseline_cost
     assert first["model_scope"]["required_flexible_energy_conserved"] is True
     assert first["model_scope"]["not_jointly_optimized_with_battery_or_diesel_decisions"] is True
+    assert first["model_scope"]["critical_vs_flexible_load_priority_modeled"] is False
+    assert first["model_scope"]["flexible_load_shedding_modeled"] is False
 
 
 def test_flexible_load_optimizer_enforces_availability_and_capacity():
