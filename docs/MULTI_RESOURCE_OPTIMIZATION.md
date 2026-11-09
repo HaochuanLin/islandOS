@@ -439,3 +439,22 @@ critical deficit is identified as `critical_load_shortfall`. The listed
 physical limiting factors remain potential contributors, not a unique causal
 proof. These diagnostics are intended to help explain infeasible or
 service-deficient schedules, not to authorize automatic load shedding.
+
+
+## Optional hard service constraints and infeasibility explanations
+
+The joint optimizer accepts two optional horizon-level hard limits:
+`max_unmet_load_kwh` and `max_critical_unmet_load_kwh`. Each is applied
+separately to every supplied scenario. A candidate enters the feasible Pareto
+archive only when its physical energy-balance audits pass and all configured
+service limits are respected. Leave a threshold as `None` to retain the
+previous soft-objective behavior for that metric; set it to `0.0` to require
+zero unmet energy.
+
+The result's `constraint_diagnostics` reports configured limits, physical
+audit pass counts, service-constraint pass counts, and rejection counts. If
+no candidate is feasible, the optimizer raises `OptimizationError` with a
+`diagnostics` attribute containing the best candidate's per-scenario
+shortfalls, violated constraints, and likely limiting factors from
+`diagnose_dispatch_shortfalls`. These are model-based explanations, not a
+mathematical infeasibility certificate or a unique causal diagnosis.
