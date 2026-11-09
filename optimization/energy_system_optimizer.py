@@ -668,12 +668,16 @@ def optimize_battery_and_diesel_schedule(
     flexible_load_available_steps: Sequence[bool] | None = None,
     flexible_load_max_power_kw: float | None = None,
     additional_scenarios: dict[str, EnergySystemInputs] | None = None,
+    max_unmet_load_kwh: float | None = None,
+    max_critical_unmet_load_kwh: float | None = None,
 ) -> dict:
     """Jointly search battery, diesel, and optional aggregate flexible-load schedules.
 
     The shared simulator clips battery/diesel requests to their configured
     physical limits. When enabled, flexible-load energy is conserved inside
-    its availability window and per-step power envelope.
+    its availability window and per-step power envelope. Optional service
+    thresholds turn total and/or critical unmet energy into hard constraints
+    across every supplied scenario.
     """
     if config.battery is None or config.diesel is None:
         raise OptimizationError("both a configured battery and diesel unit are required")
@@ -708,6 +712,15 @@ def optimize_battery_and_diesel_schedule(
         raise OptimizationError("mutation_rate must be finite and within [0, 1]")
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise OptimizationError("seed must be an integer")
+    for name, value in (
+        ("max_unmet_load_kwh", max_unmet_load_kwh),
+        ("max_critical_unmet_load_kwh", max_critical_unmet_load_kwh),
+    ):
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(float(value)) or value < 0
+        ):
+            raise OptimizationError(f"{name} must be finite and non-negative when supplied")
 
     flexible_enabled = any(value is not None for value in (
         flexible_load_energy_kwh,
@@ -820,10 +833,27 @@ def optimize_battery_and_diesel_schedule(
                     "renewable_curtailed_kwh": float(scenario_summary["renewable_curtailed_kwh"]),
                     "battery_throughput_kwh": float(scenario_summary["battery_throughput_kwh"]),
                 }
+                constraint_violations = []
+                if (
+                    max_unmet_load_kwh is not None
+                    and scenario_summary["unmet_load_kwh"] > max_unmet_load_kwh + 1e-8
+                ):
+                    constraint_violations.append("total_unmet_load_exceeds_limit")
+                if (
+                    max_critical_unmet_load_kwh is not None
+                    and scenario_summary["critical_unmet_load_kwh"]
+                    > max_critical_unmet_load_kwh + 1e-8
+                ):
+                    constraint_violations.append("critical_unmet_load_exceeds_limit")
                 per_scenario[scenario_name] = {
                     "objectives": scenario_objectives,
                     "summary": scenario_summary,
                     "audit": scenario_audit,
+                    "constraint_violations": constraint_violations,
+                    "service_constraints_passed": not constraint_violations,
+                    "shortfall_diagnostics": diagnose_dispatch_shortfalls(
+                        scenario_dispatch, config
+                    ),
                 }
                 dispatch_by_scenario[scenario_name] = scenario_dispatch
                 if not scenario_audit["passed"]:
@@ -847,6 +877,9 @@ def optimize_battery_and_diesel_schedule(
                 "errors": audit_errors,
                 "scope": "all supplied scenario dispatches independently passed the physical audit",
             }
+            service_constraints_passed = all(
+                row["service_constraints_passed"] for row in per_scenario.values()
+            )
             cache[genome] = {
                 "battery_setpoints_kw": list(setpoints),
                 "diesel_commitment_schedule": list(commitments),
@@ -856,7 +889,8 @@ def optimize_battery_and_diesel_schedule(
                 "objectives": worst_case_objectives,
                 "summary": nominal_dispatch["summary"],
                 "audit": aggregate_audit,
-                "feasible": aggregate_audit["passed"],
+                "service_constraints_passed": service_constraints_passed,
+                "feasible": aggregate_audit["passed"] and service_constraints_passed,
                 "dispatch": nominal_dispatch,
                 "scenario_results": per_scenario,
             }
@@ -1047,7 +1081,46 @@ def optimize_battery_and_diesel_schedule(
 
     archive = pareto_front(list(cache.values()))
     if not archive:
-        raise OptimizationError("No joint battery/diesel schedule passed the physical audit")
+        best_infeasible = min(
+            cache.values(),
+            key=lambda row: (
+                not row["audit"]["passed"],
+                max(
+                    float(item["summary"]["critical_unmet_load_kwh"])
+                    for item in row["scenario_results"].values()
+                ),
+                max(
+                    float(item["summary"]["unmet_load_kwh"])
+                    for item in row["scenario_results"].values()
+                ),
+                row["objectives"]["estimated_energy_cost"],
+            ),
+        )
+        reasons = []
+        for scenario_name, scenario_row in best_infeasible["scenario_results"].items():
+            if scenario_row["constraint_violations"]:
+                reasons.extend(
+                    f"{scenario_name}:{reason}"
+                    for reason in scenario_row["constraint_violations"]
+                )
+            for diagnostic in scenario_row["shortfall_diagnostics"]:
+                reasons.extend(
+                    f"{scenario_name}:t{diagnostic['timestep']}:{factor}"
+                    for factor in diagnostic["likely_limiting_factors"]
+                )
+        if best_infeasible["audit"]["errors"]:
+            reasons.extend(best_infeasible["audit"]["errors"])
+        detail = "; ".join(reasons[:8]) or "no candidate passed all configured physical/service constraints"
+        error = OptimizationError(
+            "No joint battery/diesel schedule satisfied all configured constraints; "
+            f"best candidate diagnostics: {detail}"
+        )
+        error.diagnostics = {
+            "best_candidate_scenarios": best_infeasible["scenario_results"],
+            "configured_max_unmet_load_kwh": max_unmet_load_kwh,
+            "configured_max_critical_unmet_load_kwh": max_critical_unmet_load_kwh,
+        }
+        raise error
     archive = sorted(
         archive,
         key=lambda row: (
@@ -1145,6 +1218,31 @@ def optimize_battery_and_diesel_schedule(
         "scenario_names": list(scenario_inputs),
         "robust_objective_aggregation": "worst_case_maximum_across_supplied_scenarios",
         "baseline_comparison": baseline_comparison,
+        "constraint_diagnostics": {
+            "configured_max_unmet_load_kwh": max_unmet_load_kwh,
+            "configured_max_critical_unmet_load_kwh": max_critical_unmet_load_kwh,
+            "physical_audit_passed_candidate_count": sum(
+                row["audit"]["passed"] for row in cache.values()
+            ),
+            "service_constraint_passed_candidate_count": sum(
+                row["service_constraints_passed"] for row in cache.values()
+            ),
+            "fully_feasible_candidate_count": sum(
+                row["feasible"] for row in cache.values()
+            ),
+            "service_constraint_rejections": {
+                "total_unmet_load": sum(
+                    any("total_unmet_load_exceeds_limit" in item["constraint_violations"]
+                        for item in row["scenario_results"].values())
+                    for row in cache.values()
+                ),
+                "critical_unmet_load": sum(
+                    any("critical_unmet_load_exceeds_limit" in item["constraint_violations"]
+                        for item in row["scenario_results"].values())
+                    for row in cache.values()
+                ),
+            },
+        },
         "pareto_schedules": [
             {
                 "battery_setpoints_kw": row["battery_setpoints_kw"],
@@ -1190,6 +1288,8 @@ def optimize_battery_and_diesel_schedule(
             "flexible_load_availability_and_power_bounds_enforced": True,
             "same_decisions_replayed_across_all_scenarios": True,
             "objectives_use_worst_case_across_scenarios": True,
+            "optional_hard_total_unmet_constraint": max_unmet_load_kwh is not None,
+            "optional_hard_critical_unmet_constraint": max_critical_unmet_load_kwh is not None,
             "rule_based_baseline_comparison_included": True,
             "baseline_flexible_load_profile_held_equal": True,
             "scenario_probabilities_assumed": False,
