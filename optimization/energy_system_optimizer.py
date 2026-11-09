@@ -931,6 +931,286 @@ def optimize_battery_and_diesel_schedule(
     }
 
 
+
+def optimize_flexible_load_schedule(
+    inputs: EnergySystemInputs,
+    config: EnergySystemConfig,
+    *,
+    energy_required_kwh: float,
+    available_steps: Sequence[bool],
+    max_power_kw: float,
+    weights: OptimizationWeights = OptimizationWeights(),
+    population_size: int = 32,
+    generations: int = 20,
+    mutation_rate: float = 0.2,
+    seed: int = 20261109,
+    max_horizon_steps: int = 168,
+) -> dict:
+    """Schedule one aggregate shiftable load within an availability window.
+
+    The required flexible energy is conserved exactly (within numerical
+    tolerance); only its timestep allocation is optimized. Existing battery
+    and diesel set-points on inputs are held fixed and replayed unchanged.
+    """
+    n = len(inputs.load_kw)
+    if n < 1:
+        raise OptimizationError("optimization horizon must contain at least one step")
+    if n > max_horizon_steps:
+        raise OptimizationError(
+            f"optimization horizon has {n} steps; configured maximum is {max_horizon_steps}"
+        )
+    if isinstance(energy_required_kwh, bool) or not isinstance(energy_required_kwh, (int, float)) or not math.isfinite(float(energy_required_kwh)) or energy_required_kwh <= 0:
+        raise OptimizationError("energy_required_kwh must be finite and > 0")
+    if isinstance(max_power_kw, bool) or not isinstance(max_power_kw, (int, float)) or not math.isfinite(float(max_power_kw)) or max_power_kw <= 0:
+        raise OptimizationError("max_power_kw must be finite and > 0")
+    try:
+        availability = list(available_steps)
+    except TypeError as exc:
+        raise OptimizationError("available_steps must be a boolean sequence") from exc
+    if len(availability) != n or any(not isinstance(value, bool) for value in availability):
+        raise OptimizationError(f"available_steps must contain exactly {n} boolean values")
+    if population_size < 4:
+        raise OptimizationError("population_size must be >= 4")
+    if generations < 1:
+        raise OptimizationError("generations must be >= 1")
+    if isinstance(mutation_rate, bool) or not isinstance(mutation_rate, (int, float)) or not math.isfinite(float(mutation_rate)) or not 0 <= mutation_rate <= 1:
+        raise OptimizationError("mutation_rate must be finite and within [0, 1]")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise OptimizationError("seed must be an integer")
+
+    allowed = [index for index, enabled in enumerate(availability) if enabled]
+    required_power_hours = float(energy_required_kwh) / config.dt_hours
+    capacity_power_hours = len(allowed) * float(max_power_kw)
+    if required_power_hours > capacity_power_hours + 1e-9:
+        raise OptimizationError(
+            "required flexible energy exceeds available-window power capacity"
+        )
+
+    rng = random.Random(seed)
+    cache: dict[tuple[float, ...], dict] = {}
+
+    def make_random_schedule() -> tuple[float, ...]:
+        schedule = [0.0] * n
+        order = rng.sample(allowed, len(allowed))
+        remaining = required_power_hours
+        for position, timestep in enumerate(order):
+            remaining_slots = len(order) - position - 1
+            lower = max(0.0, remaining - remaining_slots * float(max_power_kw))
+            upper = min(float(max_power_kw), remaining)
+            value = remaining if remaining_slots == 0 else rng.uniform(lower, upper)
+            schedule[timestep] = value
+            remaining -= value
+        if order:
+            schedule[order[-1]] += required_power_hours - sum(schedule)
+        return tuple(round(value, 8) for value in schedule)
+
+    def evaluate(schedule: tuple[float, ...]) -> dict:
+        if schedule not in cache:
+            flexible_energy = sum(schedule) * config.dt_hours
+            if not math.isclose(
+                flexible_energy, energy_required_kwh, rel_tol=0, abs_tol=1e-6
+            ):
+                raise OptimizationError("candidate does not conserve required flexible energy")
+            candidate_inputs = EnergySystemInputs(
+                pv_generation_kw=inputs.pv_generation_kw,
+                wind_generation_kw=inputs.wind_generation_kw,
+                load_kw=[
+                    float(base) + flexible
+                    for base, flexible in zip(inputs.load_kw, schedule)
+                ],
+                grid_price_per_kwh=inputs.grid_price_per_kwh,
+                grid_available=inputs.grid_available,
+                diesel_available=inputs.diesel_available,
+                grid_export_price_per_kwh=inputs.grid_export_price_per_kwh,
+                grid_export_available=inputs.grid_export_available,
+                diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
+                battery_power_setpoint_kw=inputs.battery_power_setpoint_kw,
+                diesel_commitment_schedule=inputs.diesel_commitment_schedule,
+                diesel_power_setpoint_kw=inputs.diesel_power_setpoint_kw,
+            )
+            dispatch = dispatch_energy_system(candidate_inputs, config)
+            audit = _audit(dispatch)
+            summary = dispatch["summary"]
+            objectives = {
+                "estimated_energy_cost": float(summary["estimated_energy_cost"]),
+                "unmet_load_kwh": float(summary["unmet_load_kwh"]),
+                "renewable_curtailed_kwh": float(summary["renewable_curtailed_kwh"]),
+                "battery_throughput_kwh": float(summary["battery_throughput_kwh"]),
+            }
+            cache[schedule] = {
+                "flexible_load_power_kw": list(schedule),
+                "objectives": objectives,
+                "summary": summary,
+                "audit": audit,
+                "feasible": audit["passed"],
+                "dispatch": dispatch,
+            }
+        return cache[schedule]
+
+    def pareto_front(rows: list[dict]) -> list[dict]:
+        feasible_rows = [row for row in rows if row["feasible"]]
+        return [
+            row for row in feasible_rows
+            if not any(other is not row and _dominates(other, row) for other in feasible_rows)
+        ]
+
+    def score(row: dict, front: list[dict]) -> float:
+        keys = (
+            "estimated_energy_cost", "unmet_load_kwh",
+            "renewable_curtailed_kwh", "battery_throughput_kwh",
+        )
+        objective_weights = (
+            weights.cost, weights.reliability,
+            weights.curtailment, weights.battery_wear,
+        )
+        total = 0.0
+        for key, weight in zip(keys, objective_weights):
+            low = min(item["objectives"][key] for item in front)
+            high = max(item["objectives"][key] for item in front)
+            value = row["objectives"][key]
+            normalized = 0.0 if high - low <= 1e-12 else (value - low) / (high - low)
+            total += weight * normalized
+        return total
+
+    population = []
+    while len(population) < population_size:
+        genome = make_random_schedule()
+        population.append(genome)
+        evaluate(genome)
+
+    for _ in range(generations):
+        front = pareto_front([evaluate(genome) for genome in population])
+        if not front:
+            raise OptimizationError("No flexible-load schedule passed the physical audit")
+        offspring: list[tuple[float, ...]] = []
+        while len(offspring) < population_size:
+            parents = rng.sample(population, 2)
+            parent_rows = [evaluate(item) for item in parents]
+            if _dominates(parent_rows[0], parent_rows[1]):
+                parent = parents[0]
+            elif _dominates(parent_rows[1], parent_rows[0]):
+                parent = parents[1]
+            else:
+                parent = min(
+                    parents,
+                    key=lambda item: (score(evaluate(item), front), item),
+                )
+            mate = rng.choice(population)
+            alpha = rng.random()
+            child = [
+                alpha * parent[index] + (1 - alpha) * mate[index]
+                for index in range(n)
+            ]
+            if len(allowed) > 1 and rng.random() < mutation_rate:
+                donor, receiver = rng.sample(allowed, 2)
+                transferable = min(child[donor], float(max_power_kw) - child[receiver])
+                if transferable > 1e-12:
+                    amount = rng.uniform(0.0, transferable)
+                    child[donor] -= amount
+                    child[receiver] += amount
+            child_tuple = tuple(round(value, 8) for value in child)
+            drift = required_power_hours - sum(child_tuple)
+            if abs(drift) > 1e-9:
+                mutable = list(child_tuple)
+                for index in allowed:
+                    proposed = mutable[index] + drift
+                    if -1e-9 <= proposed <= float(max_power_kw) + 1e-9:
+                        mutable[index] = min(float(max_power_kw), max(0.0, proposed))
+                        break
+                child_tuple = tuple(round(value, 8) for value in mutable)
+            offspring.append(child_tuple)
+            evaluate(child_tuple)
+
+        combined = list(dict.fromkeys(population + offspring))
+        combined_rows = [evaluate(genome) for genome in combined]
+        next_front = pareto_front(combined_rows)
+        if not next_front:
+            raise OptimizationError("No flexible-load schedule passed the physical audit")
+        selected = sorted(
+            next_front,
+            key=lambda row: (
+                score(row, next_front),
+                tuple(row["flexible_load_power_kw"]),
+            ),
+        )
+        selected_genomes = [
+            tuple(row["flexible_load_power_kw"])
+            for row in selected[:population_size]
+        ]
+        if len(selected_genomes) < population_size:
+            remaining = [
+                row for row in combined_rows
+                if tuple(row["flexible_load_power_kw"]) not in selected_genomes
+            ]
+            remaining.sort(
+                key=lambda row: (
+                    not row["feasible"],
+                    score(row, next_front) if row["feasible"] else float("inf"),
+                    tuple(row["flexible_load_power_kw"]),
+                )
+            )
+            selected_genomes.extend(
+                tuple(row["flexible_load_power_kw"])
+                for row in remaining[:population_size - len(selected_genomes)]
+            )
+        population = selected_genomes
+
+    archive = pareto_front(list(cache.values()))
+    if not archive:
+        raise OptimizationError("No flexible-load schedule passed the physical audit")
+    archive = sorted(
+        archive,
+        key=lambda row: (
+            score(row, archive),
+            tuple(row["flexible_load_power_kw"]),
+        ),
+    )
+    recommended = archive[0]
+    return {
+        "algorithm": "seeded_real_valued_flexible_load_pareto_search",
+        "decision_variable": "flexible-load kW allocation per timestep",
+        "candidate_count": len(cache),
+        "feasible_count": sum(row["feasible"] for row in cache.values()),
+        "pareto_count": len(archive),
+        "population_size": population_size,
+        "generations": generations,
+        "seed": seed,
+        "horizon_steps": n,
+        "required_flexible_energy_kwh": float(energy_required_kwh),
+        "available_steps": list(availability),
+        "max_power_kw": float(max_power_kw),
+        "pareto_schedules": [
+            {
+                "flexible_load_power_kw": row["flexible_load_power_kw"],
+                "objectives": row["objectives"],
+            }
+            for row in archive
+        ],
+        "recommendation": {
+            "flexible_load_power_kw": recommended["flexible_load_power_kw"],
+            "weighted_score": score(recommended, archive),
+            "weights": {
+                "cost": weights.cost,
+                "reliability": weights.reliability,
+                "curtailment": weights.curtailment,
+                "battery_wear": weights.battery_wear,
+            },
+            "objectives": recommended["objectives"],
+            "dispatch": recommended["dispatch"],
+        },
+        "model_scope": {
+            "required_flexible_energy_conserved": True,
+            "per_step_power_and_availability_bounds_enforced": True,
+            "same_base_inputs_for_all_candidates": True,
+            "fixed_battery_and_diesel_schedules_preserved": True,
+            "flexible_load_added_to_base_electrical_load": True,
+            "not_jointly_optimized_with_battery_or_diesel_decisions": True,
+            "stochastic_heuristic_not_guaranteed_global_optimum": True,
+            "not_a_controller": True,
+        },
+    }
+
+
 def diagnose_dispatch_shortfalls(
     dispatch: dict,
     config: EnergySystemConfig,
