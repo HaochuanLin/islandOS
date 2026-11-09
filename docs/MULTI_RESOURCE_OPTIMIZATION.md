@@ -353,3 +353,30 @@ caller; omitted weather, load, outage, equipment-failure, or tariff cases are
 not protected against. The same flexible-load schedule is used in every case,
 and critical-load priority/shedding remains unmodeled. Outputs remain offline
 decision support, not a controller.
+
+
+## Grid export dispatch and peak-demand charges
+
+The physical simulator accepts an optional `grid_export_power_setpoint_kw`
+series. It is a per-timestep export cap, not a command to force export:
+actual export remains limited by renewable surplus, the configured
+interconnection limit, and grid/export availability. The joint evolutionary
+optimizer includes this cap as a decision family and replays the same schedule
+across all supplied robust scenarios. This lets the search avoid uneconomic
+exports (for example, negative feed-in prices) while retaining
+renewable-curtailment as a separate Pareto objective.
+
+`EnergySystemConfig.grid_demand_charge_per_kw` adds a horizon-level demand
+charge calculated as:
+
+```text
+demand charge = maximum timestep grid import (kW) × demand charge rate
+```
+
+The charge is included in `estimated_energy_cost`, so the optimizer's cost
+objective reflects both volumetric energy charges and the modeled peak-demand
+charge. The billing window is exactly the simulation horizon; users must
+choose a horizon that matches the tariff's actual demand-measurement window.
+This is a single-peak proxy, not a full tariff engine: ratchets, coincident
+peak windows, time-of-use demand periods, taxes, power-factor penalties, and
+contracted-capacity charges are not modeled.
