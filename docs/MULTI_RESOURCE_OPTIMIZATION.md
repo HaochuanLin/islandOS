@@ -443,13 +443,16 @@ service-deficient schedules, not to authorize automatic load shedding.
 
 ## Optional hard service constraints and infeasibility explanations
 
-The joint optimizer accepts two optional horizon-level hard limits:
-`max_unmet_load_kwh` and `max_critical_unmet_load_kwh`. Each is applied
-separately to every supplied scenario. A candidate enters the feasible Pareto
-archive only when its physical energy-balance audits pass and all configured
-service limits are respected. Leave a threshold as `None` to retain the
-previous soft-objective behavior for that metric; set it to `0.0` to require
-zero unmet energy.
+The joint optimizer accepts optional hard constraints:
+`max_unmet_load_kwh`, `max_critical_unmet_load_kwh`, and
+`terminal_battery_soc_min`. The two unmet-energy limits are applied
+separately to every supplied scenario. The terminal SOC reserve is also
+checked in every scenario. A candidate enters the feasible Pareto archive
+only when its physical energy-balance audits pass and all configured
+constraints are respected. Leave an unmet-energy threshold as `None` to
+retain soft-objective behavior for that metric; set it to `0.0` to require
+zero unmet energy. The terminal SOC reserve must be within the battery's
+configured SOC limits.
 
 The result's `constraint_diagnostics` reports configured limits, physical
 audit pass counts, service-constraint pass counts, and rejection counts. If
