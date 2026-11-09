@@ -491,3 +491,27 @@ def test_battery_wear_is_an_explicit_validated_recommendation_weight():
         OptimizationWeights(battery_wear=-0.1)
     with pytest.raises(OptimizationError, match="at least one objective"):
         OptimizationWeights(cost=0, reliability=0, curtailment=0, battery_wear=0)
+
+
+def test_joint_optimizer_searches_and_returns_diesel_power_setpoints():
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+    from islandos_core.energy_system import DieselSpec
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 0], wind_generation_kw=[0, 0, 0],
+        load_kw=[4, 6, 3], grid_price_per_kwh=[0.5, 0.5, 0.5],
+        grid_available=[False, False, False], diesel_available=[True, True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        battery=BatterySpec(capacity_kwh=4, max_charge_kw=2, max_discharge_kw=2),
+        diesel=DieselSpec(rated_power_kw=8, variable_cost_per_kwh=0.2, min_stable_power_kw=2),
+    )
+    result = optimize_battery_and_diesel_schedule(
+        inputs, config, population_size=4, generations=1, seed=17,
+    )
+    recommendation = result["recommendation"]
+    assert len(recommendation["diesel_power_setpoint_kw"]) == 3
+    assert all(0 <= value <= 8 for value in recommendation["diesel_power_setpoint_kw"])
+    assert result["model_scope"]["diesel_power_setpoint_optimized"] is True
+    assert result["model_scope"]["not_a_controller"] is True
