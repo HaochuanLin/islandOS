@@ -191,3 +191,18 @@ This is an input contract for explicit schedules; it does not yet mean the
 optimizer searches diesel kW set-points. Ramp-down and minimum up/down-time
 constraints remain outside the physical model. The interface is offline
 planning only and cannot command a real generator.
+
+
+## Joint continuous diesel power and commitment optimization
+
+The joint battery/diesel evolutionary search now includes three aligned
+schedule families: signed battery kW set-points, binary diesel commitment,
+and continuous requested diesel kW set-points. The shared physical engine
+still applies residual-load caps, minimum stable output, ramp-up, availability,
+rated power, fuel inventory, and start/stop costs before a candidate can enter
+the feasible Pareto archive. The recommendation and Pareto rows expose the
+requested diesel kW schedule for audit.
+
+This does not add ramp-down or minimum up/down-time constraints, and the
+heuristic is not a global optimum. A requested diesel set-point is not a
+control command. All results remain offline decision support.
