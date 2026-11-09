@@ -978,3 +978,59 @@ def test_72_hour_grid_outage_exhausts_battery_and_diesel_fuel_without_violating_
     assert summary["unmet_load_kwh"] > 0
     assert summary["load_energy_kwh"] == pytest.approx(288.0)
     assert summary["load_served_kwh"] + summary["unmet_load_kwh"] == pytest.approx(288.0)
+
+
+def test_diesel_power_setpoint_caps_output_and_is_audited():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(rated_power_kw=10, variable_cost_per_kwh=0.2),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0], load_kw=[8, 8],
+        grid_price_per_kwh=[0.2, 0.2], grid_available=[False, False],
+        diesel_available=[True, True], diesel_power_setpoint_kw=[5, 10],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert [row["diesel_generation_kw"] for row in result["rows"]] == pytest.approx([5, 8])
+    assert [row["diesel_power_setpoint_kw"] for row in result["rows"]] == [5, 10]
+    assert result["model_scope"]["diesel_power_setpoint_input_enabled"] is True
+
+
+def test_diesel_power_setpoint_respects_minimum_stable_output():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(rated_power_kw=10, variable_cost_per_kwh=0.2, min_stable_power_kw=4),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[8],
+        grid_price_per_kwh=[0.2], grid_available=[False], diesel_available=[True],
+        diesel_power_setpoint_kw=[3],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["rows"][0]["diesel_generation_kw"] == 0
+    assert result["rows"][0]["unmet_load_kw"] == pytest.approx(8)
+
+
+def test_diesel_power_setpoint_rejects_missing_unit_and_out_of_range_values():
+    no_diesel = EnergySystemConfig(pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1)
+    with pytest.raises(EnergyModelError, match="requires a configured diesel"):
+        dispatch_energy_system(EnergySystemInputs(
+            pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+            grid_price_per_kwh=[0.2], grid_available=[True], diesel_power_setpoint_kw=[1],
+        ), no_diesel)
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+        diesel=DieselSpec(rated_power_kw=5, variable_cost_per_kwh=0.2),
+    )
+    with pytest.raises(EnergyModelError, match="exactly 2 values"):
+        dispatch_energy_system(EnergySystemInputs(
+            pv_generation_kw=[0, 0], wind_generation_kw=[0, 0], load_kw=[1, 1],
+            grid_price_per_kwh=[0.2, 0.2], grid_available=[True, True],
+            diesel_available=[True, True], diesel_power_setpoint_kw=[1],
+        ), config)
+    with pytest.raises(EnergyModelError, match="exceeds configured rated power"):
+        dispatch_energy_system(EnergySystemInputs(
+            pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+            grid_price_per_kwh=[0.2], grid_available=[True], diesel_available=[True],
+            diesel_power_setpoint_kw=[6],
+        ), config)
