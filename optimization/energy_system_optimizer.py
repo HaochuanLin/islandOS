@@ -665,12 +665,10 @@ def optimize_battery_and_diesel_schedule(
     seed: int = 20261108,
     max_horizon_steps: int = 168,
 ) -> dict:
-    """Jointly search continuous battery set-points and binary diesel commitment.
+    """Jointly search battery power, diesel commitment, and diesel kW targets.
 
-    The diesel generator still follows residual-load dispatch when committed;
-    its exact kW output is not a free decision variable. Physical startup,
-    minimum-load, ramp-up, fuel, availability, and cost rules stay in the
-    shared simulator.
+    The shared simulator clips targets to residual load, stable minimum,
+    ramp-up, availability, rated power, and fuel limits.
     """
     if config.battery is None or config.diesel is None:
         raise OptimizationError("both a configured battery and diesel unit are required")
@@ -696,13 +694,13 @@ def optimize_battery_and_diesel_schedule(
     upper = float(config.battery.max_discharge_kw)
     span = upper - lower
     rng = random.Random(seed)
-    # Genome: (signed battery kW schedule, diesel on/off schedule).
-    Genome = tuple[tuple[float, ...], tuple[bool, ...]]
+    # Genome: (battery kW, diesel commitment, diesel requested kW) schedules.
+    Genome = tuple[tuple[float, ...], tuple[bool, ...], tuple[float, ...]]
     cache: dict[Genome, dict] = {}
 
     def evaluate(genome: Genome) -> dict:
         if genome not in cache:
-            setpoints, commitments = genome
+            setpoints, commitments, diesel_targets = genome
             candidate_inputs = EnergySystemInputs(
                 pv_generation_kw=inputs.pv_generation_kw,
                 wind_generation_kw=inputs.wind_generation_kw,
@@ -715,6 +713,7 @@ def optimize_battery_and_diesel_schedule(
                 diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
                 battery_power_setpoint_kw=setpoints,
                 diesel_commitment_schedule=commitments,
+                diesel_power_setpoint_kw=diesel_targets,
             )
             dispatch = dispatch_energy_system(candidate_inputs, config)
             audit = _audit(dispatch)
@@ -728,6 +727,7 @@ def optimize_battery_and_diesel_schedule(
             cache[genome] = {
                 "battery_setpoints_kw": list(setpoints),
                 "diesel_commitment_schedule": list(commitments),
+                "diesel_power_setpoint_kw": list(diesel_targets),
                 "objectives": objectives,
                 "summary": summary,
                 "audit": audit,
@@ -761,11 +761,14 @@ def optimize_battery_and_diesel_schedule(
     zero = tuple(0.0 for _ in range(n))
     off = tuple(False for _ in range(n))
     on = tuple(True for _ in range(n))
-    population: list[Genome] = [(zero, off), (zero, on)]
+    diesel_off = tuple(0.0 for _ in range(n))
+    diesel_full = tuple(float(config.diesel.rated_power_kw) for _ in range(n))
+    population: list[Genome] = [(zero, off, diesel_off), (zero, on, diesel_full)]
     while len(population) < population_size:
         genome: Genome = (
             tuple(round(rng.uniform(lower, upper), 8) for _ in range(n)),
             tuple(bool(rng.getrandbits(1)) for _ in range(n)),
+            tuple(round(rng.uniform(0.0, config.diesel.rated_power_kw), 8) for _ in range(n)),
         )
         if genome not in population:
             population.append(genome)
@@ -800,6 +803,7 @@ def optimize_battery_and_diesel_schedule(
             mate = rng.choice(population)
             battery_child = []
             diesel_child = []
+            diesel_power_child = []
             for index in range(n):
                 alpha = rng.random()
                 value = alpha * parent[0][index] + (1 - alpha) * mate[0][index]
@@ -810,7 +814,11 @@ def optimize_battery_and_diesel_schedule(
                 if rng.random() < mutation_rate:
                     diesel_gene = not diesel_gene
                 diesel_child.append(diesel_gene)
-            child: Genome = (tuple(battery_child), tuple(diesel_child))
+                diesel_power = parent[2][index] if rng.random() < 0.5 else mate[2][index]
+                if rng.random() < mutation_rate:
+                    diesel_power += rng.gauss(0.0, config.diesel.rated_power_kw * 0.15)
+                diesel_power_child.append(round(min(config.diesel.rated_power_kw, max(0.0, diesel_power)), 8))
+            child: Genome = (tuple(battery_child), tuple(diesel_child), tuple(diesel_power_child))
             offspring.append(child)
             evaluate(child)
         combined = list(dict.fromkeys(population + offspring))
@@ -830,6 +838,7 @@ def optimize_battery_and_diesel_schedule(
             (
                 tuple(row["battery_setpoints_kw"]),
                 tuple(row["diesel_commitment_schedule"]),
+                tuple(row["diesel_power_setpoint_kw"]),
             )
             for row in selected[:population_size]
         ]
@@ -839,6 +848,7 @@ def optimize_battery_and_diesel_schedule(
                 if (
                     tuple(row["battery_setpoints_kw"]),
                     tuple(row["diesel_commitment_schedule"]),
+                    tuple(row["diesel_power_setpoint_kw"]),
                 ) not in selected_genomes
             ]
             remaining.sort(
@@ -853,6 +863,7 @@ def optimize_battery_and_diesel_schedule(
                 (
                     tuple(row["battery_setpoints_kw"]),
                     tuple(row["diesel_commitment_schedule"]),
+                    tuple(row["diesel_power_setpoint_kw"]),
                 )
                 for row in remaining[:population_size - len(selected_genomes)]
             )
@@ -874,7 +885,8 @@ def optimize_battery_and_diesel_schedule(
         "algorithm": "seeded_mixed_real_binary_evolutionary_pareto_search",
         "decision_variables": {
             "battery": "signed continuous kW set-point per timestep",
-            "diesel": "binary on/off commitment per timestep",
+            "diesel_commitment": "binary on/off commitment per timestep",
+            "diesel_power": "continuous requested kW set-point per timestep",
         },
         "candidate_count": len(cache),
         "feasible_count": sum(row["feasible"] for row in cache.values()),
@@ -894,6 +906,7 @@ def optimize_battery_and_diesel_schedule(
         "recommendation": {
             "battery_setpoints_kw": recommended["battery_setpoints_kw"],
             "diesel_commitment_schedule": recommended["diesel_commitment_schedule"],
+            "diesel_power_setpoint_kw": recommended["diesel_power_setpoint_kw"],
             "weighted_score": score(recommended, archive),
             "weights": {
                 "cost": weights.cost,
@@ -908,7 +921,7 @@ def optimize_battery_and_diesel_schedule(
             "uses_shared_physical_dispatch_engine": True,
             "battery_soc_efficiency_and_capacity_fade_enforced": True,
             "diesel_minimum_load_ramp_up_fuel_and_availability_enforced": True,
-            "diesel_power_setpoint_not_optimized": True,
+            "diesel_power_setpoint_optimized": True,
             "grid_import_export_setpoints_not_optimized": True,
             "stochastic_heuristic_not_global_optimum": True,
             "not_a_controller": True,
