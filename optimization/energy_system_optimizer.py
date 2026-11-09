@@ -840,7 +840,6 @@ def optimize_battery_and_diesel_schedule(
                 tuple(row["battery_setpoints_kw"]),
                 tuple(row["diesel_commitment_schedule"]),
                 tuple(row["diesel_power_setpoint_kw"]),
-                tuple(row["diesel_power_setpoint_kw"]),
             )
             for row in selected[:population_size]
         ]
