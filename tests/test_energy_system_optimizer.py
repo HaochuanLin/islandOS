@@ -839,3 +839,41 @@ def test_joint_optimizer_rejects_misaligned_robust_scenario_horizon():
         optimize_battery_and_diesel_schedule(
             nominal, config, additional_scenarios={"longer": other},
         )
+
+
+def test_joint_optimizer_includes_grid_export_caps_in_shared_decision_vector():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[5, 5, 5], wind_generation_kw=[0, 0, 0],
+        load_kw=[1, 1, 1], grid_price_per_kwh=[0.2, 0.2, 0.2],
+        grid_available=[True, True, True], diesel_available=[True, True, True],
+        grid_export_price_per_kwh=[0.05, 0.05, 0.05],
+        grid_export_available=[True, True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=5, wind_rated_kw=0, grid_import_limit_kw=2,
+        grid_export_limit_kw=4, grid_demand_charge_per_kw=8,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+        ),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.3),
+    )
+    kwargs = {"population_size": 8, "generations": 2, "seed": 441}
+    first = optimize_battery_and_diesel_schedule(inputs, config, **kwargs)
+    second = optimize_battery_and_diesel_schedule(inputs, config, **kwargs)
+    assert first == second
+    export = first["recommendation"]["grid_export_power_setpoint_kw"]
+    assert len(export) == 3
+    assert all(0 <= value <= 4 for value in export)
+    assert first["decision_variables"]["grid_export"].startswith("continuous")
+    assert first["model_scope"]["grid_export_setpoint_optimized"] is True
+    assert first["recommendation"]["dispatch"]["summary"]["grid_demand_charge"] >= 0
+    assert first["recommendation"]["objectives"]["estimated_energy_cost"] == pytest.approx(
+        max(
+            row["objectives"]["estimated_energy_cost"]
+            for row in first["recommendation"]["scenario_results"].values()
+        )
+    )
