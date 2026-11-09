@@ -1059,6 +1059,68 @@ def optimize_battery_and_diesel_schedule(
         ),
     )
     recommended = archive[0]
+
+    # Compare against transparent rule-based baselines on the exact same
+    # scenario set and the recommended flexible-load profile.
+    baseline_comparison = {
+        "same_inputs_config_and_scenarios": True,
+        "flexible_load_profile_held_equal": True,
+        "scenario_names": list(scenario_inputs),
+        "policies": {},
+    }
+    for baseline_policy in ("battery_first", "grid_first"):
+        baseline_scenarios = {}
+        for scenario_name, source in scenario_inputs.items():
+            baseline_inputs = EnergySystemInputs(
+                pv_generation_kw=source.pv_generation_kw,
+                wind_generation_kw=source.wind_generation_kw,
+                load_kw=source.load_kw,
+                grid_price_per_kwh=source.grid_price_per_kwh,
+                grid_available=source.grid_available,
+                diesel_available=source.diesel_available,
+                grid_export_price_per_kwh=source.grid_export_price_per_kwh,
+                grid_export_available=source.grid_export_available,
+                diesel_fuel_delivery_liters=source.diesel_fuel_delivery_liters,
+                flexible_load_kw=(
+                    recommended["flexible_load_power_kw"] if flexible_enabled else None
+                ),
+                critical_load_kw=source.critical_load_kw,
+            )
+            baseline_dispatch = dispatch_energy_system(
+                baseline_inputs, config, policy=baseline_policy
+            )
+            baseline_audit = _audit(baseline_dispatch)
+            baseline_summary = baseline_dispatch["summary"]
+            baseline_scenarios[scenario_name] = {
+                "objectives": {
+                    "estimated_energy_cost": float(baseline_summary["estimated_energy_cost"]),
+                    "unmet_load_kwh": float(baseline_summary["unmet_load_kwh"]),
+                    "renewable_curtailed_kwh": float(baseline_summary["renewable_curtailed_kwh"]),
+                    "battery_throughput_kwh": float(baseline_summary["battery_throughput_kwh"]),
+                },
+                "audit_passed": baseline_audit["passed"],
+                "audit_errors": baseline_audit["errors"],
+                "summary": baseline_summary,
+            }
+        baseline_worst_case = {
+            key: max(row["objectives"][key] for row in baseline_scenarios.values())
+            for key in (
+                "estimated_energy_cost", "unmet_load_kwh",
+                "renewable_curtailed_kwh", "battery_throughput_kwh",
+            )
+        }
+        baseline_comparison["policies"][baseline_policy] = {
+            "scenario_results": baseline_scenarios,
+            "worst_case_objectives": baseline_worst_case,
+            "recommended_minus_baseline": {
+                key: round(recommended["objectives"][key] - baseline_worst_case[key], 8)
+                for key in baseline_worst_case
+            },
+            "all_scenarios_passed_audit": all(
+                row["audit_passed"] for row in baseline_scenarios.values()
+            ),
+        }
+
     return {
         "algorithm": "seeded_mixed_real_binary_evolutionary_pareto_search",
         "decision_variables": {
@@ -1081,6 +1143,7 @@ def optimize_battery_and_diesel_schedule(
         "scenario_count": len(scenario_inputs),
         "scenario_names": list(scenario_inputs),
         "robust_objective_aggregation": "worst_case_maximum_across_supplied_scenarios",
+        "baseline_comparison": baseline_comparison,
         "pareto_schedules": [
             {
                 "battery_setpoints_kw": row["battery_setpoints_kw"],
@@ -1126,6 +1189,8 @@ def optimize_battery_and_diesel_schedule(
             "flexible_load_availability_and_power_bounds_enforced": True,
             "same_decisions_replayed_across_all_scenarios": True,
             "objectives_use_worst_case_across_scenarios": True,
+            "rule_based_baseline_comparison_included": True,
+            "baseline_flexible_load_profile_held_equal": True,
             "scenario_probabilities_assumed": False,
             "robust_optimization_enabled": len(scenario_inputs) > 1,
             "critical_vs_flexible_load_priority_modeled": False,
