@@ -1034,3 +1034,54 @@ def test_diesel_power_setpoint_rejects_missing_unit_and_out_of_range_values():
             grid_price_per_kwh=[0.2], grid_available=[True], diesel_available=[True],
             diesel_power_setpoint_kw=[6],
         ), config)
+
+
+def test_grid_export_setpoint_caps_export_and_preserves_energy_balance():
+    config = EnergySystemConfig(
+        pv_rated_kw=10, wind_rated_kw=0, grid_import_limit_kw=0,
+        grid_export_limit_kw=8,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[10], wind_generation_kw=[0], load_kw=[2],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.05], grid_export_available=[True],
+        grid_export_power_setpoint_kw=[3],
+    )
+    result = dispatch_energy_system(inputs, config)
+    row = result["rows"][0]
+    assert row["grid_export_kw"] == pytest.approx(3)
+    assert row["renewable_curtailed_kw"] == pytest.approx(5)
+    assert row["energy_balance_residual_kw"] == pytest.approx(0)
+    assert result["summary"]["grid_export_energy_kwh"] == pytest.approx(3)
+
+
+def test_grid_demand_charge_uses_peak_import_and_is_included_in_total_cost():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=10,
+        grid_demand_charge_per_kw=12,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0], load_kw=[2, 5],
+        grid_price_per_kwh=[0.2, 0.2], grid_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    summary = result["summary"]
+    assert summary["peak_grid_import_kw"] == pytest.approx(5)
+    assert summary["grid_demand_charge"] == pytest.approx(60)
+    assert summary["grid_energy_cost"] == pytest.approx(1.4)
+    assert summary["estimated_energy_cost"] == pytest.approx(61.4)
+
+
+def test_grid_export_setpoint_rejects_values_above_interconnection_limit():
+    config = EnergySystemConfig(
+        pv_rated_kw=5, wind_rated_kw=0, grid_import_limit_kw=0,
+        grid_export_limit_kw=2,
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[1], wind_generation_kw=[0], load_kw=[0],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.05], grid_export_available=[True],
+        grid_export_power_setpoint_kw=[3],
+    )
+    with pytest.raises(EnergyModelError, match="cannot exceed grid_export_limit_kw"):
+        dispatch_energy_system(inputs, config)
