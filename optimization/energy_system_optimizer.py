@@ -931,6 +931,85 @@ def optimize_battery_and_diesel_schedule(
     }
 
 
+def diagnose_dispatch_shortfalls(
+    dispatch: dict,
+    config: EnergySystemConfig,
+    *,
+    tolerance_kw: float = 1e-8,
+) -> list[dict]:
+    """Explain likely operational limits behind unmet load without guessing a single cause."""
+    if (
+        isinstance(tolerance_kw, bool)
+        or not isinstance(tolerance_kw, (int, float))
+        or not math.isfinite(float(tolerance_kw))
+        or tolerance_kw < 0
+    ):
+        raise OptimizationError("tolerance_kw must be finite and non-negative")
+    diagnostics = []
+    previous_diesel_kw = 0.0
+    for index, row in enumerate(dispatch.get("rows", [])):
+        unmet = float(row.get("unmet_load_kw", 0.0))
+        if unmet <= tolerance_kw:
+            previous_diesel_kw = float(row.get("diesel_generation_kw", 0.0))
+            continue
+        causes: list[str] = []
+        if not row.get("grid_available", False):
+            causes.append("grid_unavailable")
+        elif row.get("grid_import_kw", 0.0) >= config.grid_import_limit_kw - tolerance_kw:
+            causes.append("grid_import_limit_reached")
+
+        if config.battery is None:
+            causes.append("battery_not_configured")
+        elif row.get("battery_soc") is not None and row["battery_soc"] <= config.battery.min_soc + tolerance_kw:
+            causes.append("battery_minimum_soc_reached")
+        elif row.get("battery_discharge_kw", 0.0) >= config.battery.max_discharge_kw - tolerance_kw:
+            causes.append("battery_discharge_power_limit_reached")
+        elif row.get("battery_power_setpoint_kw") is not None and row["battery_power_setpoint_kw"] <= tolerance_kw:
+            causes.append("battery_setpoint_restricts_discharge")
+
+        residual_before_diesel = max(
+            0.0,
+            float(row.get("load_kw", 0.0))
+            - float(row.get("renewable_direct_to_load_kw", 0.0))
+            - float(row.get("battery_discharge_kw", 0.0))
+            - float(row.get("grid_import_kw", 0.0)),
+        )
+        if config.diesel is None:
+            causes.append("diesel_not_configured")
+        elif not row.get("diesel_available", False):
+            causes.append("diesel_unavailable")
+        elif row.get("diesel_committed") is False:
+            causes.append("diesel_not_committed")
+        elif residual_before_diesel + tolerance_kw < config.diesel.min_stable_power_kw:
+            causes.append("residual_below_diesel_minimum_stable_output")
+        elif (
+            config.diesel.initial_fuel_liters is not None
+            and row.get("diesel_fuel_remaining_liters") is not None
+            and row["diesel_fuel_remaining_liters"] <= tolerance_kw
+        ):
+            causes.append("diesel_fuel_exhausted")
+        elif (
+            previous_diesel_kw > 0
+            and config.diesel.ramp_up_kw_per_hour is not None
+            and residual_before_diesel > previous_diesel_kw
+            + config.diesel.ramp_up_kw_per_hour * config.dt_hours + tolerance_kw
+        ):
+            causes.append("diesel_ramp_up_limit_reached")
+        elif residual_before_diesel > config.diesel.rated_power_kw + tolerance_kw:
+            causes.append("diesel_rated_power_limit_reached")
+
+        if not causes:
+            causes.append("unmet_load_remains_after_configured_dispatch_limits")
+        diagnostics.append({
+            "timestep": index,
+            "unmet_load_kw": unmet,
+            "likely_limiting_factors": causes,
+            "interpretation": "Potential contributing limits; multiple causes may apply and require operator review",
+        })
+        previous_diesel_kw = float(row.get("diesel_generation_kw", 0.0))
+    return diagnostics
+
+
 def evaluate_schedule_robustness(
     scenarios: dict[str, EnergySystemInputs],
     config: EnergySystemConfig,
@@ -1012,6 +1091,7 @@ def evaluate_schedule_robustness(
             "audit": audit,
             "objectives": objectives,
             "service_shortfall": objectives["unmet_load_kwh"] > unmet_load_tolerance_kwh,
+            "shortfall_diagnostics": diagnose_dispatch_shortfalls(dispatch, config),
             "summary": summary,
             "dispatch": dispatch,
         }
