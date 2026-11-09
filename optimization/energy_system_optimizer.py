@@ -1286,10 +1286,9 @@ def optimize_flexible_load_schedule(
             candidate_inputs = EnergySystemInputs(
                 pv_generation_kw=inputs.pv_generation_kw,
                 wind_generation_kw=inputs.wind_generation_kw,
-                load_kw=[
-                    float(base) + flexible
-                    for base, flexible in zip(inputs.load_kw, schedule)
-                ],
+                load_kw=inputs.load_kw,
+                flexible_load_kw=schedule,
+                critical_load_kw=inputs.critical_load_kw,
                 grid_price_per_kwh=inputs.grid_price_per_kwh,
                 grid_available=inputs.grid_available,
                 diesel_available=inputs.diesel_available,
@@ -1299,6 +1298,7 @@ def optimize_flexible_load_schedule(
                 battery_power_setpoint_kw=inputs.battery_power_setpoint_kw,
                 diesel_commitment_schedule=inputs.diesel_commitment_schedule,
                 diesel_power_setpoint_kw=inputs.diesel_power_setpoint_kw,
+                grid_export_power_setpoint_kw=inputs.grid_export_power_setpoint_kw,
             )
             dispatch = dispatch_energy_system(candidate_inputs, config)
             audit = _audit(dispatch)
@@ -1477,8 +1477,9 @@ def optimize_flexible_load_schedule(
             "fixed_battery_and_diesel_schedules_preserved": True,
             "flexible_load_added_to_base_electrical_load": True,
             "not_jointly_optimized_with_battery_or_diesel_decisions": True,
-            "critical_vs_flexible_load_priority_modeled": False,
-            "flexible_load_shedding_modeled": False,
+            "critical_vs_flexible_load_priority_modeled": True,
+            "flexible_load_shedding_modeled": True,
+            "flexible_load_shedding_accounted_separately": True,
             "stochastic_heuristic_not_guaranteed_global_optimum": True,
             "not_a_controller": True,
         },
