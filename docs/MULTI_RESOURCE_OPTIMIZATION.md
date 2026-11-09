@@ -36,7 +36,7 @@ print(result["recommendation"])
 
 This remains an experimental Stage 4 optimizer, not a finished general-purpose product. In addition to the earlier transparent policy search, the current joint optimizer searches per-timestep battery power, diesel commitment and power, optional flexible-load timing, and grid-export caps in one seeded evolutionary Pareto search. It can replay one common schedule across caller-supplied same-horizon scenarios and rank candidates by worst-case cost, unmet load, curtailment, and battery throughput. The physical simulator also includes an optional horizon peak-import demand charge.
 
-Grid import is still determined by physical residual balance rather than an independent import set-point. The demand-charge model is a single maximum-import proxy over the simulation horizon, not a complete utility tariff engine. Critical-load priority and automatic flexible-load shedding, device process precedence, minimum up/down times, full network power-flow constraints, and a complete infeasibility proof are not yet implemented. Scenario coverage depends on caller-supplied cases; the stochastic heuristic does not guarantee a global optimum.
+Grid import is still determined by physical residual balance rather than an independent import set-point. The demand-charge model is a single maximum-import proxy over the simulation horizon, not a complete utility tariff engine. Critical-load priority and flexible-load shedding are now accounted for at aggregate level: served power is allocated to critical base demand first, with flexible demand reported as shed before critical unmet load. This is not yet device-level control or process precedence. Minimum up/down times, full network power-flow constraints, and a complete infeasibility proof remain outside the model. Scenario coverage depends on caller-supplied cases; the stochastic heuristic does not guarantee a global optimum.
 
 A recommendation is a model result, not a command. The optimizer is offline decision support only: it does not connect to or control equipment, certify electrical safety, establish grid-export permission, or prove field savings. Use synthetic or authorized customer data, retain source provenance, and obtain qualified engineering review before any operational use.
 
@@ -382,3 +382,25 @@ choose a horizon that matches the tariff's actual demand-measurement window.
 This is a single-peak proxy, not a full tariff engine: ratchets, coincident
 peak windows, time-of-use demand periods, taxes, power-factor penalties, and
 contracted-capacity charges are not modeled.
+
+
+## Critical demand priority and flexible-load shedding accounting
+
+`EnergySystemInputs` now optionally separates the base demand into a
+`critical_load_kw` subset and adds a separate `flexible_load_kw` profile.
+Critical demand cannot exceed the base `load_kw`; when omitted, all base
+demand is treated as critical. Flexible demand is additional and remains
+separately visible in the hourly audit.
+
+When total served power is insufficient, the simulator allocates service to
+critical demand first. It reports `critical_unmet_kw` and
+`flexible_load_shed_kw` separately, while retaining the total
+`unmet_load_kw` and energy-balance accounting. The joint optimizer passes its
+flexible-load schedule as a separate profile, so scenario reports can show
+whether shortages affect critical service or only shiftable demand.
+
+This is aggregate priority accounting, not per-device control. It does not
+yet model individual device precedence, minimum run/off times, process
+interlocks, or automatic commands to shed physical equipment. The flexible
+schedule's required energy remains an optimization contract; any shortfall
+must be reviewed in the returned shedding metrics.
