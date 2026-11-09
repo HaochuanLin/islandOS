@@ -944,7 +944,9 @@ def optimize_battery_and_diesel_schedule(
     for _ in range(generations):
         front = pareto_front([evaluate(genome) for genome in population])
         if not front:
-            raise OptimizationError("No joint battery/diesel schedule passed the physical audit")
+            # Let the final infeasibility report explain which hard constraints
+            # and physical limits prevented every current candidate.
+            break
         offspring: list[Genome] = []
         while len(offspring) < population_size:
             parents = rng.sample(population, 2)
