@@ -1021,3 +1021,53 @@ def test_joint_optimizer_rejects_negative_hard_service_thresholds():
         optimize_battery_and_diesel_schedule(
             inputs, config, max_unmet_load_kwh=-1,
         )
+
+
+def test_joint_optimizer_enforces_terminal_battery_soc_reserve():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 1], grid_price_per_kwh=[0.2, 0.2],
+        grid_available=[True, True], diesel_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=4,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+        ),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.3),
+    )
+    result = optimize_battery_and_diesel_schedule(
+        inputs, config, population_size=8, generations=2, seed=991,
+        terminal_battery_soc_min=0.4,
+    )
+    assert result["constraint_diagnostics"]["configured_terminal_battery_soc_min"] == 0.4
+    assert result["constraint_diagnostics"]["fully_feasible_candidate_count"] > 0
+    assert result["model_scope"]["optional_terminal_battery_soc_reserve_constraint"] is True
+
+
+def test_joint_optimizer_explains_unreachable_terminal_battery_soc_reserve():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True], diesel_available=[True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=3,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+        ),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.3),
+    )
+    with pytest.raises(OptimizationError, match="terminal_battery_soc_below_minimum") as caught:
+        optimize_battery_and_diesel_schedule(
+            inputs, config, population_size=8, generations=2, seed=992,
+            terminal_battery_soc_min=0.6,
+        )
+    assert caught.value.diagnostics["configured_terminal_battery_soc_min"] == 0.6
