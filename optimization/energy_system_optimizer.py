@@ -748,7 +748,7 @@ def optimize_battery_and_diesel_schedule(
     # Genome: battery kW, diesel commitment, diesel requested kW, flexible-load kW.
     Genome = tuple[
         tuple[float, ...], tuple[bool, ...],
-        tuple[float, ...], tuple[float, ...],
+        tuple[float, ...], tuple[float, ...], tuple[float, ...],
     ]
     cache: dict[Genome, dict] = {}
 
@@ -773,9 +773,16 @@ def optimize_battery_and_diesel_schedule(
         return tuple(round(value, 8) for value in schedule)
 
 
+    def random_export_schedule() -> tuple[float, ...]:
+        limit = float(config.grid_export_limit_kw)
+        return tuple(
+            round(rng.uniform(0.0, limit), 8) if limit > 0 else 0.0
+            for _ in range(n)
+        )
+
     def evaluate(genome: Genome) -> dict:
         if genome not in cache:
-            setpoints, commitments, diesel_targets, flexible_schedule = genome
+            setpoints, commitments, diesel_targets, flexible_schedule, export_schedule = genome
             if not math.isclose(
                 sum(flexible_schedule) * config.dt_hours,
                 float(flexible_load_energy_kwh),
@@ -803,6 +810,7 @@ def optimize_battery_and_diesel_schedule(
                     battery_power_setpoint_kw=setpoints,
                     diesel_commitment_schedule=commitments,
                     diesel_power_setpoint_kw=diesel_targets,
+                    grid_export_power_setpoint_kw=export_schedule,
                 )
                 scenario_dispatch = dispatch_energy_system(candidate_inputs, config)
                 scenario_audit = _audit(scenario_dispatch)
@@ -845,6 +853,7 @@ def optimize_battery_and_diesel_schedule(
                 "diesel_commitment_schedule": list(commitments),
                 "diesel_power_setpoint_kw": list(diesel_targets),
                 "flexible_load_power_kw": list(flexible_schedule),
+                "grid_export_power_setpoint_kw": list(export_schedule),
                 "objectives": worst_case_objectives,
                 "summary": nominal_dispatch["summary"],
                 "audit": aggregate_audit,
@@ -882,8 +891,8 @@ def optimize_battery_and_diesel_schedule(
     diesel_off = tuple(0.0 for _ in range(n))
     diesel_full = tuple(float(config.diesel.rated_power_kw) for _ in range(n))
     population: list[Genome] = [
-        (zero, off, diesel_off, random_flexible_schedule()),
-        (zero, on, diesel_full, random_flexible_schedule()),
+        (zero, off, diesel_off, random_flexible_schedule(), random_export_schedule()),
+        (zero, on, diesel_full, random_flexible_schedule(), random_export_schedule()),
     ]
     while len(population) < population_size:
         genome: Genome = (
@@ -891,6 +900,7 @@ def optimize_battery_and_diesel_schedule(
             tuple(bool(rng.getrandbits(1)) for _ in range(n)),
             tuple(round(rng.uniform(0.0, config.diesel.rated_power_kw), 8) for _ in range(n)),
             random_flexible_schedule(),
+            random_export_schedule(),
         )
         if genome not in population:
             population.append(genome)
@@ -927,6 +937,7 @@ def optimize_battery_and_diesel_schedule(
             diesel_child = []
             diesel_power_child = []
             flexible_child = []
+            export_child = []
             flexible_alpha = rng.random() if flexible_enabled else 0.5
             for index in range(n):
                 alpha = rng.random()
@@ -948,6 +959,10 @@ def optimize_battery_and_diesel_schedule(
                     + (1 - flexible_alpha) * mate[3][index]
                 )
                 flexible_child.append(flexible_value)
+                export_value = parent[4][index] if rng.random() < 0.5 else mate[4][index]
+                if rng.random() < mutation_rate and config.grid_export_limit_kw > 0:
+                    export_value += rng.gauss(0.0, config.grid_export_limit_kw * 0.15)
+                export_child.append(round(min(config.grid_export_limit_kw, max(0.0, export_value)), 8))
             if flexible_enabled and len(flexible_allowed) > 1 and rng.random() < mutation_rate:
                 donor, receiver = rng.sample(flexible_allowed, 2)
                 transferable = min(
@@ -971,6 +986,7 @@ def optimize_battery_and_diesel_schedule(
             child: Genome = (
                 tuple(battery_child), tuple(diesel_child),
                 tuple(diesel_power_child), tuple(flexible_tuple),
+                tuple(export_child),
             )
             offspring.append(child)
             evaluate(child)
@@ -1050,6 +1066,7 @@ def optimize_battery_and_diesel_schedule(
                 "continuous kW allocation per timestep with conserved energy and availability bounds"
                 if flexible_enabled else "disabled"
             ),
+            "grid_export": "continuous per-timestep export cap, bounded by interconnection rating",
         },
         "candidate_count": len(cache),
         "feasible_count": sum(row["feasible"] for row in cache.values()),
@@ -1067,6 +1084,7 @@ def optimize_battery_and_diesel_schedule(
                 "diesel_commitment_schedule": row["diesel_commitment_schedule"],
                 "diesel_power_setpoint_kw": row["diesel_power_setpoint_kw"],
                 "flexible_load_power_kw": row["flexible_load_power_kw"],
+                "grid_export_power_setpoint_kw": row["grid_export_power_setpoint_kw"],
                 "objectives": row["objectives"],
             }
             for row in archive
@@ -1076,6 +1094,7 @@ def optimize_battery_and_diesel_schedule(
             "diesel_commitment_schedule": recommended["diesel_commitment_schedule"],
             "diesel_power_setpoint_kw": recommended["diesel_power_setpoint_kw"],
             "flexible_load_power_kw": recommended["flexible_load_power_kw"],
+            "grid_export_power_setpoint_kw": recommended["grid_export_power_setpoint_kw"],
             "weighted_score": score(recommended, archive),
             "weights": {
                 "cost": weights.cost,
@@ -1107,7 +1126,8 @@ def optimize_battery_and_diesel_schedule(
             "scenario_probabilities_assumed": False,
             "robust_optimization_enabled": len(scenario_inputs) > 1,
             "critical_vs_flexible_load_priority_modeled": False,
-            "grid_import_export_setpoints_not_optimized": True,
+            "grid_import_is_physical_residual_balance": True,
+            "grid_export_setpoint_optimized": config.grid_export_limit_kw > 0,
             "stochastic_heuristic_not_global_optimum": True,
             "not_a_controller": True,
         },
