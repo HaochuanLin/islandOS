@@ -664,11 +664,15 @@ def optimize_battery_and_diesel_schedule(
     mutation_rate: float = 0.12,
     seed: int = 20261108,
     max_horizon_steps: int = 168,
+    flexible_load_energy_kwh: float | None = None,
+    flexible_load_available_steps: Sequence[bool] | None = None,
+    flexible_load_max_power_kw: float | None = None,
 ) -> dict:
-    """Jointly search battery power, diesel commitment, and diesel kW targets.
+    """Jointly search battery, diesel, and optional aggregate flexible-load schedules.
 
-    The shared simulator clips targets to residual load, stable minimum,
-    ramp-up, availability, rated power, and fuel limits.
+    The shared simulator clips battery/diesel requests to their configured
+    physical limits. When enabled, flexible-load energy is conserved inside
+    its availability window and per-step power envelope.
     """
     if config.battery is None or config.diesel is None:
         raise OptimizationError("both a configured battery and diesel unit are required")
@@ -690,21 +694,87 @@ def optimize_battery_and_diesel_schedule(
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise OptimizationError("seed must be an integer")
 
+    flexible_enabled = any(value is not None for value in (
+        flexible_load_energy_kwh,
+        flexible_load_available_steps,
+        flexible_load_max_power_kw,
+    ))
+    if flexible_enabled and any(value is None for value in (
+        flexible_load_energy_kwh,
+        flexible_load_available_steps,
+        flexible_load_max_power_kw,
+    )):
+        raise OptimizationError(
+            "flexible-load energy, availability, and maximum power must be supplied together"
+        )
+    if flexible_enabled:
+        if isinstance(flexible_load_energy_kwh, bool) or not isinstance(flexible_load_energy_kwh, (int, float)) or not math.isfinite(float(flexible_load_energy_kwh)) or flexible_load_energy_kwh <= 0:
+            raise OptimizationError("flexible_load_energy_kwh must be finite and > 0")
+        if isinstance(flexible_load_max_power_kw, bool) or not isinstance(flexible_load_max_power_kw, (int, float)) or not math.isfinite(float(flexible_load_max_power_kw)) or flexible_load_max_power_kw <= 0:
+            raise OptimizationError("flexible_load_max_power_kw must be finite and > 0")
+        flexible_availability = list(flexible_load_available_steps)
+        if len(flexible_availability) != n or any(not isinstance(value, bool) for value in flexible_availability):
+            raise OptimizationError(f"flexible_load_available_steps must contain exactly {n} boolean values")
+        flexible_allowed = [i for i, enabled in enumerate(flexible_availability) if enabled]
+        flexible_power_hours = float(flexible_load_energy_kwh) / config.dt_hours
+        if flexible_power_hours > len(flexible_allowed) * float(flexible_load_max_power_kw) + 1e-9:
+            raise OptimizationError("required flexible energy exceeds available-window power capacity")
+    else:
+        flexible_availability = [False] * n
+        flexible_allowed = []
+        flexible_power_hours = 0.0
+        flexible_load_energy_kwh = 0.0
+        flexible_load_max_power_kw = 0.0
+
     lower = -float(config.battery.max_charge_kw)
     upper = float(config.battery.max_discharge_kw)
     span = upper - lower
     rng = random.Random(seed)
-    # Genome: (battery kW, diesel commitment, diesel requested kW) schedules.
-    Genome = tuple[tuple[float, ...], tuple[bool, ...], tuple[float, ...]]
+    # Genome: battery kW, diesel commitment, diesel requested kW, flexible-load kW.
+    Genome = tuple[
+        tuple[float, ...], tuple[bool, ...],
+        tuple[float, ...], tuple[float, ...],
+    ]
     cache: dict[Genome, dict] = {}
+
+    def random_flexible_schedule() -> tuple[float, ...]:
+        schedule = [0.0] * n
+        if not flexible_enabled:
+            return tuple(schedule)
+        order = rng.sample(flexible_allowed, len(flexible_allowed))
+        remaining = flexible_power_hours
+        for position, timestep in enumerate(order):
+            remaining_slots = len(order) - position - 1
+            low_bound = max(
+                0.0,
+                remaining - remaining_slots * float(flexible_load_max_power_kw),
+            )
+            high_bound = min(float(flexible_load_max_power_kw), remaining)
+            value = remaining if remaining_slots == 0 else rng.uniform(low_bound, high_bound)
+            schedule[timestep] = value
+            remaining -= value
+        if order:
+            schedule[order[-1]] += flexible_power_hours - sum(schedule)
+        return tuple(round(value, 8) for value in schedule)
+
 
     def evaluate(genome: Genome) -> dict:
         if genome not in cache:
-            setpoints, commitments, diesel_targets = genome
+            setpoints, commitments, diesel_targets, flexible_schedule = genome
+            if not math.isclose(
+                sum(flexible_schedule) * config.dt_hours,
+                float(flexible_load_energy_kwh),
+                rel_tol=0,
+                abs_tol=1e-6,
+            ):
+                raise OptimizationError("joint candidate does not conserve flexible-load energy")
             candidate_inputs = EnergySystemInputs(
                 pv_generation_kw=inputs.pv_generation_kw,
                 wind_generation_kw=inputs.wind_generation_kw,
-                load_kw=inputs.load_kw,
+                load_kw=[
+                    float(base) + flexible
+                    for base, flexible in zip(inputs.load_kw, flexible_schedule)
+                ],
                 grid_price_per_kwh=inputs.grid_price_per_kwh,
                 grid_available=inputs.grid_available,
                 diesel_available=inputs.diesel_available,
@@ -728,6 +798,7 @@ def optimize_battery_and_diesel_schedule(
                 "battery_setpoints_kw": list(setpoints),
                 "diesel_commitment_schedule": list(commitments),
                 "diesel_power_setpoint_kw": list(diesel_targets),
+                "flexible_load_power_kw": list(flexible_schedule),
                 "objectives": objectives,
                 "summary": summary,
                 "audit": audit,
@@ -763,12 +834,16 @@ def optimize_battery_and_diesel_schedule(
     on = tuple(True for _ in range(n))
     diesel_off = tuple(0.0 for _ in range(n))
     diesel_full = tuple(float(config.diesel.rated_power_kw) for _ in range(n))
-    population: list[Genome] = [(zero, off, diesel_off), (zero, on, diesel_full)]
+    population: list[Genome] = [
+        (zero, off, diesel_off, random_flexible_schedule()),
+        (zero, on, diesel_full, random_flexible_schedule()),
+    ]
     while len(population) < population_size:
         genome: Genome = (
             tuple(round(rng.uniform(lower, upper), 8) for _ in range(n)),
             tuple(bool(rng.getrandbits(1)) for _ in range(n)),
             tuple(round(rng.uniform(0.0, config.diesel.rated_power_kw), 8) for _ in range(n)),
+            random_flexible_schedule(),
         )
         if genome not in population:
             population.append(genome)
@@ -804,6 +879,7 @@ def optimize_battery_and_diesel_schedule(
             battery_child = []
             diesel_child = []
             diesel_power_child = []
+            flexible_child = []
             for index in range(n):
                 alpha = rng.random()
                 value = alpha * parent[0][index] + (1 - alpha) * mate[0][index]
@@ -818,7 +894,41 @@ def optimize_battery_and_diesel_schedule(
                 if rng.random() < mutation_rate:
                     diesel_power += rng.gauss(0.0, config.diesel.rated_power_kw * 0.15)
                 diesel_power_child.append(round(min(config.diesel.rated_power_kw, max(0.0, diesel_power)), 8))
-            child: Genome = (tuple(battery_child), tuple(diesel_child), tuple(diesel_power_child))
+                flexible_value = (
+                    rng.random() * parent[3][index]
+                    + (1 - rng.random()) * mate[3][index]
+                )
+                # Convex blending with a shared alpha preserves total energy.
+                flexible_alpha = rng.random()
+                flexible_value = (
+                    flexible_alpha * parent[3][index]
+                    + (1 - flexible_alpha) * mate[3][index]
+                )
+                flexible_child.append(flexible_value)
+            if flexible_enabled and len(flexible_allowed) > 1 and rng.random() < mutation_rate:
+                donor, receiver = rng.sample(flexible_allowed, 2)
+                transferable = min(
+                    flexible_child[donor],
+                    float(flexible_load_max_power_kw) - flexible_child[receiver],
+                )
+                if transferable > 1e-12:
+                    amount = rng.uniform(0.0, transferable)
+                    flexible_child[donor] -= amount
+                    flexible_child[receiver] += amount
+            flexible_tuple = [round(value, 8) for value in flexible_child]
+            flexible_drift = flexible_power_hours - sum(flexible_tuple)
+            if abs(flexible_drift) > 1e-9:
+                for timestep in flexible_allowed:
+                    proposed = flexible_tuple[timestep] + flexible_drift
+                    if -1e-9 <= proposed <= float(flexible_load_max_power_kw) + 1e-9:
+                        flexible_tuple[timestep] = min(
+                            float(flexible_load_max_power_kw), max(0.0, proposed)
+                        )
+                        break
+            child: Genome = (
+                tuple(battery_child), tuple(diesel_child),
+                tuple(diesel_power_child), tuple(flexible_tuple),
+            )
             offspring.append(child)
             evaluate(child)
         combined = list(dict.fromkeys(population + offspring))
@@ -833,6 +943,7 @@ def optimize_battery_and_diesel_schedule(
                 tuple(row["battery_setpoints_kw"]),
                 tuple(row["diesel_commitment_schedule"]),
                 tuple(row["diesel_power_setpoint_kw"]),
+                tuple(row["flexible_load_power_kw"]),
             ),
         )
         selected_genomes = [
@@ -840,6 +951,7 @@ def optimize_battery_and_diesel_schedule(
                 tuple(row["battery_setpoints_kw"]),
                 tuple(row["diesel_commitment_schedule"]),
                 tuple(row["diesel_power_setpoint_kw"]),
+                tuple(row["flexible_load_power_kw"]),
             )
             for row in selected[:population_size]
         ]
@@ -850,6 +962,7 @@ def optimize_battery_and_diesel_schedule(
                     tuple(row["battery_setpoints_kw"]),
                     tuple(row["diesel_commitment_schedule"]),
                     tuple(row["diesel_power_setpoint_kw"]),
+                    tuple(row["flexible_load_power_kw"]),
                 ) not in selected_genomes
             ]
             remaining.sort(
@@ -865,6 +978,7 @@ def optimize_battery_and_diesel_schedule(
                     tuple(row["battery_setpoints_kw"]),
                     tuple(row["diesel_commitment_schedule"]),
                     tuple(row["diesel_power_setpoint_kw"]),
+                    tuple(row["flexible_load_power_kw"]),
                 )
                 for row in remaining[:population_size - len(selected_genomes)]
             )
@@ -879,6 +993,7 @@ def optimize_battery_and_diesel_schedule(
             score(row, archive),
             tuple(row["battery_setpoints_kw"]),
             tuple(row["diesel_commitment_schedule"]),
+            tuple(row["flexible_load_power_kw"]),
         ),
     )
     recommended = archive[0]
@@ -888,6 +1003,10 @@ def optimize_battery_and_diesel_schedule(
             "battery": "signed continuous kW set-point per timestep",
             "diesel_commitment": "binary on/off commitment per timestep",
             "diesel_power": "continuous requested kW set-point per timestep",
+            "flexible_load": (
+                "continuous kW allocation per timestep with conserved energy and availability bounds"
+                if flexible_enabled else "disabled"
+            ),
         },
         "candidate_count": len(cache),
         "feasible_count": sum(row["feasible"] for row in cache.values()),
@@ -901,6 +1020,7 @@ def optimize_battery_and_diesel_schedule(
                 "battery_setpoints_kw": row["battery_setpoints_kw"],
                 "diesel_commitment_schedule": row["diesel_commitment_schedule"],
                 "diesel_power_setpoint_kw": row["diesel_power_setpoint_kw"],
+                "flexible_load_power_kw": row["flexible_load_power_kw"],
                 "objectives": row["objectives"],
             }
             for row in archive
@@ -909,6 +1029,7 @@ def optimize_battery_and_diesel_schedule(
             "battery_setpoints_kw": recommended["battery_setpoints_kw"],
             "diesel_commitment_schedule": recommended["diesel_commitment_schedule"],
             "diesel_power_setpoint_kw": recommended["diesel_power_setpoint_kw"],
+            "flexible_load_power_kw": recommended["flexible_load_power_kw"],
             "weighted_score": score(recommended, archive),
             "weights": {
                 "cost": weights.cost,
@@ -924,6 +1045,10 @@ def optimize_battery_and_diesel_schedule(
             "battery_soc_efficiency_and_capacity_fade_enforced": True,
             "diesel_minimum_load_ramp_up_fuel_and_availability_enforced": True,
             "diesel_power_setpoint_optimized": True,
+            "flexible_load_schedule_jointly_optimized": flexible_enabled,
+            "flexible_load_energy_conserved": True,
+            "flexible_load_availability_and_power_bounds_enforced": True,
+            "critical_vs_flexible_load_priority_modeled": False,
             "grid_import_export_setpoints_not_optimized": True,
             "stochastic_heuristic_not_global_optimum": True,
             "not_a_controller": True,
