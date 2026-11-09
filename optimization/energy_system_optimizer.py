@@ -798,7 +798,7 @@ def optimize_battery_and_diesel_schedule(
                     pv_generation_kw=source.pv_generation_kw,
                     wind_generation_kw=source.wind_generation_kw,
                     load_kw=source.load_kw,
-                    flexible_load_kw=flexible_schedule,
+                    flexible_load_kw=flexible_schedule if flexible_enabled else None,
                     critical_load_kw=source.critical_load_kw,
                     grid_price_per_kwh=source.grid_price_per_kwh,
                     grid_available=source.grid_available,
