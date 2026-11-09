@@ -1582,6 +1582,8 @@ def evaluate_schedule_robustness(
     battery_power_setpoint_kw: Sequence[float] | None = None,
     diesel_commitment_schedule: Sequence[bool] | None = None,
     diesel_power_setpoint_kw: Sequence[float] | None = None,
+    flexible_load_kw: Sequence[float] | None = None,
+    grid_export_power_setpoint_kw: Sequence[float] | None = None,
     unmet_load_tolerance_kwh: float = 1e-8,
 ) -> dict:
     """Evaluate one common dispatch schedule against multiple operating scenarios.
@@ -1619,6 +1621,8 @@ def evaluate_schedule_robustness(
         ("battery_power_setpoint_kw", battery_power_setpoint_kw),
         ("diesel_commitment_schedule", diesel_commitment_schedule),
         ("diesel_power_setpoint_kw", diesel_power_setpoint_kw),
+        ("flexible_load_kw", flexible_load_kw),
+        ("grid_export_power_setpoint_kw", grid_export_power_setpoint_kw),
     ):
         if values is not None and (isinstance(values, (str, bytes)) or len(values) != horizon):
             raise OptimizationError(f"{name} must contain exactly {horizon} values")
@@ -1644,6 +1648,16 @@ def evaluate_schedule_robustness(
             battery_power_setpoint_kw=battery_power_setpoint_kw,
             diesel_commitment_schedule=diesel_commitment_schedule,
             diesel_power_setpoint_kw=diesel_power_setpoint_kw,
+            flexible_load_kw=(
+                flexible_load_kw if flexible_load_kw is not None
+                else original.flexible_load_kw
+            ),
+            critical_load_kw=original.critical_load_kw,
+            grid_export_power_setpoint_kw=(
+                grid_export_power_setpoint_kw
+                if grid_export_power_setpoint_kw is not None
+                else original.grid_export_power_setpoint_kw
+            ),
         )
         dispatch = dispatch_energy_system(replay, config)
         audit = _audit(dispatch)
@@ -1656,6 +1670,10 @@ def evaluate_schedule_robustness(
             "audit": audit,
             "objectives": objectives,
             "service_shortfall": objectives["unmet_load_kwh"] > unmet_load_tolerance_kwh,
+            "critical_service_shortfall": (
+                float(summary["critical_unmet_load_kwh"]) > unmet_load_tolerance_kwh
+            ),
+            "flexible_load_shed": float(summary["flexible_load_shed_kwh"]) > unmet_load_tolerance_kwh,
             "shortfall_diagnostics": diagnose_dispatch_shortfalls(dispatch, config),
             "summary": summary,
             "dispatch": dispatch,
@@ -1663,6 +1681,9 @@ def evaluate_schedule_robustness(
 
     physically_valid = all(row["physical_audit_passed"] for row in results.values())
     fully_served = all(not row["service_shortfall"] for row in results.values())
+    critical_fully_served = all(
+        not row["critical_service_shortfall"] for row in results.values()
+    )
     worst_case = {
         key: max(row["objectives"][key] for row in results.values())
         for key in objective_keys
@@ -1677,7 +1698,15 @@ def evaluate_schedule_robustness(
         "scenario_results": results,
         "all_physical_audits_passed": physically_valid,
         "all_scenarios_fully_served": fully_served,
+        "all_critical_loads_fully_served": critical_fully_served,
         "robust_service_feasible": physically_valid and fully_served,
+        "robust_critical_service_feasible": physically_valid and critical_fully_served,
+        "worst_case_critical_unmet_load_kwh": max(
+            float(row["summary"]["critical_unmet_load_kwh"]) for row in results.values()
+        ),
+        "worst_case_flexible_load_shed_kwh": max(
+            float(row["summary"]["flexible_load_shed_kwh"]) for row in results.values()
+        ),
         "worst_case_objectives": worst_case,
         "mean_case_objectives": mean_case,
         "model_scope": {
@@ -1685,6 +1714,8 @@ def evaluate_schedule_robustness(
             "scenario_probabilities_assumed": False,
             "worst_case_is_not_a_probability_quantile": True,
             "uses_shared_physical_dispatch_engine": True,
+            "critical_and_flexible_load_service_reported_separately": True,
+            "flexible_load_and_export_setpoints_can_be_replayed": True,
             "offline_robustness_screen_only": True,
             "not_a_stochastic_or_global_robust_optimizer": True,
             "not_a_controller": True,
