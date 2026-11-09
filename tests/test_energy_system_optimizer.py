@@ -606,3 +606,81 @@ def test_robustness_report_identifies_likely_grid_and_battery_limits():
     factors = result["scenario_results"]["islanded_outage"]["shortfall_diagnostics"][0]["likely_limiting_factors"]
     assert "grid_unavailable" in factors
     assert "battery_setpoint_restricts_discharge" in factors
+
+
+def test_flexible_load_optimizer_conserves_energy_and_shifts_toward_cheaper_periods():
+    from optimization.energy_system_optimizer import optimize_flexible_load_schedule
+    from islandos_core.energy_system import dispatch_energy_system
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 0],
+        wind_generation_kw=[0, 0, 0],
+        load_kw=[1, 1, 1],
+        grid_price_per_kwh=[1.0, 0.1, 1.0],
+        grid_available=[True, True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=5,
+    )
+    kwargs = {
+        "energy_required_kwh": 2.0,
+        "available_steps": [True, True, True],
+        "max_power_kw": 2.0,
+        "weights": OptimizationWeights(cost=1, reliability=0, curtailment=0, battery_wear=0),
+        "population_size": 16,
+        "generations": 20,
+        "mutation_rate": 0.8,
+        "seed": 20261109,
+    }
+    first = optimize_flexible_load_schedule(inputs, config, **kwargs)
+    second = optimize_flexible_load_schedule(inputs, config, **kwargs)
+    assert first == second
+    schedule = first["recommendation"]["flexible_load_power_kw"]
+    assert sum(schedule) == pytest.approx(2.0, abs=1e-6)
+    assert all(0 <= value <= 2.0 for value in schedule)
+    assert len(schedule) == 3
+    baseline = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 0], wind_generation_kw=[0, 0, 0],
+        load_kw=[3, 1, 1], grid_price_per_kwh=[1.0, 0.1, 1.0],
+        grid_available=[True, True, True],
+    )
+    baseline_cost = dispatch_energy_system(baseline, config)["summary"]["estimated_energy_cost"]
+    assert first["recommendation"]["objectives"]["estimated_energy_cost"] <= baseline_cost
+    assert first["model_scope"]["required_flexible_energy_conserved"] is True
+    assert first["model_scope"]["not_jointly_optimized_with_battery_or_diesel_decisions"] is True
+
+
+def test_flexible_load_optimizer_enforces_availability_and_capacity():
+    from optimization.energy_system_optimizer import optimize_flexible_load_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 1], grid_price_per_kwh=[0.2, 0.3],
+        grid_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=3,
+    )
+    result = optimize_flexible_load_schedule(
+        inputs, config,
+        energy_required_kwh=1,
+        available_steps=[False, True],
+        max_power_kw=2,
+        population_size=4,
+        generations=1,
+    )
+    assert result["recommendation"]["flexible_load_power_kw"] == pytest.approx([0, 1])
+    with pytest.raises(OptimizationError, match="exceeds available-window"):
+        optimize_flexible_load_schedule(
+            inputs, config,
+            energy_required_kwh=3,
+            available_steps=[False, True],
+            max_power_kw=2,
+        )
+    with pytest.raises(OptimizationError, match="boolean values"):
+        optimize_flexible_load_schedule(
+            inputs, config,
+            energy_required_kwh=1,
+            available_steps=[0, True],
+            max_power_kw=2,
+        )
