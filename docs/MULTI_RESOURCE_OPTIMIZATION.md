@@ -422,3 +422,20 @@ mean the recommendation is lower on that metric for the supplied scenarios.
 This is a transparent benchmark, not proof that the evolutionary search
 beats every possible operating policy; conclusions remain limited to the
 provided scenarios and model assumptions.
+
+
+## Robustness diagnostics for critical and flexible service
+
+`evaluate_schedule_robustness` can now replay a shared flexible-load profile
+and grid-export cap schedule across the supplied scenarios. Each replay
+preserves scenario-specific critical-load definitions and reports total
+service shortfall separately from critical-load shortfall and flexible-load
+shedding. Its aggregate result includes whether all critical loads were
+served, plus worst-case critical unmet energy and flexible energy shed.
+
+Timestep diagnostics classify a shortfall as `flexible_load_shed_only` when
+critical demand was fully served but flexible demand was not; otherwise a
+critical deficit is identified as `critical_load_shortfall`. The listed
+physical limiting factors remain potential contributors, not a unique causal
+proof. These diagnostics are intended to help explain infeasible or
+service-deficient schedules, not to authorize automatic load shedding.
