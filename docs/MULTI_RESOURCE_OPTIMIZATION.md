@@ -284,3 +284,30 @@ shed flexible demand when supply is insufficient. Unmet load remains visible
 as an objective and must be reviewed. Per-device task precedence, minimum
 run/off times, process constraints, and multi-load coordination remain future
 work. The search is stochastic and does not guarantee a global optimum.
+
+
+## Unified joint decision vector with flexible load (experimental Stage 4 increment)
+
+The joint `optimize_battery_and_diesel_schedule` function now optionally
+accepts all three flexible-load contract fields together:
+
+- `flexible_load_energy_kwh`: total shiftable energy that must be scheduled.
+- `flexible_load_available_steps`: horizon-aligned boolean operating window.
+- `flexible_load_max_power_kw`: per-step upper power bound.
+
+When supplied, the optimizer adds a fourth decision family to the same
+mixed-real/binary genome: flexible-load kW allocation at each timestep.
+Battery power, diesel commitment, diesel power, and flexible-load allocation
+are then evolved and evaluated together through the shared physical simulator.
+The required flexible energy is conserved, and availability/power bounds are
+enforced before a candidate is evaluated. Omitting all three optional fields
+preserves the battery/diesel-only call shape.
+
+This is a meaningful unified decision-vector increment, but it is not yet a
+complete plant-wide optimizer. Grid import/export remains determined by the
+physical residual balance rather than explicit market set-points. Critical
+loads are not prioritized over flexible loads, flexible demand is not
+automatically shed under shortage, and device-specific process precedence,
+minimum up/down times, and network power-flow constraints remain outside the
+model. The evolutionary search is stochastic and does not guarantee a global
+optimum. All results remain offline decision support.
