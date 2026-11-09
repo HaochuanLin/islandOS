@@ -223,6 +223,7 @@ class EnergySystemInputs:
     # Negative charges from renewable surplus; positive discharges to load.
     battery_power_setpoint_kw: Sequence[float] | None = None
     diesel_commitment_schedule: Sequence[bool] | None = None
+    diesel_power_setpoint_kw: Sequence[float] | None = None
 
 
 def _series(name: str, values: Sequence[float], *, allow_zero: bool = True) -> list[float]:
@@ -307,6 +308,10 @@ def dispatch_energy_system(
         _signed_series("battery_power_setpoint_kw", inputs.battery_power_setpoint_kw)
         if inputs.battery_power_setpoint_kw is not None else None
     )
+    diesel_setpoints = (
+        _series("diesel_power_setpoint_kw", inputs.diesel_power_setpoint_kw)
+        if inputs.diesel_power_setpoint_kw is not None else None
+    )
     n = len(load)
     if inputs.diesel_commitment_schedule is not None:
         if config.diesel is None:
@@ -320,6 +325,13 @@ def dispatch_energy_system(
         raise EnergyModelError("all numeric input series must have equal lengths")
     if battery_setpoints is not None and len(battery_setpoints) != n:
         raise EnergyModelError(f"battery_power_setpoint_kw must contain exactly {n} values")
+    if diesel_setpoints is not None:
+        if config.diesel is None:
+            raise EnergyModelError("diesel_power_setpoint_kw requires a configured diesel unit")
+        if len(diesel_setpoints) != n:
+            raise EnergyModelError(f"diesel_power_setpoint_kw must contain exactly {n} values")
+        if any(value > config.diesel.rated_power_kw + 1e-9 for value in diesel_setpoints):
+            raise EnergyModelError("diesel_power_setpoint_kw exceeds configured rated power")
     if battery_setpoints is not None and config.battery is None:
         raise EnergyModelError("battery_power_setpoint_kw requires a configured battery")
     if battery_setpoints is not None and any(
@@ -468,6 +480,11 @@ def dispatch_energy_system(
                 diesel_stopped = previous_diesel_kw > 0
                 return 0.0
             target = min(remaining_kw, spec.rated_power_kw)
+            if diesel_setpoints is not None:
+                target = min(target, diesel_setpoints[t])
+            if target <= 0 or target + 1e-9 < spec.min_stable_power_kw:
+                diesel_stopped = previous_diesel_kw > 0
+                return 0.0
             if fuel_remaining_liters is not None:
                 available_fuel = fuel_remaining_liters
                 if _diesel_fuel_rate_lph(spec, spec.min_stable_power_kw) * config.dt_hours > available_fuel + 1e-9:
@@ -599,6 +616,7 @@ def dispatch_energy_system(
         row = {
             "timestep": t, "dispatch_priority": active_policy,
             "battery_power_setpoint_kw": requested_setpoint,
+            "diesel_power_setpoint_kw": diesel_setpoints[t] if diesel_setpoints is not None else None,
             "pv_generation_kw": pv[t], "wind_generation_kw": wind[t],
             "load_kw": load[t], "renewable_direct_to_load_kw": direct_renewable,
             "battery_charge_kw": charge_kw, "battery_discharge_kw": discharge_kw,
@@ -708,6 +726,7 @@ def dispatch_energy_system(
             "diesel_nonlinear_fuel_curve_enabled": bool(
                 config.diesel and config.diesel.fuel_curve_liters_per_hour is not None
             ),
+            "diesel_power_setpoint_input_enabled": diesel_setpoints is not None,
             "diesel_fuel_consumption_model": (
                 "piecewise_linear_curve" if config.diesel and config.diesel.fuel_curve_liters_per_hour is not None
                 else "constant_l_per_kwh" if config.diesel and config.diesel.fuel_consumption_l_per_kwh is not None
