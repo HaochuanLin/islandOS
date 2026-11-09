@@ -1503,10 +1503,14 @@ def diagnose_dispatch_shortfalls(
     previous_diesel_kw = 0.0
     for index, row in enumerate(dispatch.get("rows", [])):
         unmet = float(row.get("unmet_load_kw", 0.0))
+        critical_unmet = float(row.get("critical_unmet_kw", unmet))
+        flexible_shed = float(row.get("flexible_load_shed_kw", 0.0))
         if unmet <= tolerance_kw:
             previous_diesel_kw = float(row.get("diesel_generation_kw", 0.0))
             continue
         causes: list[str] = []
+        if critical_unmet <= tolerance_kw and flexible_shed > tolerance_kw:
+            causes.append("flexible_load_shed_before_critical_load")
         if not row.get("grid_available", False):
             causes.append("grid_unavailable")
         elif row.get("grid_import_kw", 0.0) >= config.grid_import_limit_kw - tolerance_kw:
@@ -1557,6 +1561,13 @@ def diagnose_dispatch_shortfalls(
         diagnostics.append({
             "timestep": index,
             "unmet_load_kw": unmet,
+            "critical_unmet_kw": critical_unmet,
+            "flexible_load_shed_kw": flexible_shed,
+            "service_classification": (
+                "flexible_load_shed_only" if critical_unmet <= tolerance_kw and flexible_shed > tolerance_kw
+                else "critical_load_shortfall" if critical_unmet > tolerance_kw
+                else "unclassified_service_shortfall"
+            ),
             "likely_limiting_factors": causes,
             "interpretation": "Potential contributing limits; multiple causes may apply and require operator review",
         })
