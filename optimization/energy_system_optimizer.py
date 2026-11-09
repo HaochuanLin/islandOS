@@ -1081,6 +1081,7 @@ def optimize_battery_and_diesel_schedule(
                 grid_export_price_per_kwh=source.grid_export_price_per_kwh,
                 grid_export_available=source.grid_export_available,
                 diesel_fuel_delivery_liters=source.diesel_fuel_delivery_liters,
+                grid_export_power_setpoint_kw=recommended["grid_export_power_setpoint_kw"],
                 flexible_load_kw=(
                     recommended["flexible_load_power_kw"] if flexible_enabled else None
                 ),
