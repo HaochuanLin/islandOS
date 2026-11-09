@@ -941,3 +941,83 @@ def test_robustness_replays_explicit_grid_export_caps_and_flexible_load_profile(
     assert dispatch["rows"][0]["load_kw"] == pytest.approx(3)
     assert dispatch["rows"][0]["grid_export_kw"] == pytest.approx(3)
     assert dispatch["summary"]["flexible_load_energy_kwh"] == pytest.approx(2)
+
+
+def test_joint_optimizer_enforces_hard_critical_load_service_constraint():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[5, 5], grid_price_per_kwh=[0.2, 0.2],
+        grid_available=[True, True], diesel_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=6,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1,
+            initial_soc=0.5, min_soc=0.1, max_soc=0.9,
+        ),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.3),
+    )
+    result = optimize_battery_and_diesel_schedule(
+        inputs, config, population_size=8, generations=2, seed=881,
+        max_unmet_load_kwh=0,
+        max_critical_unmet_load_kwh=0,
+    )
+    constraints = result["constraint_diagnostics"]
+    assert constraints["configured_max_unmet_load_kwh"] == 0
+    assert constraints["configured_max_critical_unmet_load_kwh"] == 0
+    assert constraints["fully_feasible_candidate_count"] > 0
+    assert result["model_scope"]["optional_hard_total_unmet_constraint"] is True
+    assert result["model_scope"]["optional_hard_critical_unmet_constraint"] is True
+
+
+def test_joint_optimizer_explains_when_hard_critical_service_is_infeasible():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[5],
+        grid_price_per_kwh=[0.2], grid_available=[False],
+        diesel_available=[True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1,
+            initial_soc=0.1, min_soc=0.1, max_soc=0.9,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=2, variable_cost_per_kwh=0.3,
+            min_stable_power_kw=0.5,
+        ),
+    )
+    with pytest.raises(OptimizationError, match="critical_unmet_load_exceeds_limit") as caught:
+        optimize_battery_and_diesel_schedule(
+            inputs, config, population_size=8, generations=2, seed=882,
+            max_critical_unmet_load_kwh=0,
+        )
+    assert "best_candidate_scenarios" in caught.value.diagnostics
+    scenario = caught.value.diagnostics["best_candidate_scenarios"]["nominal"]
+    assert scenario["constraint_violations"] == ["critical_unmet_load_exceeds_limit"]
+    assert scenario["shortfall_diagnostics"][0]["service_classification"] == "critical_load_shortfall"
+
+
+def test_joint_optimizer_rejects_negative_hard_service_thresholds():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True], diesel_available=[True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=2,
+        battery=BatterySpec(capacity_kwh=2, max_charge_kw=1, max_discharge_kw=1),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.2),
+    )
+    with pytest.raises(OptimizationError, match="max_unmet_load_kwh must be finite and non-negative"):
+        optimize_battery_and_diesel_schedule(
+            inputs, config, max_unmet_load_kwh=-1,
+        )
