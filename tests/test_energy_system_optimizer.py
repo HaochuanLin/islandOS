@@ -762,3 +762,80 @@ def test_joint_optimizer_validates_flexible_load_parameters_as_a_complete_contra
             flexible_load_available_steps=[True],
             flexible_load_max_power_kw=1,
         )
+
+
+def test_joint_optimizer_uses_worst_case_objectives_across_scenarios():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    nominal = EnergySystemInputs(
+        pv_generation_kw=[0, 2], wind_generation_kw=[0, 0],
+        load_kw=[4, 4], grid_price_per_kwh=[0.2, 0.1],
+        grid_available=[True, True], diesel_available=[True, True],
+    )
+    outage = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[5, 5], grid_price_per_kwh=[0.2, 0.1],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=2, wind_rated_kw=0, grid_import_limit_kw=2,
+        battery=BatterySpec(
+            capacity_kwh=8, max_charge_kw=2, max_discharge_kw=2,
+            initial_soc=0.7, min_soc=0.1, max_soc=0.95,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=6, variable_cost_per_kwh=0.3,
+            min_stable_power_kw=1, ramp_up_kw_per_hour=6,
+        ),
+    )
+    kwargs = {
+        "population_size": 8,
+        "generations": 2,
+        "seed": 20261110,
+        "additional_scenarios": {"grid_outage": outage},
+        "flexible_load_energy_kwh": 1,
+        "flexible_load_available_steps": [True, True],
+        "flexible_load_max_power_kw": 1,
+    }
+    first = optimize_battery_and_diesel_schedule(nominal, config, **kwargs)
+    second = optimize_battery_and_diesel_schedule(nominal, config, **kwargs)
+    assert first == second
+    assert first["scenario_count"] == 2
+    assert first["scenario_names"] == ["nominal", "grid_outage"]
+    assert first["model_scope"]["robust_optimization_enabled"] is True
+    assert first["model_scope"]["same_decisions_replayed_across_all_scenarios"] is True
+    scenario_rows = first["recommendation"]["scenario_results"]
+    assert set(scenario_rows) == {"nominal", "grid_outage"}
+    for metric in (
+        "estimated_energy_cost", "unmet_load_kwh",
+        "renewable_curtailed_kwh", "battery_throughput_kwh",
+    ):
+        assert first["recommendation"]["objectives"][metric] == pytest.approx(
+            max(row["objectives"][metric] for row in scenario_rows.values())
+        )
+    assert sum(first["recommendation"]["flexible_load_power_kw"]) == pytest.approx(1)
+
+
+def test_joint_optimizer_rejects_misaligned_robust_scenario_horizon():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import optimize_battery_and_diesel_schedule
+
+    nominal = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True], diesel_available=[True],
+    )
+    other = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 1], grid_price_per_kwh=[0.2, 0.2],
+        grid_available=[True, True], diesel_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=1,
+        battery=BatterySpec(capacity_kwh=4, max_charge_kw=1, max_discharge_kw=1),
+        diesel=DieselSpec(rated_power_kw=2, variable_cost_per_kwh=0.2),
+    )
+    with pytest.raises(OptimizationError, match="same horizon"):
+        optimize_battery_and_diesel_schedule(
+            nominal, config, additional_scenarios={"longer": other},
+        )
