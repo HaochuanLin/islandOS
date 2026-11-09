@@ -888,3 +888,56 @@ def test_joint_optimizer_includes_grid_export_caps_in_shared_decision_vector():
             for row in first["recommendation"]["scenario_results"].values()
         )
     )
+
+
+def test_robustness_reports_critical_service_and_flexible_shedding_separately():
+    from optimization.energy_system_optimizer import evaluate_schedule_robustness
+
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=3,
+    )
+    scenario = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[3],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        critical_load_kw=[2],
+    )
+    result = evaluate_schedule_robustness(
+        {"constrained_grid": scenario},
+        config,
+        flexible_load_kw=[2],
+    )
+    row = result["scenario_results"]["constrained_grid"]
+    diagnostic = row["shortfall_diagnostics"][0]
+    assert row["critical_service_shortfall"] is False
+    assert row["flexible_load_shed"] is True
+    assert diagnostic["service_classification"] == "flexible_load_shed_only"
+    assert "flexible_load_shed_before_critical_load" in diagnostic["likely_limiting_factors"]
+    assert result["all_scenarios_fully_served"] is False
+    assert result["all_critical_loads_fully_served"] is True
+    assert result["robust_critical_service_feasible"] is True
+    assert result["worst_case_critical_unmet_load_kwh"] == pytest.approx(0)
+    assert result["worst_case_flexible_load_shed_kwh"] == pytest.approx(1)
+
+
+def test_robustness_replays_explicit_grid_export_caps_and_flexible_load_profile():
+    from optimization.energy_system_optimizer import evaluate_schedule_robustness
+
+    config = EnergySystemConfig(
+        pv_rated_kw=8, wind_rated_kw=0, grid_import_limit_kw=0,
+        grid_export_limit_kw=6,
+    )
+    scenario = EnergySystemInputs(
+        pv_generation_kw=[8], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        grid_export_price_per_kwh=[0.05], grid_export_available=[True],
+    )
+    result = evaluate_schedule_robustness(
+        {"sunny": scenario},
+        config,
+        flexible_load_kw=[2],
+        grid_export_power_setpoint_kw=[3],
+    )
+    dispatch = result["scenario_results"]["sunny"]["dispatch"]
+    assert dispatch["rows"][0]["load_kw"] == pytest.approx(3)
+    assert dispatch["rows"][0]["grid_export_kw"] == pytest.approx(3)
+    assert dispatch["summary"]["flexible_load_energy_kwh"] == pytest.approx(2)
