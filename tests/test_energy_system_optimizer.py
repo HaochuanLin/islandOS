@@ -871,6 +871,17 @@ def test_joint_optimizer_includes_grid_export_caps_in_shared_decision_vector():
     assert first["decision_variables"]["grid_export"].startswith("continuous")
     assert first["model_scope"]["grid_export_setpoint_optimized"] is True
     assert first["recommendation"]["dispatch"]["summary"]["grid_demand_charge"] >= 0
+    comparison = first["baseline_comparison"]
+    assert comparison["same_inputs_config_and_scenarios"] is True
+    assert comparison["flexible_load_profile_held_equal"] is True
+    assert set(comparison["policies"]) == {"battery_first", "grid_first"}
+    for policy in comparison["policies"].values():
+        assert set(policy["scenario_results"]) == {"nominal"}
+        assert policy["all_scenarios_passed_audit"] is True
+        assert set(policy["recommended_minus_baseline"]) == {
+            "estimated_energy_cost", "unmet_load_kwh",
+            "renewable_curtailed_kwh", "battery_throughput_kwh",
+        }
     assert first["recommendation"]["objectives"]["estimated_energy_cost"] == pytest.approx(
         max(
             row["objectives"]["estimated_energy_cost"]
