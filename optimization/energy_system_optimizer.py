@@ -929,3 +929,119 @@ def optimize_battery_and_diesel_schedule(
             "not_a_controller": True,
         },
     }
+
+
+def evaluate_schedule_robustness(
+    scenarios: dict[str, EnergySystemInputs],
+    config: EnergySystemConfig,
+    *,
+    battery_power_setpoint_kw: Sequence[float] | None = None,
+    diesel_commitment_schedule: Sequence[bool] | None = None,
+    diesel_power_setpoint_kw: Sequence[float] | None = None,
+    unmet_load_tolerance_kwh: float = 1e-8,
+) -> dict:
+    """Evaluate one common dispatch schedule against multiple operating scenarios.
+
+    The same decision schedule is replayed against every scenario. This is a
+    robustness screen, not a stochastic optimizer: it reports scenario-specific
+    outcomes and worst-case exposure without claiming scenario probabilities.
+    """
+    if not isinstance(scenarios, dict) or not scenarios:
+        raise OptimizationError("scenarios must be a non-empty mapping")
+    if (
+        isinstance(unmet_load_tolerance_kwh, bool)
+        or not isinstance(unmet_load_tolerance_kwh, (int, float))
+        or not math.isfinite(float(unmet_load_tolerance_kwh))
+        or unmet_load_tolerance_kwh < 0
+    ):
+        raise OptimizationError("unmet_load_tolerance_kwh must be finite and non-negative")
+
+    normalized_scenarios: list[tuple[str, EnergySystemInputs]] = []
+    for name, scenario_inputs in scenarios.items():
+        if not isinstance(name, str) or not name.strip():
+            raise OptimizationError("scenario names must be non-empty strings")
+        if not isinstance(scenario_inputs, EnergySystemInputs):
+            raise OptimizationError(f"scenario {name!r} must use EnergySystemInputs")
+        normalized_scenarios.append((name, scenario_inputs))
+
+    horizons = {len(item.load_kw) for _, item in normalized_scenarios}
+    if len(horizons) != 1:
+        raise OptimizationError("all robustness scenarios must use the same horizon length")
+    horizon = next(iter(horizons))
+    if horizon < 1:
+        raise OptimizationError("robustness scenario horizon must contain at least one step")
+
+    for name, values in (
+        ("battery_power_setpoint_kw", battery_power_setpoint_kw),
+        ("diesel_commitment_schedule", diesel_commitment_schedule),
+        ("diesel_power_setpoint_kw", diesel_power_setpoint_kw),
+    ):
+        if values is not None and (isinstance(values, (str, bytes)) or len(values) != horizon):
+            raise OptimizationError(f"{name} must contain exactly {horizon} values")
+
+    results: dict[str, dict] = {}
+    objective_keys = (
+        "estimated_energy_cost",
+        "unmet_load_kwh",
+        "renewable_curtailed_kwh",
+        "battery_throughput_kwh",
+    )
+    for name, original in normalized_scenarios:
+        replay = EnergySystemInputs(
+            pv_generation_kw=original.pv_generation_kw,
+            wind_generation_kw=original.wind_generation_kw,
+            load_kw=original.load_kw,
+            grid_price_per_kwh=original.grid_price_per_kwh,
+            grid_available=original.grid_available,
+            diesel_available=original.diesel_available,
+            grid_export_price_per_kwh=original.grid_export_price_per_kwh,
+            grid_export_available=original.grid_export_available,
+            diesel_fuel_delivery_liters=original.diesel_fuel_delivery_liters,
+            battery_power_setpoint_kw=battery_power_setpoint_kw,
+            diesel_commitment_schedule=diesel_commitment_schedule,
+            diesel_power_setpoint_kw=diesel_power_setpoint_kw,
+        )
+        dispatch = dispatch_energy_system(replay, config)
+        audit = _audit(dispatch)
+        summary = dispatch["summary"]
+        objectives = {
+            key: float(summary[key]) for key in objective_keys
+        }
+        results[name] = {
+            "physical_audit_passed": audit["passed"],
+            "audit": audit,
+            "objectives": objectives,
+            "service_shortfall": objectives["unmet_load_kwh"] > unmet_load_tolerance_kwh,
+            "summary": summary,
+            "dispatch": dispatch,
+        }
+
+    physically_valid = all(row["physical_audit_passed"] for row in results.values())
+    fully_served = all(not row["service_shortfall"] for row in results.values())
+    worst_case = {
+        key: max(row["objectives"][key] for row in results.values())
+        for key in objective_keys
+    }
+    mean_case = {
+        key: sum(row["objectives"][key] for row in results.values()) / len(results)
+        for key in objective_keys
+    }
+    return {
+        "scenario_count": len(results),
+        "horizon_steps": horizon,
+        "scenario_results": results,
+        "all_physical_audits_passed": physically_valid,
+        "all_scenarios_fully_served": fully_served,
+        "robust_service_feasible": physically_valid and fully_served,
+        "worst_case_objectives": worst_case,
+        "mean_case_objectives": mean_case,
+        "model_scope": {
+            "same_schedule_replayed_in_every_scenario": True,
+            "scenario_probabilities_assumed": False,
+            "worst_case_is_not_a_probability_quantile": True,
+            "uses_shared_physical_dispatch_engine": True,
+            "offline_robustness_screen_only": True,
+            "not_a_stochastic_or_global_robust_optimizer": True,
+            "not_a_controller": True,
+        },
+    }
