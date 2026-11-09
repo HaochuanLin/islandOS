@@ -246,3 +246,41 @@ This closes an important robustness-screening gap, but it is not yet a
 multi-scenario optimizer that searches one globally robust schedule, nor does
 it replace a full infeasibility proof for arbitrary network constraints.
 Results are offline decision support only.
+
+
+## Flexible-load time-shift scheduling (experimental)
+
+`optimize_flexible_load_schedule` allocates one aggregate shiftable electrical
+load across a caller-supplied availability window. The caller specifies the
+required energy (kWh), per-step maximum power (kW), and a boolean availability
+series. Every candidate conserves the requested flexible energy within a
+numerical tolerance, obeys the per-step power/window bounds, and is evaluated
+through the shared physical dispatch engine against cost, unmet load,
+renewable curtailment, and battery throughput.
+
+Example:
+
+```python
+from optimization.energy_system_optimizer import optimize_flexible_load_schedule
+
+result = optimize_flexible_load_schedule(
+    inputs,
+    energy_system_config,
+    energy_required_kwh=120.0,
+    available_steps=flexible_load_window,
+    max_power_kw=20.0,
+    population_size=32,
+    generations=20,
+    seed=20261109,
+)
+print(result["recommendation"]["flexible_load_power_kw"])
+```
+
+This is a bounded single-aggregate-load scheduling increment. Any battery or
+diesel schedules already present in the input are held fixed; they are not
+jointly optimized with the flexible-load profile. The current physical model
+also does not prioritize critical load over flexible load or automatically
+shed flexible demand when supply is insufficient. Unmet load remains visible
+as an objective and must be reviewed. Per-device task precedence, minimum
+run/off times, process constraints, and multi-load coordination remain future
+work. The search is stochastic and does not guarantee a global optimum.
