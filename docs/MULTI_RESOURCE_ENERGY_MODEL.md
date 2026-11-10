@@ -10,7 +10,7 @@ offline model for hourly (or fixed-step) energy balancing across:
 - optional grid exports with a separately configured export-power limit, explicit
   feed-in price series, and grid-availability gating;
 - diesel generation with rated and minimum-stable power limits, explicit availability,
-  optional ramp-up limit, variable energy cost, per-start/per-stop costs,
+  optional ramp-up and ramp-down limits, variable energy cost, per-start/per-stop costs,
   and optional finite fuel-inventory accounting;
 - renewable curtailment and unmet load.
 
