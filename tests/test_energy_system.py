@@ -1217,3 +1217,62 @@ def test_diesel_minimum_times_reject_negative_configuration(field):
             rated_power_kw=5, variable_cost_per_kwh=0.3,
             **{field: -0.5},
         )
+
+
+def test_diesel_minimum_times_do_not_assume_unknown_pre_horizon_off_duration():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_down_time_hours=3,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 1], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_commitment_schedule=[False, True],
+    )
+    # The off interval begins at the horizon boundary; its true prior duration
+    # is unknown, so it must not be rejected as a short minimum-down interval.
+    result = dispatch_energy_system(inputs, config)
+    assert result["time_steps"] == 2
+
+
+def test_diesel_minimum_times_do_not_reject_run_continuing_past_horizon():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_up_time_hours=4, min_down_time_hours=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 1], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_commitment_schedule=[True, True],
+    )
+    # The unit remains committed at the horizon boundary; no shutdown is
+    # requested inside the modeled interval, so its eventual run length is unknown.
+    result = dispatch_energy_system(inputs, config)
+    assert result["time_steps"] == 2
+
+
+def test_diesel_minimum_times_are_not_applied_without_explicit_commitment_schedule():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_up_time_hours=10, min_down_time_hours=10,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0], grid_available=[False],
+        diesel_available=[True],
+    )
+    # Minimum commitment durations are schedule constraints, not an implicit
+    # unit-commitment optimizer or inferred control policy.
+    result = dispatch_energy_system(inputs, config)
+    assert result["time_steps"] == 1
