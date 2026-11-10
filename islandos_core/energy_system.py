@@ -623,14 +623,14 @@ def dispatch_energy_system(
             grid_kw = import_grid(deficit)
             deficit -= grid_kw
             diesel_kw = run_diesel(deficit)
-            deficit -= diesel_kw
+            # Diesel output is reconciled with demand after the dispatch branches.
         elif deficit > 0:
             grid_kw = import_grid(deficit)
             deficit -= grid_kw
             discharge_kw = discharge(deficit)
             deficit -= discharge_kw
             diesel_kw = run_diesel(deficit)
-            deficit -= diesel_kw
+            # Diesel output is reconciled with demand after the dispatch branches.
 
         # A running unit must respect its ramp-down floor even if grid or
         # battery dispatch has already covered the current load.
@@ -640,7 +640,7 @@ def dispatch_energy_system(
             surplus += diesel_kw - deficit
             deficit = 0.0
         else:
-            deficit -= diesel_kw
+            # Diesel output is reconciled with demand after the dispatch branches.
         # A unit that supplied the previous step but receives no dispatch now
         # has stopped, even when the residual load was already covered by grid
         # or battery and run_diesel() was therefore never called.
