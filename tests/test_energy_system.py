@@ -1189,3 +1189,31 @@ def test_diesel_minimum_up_and_down_time_accepts_valid_commitment_schedule():
     )
     result = dispatch_energy_system(inputs, config)
     assert result["time_steps"] == 6
+
+
+def test_diesel_minimum_times_respect_subhourly_dispatch_interval():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        dt_hours=0.5,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_up_time_hours=1.0,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[1, 0], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_commitment_schedule=[True, False],
+    )
+    with pytest.raises(EnergyModelError, match="minimum up time violated"):
+        dispatch_energy_system(inputs, config)
+
+
+@pytest.mark.parametrize("field", ["min_up_time_hours", "min_down_time_hours"])
+def test_diesel_minimum_times_reject_negative_configuration(field):
+    with pytest.raises(EnergyModelError, match=field):
+        DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            **{field: -0.5},
+        )
