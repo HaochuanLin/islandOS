@@ -610,6 +610,15 @@ def dispatch_energy_system(
                 )
             return target
 
+        if (
+            previous_diesel_kw > 0 and config.diesel
+            and config.diesel.ramp_down_kw_per_hour is not None
+            and (not diesel_ok[t] or not diesel_commitment[t])
+        ):
+            raise EnergyModelError(
+                f"diesel ramp-down limit conflicts with forced stop at timestep {t}"
+            )
+
         if deficit > 0 and requested_setpoint is not None:
             discharge_kw = discharge(min(deficit, max(0.0, requested_setpoint)))
             deficit -= discharge_kw
