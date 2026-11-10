@@ -15,3 +15,4 @@ def test_multi_resource_energy_system_lab_renders_default_synthetic_case():
     assert not app.exception
     assert len(app.metric) >= 2
     assert any("Multi-Resource Energy System Lab" in item.value for item in app.title)
+    assert any("Ramp-down limit" in item.label for item in app.slider)
