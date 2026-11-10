@@ -649,7 +649,7 @@ def dispatch_energy_system(
             surplus += diesel_kw - deficit
             deficit = 0.0
         else:
-            # Diesel output is reconciled with demand after the dispatch branches.
+            deficit -= diesel_kw
         # A unit that supplied the previous step but receives no dispatch now
         # has stopped, even when the residual load was already covered by grid
         # or battery and run_diesel() was therefore never called.
