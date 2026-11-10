@@ -535,26 +535,51 @@ def dispatch_energy_system(
         def run_diesel(remaining_kw: float) -> float:
             nonlocal diesel_started, diesel_stopped
             spec = config.diesel
-            if not spec or not diesel_ok[t] or not diesel_commitment[t] or remaining_kw <= 0:
+            if not spec:
+                return 0.0
+            if not diesel_ok[t] or not diesel_commitment[t]:
+                if previous_diesel_kw > 0 and spec.ramp_down_kw_per_hour is not None:
+                    raise EnergyModelError(
+                        f"diesel ramp-down limit conflicts with forced stop at timestep {t}"
+                    )
                 diesel_stopped = previous_diesel_kw > 0
                 return 0.0
-            # Do not start (or remain online) below the confirmed stable minimum.
-            if remaining_kw + 1e-9 < spec.min_stable_power_kw:
-                diesel_stopped = previous_diesel_kw > 0
+            if remaining_kw <= 0 and previous_diesel_kw <= 0:
                 return 0.0
-            target = min(remaining_kw, spec.rated_power_kw)
+            if previous_diesel_kw <= 0 and remaining_kw + 1e-9 < spec.min_stable_power_kw:
+                return 0.0
+            target = min(max(0.0, remaining_kw), spec.rated_power_kw)
             if diesel_setpoints is not None:
                 target = min(target, diesel_setpoints[t])
+            ramp_down_floor = 0.0
+            if previous_diesel_kw > 0 and spec.ramp_down_kw_per_hour is not None:
+                ramp_down_floor = max(
+                    spec.min_stable_power_kw,
+                    previous_diesel_kw - spec.ramp_down_kw_per_hour * config.dt_hours,
+                )
+                if diesel_setpoints is not None and diesel_setpoints[t] + 1e-9 < ramp_down_floor:
+                    raise EnergyModelError(
+                        f"diesel_power_setpoint_kw violates ramp-down limit at timestep {t}"
+                    )
+                target = max(target, ramp_down_floor)
             if target <= 0 or target + 1e-9 < spec.min_stable_power_kw:
                 diesel_stopped = previous_diesel_kw > 0
                 return 0.0
             if fuel_remaining_liters is not None:
                 available_fuel = fuel_remaining_liters
                 if _diesel_fuel_rate_lph(spec, spec.min_stable_power_kw) * config.dt_hours > available_fuel + 1e-9:
+                    if ramp_down_floor > 0:
+                        raise EnergyModelError(
+                            f"insufficient diesel fuel to respect ramp-down limit at timestep {t}"
+                        )
                     diesel_stopped = previous_diesel_kw > 0
                     return 0.0
                 if _diesel_fuel_rate_lph(spec, target) * config.dt_hours > available_fuel + 1e-9:
-                    low, high = spec.min_stable_power_kw, target
+                    if ramp_down_floor > 0 and _diesel_fuel_rate_lph(spec, ramp_down_floor) * config.dt_hours > available_fuel + 1e-9:
+                        raise EnergyModelError(
+                            f"insufficient diesel fuel to respect ramp-down limit at timestep {t}"
+                        )
+                    low, high = max(spec.min_stable_power_kw, ramp_down_floor), target
                     for _ in range(60):
                         midpoint = (low + high) / 2
                         if _diesel_fuel_rate_lph(spec, midpoint) * config.dt_hours <= available_fuel:
@@ -570,6 +595,12 @@ def dispatch_energy_system(
                 diesel_started = target > 0
             elif spec.ramp_up_kw_per_hour is not None and target > previous_diesel_kw:
                 target = min(target, previous_diesel_kw + spec.ramp_up_kw_per_hour * config.dt_hours)
+            if previous_diesel_kw > 0 and spec.ramp_down_kw_per_hour is not None:
+                target = max(
+                    target,
+                    previous_diesel_kw - spec.ramp_down_kw_per_hour * config.dt_hours,
+                    spec.min_stable_power_kw,
+                )
             return target
 
         if deficit > 0 and requested_setpoint is not None:
