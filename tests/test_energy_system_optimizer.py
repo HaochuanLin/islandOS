@@ -1098,3 +1098,30 @@ def test_joint_optimizer_rejects_unimplemented_diesel_ramp_down_search():
     )
     with pytest.raises(OptimizationError, match="does not yet generate ramp-down/minimum-time"):
         optimize_battery_and_diesel_schedule(inputs, config)
+
+
+
+def test_joint_optimizer_rejects_minimum_up_down_time_until_search_supports_it():
+    from islandos_core.energy_system import DieselSpec
+    from optimization.energy_system_optimizer import (
+        OptimizationError,
+        optimize_battery_and_diesel_schedule,
+    )
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0], wind_generation_kw=[0], load_kw=[1],
+        grid_price_per_kwh=[0.2], grid_available=[True],
+        diesel_available=[True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=5,
+        battery=BatterySpec(
+            capacity_kwh=4, max_charge_kw=2, max_discharge_kw=2,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_up_time_hours=2,
+        ),
+    )
+    with pytest.raises(OptimizationError, match="ramp-down/minimum-time feasible"):
+        optimize_battery_and_diesel_schedule(inputs, config)
