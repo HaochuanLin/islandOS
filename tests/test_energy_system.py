@@ -1368,3 +1368,48 @@ def test_diesel_ramp_down_rate_must_be_positive():
             rated_power_kw=10, variable_cost_per_kwh=1,
             ramp_down_kw_per_hour=0,
         )
+
+
+
+def test_diesel_ramp_down_respects_subhourly_timestep_duration():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        dt_hours=0.5,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 0], wind_generation_kw=[0, 0, 0],
+        load_kw=[10, 8, 6], grid_price_per_kwh=[0, 0, 0],
+        grid_available=[False, False, False],
+        diesel_available=[True, True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert [row["diesel_generation_kw"] for row in result["rows"]] == pytest.approx([10, 8, 6])
+
+
+def test_diesel_ramp_down_surplus_can_be_exported():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        grid_export_limit_kw=5,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[10, 2], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False],
+        grid_export_price_per_kwh=[0.1, 0.1],
+        grid_export_available=[True, True],
+        diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    second = result["rows"][1]
+    assert second["diesel_generation_kw"] == pytest.approx(6)
+    assert second["grid_export_kw"] == pytest.approx(4)
+    assert second["renewable_curtailed_kw"] == pytest.approx(0)
+    assert second["energy_balance_residual_kw"] == pytest.approx(0)
