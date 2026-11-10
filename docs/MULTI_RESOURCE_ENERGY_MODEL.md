@@ -85,7 +85,9 @@ ramp-down limits constrain decreases in output. If a running generator must
 remain above current residual demand to respect its ramp-down limit, the excess
 is offered to battery charging, then permitted grid export, then curtailment.
 A forced availability or explicit commitment stop that conflicts with the
-configured ramp-down limit is rejected. Start/stop events and their fixed costs
+configured ramp-down limit is rejected. A shutdown is also rejected when the
+minimum stable output prevents a feasible step to zero under the configured
+ramp rate. Start/stop events and their fixed costs
 are recorded per timestep and included in estimated energy cost. Multiple
 diesel units are still rejected by the asset adapter until per-device
 commitment is supported.
