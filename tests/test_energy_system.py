@@ -1276,3 +1276,95 @@ def test_diesel_minimum_times_are_not_applied_without_explicit_commitment_schedu
     # unit-commitment optimizer or inferred control policy.
     result = dispatch_energy_system(inputs, config)
     assert result["time_steps"] == 1
+
+
+
+def test_diesel_ramp_down_creates_surplus_and_preserves_energy_balance():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[10, 2], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    rows = result["rows"]
+    assert [row["diesel_generation_kw"] for row in rows] == pytest.approx([10, 6])
+    assert rows[1]["renewable_curtailed_kw"] == pytest.approx(4)
+    assert rows[1]["unmet_load_kw"] == pytest.approx(0)
+    assert all(abs(row["energy_balance_residual_kw"]) < 1e-9 for row in rows)
+
+
+def test_diesel_ramp_down_surplus_is_charged_into_battery_before_curtailment():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        battery=BatterySpec(
+            capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+            initial_soc=0.2, min_soc=0.1, max_soc=0.9,
+            charge_efficiency=1.0, discharge_efficiency=1.0,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[10, 2], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    second = result["rows"][1]
+    assert second["diesel_generation_kw"] == pytest.approx(6)
+    assert second["battery_charge_kw"] == pytest.approx(4)
+    assert second["renewable_curtailed_kw"] == pytest.approx(0)
+    assert second["energy_balance_residual_kw"] == pytest.approx(0)
+
+
+def test_diesel_ramp_down_rejects_commitment_forced_stop():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[10, 0], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_commitment_schedule=[True, False],
+    )
+    with pytest.raises(EnergyModelError, match="ramp-down limit conflicts with forced stop"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_diesel_ramp_down_rejects_setpoint_below_physical_floor():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[10, 2], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_power_setpoint_kw=[10, 2],
+    )
+    with pytest.raises(EnergyModelError, match="violates ramp-down limit"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_diesel_ramp_down_rate_must_be_positive():
+    with pytest.raises(EnergyModelError, match="ramp_down_kw_per_hour"):
+        DieselSpec(
+            rated_power_kw=10, variable_cost_per_kwh=1,
+            ramp_down_kw_per_hour=0,
+        )
