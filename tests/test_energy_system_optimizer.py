@@ -1096,5 +1096,5 @@ def test_joint_optimizer_rejects_unimplemented_diesel_ramp_down_search():
             ramp_down_kw_per_hour=2,
         ),
     )
-    with pytest.raises(OptimizationError, match="does not yet generate ramp-down-feasible"):
+    with pytest.raises(OptimizationError, match="does not yet generate ramp-down/minimum-time"):
         optimize_battery_and_diesel_schedule(inputs, config)
