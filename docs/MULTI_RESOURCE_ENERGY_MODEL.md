@@ -80,11 +80,15 @@ Missing availability is rejected rather than silently assumed.
 A diesel unit starts only when the residual demand can accept at least its
 configured minimum stable output; otherwise that residual remains unmet rather
 than operating the generator below its declared stable limit. Optional ramp-up
-limits constrain upward changes after the initial stable startup point. Start/stop events and
-their fixed costs are recorded per timestep and included in estimated energy
-cost. Ramp-down dynamics are not yet modeled; when demand falls or availability
-is lost, the unit is stopped immediately. Multiple diesel units are still
-rejected by the asset adapter until per-device commitment is supported.
+limits constrain upward changes after the initial stable startup point; optional
+ramp-down limits constrain decreases in output. If a running generator must
+remain above current residual demand to respect its ramp-down limit, the excess
+is offered to battery charging, then permitted grid export, then curtailment.
+A forced availability or explicit commitment stop that conflicts with the
+configured ramp-down limit is rejected. Start/stop events and their fixed costs
+are recorded per timestep and included in estimated energy cost. Multiple
+diesel units are still rejected by the asset adapter until per-device
+commitment is supported.
 
 When both a confirmed initial tank inventory and a fuel-consumption rate are
 provided, diesel output is capped by the remaining fuel in each timestep.
