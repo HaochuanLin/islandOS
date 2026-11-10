@@ -112,6 +112,7 @@ class DieselSpec:
     variable_cost_per_kwh: float
     min_stable_power_kw: float = 0.0
     ramp_up_kw_per_hour: float | None = None
+    ramp_down_kw_per_hour: float | None = None
     # Commitment-run limits are validated only when an explicit schedule is supplied.
     # The pre-horizon state and any run continuing beyond the horizon are unknown.
     min_up_time_hours: float = 0.0
@@ -134,6 +135,10 @@ class DieselSpec:
             _number("diesel ramp_up_kw_per_hour", self.ramp_up_kw_per_hour)
             if self.ramp_up_kw_per_hour <= 0:
                 raise EnergyModelError("diesel ramp_up_kw_per_hour must be > 0 when specified")
+        if self.ramp_down_kw_per_hour is not None:
+            _number("diesel ramp_down_kw_per_hour", self.ramp_down_kw_per_hour)
+            if self.ramp_down_kw_per_hour <= 0:
+                raise EnergyModelError("diesel ramp_down_kw_per_hour must be > 0 when specified")
         has_constant_fuel_rate = self.fuel_consumption_l_per_kwh is not None
         has_fuel_curve = self.fuel_curve_liters_per_hour is not None
         if has_constant_fuel_rate and has_fuel_curve:
@@ -301,8 +306,10 @@ def dispatch_energy_system(
     loading, optional ramp-up after startup, and per-start/per-stop costs are
     modeled explicitly. Minimum up/down durations are checked against completed
     runs in an explicit commitment schedule; unknown pre-horizon state and a
-    run still active at the horizon boundary are not inferred. Ramp-down,
-    degradation-cost, and network constraints are not modeled.
+    run still active at the horizon boundary are not inferred. Ramp-down-limited
+    output may create surplus, which is routed to battery charging, export, or
+    curtailment. Forced shutdowns that conflict with a configured ramp-down
+    limit are rejected. Degradation-cost and network constraints are not modeled.
     """
     if policy not in {"battery_first", "grid_first"}:
         raise EnergyModelError("policy must be 'battery_first' or 'grid_first'")
@@ -609,7 +616,7 @@ def dispatch_energy_system(
             grid_kw = import_grid(deficit)
             deficit -= grid_kw
             diesel_kw = run_diesel(deficit)
-            deficit -= diesel_kw
+            # Diesel output is reconciled with demand after the dispatch branches.
         elif deficit > 0 and active_policy == "battery_first":
             discharge_kw = discharge(deficit)
             deficit -= discharge_kw
@@ -625,11 +632,35 @@ def dispatch_energy_system(
             diesel_kw = run_diesel(deficit)
             deficit -= diesel_kw
 
+        # A running unit must respect its ramp-down floor even if grid or
+        # battery dispatch has already covered the current load.
+        if previous_diesel_kw > 0 and diesel_kw <= 0 and diesel_ok[t] and diesel_commitment[t]:
+            diesel_kw = run_diesel(0.0)
+        if diesel_kw > deficit:
+            surplus += diesel_kw - deficit
+            deficit = 0.0
+        else:
+            deficit -= diesel_kw
         # A unit that supplied the previous step but receives no dispatch now
         # has stopped, even when the residual load was already covered by grid
         # or battery and run_diesel() was therefore never called.
         if previous_diesel_kw > 0 and diesel_kw <= 0 and not diesel_stopped:
             diesel_stopped = True
+        # Charge surplus created by ramp-down-limited diesel output after the
+        # normal renewable-surplus charging pass above.
+        if battery and surplus > 0:
+            soc_room_kwh = (battery.max_soc - soc) * battery_effective_capacity_kwh
+            extra_charge_kw = min(
+                surplus, max(0.0, battery.max_charge_kw - charge_kw),
+                soc_room_kwh / (battery.charge_efficiency * config.dt_hours),
+            )
+            if extra_charge_kw > 0:
+                charge_kw += extra_charge_kw
+                surplus -= extra_charge_kw
+                soc += (
+                    extra_charge_kw * config.dt_hours * battery.charge_efficiency
+                    / battery_effective_capacity_kwh
+                )
         if diesel_started and config.diesel:
             totals["diesel_start_count"] += 1
             totals["diesel_start_cost"] += config.diesel.start_cost_per_start
