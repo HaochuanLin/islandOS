@@ -545,7 +545,11 @@ def dispatch_energy_system(
             if not spec:
                 return 0.0
             if not diesel_ok[t] or not diesel_commitment[t]:
-                if previous_diesel_kw > 0 and spec.ramp_down_kw_per_hour is not None:
+                if (
+                    previous_diesel_kw > 0
+                    and spec.ramp_down_kw_per_hour is not None
+                    and previous_diesel_kw - spec.ramp_down_kw_per_hour * config.dt_hours > 1e-9
+                ):
                     raise EnergyModelError(
                         f"diesel ramp-down limit conflicts with forced stop at timestep {t}"
                     )
@@ -620,6 +624,8 @@ def dispatch_energy_system(
             previous_diesel_kw > 0 and config.diesel
             and config.diesel.ramp_down_kw_per_hour is not None
             and (not diesel_ok[t] or not diesel_commitment[t])
+            and previous_diesel_kw
+                - config.diesel.ramp_down_kw_per_hour * config.dt_hours > 1e-9
         ):
             raise EnergyModelError(
                 f"diesel ramp-down limit conflicts with forced stop at timestep {t}"
