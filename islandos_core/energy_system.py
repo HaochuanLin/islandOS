@@ -573,10 +573,11 @@ def dispatch_energy_system(
                 # A running unit may shut down only when the ramp-down floor
                 # has reached zero; otherwise it must remain above stable load.
                 if previous_diesel_kw > 0 and ramp_down_floor > 1e-9:
-                    target = spec.min_stable_power_kw
-                else:
-                    diesel_stopped = previous_diesel_kw > 0
-                    return 0.0
+                    raise EnergyModelError(
+                        f"diesel minimum stable output prevents a feasible ramp-down shutdown at timestep {t}"
+                    )
+                diesel_stopped = previous_diesel_kw > 0
+                return 0.0
             if fuel_remaining_liters is not None:
                 available_fuel = fuel_remaining_liters
                 if _diesel_fuel_rate_lph(spec, spec.min_stable_power_kw) * config.dt_hours > available_fuel + 1e-9:
