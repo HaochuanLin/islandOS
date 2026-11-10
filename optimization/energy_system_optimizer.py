@@ -682,6 +682,11 @@ def optimize_battery_and_diesel_schedule(
     """
     if config.battery is None or config.diesel is None:
         raise OptimizationError("both a configured battery and diesel unit are required")
+    if config.diesel.ramp_down_kw_per_hour is not None:
+        raise OptimizationError(
+            "joint battery-diesel search does not yet generate ramp-down-feasible "
+            "commitment schedules; use direct dispatch with an explicit feasible schedule"
+        )
     if inputs.diesel_available is None:
         raise OptimizationError("diesel_available must be explicitly supplied")
     n = len(inputs.load_kw)
