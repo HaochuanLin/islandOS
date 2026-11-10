@@ -112,6 +112,8 @@ class DieselSpec:
     variable_cost_per_kwh: float
     min_stable_power_kw: float = 0.0
     ramp_up_kw_per_hour: float | None = None
+    # Commitment-run limits are validated only when an explicit schedule is supplied.
+    # The pre-horizon state and any run continuing beyond the horizon are unknown.
     min_up_time_hours: float = 0.0
     min_down_time_hours: float = 0.0
     start_cost_per_start: float = 0.0
@@ -297,8 +299,10 @@ def dispatch_energy_system(
     grid export limit when the grid is available. Remaining surplus is curtailed.
     Export requires an explicit feed-in price series. Diesel minimum stable
     loading, optional ramp-up after startup, and per-start/per-stop costs are
-    modeled explicitly. Ramp-down, degradation-cost, and network constraints
-    are not modeled.
+    modeled explicitly. Minimum up/down durations are checked against completed
+    runs in an explicit commitment schedule; unknown pre-horizon state and a
+    run still active at the horizon boundary are not inferred. Ramp-down,
+    degradation-cost, and network constraints are not modeled.
     """
     if policy not in {"battery_first", "grid_first"}:
         raise EnergyModelError("policy must be 'battery_first' or 'grid_first'")
