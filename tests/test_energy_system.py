@@ -1135,3 +1135,57 @@ def test_critical_load_cannot_exceed_base_load():
     )
     with pytest.raises(EnergyModelError, match="cannot exceed base load"):
         dispatch_energy_system(inputs, config)
+
+
+def test_diesel_minimum_up_time_rejects_early_shutdown_in_commitment_schedule():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_up_time_hours=3,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0, 0], wind_generation_kw=[0, 0, 0],
+        load_kw=[1, 1, 0], grid_price_per_kwh=[0, 0, 0],
+        grid_available=[False, False, False], diesel_available=[True] * 3,
+        diesel_commitment_schedule=[True, True, False],
+    )
+    with pytest.raises(EnergyModelError, match="minimum up time violated"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_diesel_minimum_down_time_rejects_early_restart_after_stop():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_down_time_hours=2,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0] * 4, wind_generation_kw=[0] * 4,
+        load_kw=[1, 0, 0, 1], grid_price_per_kwh=[0] * 4,
+        grid_available=[False] * 4, diesel_available=[True] * 4,
+        diesel_commitment_schedule=[True, False, True, True],
+    )
+    with pytest.raises(EnergyModelError, match="minimum down time violated"):
+        dispatch_energy_system(inputs, config)
+
+
+def test_diesel_minimum_up_and_down_time_accepts_valid_commitment_schedule():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=5, variable_cost_per_kwh=0.3,
+            min_up_time_hours=2, min_down_time_hours=2,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0] * 6, wind_generation_kw=[0] * 6,
+        load_kw=[1, 1, 0, 0, 1, 1], grid_price_per_kwh=[0] * 6,
+        grid_available=[False] * 6, diesel_available=[True] * 6,
+        diesel_commitment_schedule=[True, True, False, False, True, True],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert result["time_steps"] == 6
