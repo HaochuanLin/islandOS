@@ -7,7 +7,7 @@ The Streamlit page `pages/5_Energy_System_Lab.py` exposes the shared energy-syst
 - Adjustable PV and wind nameplate capacities and renewable profiles.
 - Adjustable essential-load and grid-tariff multipliers.
 - Optional battery storage with SOC and power limits.
-- Optional diesel backup with minimum stable output, post-start ramp-up limit, and start/stop costs.
+- Optional diesel backup with minimum stable output, post-start ramp-up and ramp-down limits, and start/stop costs.
 - Side-by-side comparison of the `battery_first` and `grid_first` rule-based policies.
 - Hourly dispatch audit, energy-balance residual, unmet load, and downloadable CSV/JSON reports.
 
