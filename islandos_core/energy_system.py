@@ -561,7 +561,7 @@ def dispatch_energy_system(
             ramp_down_floor = 0.0
             if previous_diesel_kw > 0 and spec.ramp_down_kw_per_hour is not None:
                 ramp_down_floor = max(
-                    spec.min_stable_power_kw,
+                    0.0,
                     previous_diesel_kw - spec.ramp_down_kw_per_hour * config.dt_hours,
                 )
                 if diesel_setpoints is not None and diesel_setpoints[t] + 1e-9 < ramp_down_floor:
@@ -570,8 +570,13 @@ def dispatch_energy_system(
                     )
                 target = max(target, ramp_down_floor)
             if target <= 0 or target + 1e-9 < spec.min_stable_power_kw:
-                diesel_stopped = previous_diesel_kw > 0
-                return 0.0
+                # A running unit may shut down only when the ramp-down floor
+                # has reached zero; otherwise it must remain above stable load.
+                if previous_diesel_kw > 0 and ramp_down_floor > 1e-9:
+                    target = spec.min_stable_power_kw
+                else:
+                    diesel_stopped = previous_diesel_kw > 0
+                    return 0.0
             if fuel_remaining_liters is not None:
                 available_fuel = fuel_remaining_liters
                 if _diesel_fuel_rate_lph(spec, spec.min_stable_power_kw) * config.dt_hours > available_fuel + 1e-9:
