@@ -185,14 +185,17 @@ weight as a measured replacement cost.
 The shared dispatch input now accepts an optional horizon-aligned
 `diesel_power_setpoint_kw` series. Each request is capped by residual load,
 the generator rating, confirmed availability/commitment, minimum stable load,
-ramp-up behavior, and available fuel. A request below minimum stable output
+ramp-up/ramp-down behavior, and available fuel. A request below minimum stable output
 keeps the unit off rather than forcing an unstable partial-load point. The
 requested set-point is retained in each audit row and the run scope metadata.
 
-This is an input contract for explicit schedules; it does not yet mean the
-optimizer searches diesel kW set-points. Ramp-down and minimum up/down-time
-constraints remain outside the physical model. The interface is offline
-planning only and cannot command a real generator.
+This is an input contract for explicit schedules; it does not by itself mean
+the optimizer searches diesel kW set-points. The physical engine enforces
+configured ramp-down limits, including surplus routing and rejection of
+incompatible forced stops. The joint optimizer currently rejects ramp-down or
+minimum up/down-time configurations because its stochastic commitment generator
+does not yet construct schedules that satisfy those constraints. The interface
+is offline planning only and cannot command a real generator.
 
 
 ## Joint continuous diesel power and commitment optimization
@@ -205,7 +208,10 @@ rated power, fuel inventory, and start/stop costs before a candidate can enter
 the feasible Pareto archive. The recommendation and Pareto rows expose the
 requested diesel kW schedule for audit.
 
-This does not add ramp-down or minimum up/down-time constraints, and the
+The physical dispatch engine now supports optional ramp-down constraints, but
+this joint optimizer deliberately rejects such configurations until its
+candidate generator can produce ramp-down-feasible schedules. Minimum up/down
+time constraints are also not yet supported by the joint search, and the
 heuristic is not a global optimum. A requested diesel set-point is not a
 control command. All results remain offline decision support.
 
@@ -225,8 +231,11 @@ commitment, minimum stable output, ramp-up, rated power, fuel inventory,
 and start/stop costs. The selected next-generation genomes retain exactly
 these three decision schedules; the diesel power schedule is not duplicated.
 
-The method remains a bounded stochastic heuristic, not a guaranteed global
-optimum. Ramp-down and minimum up/down-time constraints are not yet modeled.
+The physical dispatch engine supports optional ramp-down limits, but this
+joint optimizer rejects configurations that enable ramp-down or minimum
+up/down-time constraints until the candidate generator can construct feasible
+commitment schedules. The method remains a bounded stochastic heuristic,
+not a guaranteed global optimum.
 
 ## Multi-scenario schedule robustness and shortfall diagnosis
 
