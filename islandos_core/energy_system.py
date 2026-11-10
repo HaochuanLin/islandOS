@@ -112,6 +112,8 @@ class DieselSpec:
     variable_cost_per_kwh: float
     min_stable_power_kw: float = 0.0
     ramp_up_kw_per_hour: float | None = None
+    min_up_time_hours: float = 0.0
+    min_down_time_hours: float = 0.0
     start_cost_per_start: float = 0.0
     stop_cost_per_stop: float = 0.0
     fuel_consumption_l_per_kwh: float | None = None
@@ -122,7 +124,8 @@ class DieselSpec:
 
     def __post_init__(self) -> None:
         for name in ("rated_power_kw", "variable_cost_per_kwh",
-                     "min_stable_power_kw", "start_cost_per_start",
+                     "min_stable_power_kw", "min_up_time_hours",
+                     "min_down_time_hours", "start_cost_per_start",
                      "stop_cost_per_stop"):
             _number(f"diesel {name}", getattr(self, name))
         if self.ramp_up_kw_per_hour is not None:
@@ -345,6 +348,29 @@ def dispatch_energy_system(
             raise EnergyModelError(f"diesel_commitment_schedule must contain exactly {n} boolean values")
     else:
         diesel_commitment = [True] * n
+    if inputs.diesel_commitment_schedule is not None and config.diesel is not None:
+        # Validate completed commitment runs. The horizon is assumed to begin
+        # with the unit off, but its pre-horizon off duration is unknown, so the
+        # first off run is not treated as a completed minimum-down interval.
+        spec = config.diesel
+        run_start = 0
+        for index in range(1, n + 1):
+            if index == n or diesel_commitment[index] != diesel_commitment[run_start]:
+                run_state = diesel_commitment[run_start]
+                run_hours = (index - run_start) * config.dt_hours
+                if index < n:
+                    required = spec.min_up_time_hours if run_state else spec.min_down_time_hours
+                    # Do not apply minimum-down time to the initial off segment:
+                    # the actual time spent off before this horizon is unknown.
+                    if not run_state and run_start == 0:
+                        required = 0.0
+                    if run_hours + 1e-9 < required:
+                        state_name = "up" if run_state else "down"
+                        raise EnergyModelError(
+                            f"diesel minimum {state_name} time violated: "
+                            f"{run_hours:g} h < {required:g} h before step {index}"
+                        )
+                run_start = index
     if any(len(values) != n for values in (pv, wind, price, export_price, fuel_deliveries)):
         raise EnergyModelError("all numeric input series must have equal lengths")
     if battery_setpoints is not None and len(battery_setpoints) != n:
