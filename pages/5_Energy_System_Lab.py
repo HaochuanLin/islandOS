@@ -58,7 +58,7 @@ with st.sidebar:
         disabled=not diesel_enabled,
     )
     diesel_ramp_down = st.slider(
-        "Ramp-down limit (kW/h)", 1, 40, 12, 1,
+        "Ramp-down limit (kW/h)", 1, 100, 50, 1,
         disabled=not diesel_enabled,
     )
     diesel_variable_cost = st.number_input(
