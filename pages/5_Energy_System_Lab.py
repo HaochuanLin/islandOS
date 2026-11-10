@@ -57,6 +57,10 @@ with st.sidebar:
         "Ramp-up limit after startup (kW/h)", 1, 40, 12, 1,
         disabled=not diesel_enabled,
     )
+    diesel_ramp_down = st.slider(
+        "Ramp-down limit (kW/h)", 1, 40, 12, 1,
+        disabled=not diesel_enabled,
+    )
     diesel_variable_cost = st.number_input(
         "Diesel non-fuel variable cost (currency/kWh)",
         min_value=0.0, value=1.45, step=0.05, disabled=not diesel_enabled,
@@ -120,6 +124,7 @@ diesel = (
         variable_cost_per_kwh=float(diesel_variable_cost),
         min_stable_power_kw=float(min(diesel_minimum, diesel_capacity)),
         ramp_up_kw_per_hour=float(diesel_ramp),
+        ramp_down_kw_per_hour=float(diesel_ramp_down),
         start_cost_per_start=float(diesel_start_cost),
         stop_cost_per_stop=float(diesel_stop_cost),
     )
