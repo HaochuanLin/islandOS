@@ -1452,3 +1452,23 @@ def test_diesel_ramp_down_rejects_shutdown_blocked_by_minimum_stable_output():
     )
     with pytest.raises(EnergyModelError, match="minimum stable output prevents a feasible ramp-down shutdown"):
         dispatch_energy_system(inputs, config)
+
+
+
+def test_diesel_ramp_down_allows_forced_stop_when_one_step_rate_is_sufficient():
+    config = EnergySystemConfig(
+        pv_rated_kw=0, wind_rated_kw=0, grid_import_limit_kw=0,
+        diesel=DieselSpec(
+            rated_power_kw=20, variable_cost_per_kwh=1.0,
+            min_stable_power_kw=2, ramp_down_kw_per_hour=4,
+        ),
+    )
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0, 0], wind_generation_kw=[0, 0],
+        load_kw=[2, 0], grid_price_per_kwh=[0, 0],
+        grid_available=[False, False], diesel_available=[True, True],
+        diesel_commitment_schedule=[True, False],
+    )
+    result = dispatch_energy_system(inputs, config)
+    assert [row["diesel_generation_kw"] for row in result["rows"]] == pytest.approx([2, 0])
+    assert result["rows"][1]["diesel_stopped"] is True
