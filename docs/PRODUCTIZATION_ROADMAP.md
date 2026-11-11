@@ -1,78 +1,97 @@
-# islandOS 产品化路线图（无现场数据阶段）
+# IslandOS Productization Roadmap
 
-> 本文是产品规划，不是现场验证结论。当前版本属于仿真与决策支持原型；合成数据、公开天气数据和用户录入参数必须分别标注，不能包装成电厂/社区实测数据。
+**Product definition:** IslandOS is an AI-assisted, simulation-first energy and resource coordination decision-support platform for energy-constrained regions and distributed infrastructure.
 
-## 目标客户与首个切口
+**Product promise:** From Energy Data to Intelligent Decisions.
 
-**先解决一个窄而可验证的问题：** 在离网/弱网微电网中，评估可再生能源富余电量是否有机会被柔性负荷（首期以反渗透淡化为例）利用，同时量化关键负荷、淡水服务、弃电和设备约束之间的权衡。
+## Four-step product workflow
 
-优先探索两类用户：
-- 微电网项目开发商、能源服务商、设计院/工程顾问：需要早期方案比较、参数敏感性分析和可复现的技术论证。
-- 海岛社区运营方或供水/能源管理单位：需要讨论供电与淡水服务的情景工具；现场试点前必须由其提供或确认输入参数。
+1. **INPUT** — organize energy supply, demand, assets, resource requirements, constraints, data quality, and provenance.
+2. **PREDICT** — estimate future changes in relevant supply, demand, prices, availability, and system state, with uncertainty where supported.
+3. **OPTIMIZE** — compare feasible operating and investment alternatives against explicit technical, service, economic, and environmental objectives.
+4. **DECIDE** — communicate trade-offs, risks, assumptions, and recommendations for human review, with an auditable record.
 
-不把首个版本定位为实时控制器、设备安全系统或保证节省金额的产品。
+The four steps describe the user-facing product workflow, not the number of internal packages or services.
 
-## 没有真实数据时，仍然能做的 MVP
+## Scope and use-case discipline
 
-1. **可运行演示**：提供一条命令运行的固定场景，附示例输入、输出 CSV/JSON、图表和解释。
-2. **可审计输入**：每次运行保存场景配置、数据来源标签、单位、时间范围、参数、随机种子和软件版本。
-3. **可比较结果**：同一输入下比较“基线策略”和“柔性负荷策略”，报告弃电/可利用富余电量、关键负荷缺口、淡水需求缺口、储水边界和约束违规。
-4. **可信的边界说明**：将合成、公开、人工录入、预测和现场实测分开；缺失或不可信数据不得静默填零、外推或标成实测。
-5. **现场数据准备包**：提供 CSV 模板、字段字典、单位说明、数据质量报告和待客户确认的设备参数清单。
-6. **客户可读报告**：输出“假设—输入—策略—结果—限制—待验证事项”，避免只展示漂亮图表或单一收益数字。
+IslandOS is designed for energy-constrained regions and distributed infrastructure where energy systems interact with essential resources or flexible processes. Potential application families include remote communities, distributed energy infrastructure, microgrids, water and pumping infrastructure, and industrial or commercial facilities with flexible loads, storage, or resource constraints. These are target application families, not claims that every sector is currently supported or validated.
 
-## Gate 1：可信性门禁（当前优先级）
+The platform architecture is generic, but each customer engagement must select one bounded decision problem. RO desalination and the Nan'ao scenario remain early experimental examples, not the product identity, default customer, or limit of the platform.
 
-- [x] 传感器消息契约可以导入，基础格式/单位/质量/时间戳检查有回归测试。
-- [x] 过期、明显未来时间、非有限数、负值、未知信号、单位不符和缺失字段会被拒绝。
-- [x] 区分“格式有效”与“物理可行”：额定功率、储水容量、RO 最小运行时间等必须由场景/设备约束层验证，不能仅靠消息 schema。
-- [x] CI 的全量测试通过，仿真输出可复现（在 PR #46 的精确提交上四条工作流均通过；合并后主分支复验仍单独记录）。
-- [x] README 明确声明：没有现场数据时结果为模拟/公开数据实验，不代表已验证的现场性能。
+## Target users and decision value
 
-## 后续阶段与验收
+Potential users to investigate include energy service companies, microgrid developers, system integrators, infrastructure and facility operators, engineering consultants, project developers, and equipment solution providers. Customer discovery must distinguish the end user, decision owner, budget approver, and data owner.
 
-### Gate 2 — 可复现的客户演示
-- 一条命令运行固定演示并生成图表、CSV、JSON 和 Markdown 报告。
-- 固定输入和种子重复运行，关键指标一致。
-- 报告显示数据来源、关键假设、服务缺口和约束检查，而非只显示总收益。
+IslandOS should help answer: What is the baseline? Which inputs are trusted? What may change? Which operating or equipment alternatives are feasible? How do they compare in total cost, reliability, resource service, emissions, and operational burden? Which assumptions dominate? When is an option not worth pursuing?
 
-### Gate 3 — 试点准备（先影子分析，不控设备）
-- 和潜在用户访谈，确认他们愿意提供哪些数据、决策周期、现有工作流和验收指标。
-- 形成现场数据清单：时间戳/时区、风光出力、负荷、弃电、淡水需求、储水状态、设备铭牌/效率、维护和运行限制。
-- 用客户批准的数据做离线回放，并由现场工程师审查输入映射和结果。
-- 默认只读；不向 PLC/逆变器/泵/RO 设备发送控制命令。
+No savings, payback, or purchasing recommendation is valid without traceable site-specific inputs and disclosed assumptions.
 
-### Gate 4 — 付费验证
-- 在验证过的输入和明确范围下，先销售“可行性分析/方案比较/离线仿真报告”或小范围付费试点，而不是承诺未经验证的节省比例。
-- 交付物包含基线、假设、结果、敏感性、数据缺口和不确定性。
-- 任何 ROI 数字必须可追溯到客户确认的电价、弃电、设备成本、运维和实际运行边界。
+## Current maturity and evidence boundary
 
-## 客户发现：先问问题，不先推销结论
+| Stage | Current repository evidence | Not yet established |
+|---|---|---|
+| INPUT | CSV validation, selected data imports, signal/data contracts, device and telemetry experiments | Universal plug-and-play integration, one common schema across all experiments, production live integration |
+| PREDICT | Forecast baselines, water-demand forecast contracts, separate model experiments and chronological evaluation | Unified site-calibrated multi-signal forecasting, proven transfer accuracy, uncertainty consistently propagated into optimization |
+| OPTIMIZE | Integrated deterministic microgrid accounting baseline, rule-based screening, rolling-horizon and search experiments | Unified general multi-resource optimizer, comprehensive constraints for all assets, global optimum, validated savings |
+| DECIDE | Interactive Streamlit screening, charts, CSV exports, selected audit/provenance records, simple advice prototypes | Complete end-to-end recommendation console, customer-ready investment comparison, validated decision reports |
 
-建议和 5–10 位潜在用户进行探索性访谈（不是统计意义上的市场验证），询问：
-1. 他们当前怎样评估弃电、淡水供给和柔性负荷方案？
-2. 哪个决策最耗时、最难解释，或最缺数据？
-3. 他们能提供哪些小时级数据？数据由谁批准？
-4. 他们会用什么指标判断一份离线分析有价值？
-5. 哪些安全、采购、网络隔离和合规要求必须满足？
-6. 是否愿意为一次范围清晰的方案分析付费？什么交付物才值得付费？
+The public Streamlit app is an interactive research prototype, not a live operational system. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
 
-记录原话、角色和待验证假设；不要把礼貌性兴趣当作采购承诺。
+## Productization principles
 
-## 暂时不要做
+1. **One shared system model:** represent assets, energy/resource flows, constraints, and inventories consistently.
+2. **Evidence before claims:** identify source data, units, time range, assumptions, baseline, model version, and limitations.
+3. **Prediction is not optimization:** forecast outputs and uncertainty must be explicit downstream inputs; do not imply integration until tested.
+4. **Feasibility before ranking:** enforce critical-service and equipment constraints before ranking alternatives. Report infeasibility honestly.
+5. **Economics is first-class:** distinguish CAPEX, OPEX, maintenance, replacement, tariffs, fuel, and lifecycle assumptions. Report sensitivities and no-go conditions; do not manufacture ROI.
+6. **Human-supervised decisions:** recommendations support qualified review; no autonomous control or safety certification is implied.
+7. **Reusable core, bounded pilots:** build generic interfaces but validate one narrow use case at a time.
+8. **AI with a defined job:** prediction, uncertainty analysis, physical simulation, and optimization are the principal analytical value. An LLM may assist explanation, not replace physics or validation.
 
-- 不宣称已有电厂/社区部署、经验证的节省比例或真实闭环控制。
-- 在没有设备型号、寄存器映射、标定和现场授权时，不开发“通用即插即用”硬件接入。
-- 不把天气预测等同于风光出力/负荷预测。
-- 不急着扩展氢能、复杂优化器或大量设备类型，先把一个可解释的 RO 柔性负荷案例做扎实。
-- 不将合成数据伪装成现场数据，也不把 schema 通过称为安全认证。
+## Delivery phases and exit gates
 
-## 最小成功标准
+### Phase 1 — Product positioning and documentation alignment
+- Use the same definition and four-step workflow across README, repository description, blueprint, roadmap, and demos.
+- Distinguish external workflow from internal architecture.
+- Label capabilities implemented, experimental, planned, or long-term.
+- Keep RO/Nan'ao as bounded examples.
+- **Exit:** a new reader can explain what IslandOS is, how it works, what runs today, and what remains unbuilt without contradictory definitions.
 
-在向客户展示前，陌生人应能按照文档运行演示、复现结果、看懂每项指标、识别数据来源，并清楚知道哪些结论还需要现场数据验证。
+### Phase 2 — Unified system and data foundation
+- Standardize project/scenario configuration, timestamps, units, provenance, quality, asset identity, constraints, and inventories.
+- Define stable adapter and model-service interfaces; consolidate duplicate schemas.
+- Ensure hosted and future desktop interfaces call shared domain services.
+- **Exit:** one scenario is represented consistently across simulation, forecasting, optimization, and reporting.
 
-## Gate 1 当前结果（2026-10-23）
+### Phase 3 — Connected prediction, simulation, and optimization
+- Standardize forecast contracts, chronological evaluation, model identity, horizon, uncertainty, and provenance.
+- Feed forecast scenarios into a common physical evaluator.
+- Evaluate candidates with consistent physics and hard constraints; compare transparent baselines.
+- **Exit:** a reproducible run connects validated inputs, forecasts, physical evaluation, and candidate comparison without hidden future information.
 
-Gate 1 的软件侧输入完整性、时间戳/质量/单位校验、基础物理边界、回归测试和 CI 检查已经实现。它**不等于**现场数据验证：公开天气协变量、合成数据、人工录入数据与现场仪表数据仍需明确区分。Site readiness gate 的 `READY_FOR_OFFLINE_SCENARIO` 仅表示指定字段通过程序的基础检查，不构成传感器认证、工程安全审批或运行授权。
+### Phase 4 — Customer economics and decision reporting
+- Establish a customer-confirmed baseline and decision question.
+- Model CAPEX, OPEX, tariffs, fuel, maintenance, replacements, and relevant lifecycle assumptions.
+- Report total-cost comparisons, sensitivity, service effects, assumptions, and explicit no-go/not-enough-evidence outcomes.
+- **Exit:** a qualified reviewer can reproduce the comparison and understand why an option is or is not justified.
 
-本轮额外收紧了本地表单：默认来源改为“人工抄表”，场景开始时间不再预填过期日期，时区范围和最大数据年龄都必须通过校验。
+### Phase 5 — Bounded pilot and supervised workflow
+- Select one customer segment and decision problem based on discovery, data access, and economic relevance.
+- Begin with offline replay and read-only shadow mode; obtain site-engineer review.
+- Define security, safety, approval, rollback, and acceptance requirements before any control integration.
+- **Exit:** a named decision owner accepts the methodology and deliverables against pre-agreed criteria.
+
+### Phase 6 — Product interface and deployment maturity
+- Guide users through INPUT → PREDICT → OPTIMIZE → DECIDE.
+- Surface data quality, maturity, assumptions, uncertainty, infeasibility, and audit history.
+- Keep interfaces on shared domain services; add operational controls according to validated user needs.
+- **Exit:** independent users can complete a bounded workflow and reproduce its report without developer assistance.
+
+## Customer discovery
+
+Ask which recurring decision is costly or difficult; who experiences it, owns it, approves budget, and controls data; what baseline process costs; which data can be provided and under what permissions; what technical/commercial/security constraints apply; what deliverable changes a decision; and what evidence would justify paying for a bounded analysis or pilot. Record roles, exact statements, evidence, and unresolved assumptions. Interest is not purchase intent.
+
+## Explicit non-claims
+
+IslandOS does not currently claim universal plug-and-play integration, a validated multi-signal forecast service for arbitrary sites, globally optimal scheduling, certified safety, autonomous learning, live equipment control, commercial deployment, field-proven savings, or bankable ROI. Each requires separate technical, site, and commercial evidence.
