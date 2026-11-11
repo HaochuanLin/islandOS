@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+<title id="title">IslandOS four-step decision workflow</title>
+<desc id="desc">Input data flows to prediction, optimization, and explainable decisions, with feedback from operational outcomes to future inputs.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#eef2ff"/></linearGradient>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#64748b"/></marker>
+  <style>
+    .h{font:700 28px Arial,sans-serif;fill:#0f172a}.sub{font:16px Arial,sans-serif;fill:#475569}
+    .n{font:700 16px Arial,sans-serif;letter-spacing:1.4px}.t{font:700 23px Arial,sans-serif;fill:#0f172a}
+    .d{font:16px Arial,sans-serif;fill:#334155}.small{font:14px Arial,sans-serif;fill:#64748b}
+  </style>
+</defs>
+<rect width="1200" height="560" rx="28" fill="url(#bg)"/>
+<text x="600" y="62" text-anchor="middle" class="h">From energy data to intelligent decisions</text>
+<text x="600" y="94" text-anchor="middle" class="sub">A common product workflow — capabilities mature at different stages</text>
+<g transform="translate(42 150)">
+  <rect width="252" height="230" rx="20" fill="#dbeafe" stroke="#60a5fa" stroke-width="2"/>
+  <circle cx="38" cy="40" r="20" fill="#2563eb"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">1</text>
+  <text x="30" y="92" class="n" fill="#1d4ed8">INPUT</text><text x="30" y="130" class="t">Understand the system</text>
+  <text x="30" y="165" class="d">Energy supply • demand</text><text x="30" y="190" class="d">Assets • constraints • resources</text>
+</g>
+<path d="M300 265 H330" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(340 150)">
+  <rect width="252" height="230" rx="20" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+  <circle cx="38" cy="40" r="20" fill="#059669"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">2</text>
+  <text x="30" y="92" class="n" fill="#047857">PREDICT</text><text x="30" y="130" class="t">Anticipate changes</text>
+  <text x="30" y="165" class="d">Supply • demand • prices</text><text x="30" y="190" class="d">Forecasts and uncertainty</text>
+</g>
+<path d="M598 265 H628" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(638 150)">
+  <rect width="252" height="230" rx="20" fill="#ede9fe" stroke="#a78bfa" stroke-width="2"/>
+  <circle cx="38" cy="40" r="20" fill="#7c3aed"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">3</text>
+  <text x="30" y="92" class="n" fill="#6d28d9">OPTIMIZE</text><text x="30" y="130" class="t">Compare alternatives</text>
+  <text x="30" y="165" class="d">Operating constraints</text><text x="30" y="190" class="d">Cost • reliability • resource use</text>
+</g>
+<path d="M896 265 H926" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(936 150)">
+  <rect width="222" height="230" rx="20" fill="#ffedd5" stroke="#fb923c" stroke-width="2"/>
+  <circle cx="38" cy="40" r="20" fill="#ea580c"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">4</text>
+  <text x="30" y="92" class="n" fill="#c2410c">DECIDE</text><text x="30" y="130" class="t">Support action</text>
+  <text x="30" y="165" class="d">Explainable options</text><text x="30" y="190" class="d">Human review • feedback</text>
+</g>
+<path d="M1045 394 V438 H165 V394" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
+<text x="600" y="475" text-anchor="middle" class="sub">Operational outcomes and new measurements feed the next decision cycle</text>
+<text x="600" y="520" text-anchor="middle" class="small">Conceptual product workflow — not a claim that every stage is fully implemented or deployed</text>
+</svg>
