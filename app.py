@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """IslandOS interactive, simulation-first decision-support prototype.
 
+The hosted interface currently exposes a bounded energy–water screening module; it does not yet implement the complete four-step IslandOS workflow.
 This is a planning/simulation interface, not a live microgrid controller.
 Uploaded site data is used as supplied; the built-in demo is synthetic.
 """
