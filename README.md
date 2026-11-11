@@ -36,16 +36,24 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 
 **No site data yet?** The built-in example is synthetic and intended for exploration. Uploaded data is analyzed as supplied; the app does not establish that it is accurate or representative of a real site.
 
-## What is implemented today
+## Current implementation and maturity
 
-- Interactive Streamlit application for energy–water strategy screening.
-- Deterministic integrated microgrid simulation baseline covering selected PV, wind, battery, grid, backup, RO, and water-inventory accounting.
-- Rule-based dispatch comparisons and hourly audit outputs.
-- Experimental rolling-horizon and candidate-search workflows.
-- Forecasting baselines, plug-in interfaces, and separate model evaluation experiments.
-- CSV input validation, selected data-import workflows, and reproducible synthetic benchmarks.
+**Implemented on main**
+- Public interactive Streamlit application for energy–water strategy screening.
+- Deterministic integrated microgrid accounting baseline for selected PV, wind, battery, grid, backup, RO, and water-inventory flows.
+- Rule-based strategy comparisons, hourly audit outputs, CSV validation, and selected data-import workflows.
 
-These capabilities do not yet form a validated, fully forecast-driven end-to-end decision system. Forecasting, optimization, and telemetry experiments have distinct scopes; see [Methods and maturity](docs/PRODUCT_SYSTEM_BLUEPRINT.md) and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md).
+**Experimental**
+- Rolling-horizon dispatch and candidate-search workflows.
+- Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
+- Read-only telemetry and selected integration prototypes.
+
+**Planned / not yet delivered as one workflow**
+- A unified, site-calibrated multi-signal forecasting service.
+- A general multi-resource optimizer that consistently consumes forecast uncertainty.
+- A complete end-to-end decision console with customer-ready economic comparisons.
+
+These capabilities do not yet form a validated, fully forecast-driven end-to-end decision system. Experimental scripts and integrations are not automatically part of the hosted app. See [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
 
 ## Quick start
 
@@ -93,11 +101,12 @@ Some legacy Python entry points remain in the repository root for compatibility 
 
 | Start with | What it covers |
 |---|---|
-| [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Product workflow, module boundaries, current implementation, and maturity gates |
+| [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Four-step product workflow, internal architecture mapping, current implementation, and maturity boundaries |
 | [Repository map](docs/REPOSITORY_MAP.md) | Where code, experiments, tests, and documentation live |
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
 | [Forecasting baseline](docs/SCENARIO_FORECASTING_BASELINE.md) | Current transparent forecast baseline and evaluation boundary |
+| [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) | Product phases, customer discovery, economics, and exit gates |
 | [Engineering maturity roadmap](docs/ENGINEERING_MATURITY_ROADMAP.md) | Evidence requirements and delivery gates |
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |
 
