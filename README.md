@@ -11,15 +11,19 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
 </p>
 
-IslandOS is a modular, **simulation-first decision-support platform**. It brings energy supply, demand, equipment, operating constraints, and resource requirements into a common workflow so users can examine future conditions, compare operating alternatives, and review explainable recommendations.
+IslandOS is an **AI-assisted, simulation-first energy and resource coordination decision-support platform** for energy-constrained regions and distributed infrastructure. It brings energy supply, demand, equipment, operating constraints, and resource requirements into a common workflow so users can examine future conditions, compare operating alternatives, and review explainable recommendations.
+
+Here, AI refers primarily to forecasting, uncertainty analysis, and optimization. Language models may assist with interaction or explanation, but do not replace data validation, physical models, or constraint enforcement.
 
 > **Current scope:** IslandOS is an early-stage research prototype. Its four-step workflow is the product direction; individual modules have different maturity levels. It is not a deployed plant controller, and it does not autonomously operate physical equipment.
 
 ## The four-step decision workflow
 
 <p align="center">
-  <img src="assets/islandos_decision_loop.svg" alt="IslandOS workflow: Input, Predict, Optimize, Decide" width="100%">
+  <img src="assets/islandos_decision_loop.svg" alt="IslandOS four-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
 </p>
+
+*The stage labels indicate current maturity. The diagram describes the intended product workflow, not a claim that all four stages are already integrated or deployed.*
 
 1. **INPUT** — organize energy, demand, asset, resource, and constraint data.
 2. **PREDICT** — estimate how selected supply, demand, or system signals may change. Current forecasting work includes baselines and separate model experiments; site accuracy is not established.
@@ -57,7 +61,7 @@ These capabilities do not yet form a validated, fully forecast-driven end-to-end
 
 ## Quick start
 
-Use a Python version supported by the repository dependencies; install the pinned requirements below.
+Use Python 3.10 or newer, then install the dependencies declared in `requirements.txt`.
 
 ```bash
 git clone https://github.com/HaochuanLin/islandOS.git
@@ -83,10 +87,11 @@ islandOS/
 ├── app.py                  # Streamlit application entry point
 ├── islandos_core/          # Shared system and simulation logic
 ├── optimization/           # Optimization algorithms
-├── experiments/             # Research experiments and benchmarks
+├── experiments/            # Research experiments and benchmarks
 ├── tools/                  # Command-line utilities
 ├── data/                   # Example data and input templates
-├── config/  configs/       # Example configurations
+├── config/                 # Example configurations
+├── configs/                # Additional configuration sets
 ├── islandos_sensors/       # Sensor and telemetry interfaces
 ├── pages/                  # Additional Streamlit pages
 ├── tests/                  # Automated tests

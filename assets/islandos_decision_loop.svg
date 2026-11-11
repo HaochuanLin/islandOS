@@ -1,46 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
-<title id="title">IslandOS four-step decision workflow</title>
-<desc id="desc">Input data flows to prediction, optimization, and explainable decisions, with feedback from operational outcomes to future inputs.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+<title id="title">IslandOS four-step energy and resource decision workflow</title>
+<desc id="desc">A four-stage workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE explains options for human review. A feedback loop returns operational outcomes and new measurements to future inputs. Each stage has a maturity label.</desc>
 <defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#eef2ff"/></linearGradient>
-  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#64748b"/></marker>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbfdff"/><stop offset="1" stop-color="#f1f6fc"/></linearGradient>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17345b" flood-opacity=".08"/></filter>
+  <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#7890ad"/></marker>
   <style>
-    .h{font:700 28px Arial,sans-serif;fill:#0f172a}.sub{font:16px Arial,sans-serif;fill:#475569}
-    .n{font:700 16px Arial,sans-serif;letter-spacing:1.4px}.t{font:700 23px Arial,sans-serif;fill:#0f172a}
-    .d{font:16px Arial,sans-serif;fill:#334155}.small{font:14px Arial,sans-serif;fill:#64748b}
+    .title{font:700 32px Inter,Arial,sans-serif;fill:#122b50}
+    .subtitle{font:16px Inter,Arial,sans-serif;fill:#5e718c}
+    .step{font:700 19px Inter,Arial,sans-serif;letter-spacing:1px}
+    .status{font:600 12px Inter,Arial,sans-serif}
+    .headline{font:700 19px Inter,Arial,sans-serif;fill:#183253}
+    .body{font:15px Inter,Arial,sans-serif;fill:#425873}
+    .out{font:600 11px Inter,Arial,sans-serif;letter-spacing:.5px;fill:#607792}
+    .foot{font:600 15px Inter,Arial,sans-serif;fill:#24446d}
+    .tiny{font:13px Inter,Arial,sans-serif;fill:#71839b}
   </style>
 </defs>
-<rect width="1200" height="560" rx="28" fill="url(#bg)"/>
-<text x="600" y="62" text-anchor="middle" class="h">From energy data to intelligent decisions</text>
-<text x="600" y="94" text-anchor="middle" class="sub">A common product workflow — capabilities mature at different stages</text>
-<g transform="translate(42 150)">
-  <rect width="252" height="230" rx="20" fill="#dbeafe" stroke="#60a5fa" stroke-width="2"/>
-  <circle cx="38" cy="40" r="20" fill="#2563eb"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">1</text>
-  <text x="30" y="92" class="n" fill="#1d4ed8">INPUT</text><text x="30" y="130" class="t">Understand the system</text>
-  <text x="30" y="165" class="d">Energy supply • demand</text><text x="30" y="190" class="d">Assets • constraints • resources</text>
-</g>
-<path d="M300 265 H330" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-<g transform="translate(340 150)">
-  <rect width="252" height="230" rx="20" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
-  <circle cx="38" cy="40" r="20" fill="#059669"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">2</text>
-  <text x="30" y="92" class="n" fill="#047857">PREDICT</text><text x="30" y="130" class="t">Anticipate changes</text>
-  <text x="30" y="165" class="d">Supply • demand • prices</text><text x="30" y="190" class="d">Forecasts and uncertainty</text>
-</g>
-<path d="M598 265 H628" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-<g transform="translate(638 150)">
-  <rect width="252" height="230" rx="20" fill="#ede9fe" stroke="#a78bfa" stroke-width="2"/>
-  <circle cx="38" cy="40" r="20" fill="#7c3aed"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">3</text>
-  <text x="30" y="92" class="n" fill="#6d28d9">OPTIMIZE</text><text x="30" y="130" class="t">Compare alternatives</text>
-  <text x="30" y="165" class="d">Operating constraints</text><text x="30" y="190" class="d">Cost • reliability • resource use</text>
-</g>
-<path d="M896 265 H926" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
-<g transform="translate(936 150)">
-  <rect width="222" height="230" rx="20" fill="#ffedd5" stroke="#fb923c" stroke-width="2"/>
-  <circle cx="38" cy="40" r="20" fill="#ea580c"/><text x="38" y="46" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="white">4</text>
-  <text x="30" y="92" class="n" fill="#c2410c">DECIDE</text><text x="30" y="130" class="t">Support action</text>
-  <text x="30" y="165" class="d">Explainable options</text><text x="30" y="190" class="d">Human review • feedback</text>
-</g>
-<path d="M1045 394 V438 H165 V394" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
-<text x="600" y="475" text-anchor="middle" class="sub">Operational outcomes and new measurements feed the next decision cycle</text>
-<text x="600" y="520" text-anchor="middle" class="small">Conceptual product workflow — not a claim that every stage is fully implemented or deployed</text>
+<rect width="1200" height="620" rx="24" fill="url(#bg)"/>
+<path d="M42 64 H260 M940 64 H1158" stroke="#c8d6e7" stroke-width="1.5"/>
+<text x="600" y="72" text-anchor="middle" class="title">From Energy Data to Intelligent Decisions</text>
+<text x="600" y="105" text-anchor="middle" class="subtitle">A unified workflow for forecasting, optimization and resource coordination</text>
+<!-- INPUT -->
+<g filter="url(#shadow)"><rect x="40" y="150" width="255" height="278" rx="18" fill="#fff" stroke="#a9c9f6" stroke-width="1.5"/><path d="M58 150 H277 Q295 150 295 168 V205 H40 V168 Q40 150 58 150Z" fill="#eaf2ff"/></g>
+<circle cx="70" cy="177" r="17" fill="#2e6fce"/><text x="70" y="183" text-anchor="middle" font-size="16" font-weight="700" fill="#fff">1</text><text x="98" y="184" class="step" fill="#245da9">INPUT</text>
+<rect x="190" y="164" width="90" height="25" rx="12.5" fill="#dceaff"/><text x="235" y="181" text-anchor="middle" class="status" fill="#245da9">FOUNDATION</text>
+<g transform="translate(144 225)" fill="none" stroke="#3678d3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="0" cy="8" rx="28" ry="10"/><path d="M-28 8 V40 C-28 53 28 53 28 40 V8 M-28 24 C-28 37 28 37 28 24"/><path d="M38 26 V48 M27 37 H49" stroke-width="5"/></g>
+<text x="167" y="303" text-anchor="middle" class="headline">Build a system picture</text><path d="M62 319 H273" stroke="#e1e9f3"/>
+<g class="body"><circle cx="69" cy="342" r="4" fill="#3678d3"/><text x="83" y="347">Energy supply &amp; demand</text><circle cx="69" cy="370" r="4" fill="#3678d3"/><text x="83" y="375">Assets &amp; constraints</text><circle cx="69" cy="398" r="4" fill="#3678d3"/><text x="83" y="403">Resources &amp; data quality</text></g><text x="62" y="418" class="out">OUTPUT · VALIDATED INPUTS</text>
+<!-- PREDICT -->
+<g filter="url(#shadow)"><rect x="340" y="150" width="255" height="278" rx="18" fill="#fff" stroke="#9bd9cd" stroke-width="1.5"/><path d="M358 150 H577 Q595 150 595 168 V205 H340 V168 Q340 150 358 150Z" fill="#e7f7f3"/></g>
+<circle cx="370" cy="177" r="17" fill="#159783"/><text x="370" y="183" text-anchor="middle" font-size="16" font-weight="700" fill="#fff">2</text><text x="398" y="184" class="step" fill="#087a6c">PREDICT</text>
+<rect x="486" y="164" width="92" height="25" rx="12.5" fill="#d9f2ec"/><text x="532" y="181" text-anchor="middle" class="status" fill="#087a6c">EXPERIMENTAL</text>
+<g transform="translate(468 236)" fill="none" stroke="#159783" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M-42 26 L-18 5 L0 17 L27 -14"/><path d="M12 -14 H27 V1"/><rect x="-40" y="37" width="12" height="13" rx="2"/><rect x="-14" y="28" width="12" height="22" rx="2"/><rect x="12" y="14" width="12" height="36" rx="2"/></g>
+<text x="467" y="303" text-anchor="middle" class="headline">Anticipate what comes next</text><path d="M362 319 H573" stroke="#e1e9f3"/>
+<g class="body"><circle cx="369" cy="342" r="4" fill="#159783"/><text x="383" y="347">Renewable generation</text><circle cx="369" cy="370" r="4" fill="#159783"/><text x="383" y="375">Demand &amp; prices</text><circle cx="369" cy="398" r="4" fill="#159783"/><text x="383" y="403">Scenarios &amp; uncertainty</text></g><text x="362" y="418" class="out">OUTPUT · FUTURE SCENARIOS</text>
+<!-- OPTIMIZE -->
+<g filter="url(#shadow)"><rect x="640" y="150" width="255" height="278" rx="18" fill="#fff" stroke="#c4b3f0" stroke-width="1.5"/><path d="M658 150 H877 Q895 150 895 168 V205 H640 V168 Q640 150 658 150Z" fill="#f0edfc"/></g>
+<circle cx="670" cy="177" r="17" fill="#7452c8"/><text x="670" y="183" text-anchor="middle" font-size="16" font-weight="700" fill="#fff">3</text><text x="698" y="184" class="step" fill="#6544b3">OPTIMIZE</text>
+<rect x="778" y="164" width="101" height="25" rx="12.5" fill="#e8e0fb"/><text x="828.5" y="181" text-anchor="middle" class="status" fill="#6544b3">IN PROGRESS</text>
+<g transform="translate(768 244)" fill="none" stroke="#7452c8" stroke-width="4" stroke-linecap="round"><path d="M-42 -15 H42 M-42 0 H42 M-42 15 H42"/><circle cx="-18" cy="-15" r="7" fill="#fff"/><circle cx="18" cy="0" r="7" fill="#fff"/><circle cx="-4" cy="15" r="7" fill="#fff"/></g>
+<text x="767" y="303" text-anchor="middle" class="headline">Evaluate feasible alternatives</text><path d="M662 319 H873" stroke="#e1e9f3"/>
+<g class="body"><circle cx="669" cy="342" r="4" fill="#7452c8"/><text x="683" y="347">Equipment constraints</text><circle cx="669" cy="370" r="4" fill="#7452c8"/><text x="683" y="375">Cost &amp; reliability</text><circle cx="669" cy="398" r="4" fill="#7452c8"/><text x="683" y="403">Resource-use trade-offs</text></g><text x="662" y="418" class="out">OUTPUT · FEASIBLE OPTIONS</text>
+<!-- DECIDE -->
+<g filter="url(#shadow)"><rect x="940" y="150" width="220" height="278" rx="18" fill="#fff" stroke="#f2c39e" stroke-width="1.5"/><path d="M958 150 H1142 Q1160 150 1160 168 V205 H940 V168 Q940 150 958 150Z" fill="#fff2e7"/></g>
+<circle cx="970" cy="177" r="17" fill="#dc742c"/><text x="970" y="183" text-anchor="middle" font-size="16" font-weight="700" fill="#fff">4</text><text x="998" y="184" class="step" fill="#b65b20">DECIDE</text>
+<rect x="1070" y="164" width="76" height="25" rx="12.5" fill="#ffe5d1"/><text x="1108" y="181" text-anchor="middle" class="status" fill="#b65b20">PROTOTYPE</text>
+<g transform="translate(1050 242)" fill="none" stroke="#dc742c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="-25" y="-25" width="50" height="58" rx="7"/><path d="M-10 -31 H10 V-19 H-10Z M-13 5 L-3 15 L15 -5"/></g>
+<text x="1050" y="303" text-anchor="middle" class="headline">Support decisions</text><path d="M962 319 H1138" stroke="#f0e4d9"/>
+<g class="body"><circle cx="969" cy="342" r="4" fill="#dc742c"/><text x="983" y="347">Explain options</text><circle cx="969" cy="370" r="4" fill="#dc742c"/><text x="983" y="375">Risks &amp; assumptions</text><circle cx="969" cy="398" r="4" fill="#dc742c"/><text x="983" y="403">Human review &amp; feedback</text></g><text x="962" y="418" class="out">OUTPUT · AUDITABLE REVIEW</text>
+<!-- directional arrows -->
+<path d="M302 285 H329" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/><path d="M602 285 H629" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/><path d="M902 285 H929" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/>
+<!-- feedback loop -->
+<path d="M1050 440 V499 Q1050 515 1034 515 H180 Q164 515 164 499 V440" fill="none" stroke="#6d89aa" stroke-width="2.2" marker-end="url(#arrow)"/>
+<circle cx="405" cy="490" r="13" fill="#e6eef8" stroke="#b8cbe1"/><path d="M399 488 A7 7 0 0 1 411 484 M411 484 L411 479 M411 484 L406 484 M411 492 A7 7 0 0 1 399 496 M399 496 L399 501 M399 496 L404 496" fill="none" stroke="#42658f" stroke-width="1.7" stroke-linecap="round"/>
+<text x="710" y="496" text-anchor="middle" class="foot">Operational feedback · New measurements · Updated assumptions</text>
+<path d="M42 535 H1158" stroke="#d5e0ed"/><text x="600" y="562" text-anchor="middle" class="tiny">Conceptual product workflow — implementation maturity varies by stage</text><text x="600" y="595" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#19365e">IslandOS</text>
 </svg>
