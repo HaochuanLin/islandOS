@@ -61,7 +61,7 @@ These capabilities do not yet form a validated, fully forecast-driven end-to-end
 
 ## Quick start
 
-Use a Python version supported by the repository dependencies; install the pinned requirements below.
+Use Python 3.10 or newer, then install the dependencies declared in `requirements.txt`.
 
 ```bash
 git clone https://github.com/HaochuanLin/islandOS.git
@@ -87,7 +87,7 @@ islandOS/
 ├── app.py                  # Streamlit application entry point
 ├── islandos_core/          # Shared system and simulation logic
 ├── optimization/           # Optimization algorithms
-├── experiments/             # Research experiments and benchmarks
+├── experiments/            # Research experiments and benchmarks
 ├── tools/                  # Command-line utilities
 ├── data/                   # Example data and input templates
 ├── config/                 # Example configurations
