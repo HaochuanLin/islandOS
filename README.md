@@ -30,7 +30,7 @@ The workflow is designed to be extensible across use cases such as remote microg
 
 ## Try the interactive demo
 
-<badge color="success">Public demo</badge> **[Open IslandOS on Streamlit](https://islandos.streamlit.app/)** — an interactive planning and simulation prototype.
+**[Open the public IslandOS demo](https://islandos.streamlit.app/)** — an interactive planning and simulation prototype.
 
 You can explore the built-in synthetic scenario or upload hourly data, adjust selected equipment and storage assumptions, compare operating strategies, inspect hourly outcomes, and export results.
 
@@ -49,7 +49,7 @@ These capabilities do not yet form a validated, fully forecast-driven end-to-end
 
 ## Quick start
 
-Requirements: Python 3.10+ (use the repository's pinned dependencies for the supported environment).
+Use a Python version supported by the repository dependencies; install the pinned requirements below.
 
 ```bash
 git clone https://github.com/HaochuanLin/islandOS.git
