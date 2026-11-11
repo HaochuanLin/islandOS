@@ -25,6 +25,10 @@ Use the interactive app to explore energy–water dispatch strategies, adjust RO
 
 Experimental pilot scenario: Nan’ao emergency desalination case. This is a bounded demonstration scenario, not the IslandOS product identity or technical boundary. Its assumptions are scenario inputs, not measured site data. The generic app and integrated microgrid model are designed independently of this pilot.
 
+## Repository map
+
+The project is organized by responsibility: `islandos_core/` contains shared domain logic, `optimization/` contains optimization algorithms, `experiments/` contains research workflows, `tools/` contains command-line utilities, `tests/` contains automated checks, and `docs/` contains technical documentation. The root also retains a few compatibility entry points used by the app and existing commands. See the [Repository Map](docs/REPOSITORY_MAP.md) for a visual directory guide and explanation of the layout.
+
 ## Integrated system model
 
 - **Forecast-to-screening microgrid baseline:** the interactive Microgrid screening page creates a 168-hour synthetic history, applies a seasonal-naive forecast to PV, wind, essential load, and water demand, and passes those forecast series into the common physical model. It also reports chronological replay errors on synthetic history. This is a transparent benchmark, not a trained model or site-accuracy claim; see [Scenario Forecasting Baseline](docs/SCENARIO_FORECASTING_BASELINE.md).
