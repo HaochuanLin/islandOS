@@ -52,7 +52,7 @@
 <!-- directional arrows -->
 <path d="M302 285 H329" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/><path d="M602 285 H629" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/><path d="M902 285 H929" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/>
 <!-- feedback loop -->
-<path d="M1050 440 V474 Q1050 490 1034 490 H180 Q164 490 164 474 V440" fill="none" stroke="#6d89aa" stroke-width="2.2" marker-end="url(#arrow)"/>
+<path d="M1050 440 V499 Q1050 515 1034 515 H180 Q164 515 164 499 V440" fill="none" stroke="#6d89aa" stroke-width="2.2" marker-end="url(#arrow)"/>
 <circle cx="405" cy="490" r="13" fill="#e6eef8" stroke="#b8cbe1"/><path d="M399 488 A7 7 0 0 1 411 484 M411 484 L411 479 M411 484 L406 484 M411 492 A7 7 0 0 1 399 496 M399 496 L399 501 M399 496 L404 496" fill="none" stroke="#42658f" stroke-width="1.7" stroke-linecap="round"/>
 <text x="710" y="496" text-anchor="middle" class="foot">Operational feedback · New measurements · Updated assumptions</text>
 <path d="M42 535 H1158" stroke="#d5e0ed"/><text x="600" y="562" text-anchor="middle" class="tiny">Conceptual product workflow — implementation maturity varies by stage</text><text x="600" y="595" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#19365e">IslandOS</text>
