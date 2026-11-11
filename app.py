@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""islandOS interactive energy-water strategy screening app.
+"""IslandOS interactive, simulation-first decision-support prototype.
 
 This is a planning/simulation interface, not a live microgrid controller.
 Uploaded site data is used as supplied; the built-in demo is synthetic.
@@ -40,8 +40,8 @@ from ro_costing import ROCostRates, calculate_ro_operating_cost
 from ro_historical_baseline import reconstruct_historical_ro_cost
 
 st.set_page_config(
-    page_title="islandOS | Energy-Water Planner",
-    page_icon="🌊",
+    page_title="IslandOS | Decision Lab",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -115,8 +115,8 @@ def stable_signature(payload: dict) -> str:
 
 
 with st.sidebar:
-    st.markdown("## 🌊 islandOS")
-    st.caption("Island energy + water planning")
+    st.markdown("## ⚡ IslandOS")
+    st.caption("Energy & resource decision support")
     page = st.radio(
         "Navigate",
         ["Overview", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
@@ -136,22 +136,24 @@ if page == "Overview":
     st.markdown(
         """
         <div class="hero">
-          <h1>Plan energy. Protect essential services. Make water.</h1>
-          <p>Explore how flexible desalination could fit around renewable-energy availability,
-          electricity costs, water demand, and operating constraints.</p>
+          <h1>From energy data to intelligent decisions.</h1>
+          <p>Organize system inputs, examine future conditions, compare feasible alternatives,
+          and review explainable recommendations.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
     st.info(
-        "This first web MVP runs the repository's existing strategy-comparison model. "
-        "The built-in demo is synthetic; no real-island performance is implied."
+        "This public research prototype currently exposes an energy–water screening module. "
+        "The broader IslandOS product workflow is INPUT → PREDICT → OPTIMIZE → DECIDE; "
+        "the hosted app does not yet implement that complete end-to-end workflow. "
+        "The built-in demo is synthetic, not measured site data."
     )
     c1, c2, c3 = st.columns(3)
     c1.metric("Strategy policies", "5", help="Baseline plus four RO operating policies")
     c2.metric("Input format", "Hourly CSV", help="Timestamped, aligned site time series")
     c3.metric("Output", "CSV + charts", help="Summary metrics and timestep-level audit")
-    st.subheader("What is implemented now vs. the next optimization layer")
+    st.subheader("Current module: energy–water strategy screening")
     existing_col, future_col = st.columns(2)
     with existing_col:
         st.markdown(
@@ -166,7 +168,7 @@ if page == "Overview":
             "The optimizer searches candidate hourly RO schedules and retains non-dominated "
             "feasible solutions. It is a model-based search, not machine learning trained on field data."
         )
-    st.subheader("What this prototype helps you compare")
+    st.subheader("What the current module helps you compare")
     left, right = st.columns(2)
     with left:
         st.markdown(
@@ -188,7 +190,7 @@ if page == "Overview":
             - How do minimum run-time and rated power affect operation?
             """
         )
-    st.subheader("Read-only RO screening preview")
+    st.subheader("Example decision support: read-only RO screening")
     st.caption(
         "Manual/virtual inputs only. This isolated heuristic preview does not read plant instruments, "
         "change the strategy simulator, or send equipment commands."
@@ -263,7 +265,7 @@ if page == "Overview":
                     "surplus-only heuristic. The recommendation is not an optimizer or operating instruction."
                 )
 
-    st.subheader("Recommended workflow")
+    st.subheader("Try the current screening module")
     st.markdown(
         "1. Open **Strategy simulator** and run the labelled synthetic demo, or upload a site CSV.\n"
         "2. Set RO power, specific energy consumption, tank capacity, and run-time assumptions.\n"
@@ -278,7 +280,7 @@ if page == "Overview":
     )
 
 elif page == "Strategy simulator":
-    st.title("Energy-water strategy simulator")
+    st.title("Current module: energy–water strategy simulator")
     st.write("Run a transparent screening comparison using a demo dataset or your own aligned CSV.")
     source = st.radio("Data source", ["Synthetic demo (illustrative)", "Upload site CSV"], horizontal=True)
     uploaded = None
