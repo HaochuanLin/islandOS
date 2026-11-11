@@ -50,7 +50,7 @@
 <text x="1050" y="303" text-anchor="middle" class="headline">Support decisions</text><path d="M962 319 H1138" stroke="#f0e4d9"/>
 <g class="body"><circle cx="969" cy="342" r="4" fill="#dc742c"/><text x="983" y="347">Explain options</text><circle cx="969" cy="370" r="4" fill="#dc742c"/><text x="983" y="375">Risks &amp; assumptions</text><circle cx="969" cy="398" r="4" fill="#dc742c"/><text x="983" y="403">Human review &amp; feedback</text></g><text x="962" y="418" class="out">OUTPUT · AUDITABLE REVIEW</text>
 <!-- directional arrows -->
-<path d="M302 285 H329 M602 285 H629 M902 285 H929" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/>
+<path d="M302 285 H329" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/><path d="M602 285 H629" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/><path d="M902 285 H929" stroke="#7890ad" stroke-width="3" marker-end="url(#arrow)"/>
 <!-- feedback loop -->
 <path d="M1050 440 V474 Q1050 490 1034 490 H180 Q164 490 164 474 V440" fill="none" stroke="#6d89aa" stroke-width="2.2" marker-end="url(#arrow)"/>
 <circle cx="405" cy="490" r="13" fill="#e6eef8" stroke="#b8cbe1"/><path d="M399 488 A7 7 0 0 1 411 484 M411 484 L411 479 M411 484 L406 484 M411 492 A7 7 0 0 1 399 496 M399 496 L399 501 M399 496 L404 496" fill="none" stroke="#42658f" stroke-width="1.7" stroke-linecap="round"/>
