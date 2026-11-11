@@ -20,7 +20,7 @@ Here, AI refers primarily to forecasting, uncertainty analysis, and optimization
 ## The four-step decision workflow
 
 <p align="center">
-  <img src="assets/islandos_workflow_2026.svg" alt="IslandOS four-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
+  <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS four-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
 </p>
 
 *The stage labels indicate current maturity. The diagram describes the intended product workflow, not a claim that all four stages are already integrated or deployed.*
