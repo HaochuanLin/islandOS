@@ -40,6 +40,7 @@ from islandos_core.virtual_instrument import make_virtual_reading
 from ro_costing import ROCostRates, calculate_ro_operating_cost
 from ro_historical_baseline import reconstruct_historical_ro_cost
 
+# Keep the app shell product-generic while clearly labelling the current energy–water module.
 st.set_page_config(
     page_title="IslandOS | Decision Lab",
     page_icon="⚡",
