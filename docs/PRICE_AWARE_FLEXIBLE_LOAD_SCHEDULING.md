@@ -65,7 +65,7 @@ Negative market prices are retained rather than clipped. The result records a
 SHA-256 digest of the supplied history and the forecast timestamps.
 
 The Streamlit optimizer page accepts an optional historical tariff CSV with
-`timestamp_utc` and `price_per_kwh` columns. When supplied, the forecast
+`timestamp_utc` (ISO-8601 UTC with a zero UTC offset) and `price_per_kwh` columns. Local timestamps must be converted to UTC before upload. When supplied, the forecast
 replaces the editable scenario tariff for the optimization run; the page
 discloses this and exports the method and input-history digest. The current
 integration is hourly only and requires at least 24 observations. The forecast
