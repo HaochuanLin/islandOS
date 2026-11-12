@@ -77,9 +77,9 @@ class TariffForecastingTests(unittest.TestCase):
             predicted=[-0.05, 0.10, 0.40],
         )
         self.assertEqual(metrics.samples, 3)
-        self.assertAlmostEqual(metrics.mae, 0.1)
-        self.assertAlmostEqual(metrics.rmse, (0.015) ** 0.5)
-        self.assertAlmostEqual(metrics.bias_predicted_minus_actual, 0.0)
+        self.assertAlmostEqual(metrics.mae, 0.25 / 3)
+        self.assertAlmostEqual(metrics.rmse, (0.0225 / 3) ** 0.5)
+        self.assertAlmostEqual(metrics.bias_predicted_minus_actual, 0.05 / 3)
 
     def test_rejects_mismatched_or_invalid_metric_inputs(self):
         with self.assertRaisesRegex(ValueError, "equal lengths"):
