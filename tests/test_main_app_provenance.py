@@ -88,6 +88,8 @@ def test_flexible_load_optimizer_page_renders_auditable_comparison():
     download_labels = [element.label for element in app.get("download_button")]
     assert any("Download schedule and cost comparison" in label for label in download_labels)
     assert any("Download scenario CSV template" in label for label in download_labels)
+    uploader_labels = [element.label for element in app.get("file_uploader")]
+    assert any("Historical electricity prices CSV" in label for label in uploader_labels)
 
 
 def test_flexible_load_optimizer_page_rejects_baseline_above_equipment_rating():
