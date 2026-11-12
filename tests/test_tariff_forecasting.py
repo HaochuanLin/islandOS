@@ -1,6 +1,7 @@
 """Tests for transparent electricity-tariff forecasting baselines."""
 import unittest
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from islandos_core.tariff_forecasting import (
     TariffObservation,
@@ -34,6 +35,25 @@ class TariffForecastingTests(unittest.TestCase):
             result.points[24].timestamp,
             history[-1].timestamp + timedelta(hours=25),
         )
+        self.assertEqual(result.points[0].timestamp.tzinfo, timezone.utc)
+
+    def test_dst_spring_forward_uses_elapsed_utc_hours(self):
+        eastern = ZoneInfo("America/New_York")
+        history = (
+            TariffObservation(datetime(2026, 3, 8, 1, 0, tzinfo=eastern), 0.10),
+            TariffObservation(datetime(2026, 3, 8, 3, 0, tzinfo=eastern), 0.20),
+        )
+        forecast = forecast_tariff_prices(history, 1, season_length=2)
+        self.assertEqual(forecast.points[0].timestamp, datetime(2026, 3, 8, 8, 0, tzinfo=timezone.utc))
+
+    def test_dst_fall_back_accepts_repeated_local_clock_hour(self):
+        eastern = ZoneInfo("America/New_York")
+        history = (
+            TariffObservation(datetime(2026, 11, 1, 1, 0, tzinfo=timezone(timedelta(hours=-4))), 0.10),
+            TariffObservation(datetime(2026, 11, 1, 1, 0, tzinfo=timezone(timedelta(hours=-5))), 0.20),
+        )
+        forecast = forecast_tariff_prices(history, 1, season_length=2)
+        self.assertEqual(forecast.points[0].timestamp, datetime(2026, 11, 1, 7, 0, tzinfo=timezone.utc))
 
     def test_supports_negative_market_prices_without_clipping(self):
         history = self.make_history([0.12, -0.04, 0.08])
