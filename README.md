@@ -49,6 +49,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
+- Standalone price-aware linear-programming prototype for continuous, deferrable electrical loads; not yet integrated into the hosted app.
 - Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
 - Read-only telemetry and selected integration prototypes.
 
@@ -111,6 +112,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
 | [Forecasting baseline](docs/SCENARIO_FORECASTING_BASELINE.md) | Current transparent forecast baseline and evaluation boundary |
+| [Price-aware flexible-load scheduling](docs/PRICE_AWARE_FLEXIBLE_LOAD_SCHEDULING.md) | Experimental tariff-aware LP for continuous deferrable loads and its limitations |
 | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) | Product phases, customer discovery, economics, and exit gates |
 | [Engineering maturity roadmap](docs/ENGINEERING_MATURITY_ROADMAP.md) | Evidence requirements and delivery gates |
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |
