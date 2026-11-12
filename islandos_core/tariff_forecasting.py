@@ -52,6 +52,21 @@ class TariffForecastMetrics:
     bias_predicted_minus_actual: float
 
 
+@dataclass(frozen=True)
+class TariffBacktestFold:
+    first_target_timestamp: datetime
+    last_target_timestamp: datetime
+    metrics: TariffForecastMetrics
+
+
+@dataclass(frozen=True)
+class TariffBacktestResult:
+    method: str
+    fold_count: int
+    aggregate_metrics: TariffForecastMetrics
+    folds: tuple[TariffBacktestFold, ...]
+
+
 def _validated_history(history: Sequence[TariffObservation]) -> tuple[TariffObservation, ...]:
     if isinstance(history, (str, bytes)):
         raise ValueError("history must contain TariffObservation records")
@@ -144,4 +159,63 @@ def evaluate_tariff_forecast(
         mae=sum(abs(error) for error in errors) / len(errors),
         rmse=math.sqrt(sum(error * error for error in errors) / len(errors)),
         bias_predicted_minus_actual=sum(errors) / len(errors),
+    )
+
+
+
+def rolling_origin_tariff_backtest(
+    history: Sequence[TariffObservation],
+    *,
+    initial_history: int = 48,
+    horizon: int = 24,
+    season_length: int = 24,
+) -> TariffBacktestResult:
+    """Evaluate the tariff baseline on contiguous future blocks using prior data only.
+
+    Each fold is forecast from observations strictly before its first target.
+    After a fold, its actual observations become available to the next fold.
+    This is a historical replay, not a guarantee of future forecast skill.
+    """
+    observations = _validated_history(history)
+    for name, value in (
+        ("initial_history", initial_history),
+        ("horizon", horizon),
+        ("season_length", season_length),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"{name} must be a positive integer")
+    if initial_history < season_length:
+        raise ValueError("initial_history must be at least season_length")
+    if initial_history >= len(observations):
+        raise ValueError("initial_history must be shorter than history")
+
+    folds = []
+    all_actual = []
+    all_predicted = []
+    cutoff = initial_history
+    while cutoff < len(observations):
+        fold_horizon = min(horizon, len(observations) - cutoff)
+        forecast = forecast_tariff_prices(
+            observations[:cutoff], fold_horizon, season_length=season_length
+        )
+        actual = [
+            float(item.price_per_kwh)
+            for item in observations[cutoff:cutoff + fold_horizon]
+        ]
+        predicted = [point.predicted_price_per_kwh for point in forecast.points]
+        metrics = evaluate_tariff_forecast(actual, predicted)
+        folds.append(TariffBacktestFold(
+            first_target_timestamp=observations[cutoff].timestamp,
+            last_target_timestamp=observations[cutoff + fold_horizon - 1].timestamp,
+            metrics=metrics,
+        ))
+        all_actual.extend(actual)
+        all_predicted.extend(predicted)
+        cutoff += fold_horizon
+
+    return TariffBacktestResult(
+        method="expanding-history, contiguous rolling-origin seasonal-naive replay",
+        fold_count=len(folds),
+        aggregate_metrics=evaluate_tariff_forecast(all_actual, all_predicted),
+        folds=tuple(folds),
     )
