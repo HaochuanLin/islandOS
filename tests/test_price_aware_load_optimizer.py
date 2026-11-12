@@ -64,11 +64,14 @@ class PriceAwareFlexibleLoadOptimizerTests(unittest.TestCase):
         invalid_cases = [
             ({"price_per_kwh": []}, "price_per_kwh"),
             ({"price_per_kwh": [0.1, float("nan")]}, "finite"),
+            ({"price_per_kwh": [0.1, True]}, "booleans"),
             ({"price_per_kwh": [0.1], "energy_requirement_kwh": -1}, "non-negative"),
             ({"price_per_kwh": [0.1], "max_power_kw": 0}, "max_power_kw"),
             ({"price_per_kwh": [0.1], "max_power_kw": "2"}, "max_power_kw"),
+            ({"price_per_kwh": [0.1], "dt_hours": 0}, "dt_hours"),
             ({"price_per_kwh": [0.1], "energy_requirement_kwh": True}, "energy_requirement_kwh"),
             ({"price_per_kwh": [0.1], "available_power_kw": [-1]}, "non-negative"),
+            ({"price_per_kwh": [0.1], "available_power_kw": [1, 2]}, "horizon length"),
             ({"price_per_kwh": [0.1], "availability": [1]}, "boolean"),
         ]
         for overrides, message in invalid_cases:
@@ -81,6 +84,25 @@ class PriceAwareFlexibleLoadOptimizerTests(unittest.TestCase):
             with self.subTest(overrides=overrides):
                 with self.assertRaisesRegex(ValueError, message):
                     optimize_flexible_load(**kwargs)
+
+    def test_negative_tariff_is_supported_without_overdelivering_energy(self):
+        result = optimize_flexible_load(
+            price_per_kwh=[0.10, -0.05, 0.20],
+            energy_requirement_kwh=1.5,
+            max_power_kw=2,
+        )
+        self.assertAlmostEqual(result.total_energy_kwh, 1.5)
+        self.assertEqual(result.power_kw, (0.0, 1.5, 0.0))
+        self.assertAlmostEqual(result.total_cost, -0.075)
+
+    def test_infeasible_operating_window_is_reported(self):
+        with self.assertRaisesRegex(ValueError, "infeasible"):
+            optimize_flexible_load(
+                price_per_kwh=[0.01, 0.02],
+                energy_requirement_kwh=2,
+                max_power_kw=2,
+                availability=[False, False],
+            )
 
     def test_cost_and_energy_are_reproducible(self):
         kwargs = {
