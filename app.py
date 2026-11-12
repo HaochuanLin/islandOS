@@ -425,6 +425,11 @@ elif page == "Flexible-load cost optimizer":
                 parsed_timestamp = datetime.fromisoformat(
                     str(raw_timestamp).strip().replace("Z", "+00:00")
                 )
+                if parsed_timestamp.utcoffset() != timedelta(0):
+                    raise ValueError(
+                        "Historical tariff timestamps must be UTC (zero UTC offset); "
+                        "convert local timestamps to UTC before upload."
+                    )
                 tariff_timestamps.append(parsed_timestamp)
             tariff_prices = []
             for raw_price in tariff_history_frame["price_per_kwh"]:
