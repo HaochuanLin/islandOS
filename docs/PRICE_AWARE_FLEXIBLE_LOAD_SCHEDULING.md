@@ -38,6 +38,22 @@ cannot fit in the allowed horizon. It does not silently reduce required service.
     )
     print(schedule.to_dict())
 
+## Interactive Streamlit page
+
+The feature branch adds a **Flexible-load cost optimizer** page to `app.py`.
+Users can edit a 24-interval tariff, the per-interval power budget, and a
+baseline load profile. The baseline determines the required energy, so the
+optimizer compares schedules delivering the same total energy. The page shows
+baseline and optimized energy charges, the power schedule, a row-level audit,
+and a CSV export.
+
+The default tariff and load profile are synthetic. Edited inputs are treated as
+user-supplied assumptions and are not independently verified. The currency
+label is display-only; the page does not convert currencies or validate a
+utility tariff. It currently calculates energy charges only, not demand charges,
+taxes, fixed fees, or other bill components. The page becomes available on the
+public hosted app only after the feature is merged and redeployed.
+
 ## Important limitations
 
 This first version is appropriate only for continuous, deferrable loads whose
