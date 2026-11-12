@@ -53,3 +53,24 @@ This module is complementary to dispatch_engine.py and the NSGA-II / schedule
 screening experiments. It solves a narrow tariff-aware load-shifting problem;
 it is not a replacement for common-physics evaluation, multi-resource
 coordination, or hard service-reliability checks.
+
+
+## Reproducible demo
+
+Run the example from the repository root:
+
+    python examples/price_aware_flexible_load_demo.py
+
+The example compares a fixed illustrative baseline schedule with the optimized
+schedule under the same synthetic tariff and the same total energy requirement.
+It prints both costs and their difference. This difference is a mathematical
+scenario comparison only, not measured savings, a customer quote, or a forecast
+of future savings. Replace all inputs with validated site data before using the
+calculation in a customer business case.
+
+## Validation coverage
+
+The unit tests cover cheapest-period allocation, per-interval power budgets,
+operating windows, non-hourly intervals, infeasible requirements, zero-energy
+requests, negative prices, malformed inputs, reproducibility, and energy/cost
+accounting.
