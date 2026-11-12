@@ -466,11 +466,14 @@ elif page == "Flexible-load cost optimizer":
                 f"Forecast input SHA-256: {tariff_forecast.input_history_sha256}. "
                 "This hash identifies the supplied history; it does not validate its source."
             )
-            st.line_chart(
-                pd.DataFrame({
-                    "Forecast tariff (currency/kWh)": forecasted_tariff_values
-                })
+            forecast_timestamps_utc = [
+                point.timestamp.isoformat() for point in tariff_forecast.points
+            ]
+            forecast_chart = pd.DataFrame(
+                {"Forecast tariff (currency/kWh)": forecasted_tariff_values},
+                index=pd.Index(forecast_timestamps_utc, name="Forecast target (UTC)"),
             )
+            st.line_chart(forecast_chart)
             if len(tariff_observations) >= 72:
                 tariff_backtest_metadata = rolling_origin_tariff_backtest(
                     tariff_observations,
@@ -574,8 +577,14 @@ elif page == "Flexible-load cost optimizer":
         else:
             st.info("The optimized schedule has the same energy charge as the baseline.")
 
+        forecast_timestamps_utc = (
+            [point.timestamp.isoformat() for point in tariff_forecast_metadata.points]
+            if tariff_forecast_metadata is not None
+            else [""] * len(profile)
+        )
         schedule_frame = pd.DataFrame({
             "Interval": profile["Interval"],
+            "Tariff forecast target (UTC)": forecast_timestamps_utc,
             "Tariff used (currency/kWh)": price_values,
             "Tariff source": tariff_source,
             "Available power budget (kW)": budget_values,
