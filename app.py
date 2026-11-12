@@ -322,12 +322,73 @@ elif page == "Flexible-load cost optimizer":
     })
     st.markdown("### Scenario inputs")
     st.caption(
-        "Edit the tariff, available power budget, and baseline profile below. "
-        "The baseline determines the required total energy, so the comparison "
-        "keeps service quantity equal."
+        "Use the synthetic example, upload a site scenario CSV, or edit the table "
+        "directly. The baseline determines the required total energy, so the "
+        "comparison keeps service quantity equal."
     )
+    template = default_profile.rename(columns={
+        "Interval": "interval",
+        "Price (currency/kWh)": "price_per_kwh",
+        "Available power budget (kW)": "available_power_kw",
+        "Baseline power (kW)": "baseline_power_kw",
+    })
+    st.download_button(
+        "Download scenario CSV template",
+        data=template.to_csv(index=False).encode("utf-8"),
+        file_name="islandos_flexible_load_scenario_template.csv",
+        mime="text/csv",
+    )
+    uploaded_profile = st.file_uploader(
+        "Upload scenario CSV (optional)",
+        type=["csv"],
+        help=(
+            "Required columns: interval, price_per_kwh, available_power_kw, "
+            "baseline_power_kw. Extra columns are ignored."
+        ),
+        key="price_aware_profile_upload",
+    )
+    profile_provenance = (
+        "Synthetic default or user-edited scenario assumptions; not measured site data"
+    )
+    editor_key = "price_aware_profile_editor_synthetic"
+    profile_input = default_profile
+    if uploaded_profile is not None:
+        upload_bytes = uploaded_profile.getvalue()
+        try:
+            uploaded_frame = pd.read_csv(io.BytesIO(upload_bytes))
+            required_profile_columns = [
+                "interval", "price_per_kwh", "available_power_kw", "baseline_power_kw"
+            ]
+            missing_columns = [
+                column for column in required_profile_columns
+                if column not in uploaded_frame.columns
+            ]
+            if missing_columns:
+                raise ValueError(
+                    "Scenario CSV is missing required columns: "
+                    + ", ".join(missing_columns)
+                )
+            if uploaded_frame.empty:
+                raise ValueError("Scenario CSV must contain at least one interval.")
+            profile_input = pd.DataFrame({
+                "Interval": uploaded_frame["interval"].astype(str),
+                "Price (currency/kWh)": uploaded_frame["price_per_kwh"],
+                "Available power budget (kW)": uploaded_frame["available_power_kw"],
+                "Baseline power (kW)": uploaded_frame["baseline_power_kw"],
+            })
+            upload_signature = hashlib.sha256(upload_bytes).hexdigest()[:12]
+            editor_key = f"price_aware_profile_editor_{upload_signature}"
+            profile_provenance = (
+                f"User-uploaded scenario CSV: {uploaded_profile.name}; "
+                "not independently verified site data"
+            )
+        except (ValueError, TypeError, UnicodeDecodeError, pd.errors.ParserError) as exc:
+            st.error(f"Cannot read scenario CSV: {exc}")
+            st.stop()
+
+    st.caption(f"Input provenance: {profile_provenance}")
     profile = st.data_editor(
-        default_profile,
+        profile_input,
         use_container_width=True,
         hide_index=True,
         num_rows="fixed",
@@ -343,7 +404,7 @@ elif page == "Flexible-load cost optimizer":
                 min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
             ),
         },
-        key="price_aware_profile_editor",
+        key=editor_key,
     )
 
     try:
@@ -411,9 +472,7 @@ elif page == "Flexible-load cost optimizer":
         )
         st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
         export = schedule_frame.copy()
-        export["data_provenance"] = (
-            "User-edited scenario assumptions; not independently verified site data"
-        )
+        export["data_provenance"] = profile_provenance
         export["currency_label"] = currency
         export["baseline_cost"] = result.baseline_cost
         export["optimized_cost"] = result.total_cost
