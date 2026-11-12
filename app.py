@@ -415,17 +415,25 @@ elif page == "Flexible-load cost optimizer":
                 )
             if len(tariff_history_frame) < 24:
                 raise ValueError("At least 24 hourly tariff observations are required.")
-            parsed_timestamps = pd.to_datetime(
-                tariff_history_frame["timestamp_utc"], utc=True, errors="raise"
-            )
-            parsed_prices = pd.to_numeric(
-                tariff_history_frame["price_per_kwh"], errors="raise"
-            )
-            if parsed_timestamps.isna().any() or parsed_prices.isna().any():
-                raise ValueError("Historical tariff timestamps and prices cannot be empty.")
+            tariff_timestamps = []
+            for raw_timestamp in tariff_history_frame["timestamp_utc"]:
+                if pd.isna(raw_timestamp) or not str(raw_timestamp).strip():
+                    raise ValueError("Historical tariff timestamps cannot be empty.")
+                parsed_timestamp = datetime.fromisoformat(
+                    str(raw_timestamp).strip().replace("Z", "+00:00")
+                )
+                tariff_timestamps.append(parsed_timestamp)
+            tariff_prices = []
+            for raw_price in tariff_history_frame["price_per_kwh"]:
+                if isinstance(raw_price, bool) or pd.isna(raw_price):
+                    raise ValueError("Historical tariff prices must be finite numeric values.")
+                parsed_price = float(raw_price)
+                if not math.isfinite(parsed_price):
+                    raise ValueError("Historical tariff prices must be finite numeric values.")
+                tariff_prices.append(parsed_price)
             tariff_observations = tuple(
-                TariffObservation(timestamp=stamp.to_pydatetime(), price_per_kwh=float(price))
-                for stamp, price in zip(parsed_timestamps, parsed_prices)
+                TariffObservation(timestamp=stamp, price_per_kwh=price)
+                for stamp, price in zip(tariff_timestamps, tariff_prices)
             )
             if float(dt_hours) != 1.0:
                 raise ValueError(
