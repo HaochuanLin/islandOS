@@ -56,6 +56,24 @@ utility tariff. It currently calculates energy charges only, not demand charges,
 taxes, fixed fees, or other bill components. The page becomes available on the
 public hosted app only after the feature is merged and redeployed.
 
+## Tariff forecasting baseline
+
+The feature branch also adds `islandos_core/tariff_forecasting.py`. It accepts
+timezone-aware, strictly ordered hourly tariff observations and produces a
+seasonal-naive forecast by repeating the most recent 24-hour price profile.
+Negative market prices are retained rather than clipped. The result records a
+SHA-256 digest of the supplied history and the forecast timestamps.
+
+The Streamlit optimizer page accepts an optional historical tariff CSV with
+`timestamp_utc` and `price_per_kwh` columns. When supplied, the forecast
+replaces the editable scenario tariff for the optimization run; the page
+discloses this and exports the method and input-history digest. The current
+integration is hourly only and requires at least 24 observations. The forecast
+does not account for holidays, market events, congestion, weather, or tariff
+rule changes. It is a transparent baseline, not a trained AI or market forecast.
+Forecast quality must be measured on chronological held-out data before use
+in a customer decision.
+
 ## Important limitations
 
 This first version is appropriate only for continuous, deferrable loads whose
