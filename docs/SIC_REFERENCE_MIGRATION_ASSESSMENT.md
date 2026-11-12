@@ -64,40 +64,66 @@ ramp rates, thermal/process dynamics, network power flow, or equipment
 protection. A later mixed-integer model must be justified by an actual device
 use case and separately tested.
 
-### Reproducible example
+### Transparent tariff forecast baseline
 
-Run:
+File: `islandos_core/tariff_forecasting.py`
 
-    python examples/price_aware_flexible_load_demo.py
+- Repeats the most recent 24-hour tariff profile for the requested forecast
+  horizon; preserves negative prices.
+- Requires timezone-aware, strictly ordered hourly observations.
+- Records a SHA-256 digest of the supplied history and explicit future
+  timestamps.
+- Evaluates MAE, RMSE, and signed bias through contiguous rolling-origin
+  replay, using only data available before each forecast block.
 
-The example uses synthetic tariff and power values, compares a fixed baseline
-against an optimized schedule with equal total energy, and labels the cost
-difference as a scenario calculation rather than verified customer savings.
+This is a seasonal-naive benchmark, **not a trained AI model, a market-price
+prediction claim, or evidence of forecast skill**. More advanced forecasting
+methods should be compared against this baseline using representative,
+chronological holdouts before promotion.
 
-## Next migration stages
+### Interactive cost-comparison workflow
 
-### Stage A — Complete and validate the narrow tariff optimizer
+The feature branch adds a Streamlit page for editable or uploaded scenario
+profiles and optional historical tariff CSV input. It connects the tariff
+baseline to the optimizer, presents an equal-energy cost comparison, shows
+the schedule and row-level audit, and exports provenance metadata.
 
-- Pass all repository unit tests and dependency checks.
-- Review edge cases, units, infeasibility behavior, and deterministic output.
-- Keep the optimizer standalone until a clear integration point is identified.
+The default profile is synthetic. User-uploaded data is not independently
+verified. The current calculation covers energy charges only; it does not
+include demand charges, taxes, fixed fees, or whole-bill validation. The page
+is not part of the public hosted app until the feature is merged and redeployed.
 
-**Exit:** full CI passes and the module's scope is explicit.
+## Delivery status and next migration stages
 
-### Stage B — Connect economic comparison to customer questions
+### Stage A — Tariff baseline and narrow optimizer
 
-- The optimizer now supports a like-for-like baseline profile with equal total
+- Implemented the continuous-load LP and seasonal-naive hourly tariff baseline.
+- Added malformed-input, infeasibility, negative-price, equal-energy comparison,
+  timestamp, metric, and rolling-origin replay tests.
+- Connected forecast output to the optimizer in the feature-branch app.
+- All seven PR workflows passed on head
+  `08537f0ad743353c5b4974dd5cd7b7b289076e26`.
+
+**Status:** implementation and automated validation are complete on the
+feature branch. Human review is still outstanding; the PR remains a draft and
+has not been merged. Passing CI does not establish field performance.
+
+### Stage B — Strengthen customer economics
+
+- The optimizer supports a like-for-like baseline profile with equal total
   energy, and tests both the cost difference and invalid baseline rejection.
-- An experimental Streamlit page now records an editable tariff, a display-only
-  currency label, interval duration, available power budget, and baseline load.
-- It presents equal-energy cost comparisons, the schedule, and a CSV audit.
-- Next, add tariff-source and billing-period metadata and decide how demand
-  charges should be represented before claiming whole-bill savings.
+- The experimental page records the tariff source, forecast method, input
+  digest, display-only currency label, interval duration, power budget, and
+  baseline load.
+- It presents energy-charge comparisons, the schedule, and a CSV audit.
+- Remaining work: define billing-period metadata and a defensible treatment of
+  demand charges, fixed fees, taxes, and tariff-specific billing rules before
+  claiming whole-bill savings.
 - Keep scenario differences explicitly separate from verified customer savings.
 
-**Exit:** a reviewer can trace the cost difference to the tariff source, currency,
-interval, billing assumptions, energy requirement, power limits, baseline
-profile, and schedule.
+**Exit:** a reviewer can trace the cost difference to the tariff source,
+currency, interval, billing assumptions, energy requirement, power limits,
+baseline profile, and schedule.
 
 ### Stage C — Extend equipment constraints only when justified
 
