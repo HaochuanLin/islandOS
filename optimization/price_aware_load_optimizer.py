@@ -54,6 +54,11 @@ class FlexibleLoadSchedule:
 
 
 def _series(values: Sequence[float], name: str, length: int | None = None) -> np.ndarray:
+    raw = np.asarray(values, dtype=object)
+    if raw.dtype.kind == "b" or any(
+        isinstance(value, (bool, np.bool_)) for value in raw.flat
+    ):
+        raise ValueError(f"{name} must contain numeric values, not booleans")
     try:
         result = np.asarray(values, dtype=float)
     except (TypeError, ValueError) as exc:
@@ -101,7 +106,7 @@ def optimize_flexible_load(
             raise ValueError(f"{name} must be a finite numeric value")
         numeric = float(value)
         if not np.isfinite(numeric) or (numeric <= lower_bound if exclusive else numeric < lower_bound):
-            qualifier = "> 0" if exclusive else ">= 0"
+            qualifier = "positive" if exclusive else "non-negative"
             raise ValueError(f"{name} must be finite and {qualifier}")
         normalized[name] = numeric
     energy_requirement_kwh = normalized["energy_requirement_kwh"]
