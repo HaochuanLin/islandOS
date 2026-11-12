@@ -87,12 +87,18 @@ def optimize_flexible_load(
     baseline_power_kw: Sequence[float] | None = None,
     dt_hours: float = 1.0,
 ) -> FlexibleLoadSchedule:
-    """Minimize energy cost while meeting a fixed, shiftable energy requirement.
+    """Minimize tariff cost while meeting a fixed, shiftable energy requirement.
 
     available_power_kw is the per-step power budget available to this load
     after essential demand and higher-priority reservations. If omitted, the
     nameplate rating is available at every step. availability can disable
     individual steps (for example, outside an operating window).
+
+    Optional baseline_power_kw enables a like-for-like cost comparison. Its
+    total energy must equal the requested energy, it must respect the load's
+    nameplate rating, and it must be zero in unavailable operating intervals.
+    It may use more grid power than the flexible renewable/power budget; that
+    difference is often the point of comparing a baseline with a shifted plan.
 
     A ValueError is raised when the requested energy cannot fit in the allowed
     horizon. The optimizer never silently relaxes the service requirement.
@@ -129,7 +135,6 @@ def optimize_flexible_load(
         power_budget = np.minimum(power_budget, float(max_power_kw))
 
     baseline_cost = None
-    baseline_energy = None
     if baseline_power_kw is not None:
         baseline_power = _series(baseline_power_kw, "baseline_power_kw", horizon)
         if np.any(baseline_power < 0):
@@ -152,6 +157,12 @@ def optimize_flexible_load(
         if raw_availability.dtype.kind != "b":
             raise ValueError("availability must contain boolean values only")
         power_budget = np.where(raw_availability, power_budget, 0.0)
+        if baseline_power_kw is not None and np.any(
+            np.logical_not(raw_availability) & (baseline_power > 1e-9)
+        ):
+            raise ValueError(
+                "baseline_power_kw must be zero in unavailable operating intervals"
+            )
 
     capacity_kwh = float(np.sum(power_budget) * dt_hours)
     tolerance = max(1e-8, float(energy_requirement_kwh) * 1e-9)
