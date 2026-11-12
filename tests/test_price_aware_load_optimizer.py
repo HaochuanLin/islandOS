@@ -96,6 +96,39 @@ class PriceAwareFlexibleLoadOptimizerTests(unittest.TestCase):
         self.assertEqual(result.power_kw, (0.0, 1.5, 0.0))
         self.assertAlmostEqual(result.total_cost, -0.075)
 
+    def test_like_for_like_baseline_cost_comparison_is_transparent(self):
+        result = optimize_flexible_load(
+            price_per_kwh=[0.31, 0.27, 0.13, 0.09, 0.11, 0.24],
+            energy_requirement_kwh=10.0,
+            max_power_kw=3.0,
+            available_power_kw=[3.0, 3.0, 2.0, 3.0, 3.0, 3.0],
+            baseline_power_kw=[2.0, 2.0, 2.0, 2.0, 1.0, 1.0],
+        )
+        self.assertAlmostEqual(result.baseline_cost, 1.95)
+        self.assertAlmostEqual(result.total_cost, 1.34)
+        self.assertAlmostEqual(result.cost_difference_vs_baseline, 0.61)
+        self.assertAlmostEqual(
+            result.cost_difference_percent_vs_baseline,
+            100.0 * 0.61 / 1.95,
+        )
+
+    def test_rejects_unfair_or_invalid_baseline_comparisons(self):
+        common = {
+            "price_per_kwh": [0.2, 0.1],
+            "energy_requirement_kwh": 2.0,
+            "max_power_kw": 2.0,
+        }
+        with self.assertRaisesRegex(ValueError, "same total energy"):
+            optimize_flexible_load(**common, baseline_power_kw=[2.0, 1.0])
+        with self.assertRaisesRegex(ValueError, "must not exceed"):
+            optimize_flexible_load(**common, baseline_power_kw=[3.0, 0.0])
+        with self.assertRaisesRegex(ValueError, "unavailable operating"):
+            optimize_flexible_load(
+                **common,
+                availability=[True, False],
+                baseline_power_kw=[1.0, 1.0],
+            )
+
     def test_infeasible_operating_window_is_reported(self):
         with self.assertRaisesRegex(ValueError, "infeasible"):
             optimize_flexible_load(
