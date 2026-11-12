@@ -593,8 +593,14 @@ elif page == "Flexible-load cost optimizer":
             "Optimized energy (kWh)": list(result.energy_kwh),
         })
         st.markdown("### Operating schedule")
+        schedule_plot = schedule_frame.copy()
+        schedule_plot["Dispatch interval"] = (
+            forecast_timestamps_utc
+            if tariff_forecast_metadata is not None
+            else schedule_frame["Interval"]
+        )
         st.line_chart(
-            schedule_frame.set_index("Interval")[
+            schedule_plot.set_index("Dispatch interval")[
                 ["Baseline power (kW)", "Optimized power (kW)"]
             ]
         )
