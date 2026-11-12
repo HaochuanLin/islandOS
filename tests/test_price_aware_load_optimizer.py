@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 
 from optimization.price_aware_load_optimizer import optimize_flexible_load
+from examples.price_aware_flexible_load_demo import build_demo_result
 
 
 class PriceAwareFlexibleLoadOptimizerTests(unittest.TestCase):
@@ -103,6 +104,20 @@ class PriceAwareFlexibleLoadOptimizerTests(unittest.TestCase):
                 max_power_kw=2,
                 availability=[False, False],
             )
+
+    def test_synthetic_example_reports_provenance_and_equal_energy_comparison(self):
+        result = build_demo_result()
+        self.assertIn("Synthetic", result["data_provenance"])
+        self.assertAlmostEqual(
+            result["optimized_schedule"]["total_energy_kwh"], 10.0
+        )
+        self.assertAlmostEqual(
+            sum(result["baseline_power_kw"]), 10.0
+        )
+        self.assertGreater(
+            result["baseline_vs_optimized_cost_difference"], 0.0
+        )
+        self.assertIn("not a verified customer saving", result["interpretation"])
 
     def test_cost_and_energy_are_reproducible(self):
         kwargs = {
