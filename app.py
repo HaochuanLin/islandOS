@@ -20,7 +20,9 @@ import streamlit as st
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 from optimization.price_aware_load_optimizer import optimize_flexible_load
-from islandos_core.tariff_forecasting import TariffObservation, forecast_tariff_prices
+from islandos_core.tariff_forecasting import (
+    TariffObservation, forecast_tariff_prices, rolling_origin_tariff_backtest,
+)
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
@@ -403,6 +405,7 @@ elif page == "Flexible-load cost optimizer":
     forecasted_tariff_values = None
     tariff_source = "Scenario tariff supplied in the editable profile"
     tariff_forecast_metadata = None
+    tariff_backtest_metadata = None
     if uploaded_tariff_history is not None:
         try:
             tariff_history_frame = pd.read_csv(io.BytesIO(uploaded_tariff_history.getvalue()))
@@ -463,6 +466,31 @@ elif page == "Flexible-load cost optimizer":
                     "Forecast tariff (currency/kWh)": forecasted_tariff_values
                 })
             )
+            if len(tariff_observations) >= 72:
+                tariff_backtest_metadata = rolling_origin_tariff_backtest(
+                    tariff_observations,
+                    initial_history=48,
+                    horizon=24,
+                    season_length=24,
+                )
+                metrics = tariff_backtest_metadata.aggregate_metrics
+                st.markdown("#### Historical forecast replay")
+                metric_cols = st.columns(3)
+                metric_cols[0].metric("MAE", f"{metrics.mae:.4f}")
+                metric_cols[1].metric("RMSE", f"{metrics.rmse:.4f}")
+                metric_cols[2].metric(
+                    "Forecast bias", f"{metrics.bias_predicted_minus_actual:+.4f}"
+                )
+                st.caption(
+                    f"Chronological replay: {metrics.samples} held-out hourly observations "
+                    f"across {tariff_backtest_metadata.fold_count} contiguous folds. "
+                    "These historical metrics do not guarantee future accuracy."
+                )
+            else:
+                st.caption(
+                    "At least 72 hourly observations are needed to show a 24-hour "
+                    "rolling-origin historical replay (48-hour initial history plus one test day)."
+                )
         except (ValueError, TypeError, KeyError, UnicodeDecodeError, pd.errors.ParserError) as exc:
             st.error(f"Cannot forecast tariff: {exc}")
             st.stop()
@@ -566,6 +594,18 @@ elif page == "Flexible-load cost optimizer":
         export["tariff_forecast_input_sha256"] = (
             tariff_forecast_metadata.input_history_sha256
             if tariff_forecast_metadata is not None else ""
+        )
+        export["tariff_backtest_mae"] = (
+            tariff_backtest_metadata.aggregate_metrics.mae
+            if tariff_backtest_metadata is not None else ""
+        )
+        export["tariff_backtest_rmse"] = (
+            tariff_backtest_metadata.aggregate_metrics.rmse
+            if tariff_backtest_metadata is not None else ""
+        )
+        export["tariff_backtest_bias"] = (
+            tariff_backtest_metadata.aggregate_metrics.bias_predicted_minus_actual
+            if tariff_backtest_metadata is not None else ""
         )
         export["currency_label"] = currency
         export["baseline_cost"] = result.baseline_cost
