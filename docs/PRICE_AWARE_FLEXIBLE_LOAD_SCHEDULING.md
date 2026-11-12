@@ -18,6 +18,10 @@ The new optimizer solves a continuous linear program:
 - Per-interval bound: power cannot exceed the lower of the load rating and the
   power budget available after essential demand / higher-priority reservations.
 - Operating window: optional boolean mask disables unavailable intervals.
+- Optional baseline profile: compares the optimized cost with a baseline that
+  delivers the same total energy and respects the load rating and operating
+  window. The baseline may use more grid power than the flexible renewable
+  budget, which is useful when comparing grid-heavy and renewable-aware plans.
 
 The function raises an explicit infeasibility error when the requested energy
 cannot fit in the allowed horizon. It does not silently reduce required service.
@@ -72,5 +76,5 @@ calculation in a customer business case.
 
 The unit tests cover cheapest-period allocation, per-interval power budgets,
 operating windows, non-hourly intervals, infeasible requirements, zero-energy
-requests, negative prices, malformed inputs, reproducibility, and energy/cost
-accounting.
+requests, negative prices, malformed inputs, reproducibility, equal-energy
+baseline comparisons, invalid baseline rejection, and energy/cost accounting.
