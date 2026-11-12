@@ -102,7 +102,9 @@ is not part of the public hosted app until the feature is merged and redeployed.
   timestamp, metric, and rolling-origin replay tests.
 - Connected forecast output to the optimizer in the feature-branch app.
 - All seven PR workflows passed on head
-  `08537f0ad743353c5b4974dd5cd7b7b289076e26`.
+  `40c4193a6e67d228cff6a30c8864cf6841dd4891`. The complete Python suite
+  reported 704 passed, 2 skipped, and 566 subtests passed. Tests include UTC
+  normalization across daylight-saving transitions.
 
 **Status:** implementation and automated validation are complete on the
 feature branch. Human review is still outstanding; the PR remains a draft and
