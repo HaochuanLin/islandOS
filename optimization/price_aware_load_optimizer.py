@@ -14,6 +14,7 @@ This is a planning aid, not a plant controller or a site-validated optimizer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Real
 from typing import Sequence
 
 import numpy as np
@@ -60,17 +61,15 @@ class FlexibleLoadSchedule:
 
 
 def _series(values: Sequence[float], name: str, length: int | None = None) -> np.ndarray:
+    """Validate a one-dimensional series without silently coercing text/bools."""
     raw = np.asarray(values, dtype=object)
-    if raw.dtype.kind == "b" or any(
-        isinstance(value, (bool, np.bool_)) for value in raw.flat
-    ):
-        raise ValueError(f"{name} must contain numeric values, not booleans")
-    try:
-        result = np.asarray(values, dtype=float)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be a numeric 1D series") from exc
-    if result.ndim != 1 or result.size == 0:
+    if raw.ndim != 1 or raw.size == 0:
         raise ValueError(f"{name} must be a non-empty 1D series")
+    if any(isinstance(value, (bool, np.bool_)) for value in raw.flat):
+        raise ValueError(f"{name} must contain numeric values, not booleans")
+    if any(not isinstance(value, (Real, np.integer, np.floating)) for value in raw.flat):
+        raise ValueError(f"{name} must contain numeric values, not strings or other objects")
+    result = np.asarray(values, dtype=float)
     if not np.all(np.isfinite(result)):
         raise ValueError(f"{name} must contain only finite values")
     if length is not None and len(result) != length:
