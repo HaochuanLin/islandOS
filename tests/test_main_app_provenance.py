@@ -70,3 +70,38 @@ def test_strategy_result_is_cleared_when_model_assumptions_change():
     assert any("model assumptions changed" in element.value for element in app.info)
     labels = [element.label for element in app.get("download_button")]
     assert not any("strategy summary" in label for label in labels)
+
+
+
+def test_flexible_load_optimizer_page_renders_auditable_comparison():
+    app = AppTest.from_file(str(APP), default_timeout=60).run()
+    assert not app.exception
+
+    app.radio[0].set_value("Flexible-load cost optimizer").run()
+    assert not app.exception
+
+    metric_labels = [element.label for element in app.get("metric")]
+    assert "Baseline cost" in metric_labels
+    assert "Optimized cost" in metric_labels
+    assert "Cost difference" in metric_labels
+
+    download_labels = [element.label for element in app.get("download_button")]
+    assert any("Download schedule and cost comparison" in label for label in download_labels)
+
+
+def test_flexible_load_optimizer_page_rejects_baseline_above_equipment_rating():
+    app = AppTest.from_file(str(APP), default_timeout=60).run()
+    assert not app.exception
+    app.radio[0].set_value("Flexible-load cost optimizer").run()
+    assert not app.exception
+
+    rating = next(
+        element for element in app.number_input
+        if element.label == "Equipment maximum power (kW)"
+    )
+    rating.set_value(0.1).run()
+    assert not app.exception
+    assert any(
+        "baseline_power_kw must not exceed max_power_kw" in element.value
+        for element in app.error
+    )
