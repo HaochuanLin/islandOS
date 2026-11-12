@@ -6,6 +6,7 @@ from islandos_core.tariff_forecasting import (
     TariffObservation,
     evaluate_tariff_forecast,
     forecast_tariff_prices,
+    rolling_origin_tariff_backtest,
 )
 
 
@@ -80,6 +81,31 @@ class TariffForecastingTests(unittest.TestCase):
         self.assertAlmostEqual(metrics.mae, 0.25 / 3)
         self.assertAlmostEqual(metrics.rmse, (0.0225 / 3) ** 0.5)
         self.assertAlmostEqual(metrics.bias_predicted_minus_actual, 0.05 / 3)
+
+    def test_rolling_origin_backtest_uses_only_prior_hourly_history(self):
+        # A perfectly repeating daily tariff should be forecast exactly.
+        daily = [0.05 + hour * 0.01 for hour in range(24)]
+        history = self.make_history(daily * 3)
+        result = rolling_origin_tariff_backtest(
+            history, initial_history=48, horizon=24, season_length=24
+        )
+        self.assertEqual(result.fold_count, 1)
+        self.assertEqual(result.aggregate_metrics.samples, 24)
+        self.assertAlmostEqual(result.aggregate_metrics.mae, 0.0)
+        self.assertAlmostEqual(result.aggregate_metrics.rmse, 0.0)
+        self.assertEqual(
+            result.folds[0].first_target_timestamp,
+            history[48].timestamp,
+        )
+
+    def test_backtest_rejects_too_short_initial_history(self):
+        with self.assertRaisesRegex(ValueError, "at least season_length"):
+            rolling_origin_tariff_backtest(
+                self.make_history([0.1] * 30),
+                initial_history=12,
+                horizon=6,
+                season_length=24,
+            )
 
     def test_rejects_mismatched_or_invalid_metric_inputs(self):
         with self.assertRaisesRegex(ValueError, "equal lengths"):
