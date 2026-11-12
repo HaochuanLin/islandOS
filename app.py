@@ -20,6 +20,7 @@ import streamlit as st
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
 from optimization.price_aware_load_optimizer import optimize_flexible_load
+from islandos_core.tariff_forecasting import TariffObservation, forecast_tariff_prices
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
@@ -387,6 +388,77 @@ elif page == "Flexible-load cost optimizer":
             st.stop()
 
     st.caption(f"Input provenance: {profile_provenance}")
+    st.markdown("### Optional tariff forecast")
+    st.caption(
+        "Upload at least 24 continuous hourly price observations to generate a "
+        "24-hour seasonal-naive forecast. The forecast is a transparent baseline, "
+        "not a trained market model. Negative prices are allowed."
+    )
+    uploaded_tariff_history = st.file_uploader(
+        "Historical electricity prices CSV (optional)",
+        type=["csv"],
+        help="Required columns: timestamp_utc (ISO-8601 with timezone) and price_per_kwh.",
+        key="tariff_history_upload",
+    )
+    forecasted_tariff_values = None
+    tariff_source = "Scenario tariff supplied in the editable profile"
+    tariff_forecast_metadata = None
+    if uploaded_tariff_history is not None:
+        try:
+            tariff_history_frame = pd.read_csv(io.BytesIO(uploaded_tariff_history.getvalue()))
+            required_tariff_columns = {"timestamp_utc", "price_per_kwh"}
+            missing_tariff_columns = required_tariff_columns - set(tariff_history_frame.columns)
+            if missing_tariff_columns:
+                raise ValueError(
+                    "Historical tariff CSV is missing columns: "
+                    + ", ".join(sorted(missing_tariff_columns))
+                )
+            if len(tariff_history_frame) < 24:
+                raise ValueError("At least 24 hourly tariff observations are required.")
+            parsed_timestamps = pd.to_datetime(
+                tariff_history_frame["timestamp_utc"], utc=True, errors="raise"
+            )
+            parsed_prices = pd.to_numeric(
+                tariff_history_frame["price_per_kwh"], errors="raise"
+            )
+            if parsed_timestamps.isna().any() or parsed_prices.isna().any():
+                raise ValueError("Historical tariff timestamps and prices cannot be empty.")
+            tariff_observations = tuple(
+                TariffObservation(timestamp=stamp.to_pydatetime(), price_per_kwh=float(price))
+                for stamp, price in zip(parsed_timestamps, parsed_prices)
+            )
+            if float(dt_hours) != 1.0:
+                raise ValueError(
+                    "Hourly tariff forecasting currently requires an interval duration of exactly 1 hour."
+                )
+            tariff_forecast = forecast_tariff_prices(
+                tariff_observations, horizon=len(profile_input), season_length=24
+            )
+            forecasted_tariff_values = [
+                point.predicted_price_per_kwh for point in tariff_forecast.points
+            ]
+            tariff_forecast_metadata = tariff_forecast
+            tariff_source = (
+                f"24-hour seasonal-naive forecast from {uploaded_tariff_history.name}; "
+                "historical input not independently verified"
+            )
+            st.success(
+                f"Generated {len(forecasted_tariff_values)} hourly tariff forecast values "
+                "using the latest 24-hour profile."
+            )
+            st.caption(
+                f"Forecast input SHA-256: {tariff_forecast.input_history_sha256}. "
+                "This hash identifies the supplied history; it does not validate its source."
+            )
+            st.line_chart(
+                pd.DataFrame({
+                    "Forecast tariff (currency/kWh)": forecasted_tariff_values
+                })
+            )
+        except (ValueError, TypeError, KeyError, UnicodeDecodeError, pd.errors.ParserError) as exc:
+            st.error(f"Cannot forecast tariff: {exc}")
+            st.stop()
+
     profile = st.data_editor(
         profile_input,
         use_container_width=True,
@@ -409,6 +481,11 @@ elif page == "Flexible-load cost optimizer":
 
     try:
         price_values = [float(value) for value in profile["Price (currency/kWh)"]]
+        if forecasted_tariff_values is not None:
+            if len(forecasted_tariff_values) != len(profile):
+                raise ValueError("Forecast horizon must match the scenario profile length.")
+            price_values = list(forecasted_tariff_values)
+            st.info("The optimizer is using forecasted tariff values, not the editable scenario tariff column.")
         budget_values = [float(value) for value in profile["Available power budget (kW)"]]
         baseline_values = [float(value) for value in profile["Baseline power (kW)"]]
         if not all(math.isfinite(value) for value in price_values):
@@ -458,7 +535,8 @@ elif page == "Flexible-load cost optimizer":
 
         schedule_frame = pd.DataFrame({
             "Interval": profile["Interval"],
-            "Tariff": price_values,
+            "Tariff used (currency/kWh)": price_values,
+            "Tariff source": tariff_source,
             "Available power budget (kW)": budget_values,
             "Baseline power (kW)": baseline_values,
             "Optimized power (kW)": list(result.power_kw),
@@ -473,6 +551,14 @@ elif page == "Flexible-load cost optimizer":
         st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
         export = schedule_frame.copy()
         export["data_provenance"] = profile_provenance
+        export["tariff_source"] = tariff_source
+        export["tariff_forecast_method"] = (
+            "seasonal_naive_24h" if tariff_forecast_metadata is not None else "user_supplied_profile"
+        )
+        export["tariff_forecast_input_sha256"] = (
+            tariff_forecast_metadata.input_history_sha256
+            if tariff_forecast_metadata is not None else ""
+        )
         export["currency_label"] = currency
         export["baseline_cost"] = result.baseline_cost
         export["optimized_cost"] = result.total_cost
