@@ -155,40 +155,6 @@ def _clip(value: float, non_negative: bool) -> float:
     return max(0.0, value) if non_negative else value
 
 
-def _forecast_one_step_holdout(values: Sequence[float], stamps: Sequence[datetime],
-                               split: int, non_negative: bool) -> tuple[list[float], list[float] | None]:
-    actual = list(values[split:])
-    persistence = _baseline(values[:split], len(actual), "persistence")
-    seasonal = [
-        float(values[index - 24]) for index in range(split, len(values))
-    ]
-    baseline_predictions = {
-        "persistence": [_clip(v, non_negative) for v in persistence],
-        "seasonal_naive_24h": [_clip(v, non_negative) for v in seasonal],
-    }
-    best_name = min(
-        baseline_predictions,
-        key=lambda name: _metrics(actual, baseline_predictions[name]).mae,
-    )
-    best_predictions = baseline_predictions[best_name]
-    ridge_predictions = None
-    if split >= 72:
-        try:
-            coefficients, mean, scale = _fit_ridge(values, stamps, split)
-            rolling_history = list(values[:split])
-            ridge_predictions = []
-            for stamp in stamps[split:]:
-                prediction = _clip(
-                    _ridge_predict_one(rolling_history, stamp, coefficients, mean, scale),
-                    non_negative,
-                )
-                ridge_predictions.append(prediction)
-                rolling_history.append(prediction)
-        except (np.linalg.LinAlgError, ValueError, FloatingPointError):
-            ridge_predictions = None
-    return best_predictions, ridge_predictions
-
-
 def _forecast_signal(name: str, unit: str, values: Sequence[float],
                      stamps: Sequence[datetime], horizon: int,
                      non_negative: bool) -> SignalForecast:
@@ -199,6 +165,8 @@ def _forecast_signal(name: str, unit: str, values: Sequence[float],
         raise ValueError("horizon must be an integer from 1 to 168 hours")
     if not isinstance(non_negative, bool):
         raise ValueError("non_negative must be a boolean")
+    if non_negative and any(value < 0 for value in series):
+        raise ValueError(f"{name} is declared non-negative but contains negative observations")
 
     split = max(48, int(len(series) * 0.8))
     if split >= len(series):
@@ -316,6 +284,8 @@ def forecast_signals(
         raise ValueError("history must be a non-empty mapping of signal names to series")
     if set(history) != set(units):
         raise ValueError("history and units must contain exactly the same signal names")
+    if non_negative_signals is not None and isinstance(non_negative_signals, (str, bytes)):
+        raise ValueError("non_negative_signals must be a collection of signal names")
     non_negative = set(history) if non_negative_signals is None else set(non_negative_signals)
     unknown = non_negative - set(history)
     if unknown:
