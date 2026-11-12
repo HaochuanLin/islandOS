@@ -30,6 +30,9 @@ class FlexibleLoadSchedule:
     total_cost: float
     energy_requirement_kwh: float
     energy_shortfall_kwh: float
+    baseline_cost: float | None
+    cost_difference_vs_baseline: float | None
+    cost_difference_percent_vs_baseline: float | None
     solver_status: str
     solver_message: str
     method: str = "continuous_linear_programming"
@@ -46,6 +49,9 @@ class FlexibleLoadSchedule:
             "total_cost": self.total_cost,
             "energy_requirement_kwh": self.energy_requirement_kwh,
             "energy_shortfall_kwh": self.energy_shortfall_kwh,
+            "baseline_cost": self.baseline_cost,
+            "cost_difference_vs_baseline": self.cost_difference_vs_baseline,
+            "cost_difference_percent_vs_baseline": self.cost_difference_percent_vs_baseline,
             "solver_status": self.solver_status,
             "solver_message": self.solver_message,
             "method": self.method,
@@ -78,6 +84,7 @@ def optimize_flexible_load(
     max_power_kw: float,
     available_power_kw: Sequence[float] | None = None,
     availability: Sequence[bool] | None = None,
+    baseline_power_kw: Sequence[float] | None = None,
     dt_hours: float = 1.0,
 ) -> FlexibleLoadSchedule:
     """Minimize energy cost while meeting a fixed, shiftable energy requirement.
@@ -121,6 +128,23 @@ def optimize_flexible_load(
             raise ValueError("available_power_kw must be non-negative")
         power_budget = np.minimum(power_budget, float(max_power_kw))
 
+    baseline_cost = None
+    baseline_energy = None
+    if baseline_power_kw is not None:
+        baseline_power = _series(baseline_power_kw, "baseline_power_kw", horizon)
+        if np.any(baseline_power < 0):
+            raise ValueError("baseline_power_kw must be non-negative")
+        if np.any(baseline_power > max_power_kw + 1e-9):
+            raise ValueError("baseline_power_kw must not exceed max_power_kw")
+        baseline_energy = float(np.sum(baseline_power) * dt_hours)
+        energy_tolerance = max(1e-8, energy_requirement_kwh * 1e-9)
+        if abs(baseline_energy - energy_requirement_kwh) > energy_tolerance:
+            raise ValueError(
+                "baseline_power_kw must deliver the same total energy as "
+                "energy_requirement_kwh for a like-for-like cost comparison"
+            )
+        baseline_cost = float(np.dot(prices, baseline_power * dt_hours))
+
     if availability is not None:
         raw_availability = np.asarray(availability)
         if raw_availability.ndim != 1 or len(raw_availability) != horizon:
@@ -147,6 +171,11 @@ def optimize_flexible_load(
             total_cost=0.0,
             energy_requirement_kwh=0.0,
             energy_shortfall_kwh=0.0,
+            baseline_cost=baseline_cost,
+            cost_difference_vs_baseline=(None if baseline_cost is None else baseline_cost),
+            cost_difference_percent_vs_baseline=(
+                None if baseline_cost is None or baseline_cost <= 0 else 0.0
+            ),
             solver_status="optimal",
             solver_message="Zero energy requirement; no optimization needed.",
         )
@@ -171,13 +200,26 @@ def optimize_flexible_load(
             f"(shortfall={shortfall:.9g} kWh)"
         )
 
+    optimized_cost = float(np.dot(prices, energy))
+    cost_difference = (
+        None if baseline_cost is None else baseline_cost - optimized_cost
+    )
+    cost_difference_percent = (
+        None
+        if baseline_cost is None or baseline_cost <= 0
+        else 100.0 * cost_difference / baseline_cost
+    )
+
     return FlexibleLoadSchedule(
         power_kw=tuple(float(v) for v in powers),
         energy_kwh=tuple(float(v) for v in energy),
         total_energy_kwh=delivered,
-        total_cost=float(np.dot(prices, energy)),
+        total_cost=optimized_cost,
         energy_requirement_kwh=float(energy_requirement_kwh),
         energy_shortfall_kwh=shortfall,
+        baseline_cost=baseline_cost,
+        cost_difference_vs_baseline=cost_difference,
+        cost_difference_percent_vs_baseline=cost_difference_percent,
         solver_status="optimal",
         solver_message=str(result.message),
     )
