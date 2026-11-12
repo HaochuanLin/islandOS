@@ -19,6 +19,7 @@ import streamlit as st
 
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
+from optimization.price_aware_load_optimizer import optimize_flexible_load
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
@@ -121,7 +122,7 @@ with st.sidebar:
     st.caption("Energy & resource decision support")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
+        ["Overview", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -280,6 +281,161 @@ if page == "Overview":
         'and any other priority loads. This tool does not dispatch the real grid or equipment.</div>',
         unsafe_allow_html=True,
     )
+
+elif page == "Flexible-load cost optimizer":
+    st.title("Flexible-load cost optimizer")
+    st.write(
+        "Compare a fixed operating profile with a lower-cost schedule while "
+        "delivering exactly the same electrical energy."
+    )
+    st.info(
+        "Experimental decision-support module. The default profile is synthetic. "
+        "It does not control equipment, forecast prices, or verify site savings."
+    )
+
+    currency = st.text_input(
+        "Currency label (used only for display)", value="currency",
+        help="Enter a label such as USD, EUR, or your local currency. This does not convert prices.",
+    ).strip() or "currency"
+    max_power = st.number_input(
+        "Equipment maximum power (kW)", min_value=0.1, value=2.0, step=0.1,
+        help="Nameplate upper bound for the flexible load.",
+    )
+    dt_hours = st.number_input(
+        "Interval duration (hours)", min_value=0.05, value=1.0, step=0.25,
+        help="All energy and cost calculations use this interval duration.",
+    )
+
+    hours = list(range(24))
+    prices = [
+        0.12 if hour < 6 else
+        0.20 if hour < 16 else
+        0.32 if hour < 21 else
+        0.18
+        for hour in hours
+    ]
+    default_profile = pd.DataFrame({
+        "Interval": [f"{hour:02d}:00" for hour in hours],
+        "Price (currency/kWh)": prices,
+        "Available power budget (kW)": [1.5] * 24,
+        "Baseline power (kW)": [0.5] * 24,
+    })
+    st.markdown("### Scenario inputs")
+    st.caption(
+        "Edit the tariff, available power budget, and baseline profile below. "
+        "The baseline determines the required total energy, so the comparison "
+        "keeps service quantity equal."
+    )
+    profile = st.data_editor(
+        default_profile,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        disabled=["Interval"],
+        column_config={
+            "Price (currency/kWh)": st.column_config.NumberColumn(
+                min_value=-1000000.0, max_value=1000000.0, step=0.01, format="%.3f"
+            ),
+            "Available power budget (kW)": st.column_config.NumberColumn(
+                min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
+            ),
+            "Baseline power (kW)": st.column_config.NumberColumn(
+                min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
+            ),
+        },
+        key="price_aware_profile_editor",
+    )
+
+    try:
+        price_values = [float(value) for value in profile["Price (currency/kWh)"]]
+        budget_values = [float(value) for value in profile["Available power budget (kW)"]]
+        baseline_values = [float(value) for value in profile["Baseline power (kW)"]]
+        if not all(math.isfinite(value) for value in price_values):
+            raise ValueError("Tariff values must be finite.")
+        if not all(math.isfinite(value) and value >= 0 for value in budget_values):
+            raise ValueError("Available power budgets must be finite and non-negative.")
+        if not all(math.isfinite(value) and value >= 0 for value in baseline_values):
+            raise ValueError("Baseline power values must be finite and non-negative.")
+
+        required_energy = sum(baseline_values) * float(dt_hours)
+        if required_energy <= 0:
+            raise ValueError("The baseline must contain a positive energy requirement.")
+        result = optimize_flexible_load(
+            price_per_kwh=price_values,
+            energy_requirement_kwh=required_energy,
+            max_power_kw=float(max_power),
+            available_power_kw=budget_values,
+            baseline_power_kw=baseline_values,
+            dt_hours=float(dt_hours),
+        )
+        st.markdown("### Cost comparison")
+        first, second, third = st.columns(3)
+        first.metric("Baseline cost", f"{currency} {result.baseline_cost:,.3f}")
+        second.metric("Optimized cost", f"{currency} {result.total_cost:,.3f}")
+        difference = result.cost_difference_vs_baseline
+        third.metric(
+            "Cost difference",
+            f"{currency} {difference:,.3f}",
+            delta=(
+                f"{result.cost_difference_percent_vs_baseline:.1f}%"
+                if result.cost_difference_percent_vs_baseline is not None
+                else "Percentage unavailable"
+            ),
+            delta_color="normal",
+        )
+        st.caption(
+            f"Equal service: {result.total_energy_kwh:,.3f} kWh delivered over "
+            f"{len(profile)} intervals. Positive cost difference means the optimized "
+            "schedule costs less; a negative value means it costs more."
+        )
+        if difference > 1e-8:
+            st.success("Under the supplied assumptions, the optimized schedule has a lower energy charge.")
+        elif difference < -1e-8:
+            st.warning("Under the supplied assumptions, the optimized schedule costs more than the baseline.")
+        else:
+            st.info("The optimized schedule has the same energy charge as the baseline.")
+
+        schedule_frame = pd.DataFrame({
+            "Interval": profile["Interval"],
+            "Tariff": price_values,
+            "Available power budget (kW)": budget_values,
+            "Baseline power (kW)": baseline_values,
+            "Optimized power (kW)": list(result.power_kw),
+            "Optimized energy (kWh)": list(result.energy_kwh),
+        })
+        st.markdown("### Operating schedule")
+        st.line_chart(
+            schedule_frame.set_index("Interval")[
+                ["Baseline power (kW)", "Optimized power (kW)"]
+            ]
+        )
+        st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
+        export = schedule_frame.copy()
+        export["data_provenance"] = (
+            "User-edited scenario assumptions; not independently verified site data"
+        )
+        export["currency_label"] = currency
+        export["baseline_cost"] = result.baseline_cost
+        export["optimized_cost"] = result.total_cost
+        export["cost_difference_vs_baseline"] = result.cost_difference_vs_baseline
+        st.download_button(
+            "Download schedule and cost comparison (CSV)",
+            data=export.to_csv(index=False).encode("utf-8-sig"),
+            file_name="islandos_flexible_load_cost_comparison.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        with st.expander("Model assumptions and limitations"):
+            st.write(
+                "- The baseline and optimized schedules deliver the same total electrical energy.\n"
+                "- The optimizer shifts a continuous, deferrable load across the supplied intervals.\n"
+                "- The available power budget is a hard per-interval limit after essential demand and higher-priority reservations.\n"
+                "- The model does not include demand charges, taxes, fixed fees, startup costs, minimum run times, ramp rates, process dynamics, or network constraints.\n"
+                "- The tariff is treated as supplied; no tariff interpretation or currency conversion is performed.\n"
+                "- A lower modeled energy charge is not proof of realizable customer savings or plant feasibility."
+            )
+    except (ValueError, TypeError, KeyError) as exc:
+        st.error(f"Cannot calculate this scenario: {exc}")
 
 elif page == "Strategy simulator":
     st.title("Current module: energy–water strategy simulator")
