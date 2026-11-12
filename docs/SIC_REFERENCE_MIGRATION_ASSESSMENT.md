@@ -17,6 +17,8 @@ modules or importing an unverified third-party codebase.
 - **Do not replace IslandOS forecasting interfaces with the SIC Random Forest.**
 - Adopt the narrow tariff-aware flexible-load scheduling pattern as an
   independently implemented, tested IslandOS module.
+- Add a branch-only Streamlit page for editable, equal-energy tariff scenarios;
+  do not claim it is live in the hosted app before merge and redeployment.
 - Reassess dashboard and service architecture only after the decision core has
   stable, customer-relevant outputs and a defined multi-site deployment need.
 
@@ -86,15 +88,16 @@ difference as a scenario calculation rather than verified customer savings.
 
 - The optimizer now supports a like-for-like baseline profile with equal total
   energy, and tests both the cost difference and invalid baseline rejection.
-- Next, define how the UI records tariff source, currency, interval, and
-  demand-charge assumptions.
-- Add transparent cost breakdowns and avoid reporting scenario differences as
-  guaranteed savings.
-- Integrate into the UI only after input/output contracts and test coverage are
-  stable.
+- An experimental Streamlit page now records an editable tariff, a display-only
+  currency label, interval duration, available power budget, and baseline load.
+- It presents equal-energy cost comparisons, the schedule, and a CSV audit.
+- Next, add tariff-source and billing-period metadata and decide how demand
+  charges should be represented before claiming whole-bill savings.
+- Keep scenario differences explicitly separate from verified customer savings.
 
-**Exit:** a reviewer can trace the cost difference to the exact tariff, energy
-requirement, power limits, baseline profile, and schedule.
+**Exit:** a reviewer can trace the cost difference to the tariff source, currency,
+interval, billing assumptions, energy requirement, power limits, baseline
+profile, and schedule.
 
 ### Stage C — Extend equipment constraints only when justified
 
