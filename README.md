@@ -49,7 +49,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
-- Standalone price-aware linear-programming prototype for continuous, deferrable electrical loads; not yet integrated into the hosted app.
+- Standalone price-aware linear-programming prototype for continuous, deferrable electrical loads; not yet integrated into the hosted app. Run its illustrative synthetic example with `python examples/price_aware_flexible_load_demo.py`.
 - Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
 - Read-only telemetry and selected integration prototypes.
 
