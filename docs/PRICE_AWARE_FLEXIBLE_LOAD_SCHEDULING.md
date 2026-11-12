@@ -42,10 +42,12 @@ cannot fit in the allowed horizon. It does not silently reduce required service.
 
 The feature branch adds a **Flexible-load cost optimizer** page to `app.py`.
 Users can edit a 24-interval tariff, the per-interval power budget, and a
-baseline load profile. The baseline determines the required energy, so the
-optimizer compares schedules delivering the same total energy. The page shows
-baseline and optimized energy charges, the power schedule, a row-level audit,
-and a CSV export.
+baseline load profile, or upload a scenario CSV with the columns
+`interval`, `price_per_kwh`, `available_power_kw`, and `baseline_power_kw`.
+A matching CSV template can be downloaded from the page. The baseline determines
+the required energy, so the optimizer compares schedules delivering the same
+total energy. The page shows baseline and optimized energy charges, the power
+schedule, a row-level audit, and a CSV export with input provenance.
 
 The default tariff and load profile are synthetic. Edited inputs are treated as
 user-supplied assumptions and are not independently verified. The currency
