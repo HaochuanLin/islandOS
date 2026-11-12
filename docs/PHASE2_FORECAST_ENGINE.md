@@ -22,7 +22,7 @@ This phase is a forecasting capability, not an end-to-end customer deployment. T
 2. **24-hour seasonal naive:** repeat the most recent daily profile.
 3. **Ridge autoregression:** a small regularized regression model using lagged values (1, 2, 3, 24, and 48 hours) and hour/day-of-week cyclical features.
 
-The model is selected independently for each signal. Ridge is used only when its recursive chronological holdout MAE is strictly lower than the strongest baseline. Otherwise the strongest baseline remains selected. This prevents a more complicated model from being chosen merely because it is labelled AI.
+The model is selected independently for each signal. Ridge is used only when its recursive chronological holdout MAE is strictly lower than the strongest baseline. Otherwise the strongest baseline remains selected. This prevents a more complicated model from being chosen merely because it is labelled AI. After selection, the ridge model is refit on the full history available at forecast time; holdout observations are never used to score the candidate before selection.
 
 The holdout is the final contiguous 20% of the supplied history. The model is trained only on the earlier portion. Multi-step forecasts are evaluated recursively: predictions, not future actual observations, are fed back into later steps.
 

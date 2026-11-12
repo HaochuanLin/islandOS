@@ -83,7 +83,7 @@ class TestForecastEngine(unittest.TestCase):
             forecast_signals(self.timestamps, {"load": [1.0] * 240}, {"load": "kW", "pv": "kW"}, 1)
         with self.assertRaisesRegex(ValueError, "horizon"):
             forecast_signals(self.timestamps, {"load": [1.0] * 240}, {"load": "kW"}, 0)
-        with self.assertRaisesRegex(ValueError, "at least 72"):
+        with self.assertRaisesRegex(ValueError, "(?i)at least 72"):
             forecast_signals(self.timestamps[:71], {"load": [1.0] * 71}, {"load": "kW"}, 1)
 
     def test_negative_prices_are_not_clipped(self):
