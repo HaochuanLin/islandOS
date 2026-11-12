@@ -207,7 +207,8 @@ def _forecast_signal(name: str, unit: str, values: Sequence[float],
     baseline_predictions = {
         "persistence": [_clip(v, non_negative) for v in _baseline(series[:split], len(actual), "persistence")],
         "seasonal_naive_24h": [
-            _clip(series[index - 24], non_negative) for index in range(split, len(series))
+            _clip(value, non_negative)
+            for value in _baseline(series[:split], len(actual), "seasonal_naive_24h")
         ],
     }
     baseline_metrics = {
