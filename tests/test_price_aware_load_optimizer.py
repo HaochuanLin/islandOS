@@ -66,6 +66,8 @@ class PriceAwareFlexibleLoadOptimizerTests(unittest.TestCase):
             ({"price_per_kwh": [0.1, float("nan")]}, "finite"),
             ({"price_per_kwh": [0.1], "energy_requirement_kwh": -1}, "non-negative"),
             ({"price_per_kwh": [0.1], "max_power_kw": 0}, "max_power_kw"),
+            ({"price_per_kwh": [0.1], "max_power_kw": "2"}, "max_power_kw"),
+            ({"price_per_kwh": [0.1], "energy_requirement_kwh": True}, "energy_requirement_kwh"),
             ({"price_per_kwh": [0.1], "available_power_kw": [-1]}, "non-negative"),
             ({"price_per_kwh": [0.1], "availability": [1]}, "boolean"),
         ]
