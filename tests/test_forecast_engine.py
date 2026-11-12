@@ -94,6 +94,22 @@ class TestForecastEngine(unittest.TestCase):
         )
         self.assertLess(result.forecasts["price"].points[0].predicted, 0.0)
 
+    def test_rejects_negative_observation_for_non_negative_signal(self):
+        values = [5.0] * 240
+        values[120] = -1.0
+        with self.assertRaisesRegex(ValueError, "declared non-negative"):
+            forecast_signals(
+                self.timestamps, {"pv": values}, {"pv": "kW"}, 2,
+                non_negative_signals=("pv",),
+            )
+
+    def test_rejects_string_as_non_negative_signal_collection(self):
+        with self.assertRaisesRegex(ValueError, "collection of signal names"):
+            forecast_signals(
+                self.timestamps, {"pv": [5.0] * 240}, {"pv": "kW"}, 2,
+                non_negative_signals="pv",
+            )
+
     def test_uncertainty_bounds_enclose_point_forecast(self):
         values = [10.0 + (i % 24) * 0.1 + (0.2 if i % 31 == 0 else 0.0) for i in range(240)]
         result = forecast_signals(
