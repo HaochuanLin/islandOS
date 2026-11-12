@@ -329,6 +329,12 @@ elif page == "Flexible-load cost optimizer":
         "directly. The baseline determines the required total energy, so the "
         "comparison keeps service quantity equal."
     )
+    st.caption(
+        "The per-interval power budget constrains the optimized schedule. The "
+        "reference baseline is checked against the equipment rating and operating "
+        "window, but is not constrained by this optimization budget; it may "
+        "represent grid-supplied operation before flexible resources are applied."
+    )
     template = default_profile.rename(columns={
         "Interval": "interval",
         "Price (currency/kWh)": "price_per_kwh",
