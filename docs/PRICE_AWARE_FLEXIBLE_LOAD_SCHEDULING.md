@@ -74,6 +74,12 @@ rule changes. It is a transparent baseline, not a trained AI or market forecast.
 Forecast quality must be measured on chronological held-out data before use
 in a customer decision.
 
+When at least 72 hourly observations are supplied, the page also runs a
+contiguous rolling-origin replay: 48 hours of initial history followed by
+24-hour test folds. MAE, RMSE, and signed bias are shown and exported. Each
+fold uses only observations available before its target block. These historical
+metrics are diagnostic evidence, not a promise of future accuracy.
+
 ## Important limitations
 
 This first version is appropriate only for continuous, deferrable loads whose
