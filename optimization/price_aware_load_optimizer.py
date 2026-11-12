@@ -88,14 +88,25 @@ def optimize_flexible_load(
     prices = _series(price_per_kwh, "price_per_kwh")
     horizon = len(prices)
 
-    if isinstance(energy_requirement_kwh, (bool, np.bool_)):
-        raise ValueError("energy_requirement_kwh must be finite and non-negative")
-    if not np.isfinite(energy_requirement_kwh) or energy_requirement_kwh < 0:
-        raise ValueError("energy_requirement_kwh must be finite and non-negative")
-    if isinstance(max_power_kw, (bool, np.bool_)) or not np.isfinite(max_power_kw) or max_power_kw <= 0:
-        raise ValueError("max_power_kw must be finite and > 0")
-    if isinstance(dt_hours, (bool, np.bool_)) or not np.isfinite(dt_hours) or dt_hours <= 0:
-        raise ValueError("dt_hours must be finite and > 0")
+    scalar_inputs = (
+        ("energy_requirement_kwh", energy_requirement_kwh, 0.0, False),
+        ("max_power_kw", max_power_kw, 0.0, True),
+        ("dt_hours", dt_hours, 0.0, True),
+    )
+    normalized = {}
+    for name, value, lower_bound, exclusive in scalar_inputs:
+        if isinstance(value, (bool, np.bool_)) or not isinstance(
+            value, (int, float, np.integer, np.floating)
+        ):
+            raise ValueError(f"{name} must be a finite numeric value")
+        numeric = float(value)
+        if not np.isfinite(numeric) or (numeric <= lower_bound if exclusive else numeric < lower_bound):
+            qualifier = "> 0" if exclusive else ">= 0"
+            raise ValueError(f"{name} must be finite and {qualifier}")
+        normalized[name] = numeric
+    energy_requirement_kwh = normalized["energy_requirement_kwh"]
+    max_power_kw = normalized["max_power_kw"]
+    dt_hours = normalized["dt_hours"]
 
     if available_power_kw is None:
         power_budget = np.full(horizon, float(max_power_kw))
