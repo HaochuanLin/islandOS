@@ -50,8 +50,11 @@ File: `optimization/price_aware_load_optimizer.py`
 - Reports infeasible requirements explicitly instead of silently relaxing
   required service.
 - Rejects non-finite, malformed, boolean, and dimensionally inconsistent inputs.
-- Returns an auditable schedule, total energy, cost, solver status, and explicit
-  model-scope limitations.
+- Returns an auditable schedule, total energy, optimized cost, solver status,
+  and explicit model-scope limitations.
+- Optionally compares against a baseline profile with the same total energy,
+  respecting the load rating and operating window; reports absolute and
+  percentage cost differences when mathematically meaningful.
 
 This is a continuous linear program, not a complete equipment scheduler. It
 does not model startup costs, minimum on/off times, discrete operating states,
@@ -81,15 +84,17 @@ difference as a scenario calculation rather than verified customer savings.
 
 ### Stage B — Connect economic comparison to customer questions
 
-- Define how baseline and optimized costs should be compared for equal service.
-- Record tariff source, currency, interval, and demand-charge assumptions.
+- The optimizer now supports a like-for-like baseline profile with equal total
+  energy, and tests both the cost difference and invalid baseline rejection.
+- Next, define how the UI records tariff source, currency, interval, and
+  demand-charge assumptions.
 - Add transparent cost breakdowns and avoid reporting scenario differences as
   guaranteed savings.
 - Integrate into the UI only after input/output contracts and test coverage are
   stable.
 
 **Exit:** a reviewer can trace the cost difference to the exact tariff, energy
-requirement, power limits, and schedule.
+requirement, power limits, baseline profile, and schedule.
 
 ### Stage C — Extend equipment constraints only when justified
 
