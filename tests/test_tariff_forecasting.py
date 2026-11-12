@@ -49,8 +49,8 @@ class TariffForecastingTests(unittest.TestCase):
     def test_dst_fall_back_accepts_repeated_local_clock_hour(self):
         eastern = ZoneInfo("America/New_York")
         history = (
-            TariffObservation(datetime(2026, 11, 1, 1, 0, tzinfo=timezone(timedelta(hours=-4))), 0.10),
-            TariffObservation(datetime(2026, 11, 1, 1, 0, tzinfo=timezone(timedelta(hours=-5))), 0.20),
+            TariffObservation(datetime(2026, 11, 1, 1, 0, tzinfo=eastern, fold=0), 0.10),
+            TariffObservation(datetime(2026, 11, 1, 1, 0, tzinfo=eastern, fold=1), 0.20),
         )
         forecast = forecast_tariff_prices(history, 1, season_length=2)
         self.assertEqual(forecast.points[0].timestamp, datetime(2026, 11, 1, 7, 0, tzinfo=timezone.utc))
