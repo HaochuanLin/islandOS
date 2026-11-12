@@ -47,7 +47,9 @@ baseline load profile, or upload a scenario CSV with the columns
 A matching CSV template can be downloaded from the page. The baseline determines
 the required energy, so the optimizer compares schedules delivering the same
 total energy. The page shows baseline and optimized energy charges, the power
-schedule, a row-level audit, and a CSV export with input provenance.
+schedule, a row-level audit, and a CSV export with input provenance. When a
+tariff forecast is used, its exact UTC target timestamps are shown on the
+forecast chart and included in each corresponding schedule/audit row.
 
 The default tariff and load profile are synthetic. Edited inputs are treated as
 user-supplied assumptions and are not independently verified. The currency
