@@ -2,7 +2,8 @@
 
 Forecasts are planning inputs, not market predictions. Negative prices are
 valid; values are never clipped. All timestamps must be timezone-aware and
-strictly hourly so the forecast cannot silently misalign with dispatch.
+strictly hourly in absolute UTC time so daylight-saving transitions cannot
+silently misalign the forecast with dispatch.
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from numbers import Real
 from typing import Sequence
 
@@ -79,14 +80,21 @@ def _validated_history(history: Sequence[TariffObservation]) -> tuple[TariffObse
     if any(not isinstance(item, TariffObservation) for item in observations):
         raise ValueError("history must contain only TariffObservation records")
     for previous, current in zip(observations, observations[1:]):
-        if (current.timestamp - previous.timestamp).total_seconds() != 3600:
+        elapsed = (
+            current.timestamp.astimezone(timezone.utc)
+            - previous.timestamp.astimezone(timezone.utc)
+        ).total_seconds()
+        if elapsed != 3600:
             raise ValueError("history timestamps must be strictly ordered hourly data")
     return observations
 
 
 def _history_digest(history: Sequence[TariffObservation]) -> str:
     payload = [
-        {"timestamp": item.timestamp.isoformat(), "price_per_kwh": float(item.price_per_kwh)}
+        {
+            "timestamp": item.timestamp.astimezone(timezone.utc).isoformat(),
+            "price_per_kwh": float(item.price_per_kwh),
+        }
         for item in history
     ]
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -104,16 +112,17 @@ def forecast_tariff_prices(
     For hourly electricity tariffs the default season is 24 hours. The method
     uses only the supplied history and supports negative prices. It does not
     model holidays, market events, weather, congestion, or tariff rule changes.
+    Forecast timestamps are emitted in UTC to preserve elapsed-hour alignment.
     """
     observations = _validated_history(history)
     for name, value in (("horizon", horizon), ("season_length", season_length)):
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValueError(f"{name} must be a positive integer")
     season = observations[-min(season_length, len(observations)):]
-    last_timestamp = observations[-1].timestamp
+    last_timestamp_utc = observations[-1].timestamp.astimezone(timezone.utc)
     points = tuple(
         TariffForecastPoint(
-            timestamp=last_timestamp + timedelta(hours=step),
+            timestamp=last_timestamp_utc + timedelta(hours=step),
             predicted_price_per_kwh=float(season[(step - 1) % len(season)].price_per_kwh),
         )
         for step in range(1, horizon + 1)
@@ -160,7 +169,6 @@ def evaluate_tariff_forecast(
         rmse=math.sqrt(sum(error * error for error in errors) / len(errors)),
         bias_predicted_minus_actual=sum(errors) / len(errors),
     )
-
 
 
 def rolling_origin_tariff_backtest(
