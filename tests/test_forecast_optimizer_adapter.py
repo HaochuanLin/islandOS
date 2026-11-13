@@ -10,7 +10,7 @@ from islandos_core.forecast_optimizer_adapter import (
 )
 
 
-def make_bundle(horizon=6):
+def make_bundle(horizon=6, include_load_components=False, critical_load_value=18.0):
     timestamps = [
         datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i)
         for i in range(240)
@@ -24,17 +24,20 @@ def make_bundle(horizon=6):
             for i in range(240)
         ],
     }
+    units = {
+        "pv_power": "kW",
+        "wind_power": "kW",
+        "essential_load": "kW",
+        "electricity_price": "USD/kWh",
+    }
+    if include_load_components:
+        history["flexible_load"] = [2.0] * 240
+        history["critical_load"] = [critical_load_value] * 240
+        units["flexible_load"] = "kW"
+        units["critical_load"] = "kW"
+    non_negative = tuple(name for name in history if name != "electricity_price")
     return forecast_signals(
-        timestamps,
-        history,
-        {
-            "pv_power": "kW",
-            "wind_power": "kW",
-            "essential_load": "kW",
-            "electricity_price": "USD/kWh",
-        },
-        horizon,
-        non_negative_signals=("pv_power", "wind_power", "essential_load"),
+        timestamps, history, units, horizon, non_negative_signals=non_negative,
     )
 
 
@@ -65,6 +68,23 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly 6 values"):
             build_coordination_inputs(
                 make_bundle(), grid_available=[True] * 5, price_unit="USD/kWh"
+            )
+
+    def test_maps_optional_flexible_and_critical_load_forecasts(self):
+        bundle = make_bundle(include_load_components=True)
+        result = build_coordination_inputs(
+            bundle, grid_available=[True] * 6, price_unit="USD/kWh"
+        )
+        self.assertEqual(tuple(result.inputs.flexible_load_kw), (2.0,) * 6)
+        self.assertEqual(tuple(result.inputs.critical_load_kw), (18.0,) * 6)
+        self.assertIn("flexible_load", result.model_ids)
+        self.assertIn("critical_load", result.model_ids)
+
+    def test_rejects_critical_load_above_base_load(self):
+        bundle = make_bundle(include_load_components=True, critical_load_value=40.0)
+        with self.assertRaisesRegex(ValueError, "cannot exceed essential_load"):
+            build_coordination_inputs(
+                bundle, grid_available=[True] * 6, price_unit="USD/kWh"
             )
 
     def test_runs_optimizer_and_preserves_forecast_provenance(self):
