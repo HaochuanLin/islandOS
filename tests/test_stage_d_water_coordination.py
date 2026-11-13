@@ -16,7 +16,7 @@ def test_water_demand_and_flexible_load_join_forecasted_energy_optimizer():
         "wind_power_kw": [4.0 + 0.2 * (i % 5) for i in range(96)],
         "load_kw": [7.0 + (1.0 if i % 24 in range(17, 22) else 0.0) for i in range(96)],
         "tariff_per_kwh": [0.08 if i % 24 < 6 else 0.20 for i in range(96)],
-        "flexible_load_kw": [1.0 if i % 24 in range(8, 18) else 0.0 for i in range(96)],
+        "flexible_load_kw": [1.0 if i % 24 in range(0, 8) else 0.0 for i in range(96)],
         "critical_load_kw": [5.0] * 96,
         "water_demand_m3_per_hour": [0.5 + 0.05 * (i % 3) for i in range(96)],
     }
