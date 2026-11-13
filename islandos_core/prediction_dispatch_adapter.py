@@ -160,3 +160,91 @@ def build_resource_coordination_inputs(
         grid_export_price_per_kwh=grid_export_price_per_kwh,
         grid_export_available=grid_export_available,
     )
+
+
+def optimize_prediction_resource_schedule(
+    results: Mapping[str, PredictionResult],
+    config,
+    *,
+    history_start_utc: datetime,
+    history_end_utc: datetime,
+    grid_available,
+    diesel_available,
+    price_unit: str,
+    population_size: int = 16,
+    generations: int = 8,
+    seed: int = 20261113,
+    max_unmet_load_kwh: float | None = None,
+    max_critical_unmet_load_kwh: float | None = None,
+    terminal_battery_soc_min: float | None = None,
+) -> dict:
+    """Run the existing offline joint battery/diesel optimizer from generic forecasts.
+
+    The four canonical prediction IDs are explicitly mapped to the established
+    dispatch bundle names. This is an offline schedule search, not live control.
+    """
+    from dataclasses import replace
+    from .forecast_optimizer_adapter import optimize_forecasted_resource_schedule
+
+    required = {
+        "pv_power_kw": "pv_power",
+        "wind_power_kw": "wind_power",
+        "load_kw": "essential_load",
+        "tariff_per_kwh": "electricity_price",
+    }
+    if not isinstance(results, Mapping):
+        raise ValueError("results must be a mapping of canonical signal IDs to PredictionResult")
+    missing = sorted(set(required) - set(results))
+    if missing:
+        raise ValueError("missing required resource forecasts: " + ", ".join(missing))
+    if not isinstance(price_unit, str) or not price_unit.strip():
+        raise ValueError("price_unit must be an explicit non-empty unit")
+    mapped = {}
+    for source_id, dispatch_id in required.items():
+        result = results[source_id]
+        if not isinstance(result, PredictionResult):
+            raise TypeError(f"{source_id} must be a PredictionResult")
+        if result.signal_id != source_id:
+            raise ValueError(f"result signal_id must match canonical key {source_id}")
+        expected_unit = price_unit if source_id == "tariff_per_kwh" else "kW"
+        if result.unit != expected_unit:
+            raise ValueError(f"{source_id} must use {expected_unit}; got {result.unit}")
+        mapped[dispatch_id] = replace(result, signal_id=dispatch_id)
+
+    bundle = build_dispatch_forecast_bundle(
+        mapped,
+        history_start_utc=history_start_utc,
+        history_end_utc=history_end_utc,
+    )
+    result = optimize_forecasted_resource_schedule(
+        bundle,
+        config,
+        grid_available=grid_available,
+        diesel_available=diesel_available,
+        price_unit=price_unit,
+        population_size=population_size,
+        generations=generations,
+        seed=seed,
+        max_unmet_load_kwh=max_unmet_load_kwh,
+        max_critical_unmet_load_kwh=max_critical_unmet_load_kwh,
+        terminal_battery_soc_min=terminal_battery_soc_min,
+    )
+    result["generic_prediction_handoff"] = {
+        "canonical_signal_mapping": required,
+        "source_signal_ids": sorted(required),
+        "forecast_model_versions": {
+            key: {"model_id": value.model_id, "model_version": value.model_version}
+            for key, value in sorted(results.items()) if key in required
+        },
+        "source_history_sha256": {
+            key: value.input_history_sha256 for key, value in sorted(results.items())
+            if key in required
+        },
+        "target_timestamps_utc": [
+            point.timestamp.astimezone(timezone.utc).isoformat()
+            for point in next(iter(results.values())).points
+        ],
+        "mode": "offline_schedule_search",
+        "device_write_authorized": False,
+    }
+    return result
