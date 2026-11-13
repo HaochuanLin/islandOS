@@ -98,3 +98,65 @@ def build_dispatch_forecast_bundle(
         history_end_utc=end,
         forecasts=MappingProxyType(forecasts),
     )
+
+
+def build_resource_coordination_inputs(
+    results: Mapping[str, PredictionResult],
+    *,
+    history_start_utc: datetime,
+    history_end_utc: datetime,
+    grid_available,
+    price_unit: str,
+    diesel_available=None,
+    grid_export_price_per_kwh=None,
+    grid_export_available=None,
+):
+    """Hand generic PV/wind/load/tariff predictions to the physical dispatch model.
+
+    Required input keys are the canonical onboarding signal IDs:
+    pv_power_kw, wind_power_kw, load_kw and tariff_per_kwh. These are explicitly
+    mapped to the dispatch adapter's established signal names. All forecast
+    horizons must align; no unit conversion or missing-signal substitution occurs.
+    """
+    required = {
+        "pv_power_kw": ("pv_power", "kW"),
+        "wind_power_kw": ("wind_power", "kW"),
+        "load_kw": ("essential_load", "kW"),
+        "tariff_per_kwh": ("electricity_price", price_unit),
+    }
+    if not isinstance(results, Mapping):
+        raise ValueError("results must be a mapping of canonical signal IDs to PredictionResult")
+    missing = sorted(set(required) - set(results))
+    if missing:
+        raise ValueError("missing required resource forecasts: " + ", ".join(missing))
+    if not isinstance(price_unit, str) or not price_unit.strip():
+        raise ValueError("price_unit must be an explicit non-empty unit")
+    from dataclasses import replace
+    from .forecast_optimizer_adapter import build_coordination_inputs
+
+    mapped = {}
+    for source_id, (dispatch_id, expected_unit) in required.items():
+        result = results[source_id]
+        if not isinstance(result, PredictionResult):
+            raise TypeError(f"{source_id} must be a PredictionResult")
+        if result.signal_id != source_id:
+            raise ValueError(f"result signal_id must match canonical key {source_id}")
+        if result.unit != expected_unit:
+            raise ValueError(f"{source_id} must use {expected_unit}; got {result.unit}")
+        # Keep the original history digest: it fingerprints the source signal ID
+        # and observations, while the explicit mapping documents dispatch naming.
+        mapped[dispatch_id] = replace(result, signal_id=dispatch_id)
+
+    bundle = build_dispatch_forecast_bundle(
+        mapped,
+        history_start_utc=history_start_utc,
+        history_end_utc=history_end_utc,
+    )
+    return build_coordination_inputs(
+        bundle,
+        grid_available=grid_available,
+        price_unit=price_unit,
+        diesel_available=diesel_available,
+        grid_export_price_per_kwh=grid_export_price_per_kwh,
+        grid_export_available=grid_export_available,
+    )
