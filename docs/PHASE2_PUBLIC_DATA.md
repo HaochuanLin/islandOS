@@ -66,6 +66,20 @@ bundle = forecast_signals(
 print(dataset.source_version, dataset.data_sha256)
 ```
 
+## Reproducible command-line evaluation
+
+After downloading the OPSD 60-minute single-index CSV from the source page, run:
+
+```bash
+python examples/phase2_opsd_backtest.py \
+  --csv ./time_series_60min_singleindex.csv \
+  --region AT \
+  --signals load solar wind price \
+  --horizon 24
+```
+
+The JSON report includes the exact source columns, selected region, history window, observation count, data digest, baseline comparisons, holdout metrics, and forecast output. It uses the engine's current single chronological holdout gate; it does **not** claim rolling-origin qualification. Use `--start-utc` and `--end-utc` to restrict ingestion to a chosen contiguous interval, or omit unavailable signals with `--signals`.
+
 ## Attribution
 
 Open Power System Data. 2020. Data Package Time series. Version 2020-10-06. https://doi.org/10.25832/time_series/2020-10-06. (Primary data from various sources; see OPSD source documentation.)
