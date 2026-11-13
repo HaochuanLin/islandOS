@@ -94,18 +94,20 @@ The app opens in your browser. For input columns, units, and assumptions, see th
 
 ```text
 islandOS/
-├── app.py                  # Streamlit application entry point
-├── islandos_core/          # Shared system and simulation logic
+├── app.py                  # Streamlit research/demo entry point
+├── islandos_service_api.py # Loopback-only local reference API
+├── frontend/               # React + TypeScript customer-console foundation
+├── islandos_core/          # Shared data, forecast, optimization, audit and safety logic
+├── islandos_sensors/       # Sensor contracts and telemetry interfaces
 ├── optimization/           # Optimization algorithms
-├── experiments/            # Research experiments and benchmarks
-├── tools/                  # Command-line utilities
+├── pages/                  # Additional Streamlit decision/workspace pages
+├── tools/                  # CLI utilities, including local demo deployment
 ├── data/                   # Example data and input templates
-├── config/                 # Example configurations
-├── configs/                # Additional configuration sets
-├── islandos_sensors/       # Sensor and telemetry interfaces
-├── pages/                  # Additional Streamlit pages
+├── config/ and configs/    # Example site/device configurations
+├── experiments/            # Research experiments and benchmarks
 ├── tests/                  # Automated tests
-├── docs/                   # Architecture, guides, and evidence
+├── docs/                   # Architecture, guides, acceptance and evidence
+├── packaging/              # Windows gateway/demo launch helpers
 ├── assets/                 # Static images and diagrams
 └── .github/workflows/      # Automated checks
 ```
