@@ -319,3 +319,69 @@ def forecast_signals(
         history_end_utc=stamps[-1],
         forecasts=forecasts,
     )
+
+
+def evaluate_signal_rolling(
+    timestamps: Sequence[datetime],
+    values: Sequence[float],
+    horizons: Sequence[int] = (1, 6, 12, 24, 48, 168),
+    *,
+    non_negative: bool = False,
+    min_train_size: int = 72,
+    folds: int = 4,
+):
+    """Backtest the engine's actual candidate models across forecast horizons.
+
+    Unlike the generic callback API, this helper evaluates the same
+    persistence, 24-hour seasonal-naive, and ridge autoregressive candidates
+    used by :func:`forecast_signals`. Each fold refits ridge using only that
+    fold's training history and recursively predicts its future block.
+    """
+    from .forecast_validation import evaluate_horizon_windows
+
+    stamps = _timestamps(timestamps)
+    series = _finite_series(values, "rolling_validation")
+    if len(series) != len(stamps):
+        raise ValueError("values must have one observation for every timestamp")
+    if not isinstance(non_negative, bool):
+        raise ValueError("non_negative must be a boolean")
+    if non_negative and any(value < 0 for value in series):
+        raise ValueError("non-negative rolling validation history contains negative values")
+
+    def persistence(train, future_stamps):
+        return [_clip(train[-1], non_negative)] * len(future_stamps)
+
+    def seasonal_naive(train, future_stamps):
+        profile = train[-24:]
+        return [_clip(profile[index % 24], non_negative)
+                for index in range(len(future_stamps))]
+
+    def ridge_autoregressive(train, future_stamps):
+        train_stamps = [
+            future_stamps[0] - timedelta(hours=len(train) - index)
+            for index in range(len(train))
+        ]
+        coefficients, mean, scale = _fit_ridge(train, train_stamps, len(train))
+        rolling_history = list(train)
+        predictions = []
+        for stamp in future_stamps:
+            prediction = _clip(
+                _ridge_predict_one(rolling_history, stamp, coefficients, mean, scale),
+                non_negative,
+            )
+            predictions.append(prediction)
+            rolling_history.append(prediction)
+        return predictions
+
+    return evaluate_horizon_windows(
+        stamps,
+        series,
+        {
+            "persistence": persistence,
+            "seasonal_naive_24h": seasonal_naive,
+            "ridge_autoregressive": ridge_autoregressive,
+        },
+        horizons,
+        min_train_size=min_train_size,
+        folds=folds,
+    )
