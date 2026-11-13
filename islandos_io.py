@@ -163,9 +163,11 @@ def validate_telemetry(
         future_tolerance_finite = math.isfinite(float(future_tolerance_seconds))
     except (TypeError, ValueError, OverflowError):
         future_tolerance_finite = False
-    if not max_age_finite or max_age_seconds < 0:
+    if (isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, (int, float))
+            or not max_age_finite or max_age_seconds < 0):
         raise ValueError("max_age_seconds must be finite and non-negative")
-    if not future_tolerance_finite or future_tolerance_seconds < 0:
+    if (isinstance(future_tolerance_seconds, bool) or not isinstance(future_tolerance_seconds, (int, float))
+            or not future_tolerance_finite or future_tolerance_seconds < 0):
         raise ValueError("future_tolerance_seconds must be finite and non-negative")
 
     errors = []
