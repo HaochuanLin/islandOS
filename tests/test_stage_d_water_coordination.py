@@ -6,6 +6,7 @@ from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemCon
 from islandos_core.forecast_signal_catalog import forecast_site_signals
 from islandos_core.prediction_dispatch_adapter import optimize_prediction_resource_schedule
 from islandos_core.water_resource_adapter import WaterServiceSpec, build_ro_energy_load
+from islandos_core.water_dispatch import build_price_aware_ro_schedule
 
 
 def test_water_demand_and_flexible_load_join_forecasted_energy_optimizer():
@@ -100,3 +101,26 @@ def test_water_service_spec_rejects_invalid_tank_reserve():
             initial_inventory_m3=1.0,
             reserve_m3=2.0,
         )
+
+
+
+def test_price_aware_ro_schedule_does_not_double_count_current_demand():
+    spec = WaterServiceSpec(
+        specific_energy_kwh_per_m3=4.0,
+        ro_capacity_m3_per_hour=3.0,
+        tank_capacity_m3=5.0,
+        initial_inventory_m3=0.5,
+        reserve_m3=0.5,
+    )
+    schedule = build_price_aware_ro_schedule(
+        [1.0],
+        [0.10],
+        spec=spec,
+        lookahead_hours=1,
+    )
+
+    # Starting with 0.5 m3, produce 0.5 m3 to cover the 1.0 m3 demand
+    # and finish at the 0.5 m3 reserve. The old code produced 1.5 m3.
+    assert schedule["production_m3"] == pytest.approx((1.0,))
+    assert schedule["inventory_end_m3"] == pytest.approx((0.5,))
+    assert schedule["total_ro_energy_kwh"] == pytest.approx(4.0)

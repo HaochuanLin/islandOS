@@ -47,7 +47,7 @@ All four forecasts must have identical target timestamps. The adapter rejects mi
 - The canonical forecast adapter accepts optional flexible_load_kw and critical_load_kw signals. Flexible-load forecast energy is conserved over its declared non-zero availability window and scheduled jointly with battery/diesel.
 - The water adapter validates RO specific energy, rated production, tank capacity, initial inventory, and reserve; it replays the empirical upper water-demand planning bound and converts feasible RO production into kW.
 - RO demand is added to essential load and to the critical subset when one is supplied. A water forecast without an explicit WaterServiceSpec fails closed.
-- RO production currently follows reserve-constrained just-in-time operation. It is **not** price-optimized, tank trajectory is not a decision variable, and detailed RO process constraints are not represented.
+- RO production supports two explicit modes: reserve-constrained just-in-time operation (default) and an opt-in tariff-look-ahead heuristic that uses the aligned electricity-price forecast to pre-produce in locally cheaper hours. The latter exposes an hourly tank trajectory but is not a globally optimized tank trajectory or a joint RO/battery/diesel mathematical program. Detailed RO process constraints are not represented.
 - The heuristic is not globally optimal; forecast upper bounds are not calibrated probability intervals.
 
 See `docs/STAGE_D_WATER_FLEX_COORDINATION.md` for the interface and limitations.
