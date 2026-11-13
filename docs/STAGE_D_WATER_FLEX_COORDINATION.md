@@ -4,7 +4,7 @@
 
 The canonical site forecast catalog can now pass optional flexible-load and critical-load forecasts into the forecast-to-resource optimizer. The existing battery/diesel search derives the flexible-load energy budget and availability window from the supplied forecast profile, then jointly schedules that energy with battery and diesel decisions while conserving the requested flexible energy.
 
-A new water_resource_adapter.py connects hourly water-demand forecasts to the electrical system:
+The water_resource_adapter.py connects hourly water-demand forecasts to the electrical system. The price-aware planner in water_dispatch.py is now callable from optimize_prediction_resource_schedule using water_schedule_mode="price_aware":
 - It validates a declared RO specific energy, production capacity, tank capacity, initial inventory, and reserve.
 - It replays water demand against tank inventory and produces only enough water to serve demand and restore the declared reserve.
 - It fails closed when RO capacity or tank constraints cannot satisfy the forecast.
@@ -43,11 +43,11 @@ Include water_demand_m3_per_hour in the forecast history and flexible_load_kw wh
 
 ## Deliberate limitations
 
-- RO production currently uses a reserve-constrained just-in-time rule. It is not yet a price-aware RO schedule or a jointly optimized tank trajectory.
+- The default RO policy remains reserve-constrained just-in-time. An opt-in tariff-look-ahead heuristic can pre-produce in locally cheaper periods and exposes an hourly tank trajectory, but it is not a globally optimized tank trajectory or joint RO/battery/diesel mathematical program.
 - The water service replay uses the empirical upper planning bound of the water-demand forecast. That band is not a calibrated probability interval.
 - RO operating modes, startup/shutdown, cleaning/CIP, brine handling, recovery ratio, salinity/temperature effects, pump curves, and water quality are not yet modeled.
 - The flexible-load optimizer conserves forecast energy within its declared availability window and maximum power. It does not yet represent every process-specific precedence, batch, thermal, or production constraint.
-- The joint battery/diesel optimizer remains a seeded heuristic and does not claim global optimality.
+- The tariff-look-ahead RO planner is a deterministic heuristic, not a global optimum. The joint battery/diesel optimizer remains a seeded heuristic and does not claim global optimality.
 - The result is offline decision support only; it does not issue commands to RO equipment, batteries, generators, or grid assets.
 
 ## Validation
