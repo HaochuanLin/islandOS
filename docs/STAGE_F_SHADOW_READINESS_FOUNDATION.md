@@ -2,7 +2,7 @@
 
 ## Delivered software slice
 
-`islandos_core/shadow_mode.py` adds a vendor-neutral, read-only comparison between a stored recommendation and later observed telemetry. It checks recommendation/observation identity, timestamp validity and freshness, signal coverage, unit consistency, finite values, and per-signal tolerances declared from an approved asset/sensor specification.
+`islandos_core/shadow_mode.py` adds a vendor-neutral, read-only comparison between a stored recommendation and later observed telemetry. `islandos_shadow.py` provides an offline JSON replay CLI for recorded recommendation/observation pairs. It checks recommendation/observation identity, timestamp validity and freshness, signal coverage, unit consistency, finite values, and per-signal tolerances declared from an approved asset/sensor specification.
 
 Each comparison produces an auditable report with a SHA-256 digest and one of three states:
 - `within_tolerance`: all compared signals are within their declared tolerances.
@@ -10,6 +10,21 @@ Each comparison produces an auditable report with a SHA-256 digest and one of th
 - `blocked`: required evidence is missing, stale, future-dated, malformed, non-finite, or unit-inconsistent.
 
 All outcomes explicitly set `device_write_authorized=false` and `command_generated=false`. A deviation is never auto-corrected. This module is a shadow-comparison primitive; it does not subscribe to a device, schedule jobs, page operators, or establish a field trial.
+
+## Offline replay
+
+Run a recorded comparison without connecting to a device:
+
+```bash
+python islandos_shadow.py \
+  --recommendation examples/recommendation.json \
+  --observation examples/observation.json \
+  --evaluated-at-utc 2026-11-13T10:05:00Z \
+  --max-age-seconds 300 \
+  --output build/shadow/report.json
+```
+
+Exit codes: 0 = within tolerance, 1 = valid observation with deviation, 2 = blocked evidence or invalid input. The JSON report includes the no-write invariants and audit digest. Do not treat a zero exit code as operational approval.
 
 ## Existing deployment foundations
 
@@ -42,4 +57,4 @@ All outcomes explicitly set `device_write_authorized=false` and `command_generat
 
 ## Validation
 
-`tests/test_shadow_mode.py` checks within-tolerance comparison, deviations, stale/missing/future telemetry, unit mismatch, non-finite values, audit digest generation, and the invariant that no command is generated or authorized. These are software tests, not hardware-in-the-loop or site-acceptance evidence.
+`tests/test_shadow_mode.py` checks within-tolerance comparison, deviations, stale/missing/future telemetry, unit mismatch, non-finite values, audit digest generation, and the invariant that no command is generated or authorized. `tests/test_shadow_cli.py` verifies replay report output and distinct exit codes. These are software tests, not hardware-in-the-loop or site-acceptance evidence.
