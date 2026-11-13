@@ -79,3 +79,74 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 3. Add exogenous covariates only where timestamp alignment and availability-at-decision-time are proven.
 4. Integrate the validated planning input with the physical evaluator in the subsequent integration phase, then compare forecast-driven decisions against a transparent baseline.
 5. Promote a model only when it consistently beats transparent baselines on relevant held-out data and stress cases.
+
+
+## Canonical site signal catalog
+
+The semantic signal vocabulary is maintained in `islandos_core/forecast_signal_catalog.py`.
+Use `forecast_site_signals(...)` when forecasting site data so known signals share
+one domain, unit, and physical-sign contract across data onboarding and prediction.
+This is the canonical new-work entry point: it routes each signal through the
+pluggable `PredictionEngine` in `islandos_core/prediction_engine.py`, not a new
+parallel model registry.
+
+The catalog currently covers:
+- Energy supply: PV, wind, grid import/export, and diesel generation.
+- Energy demand: total site load and flexible load.
+- Storage: battery charge, discharge, and state of charge.
+- Prices: electricity tariff (including explicitly currency-labelled negative prices).
+- Resource/fuel demand: hourly water demand and diesel fuel consumption.
+- Environment: ambient temperature.
+
+Example:
+
+```python
+from islandos_core.forecast_signal_catalog import forecast_site_signals
+
+bundle = forecast_site_signals(
+    timestamps,
+    {
+        "pv_power_kw": pv_kw,
+        "load_kw": load_kw,
+        "tariff_per_kwh": tariff,
+        "water_demand_m3_per_hour": water_demand,
+    },
+    {
+        "pv_power_kw": "kW",
+        "load_kw": "kW",
+        "tariff_per_kwh": "USD/kWh",
+        "water_demand_m3_per_hour": "m3/h",
+    },
+    horizon=24,
+)
+```
+
+Known signal IDs enforce their canonical unit and non-negative/negative-value
+semantics before entering the common model-selection pipeline. Custom signals
+remain supported when callers provide explicit units; their physical sign
+semantics are not guessed. The catalog is a semantic validation layer, not a
+claim that every signal has site-trained or externally validated model skill.
+
+
+### Model evaluation and replacement
+
+`forecast_site_signals` accepts an optional `PredictionEngine`. The default
+engine registers the built-in seasonal-naive, recent-mean, and linear-trend
+candidates, ranks them using rolling-origin replay, and selects the lowest-error
+eligible candidate independently for each signal. A customer or integrator can
+supply a separately configured engine with one or more registered candidates;
+the selected model ID/version and input-history digest remain in each result.
+
+```python
+from islandos_core.forecast_signal_catalog import forecast_site_signals
+from islandos_core.prediction_engine import PredictionEngine
+
+engine = PredictionEngine(include_builtin_candidates=False)
+engine.register(MyForecastCandidate())  # implements model_id, version, predict(...)
+bundle = forecast_site_signals(timestamps, history, units, horizon=24, engine=engine)
+selected = bundle.results["pv_power_kw"].model_id
+```
+
+Candidate registration is a software extension point, not automatic model
+promotion to production. Candidate suitability still depends on representative
+chronological backtests, data quality, and site-specific review.

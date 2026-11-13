@@ -17,6 +17,8 @@ import re
 import zipfile
 from typing import Any, Mapping
 
+from .forecast_signal_catalog import FORECAST_SIGNAL_SPECS
+
 
 SCHEMA_VERSION = "1.0"
 ALLOWED_SOURCE_TYPES = {
@@ -26,22 +28,14 @@ ALLOWED_SOURCE_TYPES = {
 
 # Canonical signals and units used by the generic energy-site onboarding path.
 CANONICAL_UNITS = {
-    "load_kw": "kW",
-    "pv_power_kw": "kW",
-    "wind_power_kw": "kW",
-    "grid_import_kw": "kW",
-    "grid_export_kw": "kW",
-    "battery_charge_kw": "kW",
-    "battery_discharge_kw": "kW",
-    "battery_soc_pct": "%",
-    "tariff_per_kwh": "currency/kWh",
-    "diesel_power_kw": "kW",
-    "diesel_fuel_lph": "L/h",
-    "temperature_c": "degC",
+    signal_id: spec.canonical_unit
+    for signal_id, spec in FORECAST_SIGNAL_SPECS.items()
 }
 
 _HEADER_ALIASES = {
     "load_kw": {"load", "load_kw", "demand", "demand_kw", "site_load", "site_load_kw", "critical_load_kw", "critical_load", "active_load_kw"},
+    "flexible_load_kw": {"flexible_load", "flexible_load_kw", "shiftable_load_kw", "controllable_load_kw"},
+    "water_demand_m3_per_hour": {"water_demand", "water_demand_m3_per_hour", "water_demand_m3h", "water_use_m3_per_hour"},
     "pv_power_kw": {"pv", "pv_kw", "pv_power", "pv_power_kw", "solar", "solar_kw", "solar_power_kw"},
     "wind_power_kw": {"wind", "wind_kw", "wind_power", "wind_power_kw"},
     "grid_import_kw": {"grid_import", "grid_import_kw", "import_kw", "utility_import_kw"},
@@ -58,7 +52,7 @@ _TIMESTAMP_ALIASES = {"timestamp", "timestamp_utc", "datetime", "date_time", "ti
 _UNIT_SUFFIXES = {
     "kw": "kW", "w": "W", "mw": "MW",
     "%": "%", "pct": "%", "l/h": "L/h", "lph": "L/h",
-    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh",
+    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh", "m3/h": "m3/h",
 }
 
 
