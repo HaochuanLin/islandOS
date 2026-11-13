@@ -195,10 +195,103 @@ def optimize_prediction_resource_schedule(
     from .water_resource_adapter import WaterEnergyLoad, WaterServiceSpec, build_ro_energy_load
     from .water_dispatch import build_price_aware_ro_schedule
 
-    if water_schedule_mode not in {"just_in_time", "price_aware"}:
-        raise ValueError("water_schedule_mode must be 'just_in_time' or 'price_aware'")
+    if water_schedule_mode not in {"just_in_time", "price_aware", "auto"}:
+        raise ValueError("water_schedule_mode must be 'just_in_time', 'price_aware', or 'auto'")
     if isinstance(water_lookahead_hours, bool) or not isinstance(water_lookahead_hours, int) or water_lookahead_hours < 1:
         raise ValueError("water_lookahead_hours must be a positive integer")
+
+    if water_schedule_mode == "auto":
+        if not isinstance(results, Mapping) or "water_demand_m3_per_hour" not in results:
+            raise ValueError("automatic water-policy selection requires a water-demand forecast")
+        if not isinstance(water_service, WaterServiceSpec):
+            raise ValueError("automatic water-policy selection requires a WaterServiceSpec")
+        candidates = {}
+        failures = {}
+        for mode in ("just_in_time", "price_aware"):
+            try:
+                candidates[mode] = optimize_prediction_resource_schedule(
+                    results, config,
+                    history_start_utc=history_start_utc,
+                    history_end_utc=history_end_utc,
+                    grid_available=grid_available,
+                    diesel_available=diesel_available,
+                    price_unit=price_unit,
+                    population_size=population_size,
+                    generations=generations,
+                    seed=seed,
+                    max_unmet_load_kwh=max_unmet_load_kwh,
+                    max_critical_unmet_load_kwh=max_critical_unmet_load_kwh,
+                    terminal_battery_soc_min=terminal_battery_soc_min,
+                    water_service=water_service,
+                    water_schedule_mode=mode,
+                    water_lookahead_hours=water_lookahead_hours,
+                )
+            except (ValueError, TypeError) as exc:
+                failures[mode] = str(exc)
+
+        if not candidates:
+            details = "; ".join(f"{mode}: {reason}" for mode, reason in sorted(failures.items()))
+            raise ValueError("no water-production policy produced a feasible resource schedule: " + details)
+
+        def coordination_rank(item):
+            mode, candidate = item
+            scenario_rows = candidate["recommendation"]["scenario_results"].values()
+            worst_critical = max(
+                (float(row["summary"].get("critical_unmet_load_kwh", 0.0)) for row in scenario_rows),
+                default=0.0,
+            )
+            scenario_rows = candidate["recommendation"]["scenario_results"].values()
+            worst_unmet = max(
+                (float(row["summary"].get("unmet_load_kwh", 0.0)) for row in scenario_rows),
+                default=0.0,
+            )
+            objectives = candidate["recommendation"]["objectives"]
+            return (
+                worst_critical,
+                worst_unmet,
+                float(objectives["estimated_energy_cost"]),
+                float(objectives["renewable_curtailed_kwh"]),
+                float(objectives["battery_throughput_kwh"]),
+                mode,
+            )
+
+        selected_mode, selected = min(candidates.items(), key=coordination_rank)
+        comparisons = {}
+        for mode in ("just_in_time", "price_aware"):
+            if mode in candidates:
+                candidate = candidates[mode]
+                objectives = candidate["recommendation"]["objectives"]
+                comparisons[mode] = {
+                    "feasible": True,
+                    "worst_case_objectives": dict(objectives),
+                    "water_energy_cost_estimate": candidate["water_service"]["estimated_ro_energy_cost"],
+                    "production_policy": candidate["water_service"]["production_policy"],
+                }
+            else:
+                comparisons[mode] = {
+                    "feasible": False,
+                    "failure_reason": failures[mode],
+                }
+        selected["water_policy_comparison"] = {
+            "selected_mode": selected_mode,
+            "selection_order": [
+                "minimum worst-case critical unmet energy",
+                "minimum worst-case total unmet energy",
+                "minimum worst-case estimated energy cost",
+                "minimum worst-case renewable curtailment",
+                "minimum worst-case battery throughput",
+            ],
+            "candidates": comparisons,
+            "method_scope": (
+                "compares two explicit RO production heuristics, each followed by "
+                "the same seeded multi-resource optimizer across the same forecast "
+                "stress scenarios; this is not a globally joint water-energy optimum"
+            ),
+            "scenario_probabilities_assigned": False,
+            "device_write_authorized": False,
+        }
+        selected["water_service"]["selected_schedule_mode"] = selected_mode
+        return selected
 
     required = {
         "pv_power_kw": "pv_power",
