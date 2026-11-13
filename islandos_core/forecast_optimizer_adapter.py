@@ -531,7 +531,7 @@ def optimize_forecasted_energy_system(
     }
     result["decision_scope"] = (
         "offline policy comparison plus deterministic forecast-envelope and grid-outage "
-        "stress replay; not probabilistic robust optimization, site validation, a live "
-        "controller, or authorization to write to devices"
+        "stress replay; not robust optimization and not probabilistic robust optimization, "
+        "site validation, a live controller, or authorization to write to devices"
     )
     return result
