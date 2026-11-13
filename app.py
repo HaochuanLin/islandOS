@@ -125,7 +125,7 @@ with st.sidebar:
     st.caption("Energy & resource decision support")
     page = st.radio(
         "Navigate",
-        ["Overview", "Data onboarding & workspace", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
+        ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -1693,6 +1693,64 @@ elif page == "Data onboarding & workspace":
                 st.info("For local SQLite metadata persistence, run IslandOS locally with ISLANDOS_ENABLE_LOCAL_WORKSPACE=1. This remains a single-user prototype.")
     st.subheader("What happens next")
     st.markdown("- Exploration: inspect source data and quality.\n- Forecasting: requires a supported target signal, sufficient history, explicit units and regular sampling.\n- Dispatch screening: additionally requires supply/resource signals and confirmed operating constraints.\n\nA readiness result is an analysis gate, not a safety approval or authorization to control equipment.")
+
+elif page == "Forecast lab":
+    st.title("Forecast lab")
+    st.caption("Run chronological model comparison on an inspected CSV signal. No training data leaves this session.")
+    from islandos_core.onboarding import ALLOWED_SOURCE_TYPES, inspect_csv_bytes
+    from islandos_core.prediction_adapter import build_forecast_request
+    from islandos_core.prediction_engine import PredictionEngine
+
+    st.info("Built-in candidates are statistical baselines, not trained AI models. Use measured or explicitly labelled data; synthetic examples are for workflow demonstration only.")
+    forecast_source_type = st.selectbox("Data provenance", options=sorted(ALLOWED_SOURCE_TYPES), index=1, key="forecast_lab_source_type")
+    forecast_file = st.file_uploader("Upload a timestamped CSV", type=["csv"], key="forecast_lab_csv")
+    if forecast_file is not None:
+        forecast_bytes = forecast_file.getvalue()
+        try:
+            import_report = inspect_csv_bytes(forecast_bytes, source_type=forecast_source_type, source_name=forecast_file.name)
+            st.metric("Import status", import_report["status"].replace("_", " ").title())
+            st.caption(f"{import_report['row_count']} rows · {import_report['error_count']} errors · {import_report['warning_count']} warnings · SHA-256 {import_report['artifact']['sha256'][:16]}…")
+            if import_report.get("issues"):
+                st.dataframe(import_report["issues"], use_container_width=True, hide_index=True)
+            mappings = import_report.get("column_mappings", [])
+            signals = sorted({item["canonical_field"] for item in mappings})
+            if not signals:
+                st.warning("No supported forecast signal was recognized. Use a documented canonical header and explicit unit.")
+            elif import_report["error_count"]:
+                st.error("Resolve import errors before forecasting. Missing values are not imputed.")
+            else:
+                signal_id = st.selectbox("Signal to forecast", signals)
+                horizon = st.number_input("Forecast horizon (intervals)", min_value=1, max_value=168, value=24)
+                if st.button("Run backtest and forecast", type="primary"):
+                    try:
+                        request = build_forecast_request(forecast_bytes, import_report, signal_id=signal_id, horizon=int(horizon))
+                        engine = PredictionEngine()
+                        history_length = len(request.history)
+                        initial_history = min(48, history_length - 1)
+                        result = engine.forecast(request, initial_history=initial_history, backtest_horizon=min(24, history_length - initial_history), season_length=min(24, history_length))
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Selected baseline", result.model_id)
+                        m2.metric("Backtest MAE", f"{result.backtest.mae:.4g} {result.unit}")
+                        m3.metric("Backtest RMSE", f"{result.backtest.rmse:.4g} {result.unit}")
+                        m4.metric("Backtest samples", result.backtest.samples)
+                        forecast_frame = pd.DataFrame({
+                            "Timestamp": [point.timestamp for point in result.points],
+                            "Prediction": [point.predicted_value for point in result.points],
+                            "Lower empirical band": [point.lower_bound for point in result.points],
+                            "Upper empirical band": [point.upper_bound for point in result.points],
+                        }).set_index("Timestamp")
+                        st.line_chart(forecast_frame)
+                        st.caption(f"Model {result.model_id}@{result.model_version} · {result.confidence_level:.0%} empirical residual band · {result.interval_calibration_samples} calibration errors")
+                        st.code(result.input_history_sha256, language="text")
+                        st.warning("Empirical residual bands are not guaranteed prediction intervals. Backtest performance does not guarantee future accuracy or site suitability.")
+                        with st.expander("Limitations"):
+                            for limitation in result.limitations:
+                                st.write("- " + limitation)
+                        st.download_button("Download forecast CSV", data=forecast_frame.reset_index().to_csv(index=False).encode("utf-8"), file_name="islandos_forecast.csv", mime="text/csv")
+                    except Exception as exc:
+                        st.error(f"Forecast blocked: {exc}")
+        except Exception as exc:
+            st.error(f"CSV inspection failed: {exc}")
 
 else:
     st.title("Data guide")

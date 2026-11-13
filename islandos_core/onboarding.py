@@ -58,7 +58,7 @@ _TIMESTAMP_ALIASES = {"timestamp", "timestamp_utc", "datetime", "date_time", "ti
 _UNIT_SUFFIXES = {
     "kw": "kW", "w": "W", "mw": "MW",
     "%": "%", "pct": "%", "l/h": "L/h", "lph": "L/h",
-    "c": "degC", "°c": "degC",
+    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh",
 }
 
 
@@ -280,7 +280,7 @@ def inspect_csv_bytes(
                 issues.append(ImportIssue("non_finite", "error", "Value must be finite", row=row_number, column=mapping.source_column))
                 continue
             value = number * mapping.conversion_to_canonical
-            if mapping.canonical_field != "temperature_c" and value < 0:
+            if mapping.canonical_field not in {"temperature_c", "tariff_per_kwh"} and value < 0:
                 issues.append(ImportIssue("negative_value", "error", "Negative value is not accepted for this signal", row=row_number, column=mapping.source_column))
             if mapping.canonical_field == "battery_soc_pct" and not 0 <= value <= 100:
                 issues.append(ImportIssue("soc_out_of_range", "error", "Battery SOC must be between 0 and 100 percent", row=row_number, column=mapping.source_column))

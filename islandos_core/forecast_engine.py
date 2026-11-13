@@ -30,7 +30,7 @@ class ForecastMetrics:
     samples: int
     mae: float
     rmse: float
-    bias_predicted_minus_actual: float
+    bias_predicted_minus_actual: float | None
 
 
 @dataclass(frozen=True)
