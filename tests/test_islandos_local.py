@@ -32,5 +32,7 @@ def test_health_check_accepts_only_http_200():
 
 def test_health_check_fails_closed_when_endpoint_is_unavailable():
     from urllib.error import URLError
+    ticks = iter([0.0, 0.0, 1.0])
     assert not wait_for_health(opener=lambda *_a, **_k: (_ for _ in ()).throw(URLError("offline")),
-                               timeout_seconds=0, clock=lambda: 0, pause=lambda _s: None)
+                               timeout_seconds=0, clock=lambda: next(ticks, 1.0),
+                               pause=lambda _s: None)
