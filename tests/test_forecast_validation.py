@@ -54,6 +54,24 @@ class TestForecastValidation(unittest.TestCase):
         self.assertEqual(len(result["persistence"].folds), 4)
         self.assertLess(result["step"].mean_mae, result["persistence"].mean_mae)
 
+    def test_rejects_gapped_timestamps_and_non_finite_history(self):
+        stamps = [datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(120)]
+        broken = list(stamps)
+        broken[50] += timedelta(minutes=30)
+        forecasters = {"persistence": lambda train, future: [train[-1]] * len(future)}
+        with self.assertRaisesRegex(ValueError, "contiguous hourly"):
+            evaluate_expanding_window(
+                broken, [1.0] * 120, forecasters,
+                min_train_size=72, validation_size=12, folds=4,
+            )
+        values = [1.0] * 120
+        values[10] = float("nan")
+        with self.assertRaisesRegex(ValueError, "finite numbers"):
+            evaluate_expanding_window(
+                stamps, values, forecasters,
+                min_train_size=72, validation_size=12, folds=4,
+            )
+
     def test_rejects_non_finite_predictions(self):
         stamps = [datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(120)]
         with self.assertRaisesRegex(ValueError, "non-finite"):
