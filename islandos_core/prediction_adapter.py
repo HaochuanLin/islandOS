@@ -7,6 +7,7 @@ fills missing values or changes the source series.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 from datetime import datetime, timedelta
 from typing import Any, Mapping
@@ -45,6 +46,8 @@ def build_forecast_request(
         raise ValueError("onboarding report contains blocking import errors")
     if report.get("data_was_modified") is not False:
         raise ValueError("adapter requires an unmodified onboarding report")
+    if report.get("artifact", {}).get("sha256") != hashlib.sha256(content).hexdigest():
+        raise ValueError("onboarding report does not match the uploaded CSV bytes")
     if signal_id not in SIGNAL_UNITS:
         raise ValueError(f"unsupported forecast signal: {signal_id}")
     if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
@@ -68,7 +71,11 @@ def build_forecast_request(
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise ValueError("CSV must be UTF-8") from exc
-    reader = csv.DictReader(io.StringIO(text, newline=""))
+    try:
+        dialect = csv.Sniffer().sniff(text[:8192], delimiters=",;\\t|")
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.DictReader(io.StringIO(text, newline=""), dialect=dialect)
     if not reader.fieldnames or mapping.get("source_column") not in reader.fieldnames:
         raise ValueError("mapped source column is missing from CSV")
     timestamp_column = report.get("timestamp_column")
