@@ -6,8 +6,12 @@ from islandos_core.forecast_engine import forecast_signals
 from islandos_core.energy_system import (
     BatterySpec, DieselSpec, EnergySystemConfig,
 )
+from islandos_core.assets import AssetParameter, AssetRecord, OperatingConstraint
+from islandos_core.operational_state import AssetOperationalState
+from islandos_core.asset_energy_adapter import AssetEnergyAdapterError
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
+    build_site_energy_configuration,
     build_service_equivalent_economics,
     evaluate_forecast_stress_scenarios,
     optimize_forecasted_energy_system,
@@ -159,6 +163,51 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
                       ("battery_first", "grid_first"))
         self.assertFalse(stress["method_scope"]["scenario_probabilities_assigned"])
         self.assertFalse(stress["method_scope"]["robust_global_optimization_claimed"])
+
+    def test_site_configuration_requires_confirmed_assets_and_fresh_online_state(self):
+        now = datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc)
+        parameter = lambda value, unit: AssetParameter(
+            value, unit, "customer_provided", "site asset register rev A", True
+        )
+        pv = AssetRecord(
+            asset_id="pv-main", site_id="site-alpha", asset_type="pv",
+            nameplate_parameters={"rated_power_kw": parameter(20.0, "kW")},
+            installed_parameters={"configured_power_kw": parameter(18.0, "kW")},
+            observed_parameters={},
+            constraints=(OperatingConstraint(
+                constraint_id="pv-max", parameter="max_power_kw",
+                severity="hard", unit="kW", operator="max",
+                upper_bound=18.0, source_reference="approved inverter limit",
+                confirmed=True,
+            ),),
+        )
+        state = AssetOperationalState(
+            "pv-main", "site-alpha", "online", now,
+            "verified telemetry snapshot", True,
+        )
+        configured = build_site_energy_configuration([pv], [state], as_of=now)
+        self.assertEqual(configured["config"].pv_rated_kw, 18.0)
+        self.assertTrue(configured["operational_readiness"]["can_dispatch_screen"])
+
+    def test_site_configuration_fails_closed_on_missing_operational_state(self):
+        now = datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc)
+        parameter = lambda value, unit: AssetParameter(
+            value, unit, "customer_provided", "site asset register rev A", True
+        )
+        pv = AssetRecord(
+            asset_id="pv-main", site_id="site-alpha", asset_type="pv",
+            nameplate_parameters={"rated_power_kw": parameter(20.0, "kW")},
+            installed_parameters={"configured_power_kw": parameter(18.0, "kW")},
+            observed_parameters={},
+            constraints=(OperatingConstraint(
+                constraint_id="pv-max", parameter="max_power_kw",
+                severity="hard", unit="kW", operator="max",
+                upper_bound=18.0, source_reference="approved inverter limit",
+                confirmed=True,
+            ),),
+        )
+        with self.assertRaisesRegex(AssetEnergyAdapterError, "operational readiness is blocked"):
+            build_site_energy_configuration([pv], [], as_of=now)
 
     def test_joint_resource_optimizer_uses_shared_forecast_stress_scenarios(self):
         bundle = make_bundle()
