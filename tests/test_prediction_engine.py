@@ -141,3 +141,18 @@ class TestPredictionEngine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+def test_rolling_origin_reports_multiple_chronological_folds():
+    engine = PredictionEngine()
+    history = [float(index % 24) for index in range(120)]
+    ranking = engine.evaluate_candidates(
+        history, initial_history=48, horizon=24, season_length=24,
+    )
+    assert ranking
+    assert all(item.folds == 3 for item in ranking)
+    assert all(item.samples == 72 for item in ranking)
+    assert list(ranking) == sorted(
+        ranking, key=lambda item: (item.mae, item.rmse, item.model_id)
+    )

@@ -10,8 +10,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
+import shutil
+import tempfile
 import re
 import sqlite3
 import uuid
@@ -671,3 +674,128 @@ def list_asset_records(
                         "actor_id": row["actor_id"], "record_sha256": row["record_sha256"],
                         "asset": record, "readiness": readiness})
     return results
+
+
+def _file_sha256(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
+    """Validate SQLite integrity and the append-only audit chain before backup/restore."""
+    source = Path(path)
+    if not source.is_file():
+        raise WorkspaceStoreError("workspace database file does not exist")
+    try:
+        with closing(sqlite3.connect(str(source))) as connection:
+            integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+            tables = {
+                row[0] for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+        if integrity != "ok":
+            raise AuditIntegrityError("workspace SQLite integrity check failed")
+        if not {"workspace_meta", "projects", "audit_events"}.issubset(tables):
+            raise WorkspaceStoreError("file is not a supported IslandOS workspace database")
+        audit = verify_audit_chain(source)
+    except sqlite3.Error as exc:
+        raise WorkspaceStoreError(f"workspace database cannot be opened: {exc}") from exc
+    if not audit["valid"]:
+        raise AuditIntegrityError(
+            f"workspace audit chain is invalid at sequence {audit['failed_sequence']}"
+        )
+    return audit
+
+
+def backup_workspace(
+    db_path: str | Path,
+    destination_path: str | Path,
+    *,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Create an atomic, integrity-checked SQLite backup of the complete local workspace.
+
+    Uploaded source-file bytes are not part of the workspace schema; this backs
+    up project metadata, assets, run manifests, and audit history only.
+    """
+    source = Path(db_path).expanduser().resolve()
+    destination = Path(destination_path).expanduser().resolve()
+    if source == destination:
+        raise WorkspaceStoreError("backup destination must differ from the source database")
+    if not isinstance(overwrite, bool):
+        raise WorkspaceStoreError("overwrite must be a boolean")
+    if destination.exists() and not overwrite:
+        raise WorkspaceStoreError("backup destination already exists; pass overwrite=True to replace it")
+    audit = _validate_workspace_file(source)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=str(destination.parent)
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with closing(sqlite3.connect(str(source))) as source_connection:
+            with closing(sqlite3.connect(str(temporary))) as target_connection:
+                source_connection.backup(target_connection)
+                integrity = target_connection.execute("PRAGMA integrity_check").fetchone()[0]
+                if integrity != "ok":
+                    raise AuditIntegrityError("backup SQLite integrity check failed")
+        backup_audit = _validate_workspace_file(temporary)
+        if backup_audit["latest_hash"] != audit["latest_hash"]:
+            raise AuditIntegrityError("backup audit checkpoint differs from source workspace")
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    digest = _file_sha256(destination)
+    return {
+        "backup_path": str(destination),
+        "sha256": digest,
+        "audit_event_count": audit["event_count"],
+        "audit_latest_hash": audit["latest_hash"],
+        "integrity": "ok",
+    }
+
+
+def restore_workspace(
+    backup_path: str | Path,
+    destination_path: str | Path,
+    *,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Restore a workspace from a validated backup using an atomic file replacement."""
+    source = Path(backup_path).expanduser().resolve()
+    destination = Path(destination_path).expanduser().resolve()
+    if source == destination:
+        raise WorkspaceStoreError("restore source and destination must differ")
+    if not isinstance(overwrite, bool):
+        raise WorkspaceStoreError("overwrite must be a boolean")
+    if destination.exists() and not overwrite:
+        raise WorkspaceStoreError("restore destination already exists; pass overwrite=True to replace it")
+    audit = _validate_workspace_file(source)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".restore", dir=str(destination.parent)
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        shutil.copyfile(source, temporary)
+        restored_audit = _validate_workspace_file(temporary)
+        if restored_audit["latest_hash"] != audit["latest_hash"]:
+            raise AuditIntegrityError("restored workspace audit checkpoint differs from backup")
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return {
+        "restored_path": str(destination),
+        "sha256": _file_sha256(destination),
+        "audit_event_count": audit["event_count"],
+        "audit_latest_hash": audit["latest_hash"],
+        "integrity": "ok",
+    }
