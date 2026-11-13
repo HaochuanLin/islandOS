@@ -23,7 +23,7 @@ Here, AI refers primarily to forecasting, uncertainty analysis, and optimization
   <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS four-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
 </p>
 
-*The stage labels indicate current maturity. The diagram describes the intended product workflow, not a claim that all four stages are already integrated or deployed.*
+*The core offline path from validated inputs through forecasting and constrained schedule comparison to human-reviewed decision outputs is implemented. The diagram does not imply live equipment control, production deployment, or site validation.*
 
 1. **INPUT** — organize energy, demand, asset, resource, and constraint data.
 2. **PREDICT** — validate canonical energy/price signals and compare replaceable statistical forecast candidates with rolling-origin replay. Error bands and model provenance are exposed; site-specific accuracy is not established.
@@ -63,7 +63,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Production-grade managed database/object storage, TLS, secrets management, security review, backup/restore and operational monitoring.
 - Customer usability evidence and verified site economics from a real decision owner.
 
-The repository now contains a tested offline path from canonical customer history through multi-signal forecasting to joint battery/diesel schedule comparison and a local reference API. These pieces do not constitute field validation, a production SaaS deployment, or autonomous control. Experimental scripts and integrations are not automatically part of the hosted app. See [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
+The repository now contains a tested offline path from canonical customer history through multi-signal forecasting to joint battery/diesel schedule comparison and a local reference API. These pieces do not constitute field validation, a production SaaS deployment, or autonomous control. Experimental scripts and integrations are not automatically part of the hosted app. See [A–F final closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) for the current acceptance decision and remaining gates, [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions, and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
 
 ## Quick start
 
