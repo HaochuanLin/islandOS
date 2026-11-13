@@ -47,6 +47,8 @@ def _valid_exact_https_origin(value):
         and parsed.path in {"", "/"}
         and not parsed.query
         and not parsed.fragment
+        and "?" not in value
+        and "#" not in value
         and not any(character.isspace() for character in value)
     )
 
