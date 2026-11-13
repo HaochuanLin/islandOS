@@ -68,6 +68,9 @@ class TestForecastValidation(unittest.TestCase):
         for horizon, models in result.items():
             self.assertEqual(len(models["persistence"].folds), 4)
             self.assertTrue(all(fold.samples == horizon for fold in models["persistence"].folds))
+            self.assertGreaterEqual(models["persistence"].mean_mae, 0.0)
+            self.assertGreaterEqual(models["persistence"].mean_rmse, 0.0)
+            self.assertIsInstance(models["persistence"].mean_bias, float)
 
     def test_horizon_evaluation_rejects_invalid_horizons(self):
         stamps = [datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(120)]
