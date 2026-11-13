@@ -1,7 +1,7 @@
 """Tests for the forecast-to-planning hand-off contract."""
 import unittest
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from islandos_core.forecast_contract import build_forecast_planning_input
 from islandos_core.forecast_engine import forecast_signals
@@ -9,7 +9,6 @@ from islandos_core.forecast_engine import forecast_signals
 
 class TestForecastPlanningContract(unittest.TestCase):
     def setUp(self):
-        from datetime import datetime, timezone
         self.timestamps = [
             datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i)
             for i in range(240)
