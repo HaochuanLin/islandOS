@@ -22,14 +22,16 @@ This page explains where to find the main parts of IslandOS. The repository cont
 
 ```text
 islandOS/
-├── app.py                  # Streamlit entry point
-├── islandos_core/          # Shared simulation, forecasting, decision and audit logic
+├── app.py                  # Streamlit research/demo entry point
+├── islandos_service_api.py # Loopback-only local reference API
+├── frontend/               # React + TypeScript customer-console foundation
+├── islandos_core/          # Shared simulation, forecasting, decision, audit and safety logic
 ├── optimization/           # Optimization algorithms
 ├── islandos_sensors/       # Sensor contracts and mock sources
 ├── data/                   # Example datasets and input templates
 ├── config/                 # Example site/device configuration
 ├── configs/                # Additional example mappings
-├── tools/                  # User-facing CLI utilities and validation tools
+├── tools/                  # User-facing CLI utilities, validation and local demo deployment
 ├── experiments/            # Research experiments and benchmark scripts
 ├── examples/               # Minimal integration examples
 ├── tests/                  # Automated tests
@@ -47,7 +49,7 @@ A number of root-level Python files are retained as compatibility entry points f
 
 ## Important maturity boundary
 
-- The Streamlit application is an interactive, simulation-first research prototype.
+- The Streamlit application is an interactive, simulation-first research prototype. The React frontend and Python reference API are a separate local customer-console foundation; the deployment helper currently packages only the existing Streamlit Compose demo.
 - Synthetic examples are illustrative and are not measured site data.
 - Experimental scripts and optional integrations are not automatically part of the hosted app.
 - The repository does not claim autonomous control of physical equipment.
