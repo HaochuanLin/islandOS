@@ -12,7 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 import shutil
 import tempfile
 import re
@@ -676,13 +676,21 @@ def list_asset_records(
     return results
 
 
+def _file_sha256(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
     """Validate SQLite integrity and the append-only audit chain before backup/restore."""
     source = Path(path)
     if not source.is_file():
         raise WorkspaceStoreError("workspace database file does not exist")
     try:
-        with sqlite3.connect(str(source)) as connection:
+        with closing(sqlite3.connect(str(source))) as connection:
             integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
             tables = {
                 row[0] for row in connection.execute(
@@ -730,8 +738,8 @@ def backup_workspace(
     os.close(descriptor)
     temporary = Path(temporary_name)
     try:
-        with sqlite3.connect(str(source)) as source_connection:
-            with sqlite3.connect(str(temporary)) as target_connection:
+        with closing(sqlite3.connect(str(source))) as source_connection:
+            with closing(sqlite3.connect(str(temporary))) as target_connection:
                 source_connection.backup(target_connection)
                 integrity = target_connection.execute("PRAGMA integrity_check").fetchone()[0]
                 if integrity != "ok":
@@ -743,7 +751,7 @@ def backup_workspace(
     finally:
         if temporary.exists():
             temporary.unlink()
-    digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    digest = _file_sha256(destination)
     return {
         "backup_path": str(destination),
         "sha256": digest,
@@ -786,7 +794,7 @@ def restore_workspace(
             temporary.unlink()
     return {
         "restored_path": str(destination),
-        "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
+        "sha256": _file_sha256(destination),
         "audit_event_count": audit["event_count"],
         "audit_latest_hash": audit["latest_hash"],
         "integrity": "ok",
