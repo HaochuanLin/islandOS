@@ -24,6 +24,7 @@ from optimization.energy_system_optimizer import (
     OptimizationWeights,
     _audit,
     forecast_results_to_energy_inputs,
+    optimize_battery_and_diesel_schedule,
     optimize_energy_system,
 )
 from islandos_core.energy_system import dispatch_energy_system
@@ -273,6 +274,80 @@ def evaluate_forecast_stress_scenarios(
         },
     }
 
+
+
+
+def optimize_forecasted_resource_schedule(
+    bundle: ForecastBundle,
+    config: EnergySystemConfig,
+    *,
+    grid_available: Sequence[bool],
+    diesel_available: Sequence[bool],
+    price_unit: str,
+    weights: OptimizationWeights = OptimizationWeights(),
+    population_size: int = 16,
+    generations: int = 8,
+    seed: int = 20261113,
+    max_unmet_load_kwh: float | None = None,
+    max_critical_unmet_load_kwh: float | None = None,
+    terminal_battery_soc_min: float | None = None,
+) -> dict:
+    """Run joint battery/diesel schedule search across forecast stress scenarios.
+
+    This path requires explicit battery and diesel asset configurations and
+    diesel availability. It uses the existing seeded evolutionary optimizer;
+    it is a bounded heuristic, not a guaranteed global optimum or controller.
+    """
+    if config.battery is None or config.diesel is None:
+        raise OptimizationError(
+            "joint resource scheduling requires configured battery and diesel assets"
+        )
+    if diesel_available is None:
+        raise OptimizationError("diesel_available must be explicitly supplied")
+    coordinated = build_coordination_inputs(
+        bundle,
+        grid_available=grid_available,
+        diesel_available=diesel_available,
+        price_unit=price_unit,
+    )
+    scenarios = _build_stress_scenarios(coordinated)
+    additional = {
+        name: scenario for name, scenario in scenarios.items()
+        if name != "forecast_central"
+    }
+    result = optimize_battery_and_diesel_schedule(
+        coordinated.inputs,
+        config,
+        weights=weights,
+        population_size=population_size,
+        generations=generations,
+        seed=seed,
+        additional_scenarios=additional,
+        max_unmet_load_kwh=max_unmet_load_kwh,
+        max_critical_unmet_load_kwh=max_critical_unmet_load_kwh,
+        terminal_battery_soc_min=terminal_battery_soc_min,
+    )
+    result["forecast_provenance"] = {
+        "history_sha256": coordinated.history_sha256,
+        "model_ids": dict(coordinated.model_ids),
+        "target_timestamps_utc": [
+            timestamp.isoformat() for timestamp in coordinated.timestamps_utc
+        ],
+        "price_unit": coordinated.price_unit,
+    }
+    result["forecast_scenario_scope"] = {
+        "nominal_plus_stress_scenarios": ["forecast_central", *additional.keys()],
+        "scenario_probabilities_assigned": False,
+        "bounds_are_joint_confidence_intervals": False,
+        "same_schedule_replayed_across_all_scenarios": True,
+        "objective_aggregation": "worst_case_across_supplied_scenarios",
+    }
+    result["decision_scope"] = (
+        "offline joint battery/diesel schedule search across deterministic forecast "
+        "envelopes and grid outage stress; seeded heuristic, not a global optimum, "
+        "not site validation, and not authorization to write to devices"
+    )
+    return result
 
 
 def build_service_equivalent_economics(result: dict, *, tolerance: float = 1e-6) -> dict:
