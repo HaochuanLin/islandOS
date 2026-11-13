@@ -99,7 +99,7 @@ def test_forecast_bundle_fails_closed_when_one_signal_cannot_be_forecast():
     engine = PredictionEngine()
     engine.register(NegativeOutputCandidate())
     service = ForecastService(engine)
-    with pytest.raises(ValueError, match="ineligible for this signal"):
+    with pytest.raises(ValueError, match="cannot be negative"):
         service.forecast_bundle(
             request,
             model_ids={"battery_soc": "unsafe_negative"},
