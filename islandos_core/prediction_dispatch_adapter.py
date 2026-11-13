@@ -242,7 +242,7 @@ def optimize_prediction_resource_schedule(
         },
         "target_timestamps_utc": [
             point.timestamp.astimezone(timezone.utc).isoformat()
-            for point in next(iter(results.values())).points
+            for point in results["pv_power_kw"].points
         ],
         "mode": "offline_schedule_search",
         "device_write_authorized": False,
