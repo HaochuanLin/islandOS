@@ -9,7 +9,8 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Mapping
 
 from .forecast_engine import ForecastBundle
@@ -42,6 +43,8 @@ def build_forecast_planning_input(
     """
     if not isinstance(bundle, ForecastBundle):
         raise ValueError("bundle must be a ForecastBundle")
+    if not isinstance(bundle.forecasts, Mapping) or not bundle.forecasts:
+        raise ValueError("bundle.forecasts must be a non-empty signal mapping")
     if not isinstance(required_units, Mapping) or not required_units:
         raise ValueError("required_units must be a non-empty signal-to-unit mapping")
     if isinstance(required_units, (str, bytes)):
@@ -77,10 +80,14 @@ def build_forecast_planning_input(
         if not forecast.points:
             raise ValueError(f"forecast horizon is empty for {signal_name}")
 
-        signal_timestamps = tuple(point.timestamp for point in forecast.points)
+        raw_timestamps = tuple(point.timestamp for point in forecast.points)
+        if any(
+            not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None
+            for stamp in raw_timestamps
+        ):
+            raise ValueError(f"{signal_name} forecast timestamps must be timezone-aware")
+        signal_timestamps = tuple(stamp.astimezone(timezone.utc) for stamp in raw_timestamps)
         for index, stamp in enumerate(signal_timestamps):
-            if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
-                raise ValueError(f"{signal_name} forecast timestamps must be timezone-aware")
             if index and stamp - signal_timestamps[index - 1] != timedelta(hours=1):
                 raise ValueError(f"{signal_name} forecast timestamps must be contiguous hourly instants")
         if timestamps is None:
@@ -116,10 +123,10 @@ def build_forecast_planning_input(
     assert timestamps is not None
     return ForecastPlanningInput(
         timestamps=timestamps,
-        values=values,
-        lower_bounds=lower_bounds,
-        upper_bounds=upper_bounds,
-        units=units,
-        model_ids=model_ids,
+        values=MappingProxyType(values),
+        lower_bounds=MappingProxyType(lower_bounds),
+        upper_bounds=MappingProxyType(upper_bounds),
+        units=MappingProxyType(units),
+        model_ids=MappingProxyType(model_ids),
         history_sha256=digest,
     )
