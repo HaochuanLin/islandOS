@@ -49,6 +49,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
+- Experimental hourly tariff-forecast baseline and price-aware linear-programming optimizer with an interactive Streamlit scenario page on this branch. Users can upload historical hourly prices to generate a 24-hour seasonal-naive forecast, feed that forecast into the optimizer, and inspect an equal-energy cost comparison with provenance. The forecast is not a trained market model, and the page is not live in the public hosted app until this PR is merged. Run the synthetic optimizer example with `python examples/price_aware_flexible_load_demo.py`.
 - Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
 - Read-only telemetry and selected integration prototypes.
 
@@ -111,6 +112,8 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
 | [Forecasting baseline](docs/SCENARIO_FORECASTING_BASELINE.md) | Current transparent forecast baseline and evaluation boundary |
+| [Price-aware flexible-load scheduling](docs/PRICE_AWARE_FLEXIBLE_LOAD_SCHEDULING.md) | Experimental hourly tariff baseline, tariff-to-optimizer workflow, continuous-load LP, and limitations |
+| [SIC reference migration assessment](docs/SIC_REFERENCE_MIGRATION_ASSESSMENT.md) | What was learned from the SIC repositories, what was adopted, and what is deliberately deferred |
 | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) | Product phases, customer discovery, economics, and exit gates |
 | [Engineering maturity roadmap](docs/ENGINEERING_MATURITY_ROADMAP.md) | Evidence requirements and delivery gates |
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |

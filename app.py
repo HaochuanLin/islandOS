@@ -19,6 +19,10 @@ import streamlit as st
 
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
+from optimization.price_aware_load_optimizer import optimize_flexible_load
+from islandos_core.tariff_forecasting import (
+    TariffObservation, forecast_tariff_prices, rolling_origin_tariff_backtest,
+)
 
 from islandos_core import SiteConfiguration, recommend_ro_screening
 from islandos_core.microgrid_model import MicrogridConfig, MicrogridInputs
@@ -121,7 +125,7 @@ with st.sidebar:
     st.caption("Energy & resource decision support")
     page = st.radio(
         "Navigate",
-        ["Overview", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
+        ["Overview", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -280,6 +284,377 @@ if page == "Overview":
         'and any other priority loads. This tool does not dispatch the real grid or equipment.</div>',
         unsafe_allow_html=True,
     )
+
+elif page == "Flexible-load cost optimizer":
+    st.title("Flexible-load cost optimizer")
+    st.write(
+        "Compare a fixed operating profile with a lower-cost schedule while "
+        "delivering exactly the same electrical energy."
+    )
+    st.info(
+        "Experimental decision-support module. The default profile is synthetic. "
+        "It does not control equipment, forecast prices, or verify site savings."
+    )
+
+    currency = st.text_input(
+        "Currency label (used only for display)", value="currency",
+        help="Enter a label such as USD, EUR, or your local currency. This does not convert prices.",
+    ).strip() or "currency"
+    max_power = st.number_input(
+        "Equipment maximum power (kW)", min_value=0.1, value=2.0, step=0.1,
+        help="Nameplate upper bound for the flexible load.",
+    )
+    dt_hours = st.number_input(
+        "Interval duration (hours)", min_value=0.05, value=1.0, step=0.25,
+        help="All energy and cost calculations use this interval duration.",
+    )
+
+    hours = list(range(24))
+    prices = [
+        0.12 if hour < 6 else
+        0.20 if hour < 16 else
+        0.32 if hour < 21 else
+        0.18
+        for hour in hours
+    ]
+    default_profile = pd.DataFrame({
+        "Interval": [f"{hour:02d}:00" for hour in hours],
+        "Price (currency/kWh)": prices,
+        "Available power budget (kW)": [1.5] * 24,
+        "Baseline power (kW)": [0.5] * 24,
+    })
+    st.markdown("### Scenario inputs")
+    st.caption(
+        "Use the synthetic example, upload a site scenario CSV, or edit the table "
+        "directly. The baseline determines the required total energy, so the "
+        "comparison keeps service quantity equal."
+    )
+    st.caption(
+        "The per-interval power budget constrains the optimized schedule. The "
+        "reference baseline is checked against the equipment rating and operating "
+        "window, but is not constrained by this optimization budget; it may "
+        "represent grid-supplied operation before flexible resources are applied."
+    )
+    template = default_profile.rename(columns={
+        "Interval": "interval",
+        "Price (currency/kWh)": "price_per_kwh",
+        "Available power budget (kW)": "available_power_kw",
+        "Baseline power (kW)": "baseline_power_kw",
+    })
+    st.download_button(
+        "Download scenario CSV template",
+        data=template.to_csv(index=False).encode("utf-8"),
+        file_name="islandos_flexible_load_scenario_template.csv",
+        mime="text/csv",
+    )
+    uploaded_profile = st.file_uploader(
+        "Upload scenario CSV (optional)",
+        type=["csv"],
+        help=(
+            "Required columns: interval, price_per_kwh, available_power_kw, "
+            "baseline_power_kw. Extra columns are ignored."
+        ),
+        key="price_aware_profile_upload",
+    )
+    profile_provenance = (
+        "Synthetic default or user-edited scenario assumptions; not measured site data"
+    )
+    editor_key = "price_aware_profile_editor_synthetic"
+    profile_input = default_profile
+    if uploaded_profile is not None:
+        upload_bytes = uploaded_profile.getvalue()
+        try:
+            uploaded_frame = pd.read_csv(io.BytesIO(upload_bytes))
+            required_profile_columns = [
+                "interval", "price_per_kwh", "available_power_kw", "baseline_power_kw"
+            ]
+            missing_columns = [
+                column for column in required_profile_columns
+                if column not in uploaded_frame.columns
+            ]
+            if missing_columns:
+                raise ValueError(
+                    "Scenario CSV is missing required columns: "
+                    + ", ".join(missing_columns)
+                )
+            if uploaded_frame.empty:
+                raise ValueError("Scenario CSV must contain at least one interval.")
+            profile_input = pd.DataFrame({
+                "Interval": uploaded_frame["interval"].astype(str),
+                "Price (currency/kWh)": uploaded_frame["price_per_kwh"],
+                "Available power budget (kW)": uploaded_frame["available_power_kw"],
+                "Baseline power (kW)": uploaded_frame["baseline_power_kw"],
+            })
+            upload_signature = hashlib.sha256(upload_bytes).hexdigest()[:12]
+            editor_key = f"price_aware_profile_editor_{upload_signature}"
+            profile_provenance = (
+                f"User-uploaded scenario CSV: {uploaded_profile.name}; "
+                "not independently verified site data"
+            )
+        except (ValueError, TypeError, UnicodeDecodeError, pd.errors.ParserError) as exc:
+            st.error(f"Cannot read scenario CSV: {exc}")
+            st.stop()
+
+    st.caption(f"Input provenance: {profile_provenance}")
+    st.markdown("### Optional tariff forecast")
+    st.caption(
+        "Upload at least 24 continuous hourly price observations to generate a "
+        "24-hour seasonal-naive forecast. The forecast is a transparent baseline, "
+        "not a trained market model. Negative prices are allowed."
+    )
+    uploaded_tariff_history = st.file_uploader(
+        "Historical electricity prices CSV (optional)",
+        type=["csv"],
+        help="Required columns: timestamp_utc (ISO-8601 with timezone) and price_per_kwh.",
+        key="tariff_history_upload",
+    )
+    forecasted_tariff_values = None
+    tariff_source = "Scenario tariff supplied in the editable profile"
+    tariff_forecast_metadata = None
+    tariff_backtest_metadata = None
+    if uploaded_tariff_history is not None:
+        try:
+            tariff_history_frame = pd.read_csv(io.BytesIO(uploaded_tariff_history.getvalue()))
+            required_tariff_columns = {"timestamp_utc", "price_per_kwh"}
+            missing_tariff_columns = required_tariff_columns - set(tariff_history_frame.columns)
+            if missing_tariff_columns:
+                raise ValueError(
+                    "Historical tariff CSV is missing columns: "
+                    + ", ".join(sorted(missing_tariff_columns))
+                )
+            if len(tariff_history_frame) < 24:
+                raise ValueError("At least 24 hourly tariff observations are required.")
+            tariff_timestamps = []
+            for raw_timestamp in tariff_history_frame["timestamp_utc"]:
+                if pd.isna(raw_timestamp) or not str(raw_timestamp).strip():
+                    raise ValueError("Historical tariff timestamps cannot be empty.")
+                parsed_timestamp = datetime.fromisoformat(
+                    str(raw_timestamp).strip().replace("Z", "+00:00")
+                )
+                if parsed_timestamp.utcoffset() != timedelta(0):
+                    raise ValueError(
+                        "Historical tariff timestamps must be UTC (zero UTC offset); "
+                        "convert local timestamps to UTC before upload."
+                    )
+                tariff_timestamps.append(parsed_timestamp)
+            tariff_prices = []
+            for raw_price in tariff_history_frame["price_per_kwh"]:
+                if isinstance(raw_price, bool) or pd.isna(raw_price):
+                    raise ValueError("Historical tariff prices must be finite numeric values.")
+                parsed_price = float(raw_price)
+                if not math.isfinite(parsed_price):
+                    raise ValueError("Historical tariff prices must be finite numeric values.")
+                tariff_prices.append(parsed_price)
+            tariff_observations = tuple(
+                TariffObservation(timestamp=stamp, price_per_kwh=price)
+                for stamp, price in zip(tariff_timestamps, tariff_prices)
+            )
+            if float(dt_hours) != 1.0:
+                raise ValueError(
+                    "Hourly tariff forecasting currently requires an interval duration of exactly 1 hour."
+                )
+            tariff_forecast = forecast_tariff_prices(
+                tariff_observations, horizon=len(profile_input), season_length=24
+            )
+            forecasted_tariff_values = [
+                point.predicted_price_per_kwh for point in tariff_forecast.points
+            ]
+            tariff_forecast_metadata = tariff_forecast
+            tariff_source = (
+                f"24-hour seasonal-naive forecast from {uploaded_tariff_history.name}; "
+                "historical input not independently verified"
+            )
+            st.success(
+                f"Generated {len(forecasted_tariff_values)} hourly tariff forecast values "
+                "using the latest 24-hour profile."
+            )
+            st.caption(
+                f"Forecast input SHA-256: {tariff_forecast.input_history_sha256}. "
+                "This hash identifies the supplied history; it does not validate its source."
+            )
+            forecast_timestamps_utc = [
+                point.timestamp.isoformat() for point in tariff_forecast.points
+            ]
+            forecast_chart = pd.DataFrame(
+                {"Forecast tariff (currency/kWh)": forecasted_tariff_values},
+                index=pd.Index(forecast_timestamps_utc, name="Forecast target (UTC)"),
+            )
+            st.line_chart(forecast_chart)
+            if len(tariff_observations) >= 72:
+                tariff_backtest_metadata = rolling_origin_tariff_backtest(
+                    tariff_observations,
+                    initial_history=48,
+                    horizon=24,
+                    season_length=24,
+                )
+                metrics = tariff_backtest_metadata.aggregate_metrics
+                st.markdown("#### Historical forecast replay")
+                metric_cols = st.columns(3)
+                metric_cols[0].metric("MAE", f"{metrics.mae:.4f}")
+                metric_cols[1].metric("RMSE", f"{metrics.rmse:.4f}")
+                metric_cols[2].metric(
+                    "Forecast bias", f"{metrics.bias_predicted_minus_actual:+.4f}"
+                )
+                st.caption(
+                    f"Chronological replay: {metrics.samples} held-out hourly observations "
+                    f"across {tariff_backtest_metadata.fold_count} contiguous folds. "
+                    "These historical metrics do not guarantee future accuracy."
+                )
+            else:
+                st.caption(
+                    "At least 72 hourly observations are needed to show a 24-hour "
+                    "rolling-origin historical replay (48-hour initial history plus one test day)."
+                )
+        except (ValueError, TypeError, KeyError, UnicodeDecodeError, pd.errors.ParserError) as exc:
+            st.error(f"Cannot forecast tariff: {exc}")
+            st.stop()
+
+    profile = st.data_editor(
+        profile_input,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        disabled=["Interval"],
+        column_config={
+            "Price (currency/kWh)": st.column_config.NumberColumn(
+                min_value=-1000000.0, max_value=1000000.0, step=0.01, format="%.3f"
+            ),
+            "Available power budget (kW)": st.column_config.NumberColumn(
+                min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
+            ),
+            "Baseline power (kW)": st.column_config.NumberColumn(
+                min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
+            ),
+        },
+        key=editor_key,
+    )
+
+    try:
+        price_values = [float(value) for value in profile["Price (currency/kWh)"]]
+        if forecasted_tariff_values is not None:
+            if len(forecasted_tariff_values) != len(profile):
+                raise ValueError("Forecast horizon must match the scenario profile length.")
+            price_values = list(forecasted_tariff_values)
+            st.info("The optimizer is using forecasted tariff values, not the editable scenario tariff column.")
+        budget_values = [float(value) for value in profile["Available power budget (kW)"]]
+        baseline_values = [float(value) for value in profile["Baseline power (kW)"]]
+        if not all(math.isfinite(value) for value in price_values):
+            raise ValueError("Tariff values must be finite.")
+        if not all(math.isfinite(value) and value >= 0 for value in budget_values):
+            raise ValueError("Available power budgets must be finite and non-negative.")
+        if not all(math.isfinite(value) and value >= 0 for value in baseline_values):
+            raise ValueError("Baseline power values must be finite and non-negative.")
+
+        required_energy = sum(baseline_values) * float(dt_hours)
+        if required_energy <= 0:
+            raise ValueError("The baseline must contain a positive energy requirement.")
+        result = optimize_flexible_load(
+            price_per_kwh=price_values,
+            energy_requirement_kwh=required_energy,
+            max_power_kw=float(max_power),
+            available_power_kw=budget_values,
+            baseline_power_kw=baseline_values,
+            dt_hours=float(dt_hours),
+        )
+        st.markdown("### Cost comparison")
+        first, second, third = st.columns(3)
+        first.metric("Baseline cost", f"{currency} {result.baseline_cost:,.3f}")
+        second.metric("Optimized cost", f"{currency} {result.total_cost:,.3f}")
+        difference = result.cost_difference_vs_baseline
+        third.metric(
+            "Cost difference",
+            f"{currency} {difference:,.3f}",
+            delta=(
+                f"{result.cost_difference_percent_vs_baseline:.1f}%"
+                if result.cost_difference_percent_vs_baseline is not None
+                else "Percentage unavailable"
+            ),
+            delta_color="normal",
+        )
+        st.caption(
+            f"Equal service: {result.total_energy_kwh:,.3f} kWh delivered over "
+            f"{len(profile)} intervals. Positive cost difference means the optimized "
+            "schedule costs less; a negative value means it costs more."
+        )
+        if difference > 1e-8:
+            st.success("Under the supplied assumptions, the optimized schedule has a lower energy charge.")
+        elif difference < -1e-8:
+            st.warning("Under the supplied assumptions, the optimized schedule costs more than the baseline.")
+        else:
+            st.info("The optimized schedule has the same energy charge as the baseline.")
+
+        forecast_timestamps_utc = (
+            [point.timestamp.isoformat() for point in tariff_forecast_metadata.points]
+            if tariff_forecast_metadata is not None
+            else [""] * len(profile)
+        )
+        schedule_frame = pd.DataFrame({
+            "Interval": profile["Interval"],
+            "Tariff forecast target (UTC)": forecast_timestamps_utc,
+            "Tariff used (currency/kWh)": price_values,
+            "Tariff source": tariff_source,
+            "Available power budget (kW)": budget_values,
+            "Baseline power (kW)": baseline_values,
+            "Optimized power (kW)": list(result.power_kw),
+            "Optimized energy (kWh)": list(result.energy_kwh),
+        })
+        st.markdown("### Operating schedule")
+        schedule_plot = schedule_frame.copy()
+        schedule_plot["Dispatch interval"] = (
+            forecast_timestamps_utc
+            if tariff_forecast_metadata is not None
+            else schedule_frame["Interval"]
+        )
+        st.line_chart(
+            schedule_plot.set_index("Dispatch interval")[
+                ["Baseline power (kW)", "Optimized power (kW)"]
+            ]
+        )
+        st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
+        export = schedule_frame.copy()
+        export["data_provenance"] = profile_provenance
+        export["tariff_source"] = tariff_source
+        export["tariff_forecast_method"] = (
+            "seasonal_naive_24h" if tariff_forecast_metadata is not None else "user_supplied_profile"
+        )
+        export["tariff_forecast_input_sha256"] = (
+            tariff_forecast_metadata.input_history_sha256
+            if tariff_forecast_metadata is not None else ""
+        )
+        export["tariff_backtest_mae"] = (
+            tariff_backtest_metadata.aggregate_metrics.mae
+            if tariff_backtest_metadata is not None else ""
+        )
+        export["tariff_backtest_rmse"] = (
+            tariff_backtest_metadata.aggregate_metrics.rmse
+            if tariff_backtest_metadata is not None else ""
+        )
+        export["tariff_backtest_bias"] = (
+            tariff_backtest_metadata.aggregate_metrics.bias_predicted_minus_actual
+            if tariff_backtest_metadata is not None else ""
+        )
+        export["currency_label"] = currency
+        export["baseline_cost"] = result.baseline_cost
+        export["optimized_cost"] = result.total_cost
+        export["cost_difference_vs_baseline"] = result.cost_difference_vs_baseline
+        st.download_button(
+            "Download schedule and cost comparison (CSV)",
+            data=export.to_csv(index=False).encode("utf-8-sig"),
+            file_name="islandos_flexible_load_cost_comparison.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        with st.expander("Model assumptions and limitations"):
+            st.write(
+                "- The baseline and optimized schedules deliver the same total electrical energy.\n"
+                "- The optimizer shifts a continuous, deferrable load across the supplied intervals.\n"
+                "- The available power budget is a hard per-interval limit after essential demand and higher-priority reservations.\n"
+                "- The model does not include demand charges, taxes, fixed fees, startup costs, minimum run times, ramp rates, process dynamics, or network constraints.\n"
+                "- The tariff is treated as supplied; no tariff interpretation or currency conversion is performed.\n"
+                "- A lower modeled energy charge is not proof of realizable customer savings or plant feasibility."
+            )
+    except (ValueError, TypeError, KeyError) as exc:
+        st.error(f"Cannot calculate this scenario: {exc}")
 
 elif page == "Strategy simulator":
     st.title("Current module: energy–water strategy simulator")

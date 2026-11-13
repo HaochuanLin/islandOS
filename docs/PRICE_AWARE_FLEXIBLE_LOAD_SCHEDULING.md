@@ -1,0 +1,124 @@
+# Price-aware flexible-load scheduling
+
+## Why this module exists
+
+SIC_backend demonstrates a demand-response pattern: move deferrable electrical
+consumption toward lower-price periods while respecting a power budget. IslandOS
+has its own flexible-load simulation and multi-objective dispatch experiments;
+this module adds a separate, reusable price-aware scheduling primitive rather
+than replacing those systems or importing third-party source code.
+
+## Current model
+
+The new optimizer solves a continuous linear program:
+
+- Decision variable: electrical power assigned to each time interval (kW).
+- Objective: minimize the sum of price times power times interval duration.
+- Hard energy requirement: deliver the requested total energy (kWh).
+- Per-interval bound: power cannot exceed the lower of the load rating and the
+  power budget available after essential demand / higher-priority reservations.
+- Operating window: optional boolean mask disables unavailable intervals.
+- Optional baseline profile: compares the optimized cost with a baseline that
+  delivers the same total energy and respects the load rating and operating
+  window. The baseline may use more grid power than the flexible renewable
+  budget, which is useful when comparing grid-heavy and renewable-aware plans.
+
+The function raises an explicit infeasibility error when the requested energy
+cannot fit in the allowed horizon. It does not silently reduce required service.
+
+## Example
+
+    from optimization.price_aware_load_optimizer import optimize_flexible_load
+
+    schedule = optimize_flexible_load(
+        price_per_kwh=[0.30, 0.10, 0.20, 0.08],
+        energy_requirement_kwh=6.0,
+        max_power_kw=2.0,
+        available_power_kw=[2.0, 2.0, 1.0, 2.0],
+    )
+    print(schedule.to_dict())
+
+## Interactive Streamlit page
+
+The feature branch adds a **Flexible-load cost optimizer** page to `app.py`.
+Users can edit a 24-interval tariff, the per-interval power budget, and a
+baseline load profile, or upload a scenario CSV with the columns
+`interval`, `price_per_kwh`, `available_power_kw`, and `baseline_power_kw`.
+A matching CSV template can be downloaded from the page. The baseline determines
+the required energy, so the optimizer compares schedules delivering the same
+total energy. The page shows baseline and optimized energy charges, the power
+schedule, a row-level audit, and a CSV export with input provenance. When a
+tariff forecast is used, its exact UTC target timestamps are shown on the
+forecast chart and included in each corresponding schedule/audit row.
+
+The default tariff and load profile are synthetic. Edited inputs are treated as
+user-supplied assumptions and are not independently verified. The currency
+label is display-only; the page does not convert currencies or validate a
+utility tariff. It currently calculates energy charges only, not demand charges,
+taxes, fixed fees, or other bill components. The page becomes available on the
+public hosted app only after the feature is merged and redeployed.
+
+## Tariff forecasting baseline
+
+The feature branch also adds `islandos_core/tariff_forecasting.py`. It accepts
+timezone-aware, strictly ordered hourly tariff observations and produces a
+seasonal-naive forecast by repeating the most recent 24-hour price profile.
+Negative market prices are retained rather than clipped. The result records a
+SHA-256 digest of the supplied history and the forecast timestamps.
+
+The Streamlit optimizer page accepts an optional historical tariff CSV with
+`timestamp_utc` (ISO-8601 UTC with a zero UTC offset) and `price_per_kwh` columns. Local timestamps must be converted to UTC before upload. When supplied, the forecast
+replaces the editable scenario tariff for the optimization run; the page
+discloses this and exports the method and input-history digest. The current
+integration is hourly only and requires at least 24 observations. The forecast
+does not account for holidays, market events, congestion, weather, or tariff
+rule changes. It is a transparent baseline, not a trained AI or market forecast.
+Forecast quality must be measured on chronological held-out data before use
+in a customer decision.
+
+When at least 72 hourly observations are supplied, the page also runs a
+contiguous rolling-origin replay: 48 hours of initial history followed by
+24-hour test folds. MAE, RMSE, and signed bias are shown and exported. Each
+fold uses only observations available before its target block. These historical
+metrics are diagnostic evidence, not a promise of future accuracy.
+
+## Important limitations
+
+This first version is appropriate only for continuous, deferrable loads whose
+energy requirement can be shifted within the selected horizon. It does not
+model minimum on/off duration, startup costs, ramp rates, discrete operating
+states, thermal/process dynamics, network power flow, or equipment protection.
+Those require a separately specified MILP or physical process model.
+
+The result is a candidate schedule under supplied prices and constraints. It
+does not establish customer savings, site feasibility, forecast accuracy, or
+permission to control equipment. It must be compared with the site's actual
+baseline and reviewed by a responsible operator.
+
+## Relationship to the wider IslandOS optimizer
+
+This module is complementary to dispatch_engine.py and the NSGA-II / schedule
+screening experiments. It solves a narrow tariff-aware load-shifting problem;
+it is not a replacement for common-physics evaluation, multi-resource
+coordination, or hard service-reliability checks.
+
+
+## Reproducible demo
+
+Run the example from the repository root:
+
+    python examples/price_aware_flexible_load_demo.py
+
+The example compares a fixed illustrative baseline schedule with the optimized
+schedule under the same synthetic tariff and the same total energy requirement.
+It prints both costs and their difference. This difference is a mathematical
+scenario comparison only, not measured savings, a customer quote, or a forecast
+of future savings. Replace all inputs with validated site data before using the
+calculation in a customer business case.
+
+## Validation coverage
+
+The unit tests cover cheapest-period allocation, per-interval power budgets,
+operating windows, non-hourly intervals, infeasible requirements, zero-energy
+requests, negative prices, malformed inputs, reproducibility, equal-energy
+baseline comparisons, invalid baseline rejection, and energy/cost accounting.
