@@ -126,7 +126,7 @@ Do not describe the current app as production-ready until these controls have be
 
 ## Hosted Streamlit Cloud visibility check
 
-The hosted demo URL is `https://islandos.streamlit.app/`. A scheduled GitHub Actions probe checks both the landing page and Streamlit's health endpoint without following redirects. On 2026-10-25, the public probe received HTTP 303 redirects for both endpoints to `share.streamlit.io/-/auth/app`. This is evidence that unauthenticated visitors are being sent to Streamlit Cloud sign-in; it is not evidence of a simulation-code failure.
+The hosted demo URL is `https://islandos.streamlit.app/`. A scheduled GitHub Actions probe checks both the landing page and Streamlit's health endpoint without following redirects. On 2026-10-25, the public probe received HTTP 303 redirects for both endpoints to `share.streamlit.io/-/auth/app`. This is a historical observation from that date only; it is not a current access diagnosis and should not be used to infer today's visibility. Re-run the workflow and an unauthenticated private-window check before changing the README's public-demo messaging.
 
 If the hosted demo is intended to be publicly usable:
 
