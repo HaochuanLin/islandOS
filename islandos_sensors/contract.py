@@ -66,10 +66,17 @@ def validate_message(message: dict, *, now: datetime | None = None,
         errors.append(f"unsupported source_type: {source_type}")
 
     value = message["value"]
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         errors.append("value must be a finite number")
-    elif signal_spec is not None and value < signal_spec["min"]:
-        errors.append("value is below the allowed minimum")
+    else:
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError, OverflowError):
+            numeric_value = float("nan")
+        if not math.isfinite(numeric_value):
+            errors.append("value must be a finite number")
+        elif signal_spec is not None and numeric_value < signal_spec["min"]:
+            errors.append("value is below the allowed minimum")
 
     try:
         timestamp_text = message["observed_at"]
