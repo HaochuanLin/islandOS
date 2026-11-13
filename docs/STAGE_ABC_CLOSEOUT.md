@@ -3,6 +3,8 @@
 **Baseline:** `main` at commit `6afb3480736407f5cdb7d38b9293d94432d22079` (2026-11-13).  
 **Purpose:** This ledger uses the user's current six-stage definitions. It deliberately distinguishes code completion from site validation and production deployment.
 
+**Relationship to the current numbered roadmap:** this is the earlier A–F workstream record. The separate numbered engineering stages 1–10 have their own [closeout ledger](ENGINEERING_STAGES_1_10_CLOSEOUT.md). Do not equate A–F labels with numbered stages 1–10.
+
 ## Stage A — Code consolidation and architecture convergence
 
 **Status: core exit criteria met; historical branch-ref pruning remains.**
