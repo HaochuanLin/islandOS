@@ -122,24 +122,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 min_train_size=72,
                 folds=4,
             )
-            report["rolling_validation"]["signals"][name] = {
-                str(horizon): {
-                    model_id: {
-                        "mean_mae": score.mean_mae,
-                        "folds": [
-                            {
-                                "samples": fold.samples,
-                                "mae": fold.mae,
-                                "rmse": fold.rmse,
-                                "bias_predicted_minus_actual": fold.bias_predicted_minus_actual,
-                            }
-                            for fold in score.folds
-                        ],
-                    }
-                    for model_id, score in models.items()
+            signal_report = {}
+            for horizon, models in horizon_results.items():
+                baseline_ids = ("persistence", "seasonal_naive_24h")
+                ridge = models["ridge_autoregressive"]
+                fold_win_count = sum(
+                    ridge.folds[index].mae
+                    < min(models[baseline_id].folds[index].mae for baseline_id in baseline_ids)
+                    for index in range(len(ridge.folds))
+                )
+                signal_report[str(horizon)] = {
+                    "best_by_mean_mae": min(models, key=lambda model_id: models[model_id].mean_mae),
+                    "ridge_fold_win_rate_vs_best_baseline": fold_win_count / len(ridge.folds),
+                    "models": {
+                        model_id: {
+                            "mean_mae": score.mean_mae,
+                            "mean_rmse": score.mean_rmse,
+                            "mean_bias_predicted_minus_actual": score.mean_bias,
+                            "folds": [
+                                {
+                                    "samples": fold.samples,
+                                    "mae": fold.mae,
+                                    "rmse": fold.rmse,
+                                    "bias_predicted_minus_actual": fold.bias_predicted_minus_actual,
+                                }
+                                for fold in score.folds
+                            ],
+                        }
+                        for model_id, score in models.items()
+                    },
                 }
-                for horizon, models in horizon_results.items()
-            }
+            report["rolling_validation"]["signals"][name] = signal_report
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
