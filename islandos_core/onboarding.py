@@ -17,6 +17,8 @@ import re
 import zipfile
 from typing import Any, Mapping
 
+from .forecast_signal_catalog import FORECAST_SIGNAL_SPECS
+
 
 SCHEMA_VERSION = "1.0"
 ALLOWED_SOURCE_TYPES = {
@@ -26,18 +28,8 @@ ALLOWED_SOURCE_TYPES = {
 
 # Canonical signals and units used by the generic energy-site onboarding path.
 CANONICAL_UNITS = {
-    "load_kw": "kW",
-    "pv_power_kw": "kW",
-    "wind_power_kw": "kW",
-    "grid_import_kw": "kW",
-    "grid_export_kw": "kW",
-    "battery_charge_kw": "kW",
-    "battery_discharge_kw": "kW",
-    "battery_soc_pct": "%",
-    "tariff_per_kwh": "currency/kWh",
-    "diesel_power_kw": "kW",
-    "diesel_fuel_lph": "L/h",
-    "temperature_c": "degC",
+    signal_id: spec.canonical_unit
+    for signal_id, spec in FORECAST_SIGNAL_SPECS.items()
 }
 
 _HEADER_ALIASES = {
