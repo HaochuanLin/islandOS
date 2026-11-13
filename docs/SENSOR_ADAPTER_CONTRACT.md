@@ -4,7 +4,7 @@
 
 This document defines a stable boundary between physical instrumentation and IslandOS. The contract is designed before hardware is selected, so an adapter can be added later without rewriting dispatch logic.
 
-**Current status:** contract and mock adapter only. No sensor hardware, gateway, serial port, Modbus client, MQTT broker, OPC UA client, or live telemetry connection is implemented. A valid message is not proof that a sensor is calibrated or trustworthy.
+**Current status:** normalized envelope, strict validator, batch duplicate quarantine, and synthetic mock adapter are implemented. Hardware-specific serial, Modbus, MQTT, OPC UA, and vendor API drivers are not implemented. A valid message is not proof that a sensor is calibrated or trustworthy.
 
 ## Layered connection model
 
@@ -71,8 +71,8 @@ Water level in metres is not interchangeable with water volume in cubic metres. 
 - Missing timestamp, unit, device ID, quality, or provenance: reject.
 - Non-finite value or physically invalid range: reject.
 - Quality is `bad` or `uncertain`: reject for the strict operational snapshot unless a site-approved policy explicitly defines an alternative.
-- Stale or future-dated samples: reject according to a site-approved freshness threshold.
-- Duplicate samples with conflicting values: quarantine and report; do not silently choose one.
+- Stale samples: reject according to a site-approved freshness threshold. Any future-dated sample is rejected; synchronize clocks before ingestion rather than accepting future clock skew.
+- Duplicate samples sharing site/device/signal/timestamp identity are all quarantined and reported, whether values match or conflict; do not silently choose one.
 - Missing required critical signals: do not start the scenario.
 - Do not replace missing values with zero, carry forward indefinitely, or interpolate without an explicit documented policy.
 
