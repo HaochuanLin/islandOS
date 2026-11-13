@@ -119,6 +119,11 @@ if not st.session_state.get("islandos_access_token"):
 st.sidebar.success(f"Signed in · role: {st.session_state.get('islandos_role', 'unknown')}")
 st.sidebar.caption(f"Tenant: {st.session_state.get('islandos_tenant_id', 'not returned')}")
 if st.sidebar.button("Sign out"):
+    try:
+        api_request("POST", "/api/v1/auth/logout", {})
+    except RuntimeError as exc:
+        st.error(f"Server-side session revocation failed: {exc}")
+        st.stop()
     st.session_state.pop("islandos_access_token", None)
     st.session_state.pop("islandos_role", None)
     st.session_state.pop("islandos_tenant_id", None)
