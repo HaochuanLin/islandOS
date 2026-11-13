@@ -19,7 +19,7 @@ from typing import Mapping, Sequence
 
 
 OPSD_VERSION = "2020-10-06"
-OPSD_SOURCE_URL = "https://data.open-power-system.org/time_series/2020-10-06/"
+OPSD_SOURCE_URL = "https://data.open-power-system-data.org/time_series/2020-10-06/"
 OPSD_ATTRIBUTION = (
     "Open Power System Data. 2020. Data Package Time series. "
     "Version 2020-10-06. https://doi.org/10.25832/time_series/2020-10-06. "
