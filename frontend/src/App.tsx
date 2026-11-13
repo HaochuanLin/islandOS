@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "./api";
+import MemberManagement from "./MemberManagement";
+import "./workflow.css";
 import type { Notification, Session, Site, Telemetry } from "./api";
 
 function App() {
@@ -132,6 +134,7 @@ function App() {
         <article className="metric-card"><span className="metric-label">UNREAD NOTIFICATIONS</span><strong>{unread}</strong><small>Requires review</small></article>
         <article className="metric-card"><span className="metric-label">LATEST TELEMETRY</span><strong className="metric-date">{telemetry ? new Date(telemetry.timestamp_utc).toLocaleString() : "—"}</strong><small>{telemetry ? `Source: ${telemetry.source}` : "No validated record"}</small></article>
       </section>
+      <MemberManagement token={session.access_token} role={session.role} />
       <div className="content-grid">
         <section className="panel telemetry-panel"><div className="panel-head"><div><p className="eyebrow">LIVE DATA · READ ONLY</p><h2>Latest telemetry</h2></div><span className="tag">{telemetry ? "VALIDATED RECORD" : "NO DATA"}</span></div>
           {!selectedSite ? <div className="empty-state"><div className="empty-icon">⌂</div><strong>Create a site to get started</strong><p>Each site has its own timezone and isolated telemetry records.</p></div> : !telemetry ? <div className="empty-state"><div className="empty-icon">⌁</div><strong>No telemetry received</strong><p>Connect an approved read-only data source or submit a validated telemetry record to the local API.</p></div> : <><div className="data-grid">{telemetryEntries.map(([key, value]) => <div className="data-cell" key={key}><span>{key.replaceAll("_", " ")}</span><strong>{String(value)}</strong></div>)}</div><div className="telemetry-foot">Received {new Date(telemetry.received_at_utc).toLocaleString()} · Physical write: no</div></>}
