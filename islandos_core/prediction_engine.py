@@ -230,6 +230,33 @@ class PredictionEngine:
     def available_candidates(self) -> tuple[tuple[str, str], ...]:
         return tuple(sorted((key, value[1]) for key, value in self._candidates.items()))
 
+    def _predict(
+        self,
+        model_id: str,
+        history: Sequence[float],
+        horizon: int,
+        *,
+        season_length: int,
+        non_negative: bool,
+    ) -> list[float]:
+        candidate, registered_version = self._candidates[model_id]
+
+        def verify_identity(phase: str) -> None:
+            current_id = getattr(candidate, "model_id", None)
+            current_version = getattr(candidate, "version", None)
+            if current_id != model_id or current_version != registered_version:
+                raise ValueError(
+                    f"candidate identity changed {phase} prediction: expected "
+                    f"{model_id!r}@{registered_version!r}, got "
+                    f"{current_id!r}@{current_version!r}"
+                )
+
+        verify_identity("before")
+        raw = candidate.predict(history, horizon, season_length=season_length)
+        predictions = _validate_predictions(raw, horizon, non_negative=non_negative)
+        verify_identity("during")
+        return predictions
+
     def _replay(
         self,
         model_id: str,
@@ -247,9 +274,9 @@ class PredictionEngine:
         folds = 0
         while cutoff < len(values):
             fold_horizon = min(horizon, len(values) - cutoff)
-            predicted = _validate_predictions(
-                candidate.predict(values[:cutoff], fold_horizon, season_length=season_length),
-                fold_horizon, non_negative=non_negative,
+            predicted = self._predict(
+                model_id, values[:cutoff], fold_horizon,
+                season_length=season_length, non_negative=non_negative,
             )
             actual = [float(value) for value in values[cutoff:cutoff + fold_horizon]]
             actual_all.extend(actual)
@@ -328,10 +355,10 @@ class PredictionEngine:
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
         )
-        candidate, registered_version = self._candidates[selected_id]
-        predictions = _validate_predictions(
-            candidate.predict(values, len(request.target_timestamps), season_length=season_length),
-            len(request.target_timestamps), non_negative=request.non_negative,
+        _, registered_version = self._candidates[selected_id]
+        predictions = self._predict(
+            selected_id, values, len(request.target_timestamps),
+            season_length=season_length, non_negative=request.non_negative,
         )
         ordered_errors = sorted(absolute_errors)
         rank = max(1, min(len(ordered_errors), math.ceil(confidence_level * len(ordered_errors))))
