@@ -101,3 +101,11 @@ the `grid_first` reference is also withheld unless total served energy, total
 unmet energy, critical unmet energy, and flexible-load shedding match in every
 scenario. The reference is a modeled policy under identical scenarios, not
 measured customer operation.
+
+## Stage D extension — water service and flexible demand
+
+The canonical prediction adapter now accepts optional flexible_load_kw and critical_load_kw forecasts. Flexible-load forecast energy is conserved over its declared non-zero availability window and scheduled jointly with battery/diesel decisions by the existing seeded search.
+
+An optional water_demand_m3_per_hour forecast can be coupled through islandos_core/water_resource_adapter.py. A declared RO specific energy, production limit, tank capacity, initial inventory, and reserve are checked using a just-in-time water-inventory replay. The resulting RO kW is added to essential load (and to the critical subset when supplied) before the common optimizer runs. The empirical upper water-demand planning bound is used for service-feasibility screening.
+
+This is a first integration slice, not a fully optimized water-energy system: RO production is not yet price-optimized, tank trajectory is not a decision variable, and RO process constraints beyond rated production and tank inventory are not represented. See docs/STAGE_D_WATER_FLEX_COORDINATION.md.
