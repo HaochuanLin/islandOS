@@ -58,6 +58,12 @@ The stage 9 fix was first verified on commit `57f4c9f`; the merged `main` push t
 
 The next release cycle should close the gaps that convert foundations into a credible customer pilot: full-stack local deployment; complete React invitation and decision-review workflows; live read-only adapters for one documented vendor/site; continuous shadow replay with independently retained evidence; site-calibrated forecasting and economics; and a signed, independently reviewed pilot acceptance package. Work can proceed in parallel where interfaces are stable, but real-device operation remains blocked until its external safety and authorization prerequisites are satisfied.
 
+## Repository hygiene snapshot
+
+At this audit, the repository exposed **245 branch refs** across three pages. The merged Stage 1–10 feature branches and many older `draft/`, `feature/`, `fix/`, and phase branches remain visible. `main` is the integration baseline; branch existence does not mean a branch is current or its code should be merged. Several historical branches are substantially divergent, so do not mass-merge or mass-delete them without comparing their unique tree content first.
+
+The only open pull request is [#202, a Dependabot Python dependency update](https://github.com/HaochuanLin/islandOS/pull/202). At review time GitHub reported it as non-mergeable and its base was behind the current `main`; it is not part of the ten-stage feature closeout. Refresh/rebase it and run its exact-head checks before considering a merge. Historical branch deletion remains a repository-owner housekeeping task.
+
 ## Relationship to earlier A–F records
 
 `docs/STAGE_ABC_CLOSEOUT.md` records the earlier A–F workstream and remains useful for its detailed historical acceptance decisions. It is not a replacement for this numbered ten-stage ledger; the labels and stage boundaries are different and should not be conflated.
