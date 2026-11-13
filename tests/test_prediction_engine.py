@@ -33,6 +33,15 @@ def make_request(values, *, non_negative=True, signal_id="site_load", unit="kW")
     return ForecastRequest(signal_id, unit, history, targets, non_negative=non_negative)
 
 
+class MutatingCandidate:
+    model_id = "mutating"
+    version = "1"
+
+    def predict(self, history, horizon, *, season_length):
+        self.version = "2"
+        return [float(history[-1])] * horizon
+
+
 class TestPredictionEngine(unittest.TestCase):
     def test_builtin_candidates_registered(self):
         engine = PredictionEngine()
@@ -112,6 +121,15 @@ class TestPredictionEngine(unittest.TestCase):
             PredictionEngine().forecast(
                 request, model_id="linear_trend", initial_history=2,
                 backtest_horizon=1, season_length=2,
+            )
+
+    def test_candidate_identity_cannot_change_after_registration(self):
+        engine = PredictionEngine()
+        engine.register(MutatingCandidate())
+        with self.assertRaisesRegex(ValueError, "identity changed"):
+            engine.forecast(
+                make_request([float(index % 24) for index in range(72)]),
+                model_id="mutating", initial_history=48,
             )
 
     def test_recent_mean_is_constant(self):
