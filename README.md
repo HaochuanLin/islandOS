@@ -125,6 +125,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Phase 4 investment economics](docs/PHASE4_CUSTOMER_INVESTMENT_ECONOMICS.md) | Customer-entered CAPEX, O&M, NPV, payback, replacement, and sensitivity screening |
 | [Engineering maturity roadmap](docs/ENGINEERING_MATURITY_ROADMAP.md) | Evidence requirements and delivery gates |
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |
+| [Site workspace guide](docs/SITE_WORKSPACE.md) | Local projects, site profiles, equipment records, source retention, and portable project packages |
 
 The earlier RO simulation screenshot has been retained as a historical example in [Early RO simulation demo](docs/EARLY_RO_SIMULATION_DEMO.md); it is not the product workflow diagram.
 

@@ -1607,6 +1607,7 @@ elif page == "Data onboarding & workspace":
     from uuid import uuid4
     from islandos_core.onboarding import ALLOWED_SOURCE_TYPES, evaluate_task_readiness, inspect_csv_bytes, inspect_excel_bytes, inspect_excel_sheets
     from islandos_core.workspace_store import create_project, initialize_workspace, list_projects, record_import_artifact, verify_audit_chain
+    from islandos_core.site_workspace import retain_source_file
 
     st.warning("Do not upload confidential or personally identifiable information to the public hosted demo. It has no customer authentication. SQLite persistence is disabled unless ISLANDOS_ENABLE_LOCAL_WORKSPACE=1 is set in a trusted local deployment.")
     uploaded = st.file_uploader("Upload a site dataset", type=["csv", "xlsx"], key="onboarding_upload")
@@ -1661,7 +1662,7 @@ elif page == "Data onboarding & workspace":
             if os.getenv("ISLANDOS_ENABLE_LOCAL_WORKSPACE", "").strip() == "1":
                 st.divider()
                 st.subheader("Local workspace metadata registration")
-                st.caption("Only metadata and hashes are stored; uploaded raw file bytes are not retained.")
+                st.caption("Import metadata is stored by default. Original CSV/XLSX bytes are retained only if you separately opt in below; storage stays on this local machine.")
                 db_path = Path(os.getenv("ISLANDOS_WORKSPACE_DB", ".islandos/workspace.sqlite3"))
                 initialize_workspace(db_path, workspace_id=os.getenv("ISLANDOS_WORKSPACE_ID", "local-islandos-workspace"), actor_id="local_operator")
                 projects = list_projects(db_path)
@@ -1674,6 +1675,7 @@ elif page == "Data onboarding & workspace":
                     project_name = ""
                     project_id = options[selected]
                 consent = st.checkbox("I consent to storing project metadata, file name, provenance, quality summary and SHA-256 locally.")
+                retain_original = st.checkbox("I separately consent to retaining the original CSV/XLSX file locally for this project.")
                 if st.button("Register import metadata", disabled=not consent):
                     if selected == "Create a new project":
                         if not project_name.strip():
@@ -1687,6 +1689,13 @@ elif page == "Data onboarding & workspace":
                         signal_count=report.get("recognized_signal_count", 0), quality_status=report.get("status", "unassessed"),
                         actor_id="local_operator", consent_to_store_metadata=True, worksheet=worksheet)
                     st.success(f"Import metadata registered. Artifact ID: {artifact_id}")
+                    if retain_original:
+                        retained = retain_source_file(
+                            db_path, Path(os.getenv("ISLANDOS_SOURCE_STORAGE_DIR", ".islandos/source_files")),
+                            project_id=project_id, artifact_id=artifact_id, file_name=uploaded.name,
+                            content=raw_bytes, actor_id="local_operator", explicit_consent=True,
+                        )
+                        st.success(f"Original source retained locally and SHA-256 verified: {retained['sha256']}")
                 audit = verify_audit_chain(db_path)
                 st.caption(f"Local audit chain: {'valid' if audit['valid'] else 'integrity check failed'} · {audit['event_count']} events")
             else:
