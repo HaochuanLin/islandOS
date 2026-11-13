@@ -72,7 +72,8 @@ class TestTenantScopedServiceStore(unittest.TestCase):
         }
         self.store.ingest_telemetry(alice, site["id"], payload, "unit-test")
         self.assertTrue(self.store.delete_site(alice, site["id"])["deleted"])
-        self.assertIsNone(self.store.latest_telemetry(alice, site["id"]))
+        with self.assertRaises(LookupError):
+            self.store.latest_telemetry(alice, site["id"])
 
 
 if __name__ == "__main__":
