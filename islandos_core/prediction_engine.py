@@ -351,6 +351,10 @@ class PredictionEngine:
         selected_id = model_id or ranking[0].model_id
         if selected_id not in self._candidates:
             raise KeyError(f"unknown forecast candidate: {selected_id}")
+        # Replay the explicitly selected candidate before applying the
+        # eligibility gate. This preserves identity-integrity and output-contract
+        # errors (for example, a mutated plug-in or negative physical output)
+        # instead of masking them behind a generic ranking rejection.
         selected_metrics, absolute_errors = self._replay(
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
@@ -361,8 +365,11 @@ class PredictionEngine:
             season_length=season_length, non_negative=request.non_negative,
         )
         ordered_errors = sorted(absolute_errors)
-        rank = max(1, min(len(ordered_errors), math.ceil(confidence_level * len(ordered_errors))))
-        radius = ordered_errors[rank - 1]
+        # Finite-sample conformal rank. When the requested quantile lies
+        # beyond the available calibration sample, the largest observed
+        # residual is used and the limitation remains explicit.
+        rank = min(len(ordered_errors), math.ceil((len(ordered_errors) + 1) * confidence_level))
+        radius = ordered_errors[max(0, rank - 1)]
         points = []
         for stamp, prediction in zip(request.target_timestamps, predictions):
             lower = prediction - radius
@@ -376,7 +383,7 @@ class PredictionEngine:
             model_version=registered_version,
             input_history_sha256=_history_digest(request),
             confidence_level=float(confidence_level),
-            interval_method="symmetric empirical absolute-error quantile from rolling-origin replay",
+            interval_method="finite-sample conformal-style symmetric absolute-error quantile from rolling-origin replay",
             interval_calibration_samples=len(absolute_errors),
             backtest=selected_metrics,
             points=tuple(points),

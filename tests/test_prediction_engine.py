@@ -95,6 +95,23 @@ class TestPredictionEngine(unittest.TestCase):
         )
         self.assertEqual(result.model_id, "recent_mean")
 
+    def test_explicit_candidate_must_pass_signal_backtest(self):
+        values = [float(index % 24) for index in range(96)]
+        engine = PredictionEngine()
+        engine.register(InvalidCandidate())
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            engine.forecast(
+                make_request(values), model_id="invalid", initial_history=48,
+            )
+
+    def test_interval_uses_finite_sample_conformal_rank(self):
+        values = [float(index % 24) for index in range(96)]
+        result = PredictionEngine().forecast(
+            make_request(values), initial_history=48, backtest_horizon=24,
+            confidence_level=0.90,
+        )
+        self.assertIn("finite-sample conformal-style", result.interval_method)
+
     def test_irregular_history_rejected(self):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)
         history = (
