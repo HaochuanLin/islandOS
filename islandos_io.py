@@ -78,7 +78,13 @@ def load_device_mapping(path: str) -> dict:
         for option in ("scale", "offset"):
             if option in spec:
                 value = spec[option]
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise ValueError("mapped field %s %s must be finite numeric" % (canonical, option))
+                try:
+                    finite_value = math.isfinite(float(value))
+                except (TypeError, ValueError, OverflowError):
+                    finite_value = False
+                if not finite_value:
                     raise ValueError("mapped field %s %s must be finite numeric" % (canonical, option))
         if canonical == "timestamp_utc" and ("scale" in spec or "offset" in spec):
             raise ValueError("timestamp_utc cannot use numeric scale or offset")
@@ -149,9 +155,17 @@ def validate_telemetry(
         raise TypeError("payload must be a mapping")
     if not str(source).strip():
         raise ValueError("source must be a non-empty identifier")
-    if not math.isfinite(float(max_age_seconds)) or max_age_seconds < 0:
+    try:
+        max_age_finite = math.isfinite(float(max_age_seconds))
+    except (TypeError, ValueError, OverflowError):
+        max_age_finite = False
+    try:
+        future_tolerance_finite = math.isfinite(float(future_tolerance_seconds))
+    except (TypeError, ValueError, OverflowError):
+        future_tolerance_finite = False
+    if not max_age_finite or max_age_seconds < 0:
         raise ValueError("max_age_seconds must be finite and non-negative")
-    if not math.isfinite(float(future_tolerance_seconds)) or future_tolerance_seconds < 0:
+    if not future_tolerance_finite or future_tolerance_seconds < 0:
         raise ValueError("future_tolerance_seconds must be finite and non-negative")
 
     errors = []
