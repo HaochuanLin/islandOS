@@ -47,7 +47,7 @@ def test_negative_tariffs_are_preserved_as_signed_signal():
 def test_missing_values_are_not_imputed():
     raw = b"timestamp,load_kw\n2026-11-01T00:00:00Z,1\n2026-11-01T01:00:00Z,\n2026-11-01T02:00:00Z,3\n"
     report = _report(raw)
-    with pytest.raises(ValueError, match="blocking import errors"):
+    with pytest.raises(ValueError, match="missing timestamp or target value"):
         build_forecast_request(raw, report, signal_id="load_kw")
 
 
