@@ -7,6 +7,7 @@ import zipfile
 
 import pytest
 
+from islandos_core.assets import AssetRecord
 from islandos_core.site_workspace import (
     export_project_package,
     import_project_package,
@@ -22,6 +23,8 @@ from islandos_core.workspace_store import (
     initialize_workspace,
     record_import_artifact,
     list_import_artifacts,
+    list_asset_records,
+    save_asset_record,
     verify_audit_chain,
 )
 
@@ -168,6 +171,20 @@ def test_project_package_import_creates_new_project_and_revalidates_sources(tmp_
     )
     source_bytes = b"timestamp,load_kw\\n2026-01-01T00:00:00Z,10\\n"
     digest = hashlib.sha256(source_bytes).hexdigest()
+    asset = AssetRecord.from_mapping({
+        "asset_id": "pv-01", "site_id": "site-1", "asset_type": "pv",
+        "nameplate_parameters": {
+            "rated_power_kw": {"value": 100, "unit": "kW", "source_type": "vendor_specification", "source_reference": "PV datasheet", "confirmed": True}
+        },
+        "installed_parameters": {
+            "configured_power_kw": {"value": 90, "unit": "kW", "source_type": "customer_provided", "source_reference": "Commissioning record", "confirmed": True}
+        },
+        "observed_parameters": {},
+        "constraints": [
+            {"constraint_id": "pv-max", "parameter": "max_power_kw", "severity": "hard", "unit": "kW", "operator": "max", "upper_bound": 90, "source_type": "customer_provided", "source_reference": "Inverter settings", "confirmed": True}
+        ],
+    })
+    save_asset_record(source_db, project_id="site-1", asset=asset, actor_id="tester")
     old_artifact = record_import_artifact(
         source_db, project_id="site-1", file_name="meter.csv", media_type="text/csv",
         sha256=digest, source_type="measured", row_count=1, signal_count=1,
@@ -196,7 +213,11 @@ def test_project_package_import_creates_new_project_and_revalidates_sources(tmp_
     )
     assert imported["project_id"] == "site-imported"
     assert imported["site_profile_versions_imported"] == 1
+    assert imported["asset_versions_imported"] == 1
     assert imported["import_artifacts_imported"] == 1
+    imported_assets = list_asset_records(destination_db, project_id="site-imported", include_history=True)
+    assert len(imported_assets) == 1
+    assert imported_assets[0]["asset_id"] == "pv-01"
     assert imported["source_files_retained"] == 1
     imported_artifacts = list_import_artifacts(destination_db, project_id="site-imported")
     assert len(imported_artifacts) == 1
