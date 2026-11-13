@@ -241,6 +241,14 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
                          bundle.input_history_sha256)
         self.assertFalse(result["forecast_scenario_scope"]["scenario_probabilities_assigned"])
         self.assertEqual(len(result["recommendation"]["battery_setpoints_kw"]), 6)
+        economics = result["robust_customer_economics"]
+        self.assertIsInstance(economics["service_equivalent_in_every_scenario"], bool)
+        self.assertEqual(
+            economics["cost_comparison_valid"],
+            economics["service_equivalent_in_every_scenario"],
+        )
+        if not economics["cost_comparison_valid"]:
+            self.assertIsNone(economics["estimated_worst_case_cost_reduction"])
 
     def test_joint_resource_optimizer_requires_explicit_assets(self):
         with self.assertRaisesRegex(ValueError, "requires configured battery and diesel"):
