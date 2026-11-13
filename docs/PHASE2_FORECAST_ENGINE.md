@@ -53,7 +53,7 @@ planning_input = build_forecast_planning_input(
 )
 ```
 
-The caller supplies the exact signal allow-list and expected units. The adapter rejects missing signals, unit mismatches, non-finite values, invalid prediction bounds, malformed history digests, and signals whose forecast timestamps do not align exactly. It returns common target timestamps, point forecasts, lower/upper planning bounds, units, selected model IDs, and the source-history SHA-256 digest. Extra signals are ignored unless explicitly requested.
+The caller supplies the exact signal allow-list and expected units. The adapter rejects missing signals, unit mismatches, non-finite values, invalid prediction bounds, malformed history digests, and signals whose forecast timestamps do not align exactly. Equivalent timezone-aware timestamps are normalized to UTC before comparison and hand-off. Returned signal mappings are read-only so a downstream component cannot accidentally mutate the forecast snapshot. It returns common target timestamps, point forecasts, lower/upper planning bounds, units, selected model IDs, and the source-history SHA-256 digest. Extra signals are ignored unless explicitly requested.
 
 This is a data contract only: it does not choose equipment schedules, optimize costs, assume asset constraints, or issue commands. A downstream optimizer must still apply physical limits, operating constraints, tariff semantics, and reliability requirements explicitly.
 
