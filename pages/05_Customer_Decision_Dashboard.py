@@ -37,7 +37,9 @@ st.caption("Forecast → compare operating policies → review cost and reliabil
 st.info(
     "Demonstration mode: all default inputs are synthetic. Replace them with "
     "validated site data before using the results in a customer decision. "
-    "This page performs offline screening only; it does not control equipment."
+    "This page performs offline screening only; it does not control equipment. "
+    "Uploaded CSV files are processed by the hosted app server: upload only data "
+    "you are authorized to share, and use redacted or non-sensitive exports."
 )
 
 with st.sidebar:
