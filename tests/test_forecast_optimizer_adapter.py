@@ -3,12 +3,15 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from islandos_core.forecast_engine import forecast_signals
-from islandos_core.energy_system import EnergySystemConfig
+from islandos_core.energy_system import (
+    BatterySpec, DieselSpec, EnergySystemConfig,
+)
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
     build_service_equivalent_economics,
     evaluate_forecast_stress_scenarios,
     optimize_forecasted_energy_system,
+    optimize_forecasted_resource_schedule,
 )
 
 
@@ -156,6 +159,50 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
                       ("battery_first", "grid_first"))
         self.assertFalse(stress["method_scope"]["scenario_probabilities_assigned"])
         self.assertFalse(stress["method_scope"]["robust_global_optimization_claimed"])
+
+    def test_joint_resource_optimizer_uses_shared_forecast_stress_scenarios(self):
+        bundle = make_bundle()
+        config = EnergySystemConfig(
+            pv_rated_kw=30.0,
+            wind_rated_kw=15.0,
+            grid_import_limit_kw=100.0,
+            battery=BatterySpec(
+                capacity_kwh=40.0, max_charge_kw=12.0,
+                max_discharge_kw=12.0, initial_soc=0.6,
+            ),
+            diesel=DieselSpec(
+                rated_power_kw=30.0, variable_cost_per_kwh=0.25,
+                min_stable_power_kw=0.0, ramp_up_kw_per_hour=30.0,
+            ),
+        )
+        result = optimize_forecasted_resource_schedule(
+            bundle,
+            config,
+            grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+            price_unit="USD/kWh",
+            population_size=4,
+            generations=1,
+            seed=7,
+        )
+        self.assertEqual(result["scenario_count"], 4)
+        self.assertTrue(result["model_scope"]["same_decisions_replayed_across_all_scenarios"])
+        self.assertTrue(result["model_scope"]["robust_optimization_enabled"])
+        self.assertEqual(result["forecast_provenance"]["history_sha256"],
+                         bundle.input_history_sha256)
+        self.assertFalse(result["forecast_scenario_scope"]["scenario_probabilities_assigned"])
+        self.assertEqual(len(result["recommendation"]["battery_setpoints_kw"]), 6)
+
+    def test_joint_resource_optimizer_requires_explicit_assets(self):
+        with self.assertRaisesRegex(ValueError, "requires configured battery and diesel"):
+            optimize_forecasted_resource_schedule(
+                make_bundle(),
+                EnergySystemConfig(pv_rated_kw=30.0, wind_rated_kw=15.0,
+                                   grid_import_limit_kw=100.0),
+                grid_available=[True] * 6,
+                diesel_available=[True] * 6,
+                price_unit="USD/kWh",
+            )
 
     def test_runs_optimizer_and_preserves_forecast_provenance(self):
         bundle = make_bundle()
