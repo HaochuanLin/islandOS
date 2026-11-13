@@ -444,7 +444,8 @@ def import_project_package(
     from io import BytesIO
     from islandos_core.assets import AssetRecord
     from islandos_core.workspace_store import (
-        create_project, create_run_manifest, record_import_artifact, save_asset_record,
+        create_project, create_run_manifest, initialize_workspace,
+        record_import_artifact, save_asset_record,
     )
 
     if consent_to_store_metadata is not True:
@@ -487,8 +488,12 @@ def import_project_package(
         }:
             raise WorkspaceStoreError("package contains an unsupported source type")
 
-    initialize = __import__("islandos_core.workspace_store", fromlist=["initialize_workspace"]).initialize_workspace
-    initialize(db_path, workspace_id="local-islandos-workspace", actor_id=actor_id)
+    with _connect(db_path) as connection:
+        workspace_row = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='workspace_id'"
+        ).fetchone()
+    workspace_id = workspace_row["value"] if workspace_row else "local-islandos-workspace"
+    initialize_workspace(db_path, workspace_id=workspace_id, actor_id=actor_id)
     create_project(
         db_path, project_id=new_project_id, display_name=new_project_name.strip(),
         actor_id=actor_id, consent_to_store_metadata=True,
