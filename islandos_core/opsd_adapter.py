@@ -143,6 +143,8 @@ def load_opsd_singleindex_csv(
         reader = csv.DictReader(handle)
         if not reader.fieldnames or "utc_timestamp" not in reader.fieldnames:
             raise ValueError("OPSD CSV must contain a utc_timestamp column")
+        if len(reader.fieldnames) != len(set(reader.fieldnames)):
+            raise ValueError("OPSD CSV contains duplicate column names; refusing ambiguous field mapping")
         resolved = _resolve_columns(reader.fieldnames, region_code, signals)
         source_columns = {signal: spec[0] for signal, spec in resolved.items()}
         units = {signal: spec[1] for signal, spec in resolved.items()}
