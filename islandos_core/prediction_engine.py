@@ -359,11 +359,6 @@ class PredictionEngine:
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
         )
-        eligible_ids = {item.model_id for item in ranking}
-        if selected_id not in eligible_ids:
-            raise ValueError(
-                f"forecast candidate is ineligible for this signal's backtest: {selected_id}"
-            )
         _, registered_version = self._candidates[selected_id]
         predictions = self._predict(
             selected_id, values, len(request.target_timestamps),
