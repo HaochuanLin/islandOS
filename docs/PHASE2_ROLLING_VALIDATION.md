@@ -33,3 +33,9 @@ The current `forecast_signals` API still uses its original single holdout
 selection and UTC calendar features until a separately reviewed integration
 change wires these helpers into model fitting and records the selected site
 timezone in forecast provenance. They do not establish site accuracy.
+
+## Horizon-specific validation
+
+The module also exposes `evaluate_horizon_windows(...)`, which runs an independent expanding-window evaluation for each requested horizon (1–168 hours). This keeps short-horizon and long-horizon errors separate instead of reporting one blended score. The default horizon set is 1, 6, 12, 24, 48, and 168 hours; each horizon requires enough history for its own requested number of folds. Model callbacks still receive only training values and future timestamps.
+
+This is an evaluation utility, not yet the selection policy used by `forecast_signals`. The engine's automatic model choice remains based on its documented final chronological holdout until the horizon-wise results are integrated and reviewed.
