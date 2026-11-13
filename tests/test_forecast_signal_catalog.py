@@ -7,6 +7,7 @@ from islandos_core.forecast_signal_catalog import (
     forecast_site_signals,
     get_forecast_signal_spec,
 )
+from islandos_core.prediction_engine import PredictionEngine
 
 
 def _timestamps(count=96):
@@ -40,9 +41,11 @@ def test_site_forecast_uses_one_engine_for_multiple_domains():
         "water_demand_m3_per_hour": "m3/h",
     }
     result = forecast_site_signals(_timestamps(), history, units, 6)
-    assert set(result.forecasts) == set(history)
-    assert all(len(item.points) == 6 for item in result.forecasts.values())
-    assert result.forecasts["tariff_per_kwh"].unit == "USD/kWh"
+    assert set(result.results) == set(history)
+    assert all(len(item.points) == 6 for item in result.results.values())
+    assert result.results["tariff_per_kwh"].unit == "USD/kWh"
+    assert all(item.model_id for item in result.results.values())
+    assert len(result.input_history_sha256) == 64
 
 
 def test_known_signal_rejects_unit_mismatch():
@@ -78,8 +81,29 @@ def test_negative_tariffs_and_temperatures_are_supported():
         {"tariff_per_kwh": "EUR/kWh", "temperature_c": "degC"},
         4,
     )
-    assert result.forecasts["tariff_per_kwh"].points[0].predicted < 0
-    assert result.forecasts["temperature_c"].points[0].predicted < 0
+    assert result.results["tariff_per_kwh"].points[0].predicted_value < 0
+    assert result.results["temperature_c"].points[0].predicted_value < 0
+
+
+def test_registered_candidate_can_replace_builtin_models():
+    class FlatCandidate:
+        model_id = "customer_flat"
+        version = "2.1"
+
+        def predict(self, history, horizon, *, season_length):
+            return [float(history[-1])] * horizon
+
+    engine = PredictionEngine(include_builtin_candidates=False)
+    engine.register(FlatCandidate())
+    result = forecast_site_signals(
+        _timestamps(),
+        {"process_heat": _series()},
+        {"process_heat": "kW_th"},
+        3,
+        engine=engine,
+    )
+    assert result.results["process_heat"].model_id == "customer_flat"
+    assert result.results["process_heat"].model_version == "2.1"
 
 
 def test_custom_signal_requires_explicit_unit_but_remains_supported():
@@ -88,4 +112,4 @@ def test_custom_signal_requires_explicit_unit_but_remains_supported():
     result = forecast_site_signals(
         _timestamps(), {"process_heat": _series()}, {"process_heat": "kW_th"}, 2
     )
-    assert "process_heat" in result.forecasts
+    assert "process_heat" in result.results
