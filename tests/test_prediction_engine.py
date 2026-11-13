@@ -99,7 +99,7 @@ class TestPredictionEngine(unittest.TestCase):
         values = [float(index % 24) for index in range(96)]
         engine = PredictionEngine()
         engine.register(InvalidCandidate())
-        with self.assertRaisesRegex(ValueError, "ineligible for this signal"):
+        with self.assertRaisesRegex(ValueError, "must be finite"):
             engine.forecast(
                 make_request(values), model_id="invalid", initial_history=48,
             )
