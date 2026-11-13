@@ -113,7 +113,17 @@ def validate_batch(messages, *, now: datetime | None = None,
         if isinstance(message, dict):
             fields = ("site_id", "device_id", "signal_id", "observed_at")
             if all(isinstance(message.get(field), str) and message[field].strip() for field in fields):
-                key = tuple(message[field] for field in fields)
+                try:
+                    timestamp_text = message["observed_at"]
+                    timestamp_text = timestamp_text[:-1] + "+00:00" if timestamp_text.endswith("Z") else timestamp_text
+                    parsed_timestamp = datetime.fromisoformat(timestamp_text)
+                    if parsed_timestamp.tzinfo is not None and parsed_timestamp.utcoffset() is not None:
+                        key = (
+                            message["site_id"], message["device_id"], message["signal_id"],
+                            parsed_timestamp.astimezone(timezone.utc).isoformat(),
+                        )
+                except (TypeError, ValueError, OverflowError):
+                    key = None
         if key is not None:
             prior = seen.setdefault(key, [])
             if prior:
