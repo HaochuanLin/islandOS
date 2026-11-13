@@ -54,7 +54,7 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 ## Next engineering gates
 
 1. Test the model against realistic public or customer-authorized time series with provenance.
-2. Add expanding-window multi-fold evaluation and horizon-specific error analysis.
+2. Integrate the available expanding-window and horizon-specific evaluation utilities into the model review workflow; run them on representative, provenance-documented data before changing automatic promotion.
 3. Add exogenous covariates only where timestamp alignment and availability-at-decision-time are proven.
 4. Propagate forecast scenarios into the physical evaluator in the subsequent integration phase.
 5. Promote a model only when it consistently beats transparent baselines on relevant held-out data and stress cases.
