@@ -57,3 +57,8 @@ With token protection, add `-H "Authorization: Bearer $ISLANDOS_GATEWAY_TOKEN"` 
 - [ ] Keep the control path disabled. Require a separate hazard review, interlock design, operator authorization, and device-specific acceptance tests before any future actuation work.
 
 The current project does not establish field accuracy, vendor certification, universal plug-and-play compatibility, or permission to control equipment. Synthetic replay verifies software behavior only.
+
+
+## Timestamp freshness hardening
+
+The default normalized telemetry validator rejects every future-dated sample, including sub-second clock skew. An explicit non-zero `future_tolerance_seconds` is available only for a caller that has documented and approved a bounded clock policy; it is not enabled by the default gateway or sensor contract. Timestamps are compared as timezone-aware UTC instants.
