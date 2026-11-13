@@ -31,12 +31,12 @@ No savings, payback, or purchasing recommendation is valid without traceable sit
 
 | Stage | Current repository evidence | Not yet established |
 |---|---|---|
-| INPUT | CSV/XLSX onboarding, local-first site workspace, asset records, source hashes, canonical signal catalog, and read-only telemetry contract | Universal vendor plug-and-play, managed multi-site storage, production live integration |
+| INPUT | CSV/XLSX onboarding, local-first site workspace, versioned asset records, source hashes, immutable run manifests, append-only audit chain, and verified whole-workspace SQLite backup/restore | Project-level portable export/import, raw source-file retention, managed multi-site storage, production live integration |
 | PREDICT | Canonical multi-domain signal catalog, replaceable prediction candidates, rolling-origin model comparison, model/version and history-hash provenance, empirical error bands | Site-calibrated accuracy, transfer validation, calibrated uncertainty consistently propagated into optimization |
 | OPTIMIZE | Forecast-to-joint battery/diesel schedule search, deterministic stress scenarios, policy comparison, service-equivalence gate, bounded heuristic and audit export | Broad asset coverage, calibrated probabilistic robust optimization, global optimality, validated savings |
 | DECIDE | Forecast-led customer decision page, model provenance, hourly schedule comparison, JSON audit, simplified customer-entered economics, versioned local reference API, tenant-scoped site records and read-only telemetry | Production service/security operations, full lifecycle customer economics, usability evidence, site-verified decision reports |
 
-The public Streamlit app is an interactive research prototype, not a live operational system. Stages A–F are represented on `main` as reusable foundations and offline workflows; Stage F routes the customer-facing optimizer through the canonical catalog. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
+The public Streamlit app is an interactive research prototype, not a live operational system. The earlier A–F engineering work established reusable foundations and offline workflows; the current six-stage acceptance definition is tracked separately in `docs/STAGE_ABC_CLOSEOUT.md`. The prior Stage F implementation refers only to canonical workflow integration, not the new real-deployment Stage F. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
 
 ## Productization principles
 
