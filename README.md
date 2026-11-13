@@ -67,7 +67,7 @@ The repository now contains a tested offline path from canonical customer histor
 
 ## Quick start
 
-Use Python 3.10 or newer, then install the dependencies declared in `requirements.txt`.
+Use Python 3.11 or newer. The default install follows the exact versions in `requirements-runtime.lock` through `requirements.txt`, so a fresh installation is reproducible against the repository's tested runtime set.
 
 ```bash
 git clone https://github.com/HaochuanLin/islandOS.git
@@ -141,11 +141,16 @@ The earlier RO simulation screenshot has been retained as a historical example i
 
 Contributions are welcome. Please keep data provenance, units, assumptions, and maturity labels explicit. Compare complex models against transparent baselines and add tests for behavior changes.
 
-Run the test suite from the repository root:
+For development and tests, install the exact CI/development lock (it includes pytest and the tools used by automated checks):
 
 ```bash
+python -m pip install -r requirements-ci.lock
+python -m pip check
+python -m compileall -q .
 python -m pytest -q
 ```
+
+The smaller runtime installation is sufficient to launch the app; the CI lock is intended for contributors and verification.
 
 Passing tests verify software behavior, not forecast accuracy, engineering feasibility, safety, or real-world benefits.
 
