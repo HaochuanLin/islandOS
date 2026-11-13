@@ -142,7 +142,7 @@ def validate_telemetry(
     received_at: Optional[datetime] = None,
     required_fields: Tuple[str, ...] = DEFAULT_REQUIRED_FIELDS,
     max_age_seconds: float = 300.0,
-    future_tolerance_seconds: float = 30.0,
+    future_tolerance_seconds: float = 0.0,
 ) -> TelemetryFrame:
     """Validate a vendor-neutral telemetry message without imputing missing data."""
     if not isinstance(payload, Mapping):
@@ -170,7 +170,7 @@ def validate_telemetry(
     if not errors and age_seconds > max_age_seconds:
         errors.append("telemetry is stale")
     if not errors and age_seconds < -future_tolerance_seconds:
-        errors.append("telemetry timestamp is too far in the future")
+        errors.append("telemetry timestamp is in the future")
 
     values = {}
     for field in required_fields:
