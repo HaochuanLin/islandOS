@@ -106,10 +106,12 @@ class TestPredictionEngine(unittest.TestCase):
     def test_model_output_validation_and_linear_trend(self):
         candidate = LinearTrendCandidate()
         self.assertEqual(candidate.predict([1.0, 2.0, 3.0], 2, season_length=3), [4.0, 5.0])
+        values = [1.0, 0.0, 0.0, 0.0, 0.0]
+        request = make_request(values)
         with self.assertRaisesRegex(ValueError, "cannot be negative"):
-            PredictionEngine().evaluate_candidates(
-                [1.0, 0.0, 0.0, 0.0, 0.0],
-                initial_history=2, horizon=1, season_length=2,
+            PredictionEngine().forecast(
+                request, model_id="linear_trend", initial_history=2,
+                backtest_horizon=1, season_length=2,
             )
 
     def test_recent_mean_is_constant(self):
