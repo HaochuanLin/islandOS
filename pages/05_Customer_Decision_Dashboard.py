@@ -6,11 +6,14 @@ measured customer savings, a site-validated forecast, or equipment commands.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
+import math
 
 import pandas as pd
 import streamlit as st
 
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
+from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.forecast_engine import forecast_signals
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
@@ -46,24 +49,40 @@ with st.sidebar:
     battery_power = st.slider("Battery charge/discharge limit (kW)", 0, 60, 20, 5)
     cost_priority = st.slider("Cost priority", 0.0, 1.0, 0.7, 0.05)
     st.caption("The remaining objective weight is assigned to reliability.")
+    site_csv = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-history_stamps = [now - timedelta(hours=168 - index) for index in range(168)]
 history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
-for index, stamp in enumerate(history_stamps):
-    hour = stamp.hour
-    day = stamp.weekday()
-    solar = max(0.0, 34.0 * __import__("math").sin(__import__("math").pi * (hour - 6) / 12.0))
-    pv = solar * (0.82 + 0.12 * __import__("math").sin(index * 0.31))
-    wind = 7.0 + 3.0 * (0.5 + 0.5 * __import__("math").sin(index * 0.23 + 0.8))
-    load = (21.0 + 4.0 * (hour in range(17, 23)) + 2.0 * (hour in range(7, 10))
-            + 1.2 * (day < 5)) * demand_scale
-    tariff = (0.09 if hour < 6 else 0.29 if hour in range(17, 22) else 0.17)
-    tariff *= tariff_scale * (1.0 + 0.04 * __import__("math").sin(index * 0.11))
-    history["pv_power"].append(round(max(0.0, pv), 3))
-    history["wind_power"].append(round(max(0.0, wind), 3))
-    history["essential_load"].append(round(load, 3))
-    history["electricity_price"].append(round(tariff, 4))
+source_sha256 = None
+source_label = "Synthetic demonstration data"
+if site_csv is not None:
+    try:
+        uploaded = parse_customer_history_csv(site_csv.getvalue(), source_name=site_csv.name)
+        history_stamps = list(uploaded.timestamps_utc)
+        history = {name: list(values) for name, values in uploaded.signals.items()}
+        source_sha256 = uploaded.source_sha256
+        source_label = f"User-uploaded: {uploaded.source_name} (not independently verified)"
+    except ValueError as exc:
+        st.error(f"Site history CSV rejected: {exc}")
+        st.stop()
+else:
+    history_stamps = [now - timedelta(hours=168 - index) for index in range(168)]
+    for index, stamp in enumerate(history_stamps):
+        hour = stamp.hour
+        day = stamp.weekday()
+        solar = max(0.0, 34.0 * math.sin(math.pi * (hour - 6) / 12.0))
+        pv = solar * (0.82 + 0.12 * math.sin(index * 0.31))
+        wind = 7.0 + 3.0 * (0.5 + 0.5 * math.sin(index * 0.23 + 0.8))
+        load = (21.0 + 4.0 * (hour in range(17, 23)) + 2.0 * (hour in range(7, 10))
+                + 1.2 * (day < 5)) * demand_scale
+        tariff = (0.09 if hour < 6 else 0.29 if hour in range(17, 22) else 0.17)
+        tariff *= tariff_scale * (1.0 + 0.04 * math.sin(index * 0.11))
+        history["pv_power"].append(round(max(0.0, pv), 3))
+        history["wind_power"].append(round(max(0.0, wind), 3))
+        history["essential_load"].append(round(load, 3))
+        history["electricity_price"].append(round(tariff, 4))
+
+st.caption(f"Input provenance: {source_label}")
 
 units = {
     "pv_power": "kW",
@@ -78,7 +97,7 @@ try:
         history,
         units,
         horizon=24,
-        non_negative_signals=tuple(history),
+        non_negative_signals=("pv_power", "wind_power", "essential_load"),
     )
     coordinated = build_coordination_inputs(
         bundle,
@@ -152,12 +171,22 @@ try:
                 "Upper planning bound": point.upper_bound,
             })
     forecast_frame = pd.DataFrame(forecast_rows)
-    st.line_chart(
-        forecast_frame.pivot(index="Timestamp (UTC)", columns="Signal", values="Forecast"),
-        use_container_width=True,
-    )
+    energy_forecast = forecast_frame[
+        forecast_frame["Signal"].isin(("pv_power", "wind_power", "essential_load"))
+    ].pivot(index="Timestamp (UTC)", columns="Signal", values="Forecast")
+    tariff_forecast = forecast_frame[
+        forecast_frame["Signal"] == "electricity_price"
+    ].set_index("Timestamp (UTC)")[["Forecast"]]
+    chart_left, chart_right = st.columns(2)
+    with chart_left:
+        st.caption("Generation and essential load (kW)")
+        st.line_chart(energy_forecast, use_container_width=True)
+    with chart_right:
+        st.caption(f"Electricity price ({currency}/kWh)")
+        st.line_chart(tariff_forecast, use_container_width=True)
     with st.expander("Forecast model quality and provenance"):
-        st.write(f"Input history SHA-256: `{bundle.input_history_sha256}`")
+        st.write(f"Forecast history SHA-256: `{bundle.input_history_sha256}`")
+        st.write(f"Uploaded file SHA-256: {source_sha256 or 'not applicable — synthetic data'}")
         for name, forecast in bundle.forecasts.items():
             st.write({
                 "signal": name,
@@ -213,6 +242,8 @@ try:
         "recommended_policy": recommended,
         "currency": currency,
         "history_sha256": bundle.input_history_sha256,
+        "source_file_sha256": source_sha256,
+        "input_provenance": source_label,
         "forecast_models": {name: item.model_id for name, item in bundle.forecasts.items()},
         "service_equivalent_to_grid_first": service_equal,
         "cost_comparison_valid": economics["cost_comparison_valid"],
@@ -220,11 +251,11 @@ try:
         "recommended_summary": selected,
         "reference_summary": baseline,
         "forecast_stress_scenarios": stress_rows,
-        "scope": "synthetic offline screening; not measured savings or equipment control",
+        "scope": "offline screening; not measured savings or equipment control",
     }
     st.download_button(
         "Download decision report (JSON)",
-        data=__import__("json").dumps(report, indent=2, default=str).encode("utf-8"),
+        data=json.dumps(report, indent=2, default=str).encode("utf-8"),
         file_name="islandos_customer_decision_report.json",
         mime="application/json",
     )
