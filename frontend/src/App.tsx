@@ -1,5 +1,7 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { api, Notification, Session, Site, Telemetry } from "./api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { api } from "./api";
+import type { Notification, Session, Site, Telemetry } from "./api";
 
 function App() {
   const [health, setHealth] = useState("checking");
