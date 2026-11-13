@@ -10,7 +10,7 @@
 - Main is the only integration baseline; old pull requests were triaged and superseded changes were closed rather than copied wholesale.
 - The forecasting path has one canonical new-work entry point: `forecast_signal_catalog.py` → `prediction_engine.py`; legacy forecast modules are compatibility or specialist paths.
 - Shared asset, site-readiness, forecast contract, optimizer, economics, and telemetry boundaries are documented.
-- The latest open PR review found only an unrelated Dependabot dependency PR.
+- At the time of the initial baseline review, the only remaining open PR was an unrelated Dependabot dependency PR; subsequent Stage F closeout changes are tracked in their own bounded PRs.
 - The connected GitHub interface does not expose branch deletion. Historical feature/draft refs therefore remain visible; they do not change mainline behavior, but final repository hygiene requires deleting obsolete refs through GitHub's branch settings/API.
 
 **Acceptance:** mainline architecture and PR triage are complete. Do not claim every old branch has been deleted.
