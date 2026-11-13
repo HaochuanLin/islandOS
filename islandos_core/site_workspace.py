@@ -86,10 +86,13 @@ def save_site_profile(
     """Append a validated immutable site profile version to an existing project."""
     if not isinstance(profile, Mapping):
         raise WorkspaceStoreError("site profile must be an object")
-    allowed = {"site_name", "site_type", "country", "timezone", "currency", "description"}
+    allowed = {"schema_version", "site_name", "site_type", "country", "timezone", "currency", "description"}
     unknown = sorted(set(profile) - allowed)
     if unknown:
         raise WorkspaceStoreError("unknown site profile fields: " + ", ".join(unknown))
+    schema_version = profile.get("schema_version", "1.0")
+    if schema_version != "1.0":
+        raise WorkspaceStoreError("unsupported site profile schema_version")
     site_name = profile.get("site_name")
     site_type = profile.get("site_type", "other")
     timezone_name = profile.get("timezone", "UTC")
