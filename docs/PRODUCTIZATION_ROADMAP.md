@@ -34,9 +34,9 @@ No savings, payback, or purchasing recommendation is valid without traceable sit
 | INPUT | CSV/XLSX onboarding, local-first site workspace, versioned asset records, source hashes, immutable run manifests, append-only audit chain, and verified whole-workspace SQLite backup/restore | Project-level portable export/import, raw source-file retention, managed multi-site storage, production live integration |
 | PREDICT | Canonical multi-domain signal catalog, replaceable prediction candidates, rolling-origin model comparison, model/version and history-hash provenance, empirical error bands | Site-calibrated accuracy, transfer validation, calibrated uncertainty consistently propagated into optimization |
 | OPTIMIZE | Forecast-to-joint battery/diesel schedule search, deterministic stress scenarios, policy comparison, service-equivalence gate, flexible-load energy scheduling, and reserve-constrained RO demand-to-power coupling | Price-aware RO/tank trajectory optimization, broader asset coverage, calibrated probabilistic robust optimization, global optimality, validated savings |
-| DECIDE | Forecast-led customer decision page, model provenance, hourly schedule comparison, JSON audit, simplified customer-entered economics, versioned local reference API, tenant-scoped site records and read-only telemetry | Production service/security operations, full lifecycle customer economics, usability evidence, site-verified decision reports |
+| DECIDE | Forecast-led customer decision page, model provenance, hourly schedule comparison, JSON audit, customer-entered NPV/payback screen, tenant-scoped local API, owner-managed member invitations/roles, persistent tenant/user-scoped notification inbox | Streamlit UI integration for member/inbox workflows, email/push delivery, full lifecycle economics (fuel, demand charges, escalation, taxes, degradation), production security, usability evidence, site-verified reports |
 
-The public Streamlit app is an interactive research prototype, not a live operational system. The earlier A–F engineering work established reusable foundations and offline workflows; the current six-stage acceptance definition is tracked separately in `docs/STAGE_ABC_CLOSEOUT.md`. The prior Stage F implementation refers only to canonical workflow integration, not the new real-deployment Stage F. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
+The public Streamlit app is an interactive research prototype, not a live operational system. The current six-stage acceptance definition is tracked in `docs/STAGE_ABC_CLOSEOUT.md`; Stage E API additions and Stage F shadow replay are foundations, not a production deployment. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
 
 ## Productization principles
 
@@ -89,13 +89,13 @@ The public Streamlit app is an interactive research prototype, not a live operat
 - **Exit:** independent users can complete a bounded workflow and reproduce its report without developer assistance.
 
 
-### Stage F — unified customer workflow and deployment handoff
+### Current Stage F — real deployment and field-validation foundation
 
-- Route customer-facing forecast and optimization pages through the same canonical signal catalog used by onboarding; do not duplicate signal semantics in UI code.
-- Keep INPUT provenance, PREDICT model identity/backtests/error bands, OPTIMIZE feasibility/service-equivalence checks, and DECIDE audit exports visible in one reproducible path.
-- Connect the local reference API only through explicit service boundaries; retain loopback-only defaults and read-only telemetry.
-- Align README, product blueprint, maturity labels, and runnable workflow documentation with merged code.
-- **Exit:** the customer decision page uses the canonical forecast catalog; an integration test covers catalog → forecast → joint optimizer; docs describe actual mainline capability and remaining production gaps. This is still an offline research workflow, not site validation or production SaaS.
+- Implemented a vendor-neutral read-only shadow comparison and offline JSON replay CLI. It checks timestamps/freshness, signal coverage, units, finite values, and declared per-signal tolerances; outputs include an audit digest and explicit no-command/no-write invariants.
+- Existing local foundations include a loopback-only reference API and telemetry gateway, SQLite persistence, whole-workspace backup/restore, Docker hardening, CI SBOM/dependency checks, and a deployment/pilot acceptance template.
+- Not implemented: managed production database, TLS termination and network segmentation, secret manager, MFA/SSO, production rate limiting, signed device identity, vendor-specific live protocol adapters, centralized monitoring/alert routing, off-host encrypted backup and restore drills, site-connected shadow operation, or signed pilot acceptance.
+- **Exit:** all production gates have named owners and verified evidence; a site-approved read-only shadow trial completes against owner-defined acceptance thresholds. No live control is implied or authorized.
+
 
 ## Customer discovery
 
