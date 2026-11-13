@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 from typing import Sequence
 
-from islandos_core.forecast_engine import forecast_signals
+from islandos_core.forecast_engine import evaluate_signal_rolling, forecast_signals
 from islandos_core.opsd_adapter import load_opsd_singleindex_csv
 
 
@@ -35,6 +35,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-utc", type=_utc_bound, help="Inclusive ISO-8601 UTC start")
     parser.add_argument("--end-utc", type=_utc_bound, help="Exclusive ISO-8601 UTC end")
     parser.add_argument("--horizon", type=int, default=24, help="Forecast horizon in hours (1–168)")
+    parser.add_argument(
+        "--rolling-validation", action="store_true",
+        help="Also evaluate persistence, seasonal-naive, and ridge on expanding windows",
+    )
+    parser.add_argument(
+        "--rolling-horizons", nargs="+", type=int, default=(1, 6, 24, 168),
+        help="Rolling validation horizons in hours (default: 1 6 24 168)",
+    )
     return parser
 
 
@@ -97,6 +105,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             for name, forecast in bundle.forecasts.items()
         },
     }
+    if args.rolling_validation:
+        report["rolling_validation"] = {
+            "method": "expanding_window",
+            "folds": 4,
+            "minimum_training_observations": 72,
+            "horizons_hours": list(args.rolling_horizons),
+            "signals": {},
+        }
+        for name, values in dataset.history.items():
+            horizon_results = evaluate_signal_rolling(
+                dataset.timestamps,
+                values,
+                horizons=tuple(args.rolling_horizons),
+                non_negative=name != "price",
+                min_train_size=72,
+                folds=4,
+            )
+            report["rolling_validation"]["signals"][name] = {
+                str(horizon): {
+                    model_id: {
+                        "mean_mae": score.mean_mae,
+                        "folds": [
+                            {
+                                "samples": fold.samples,
+                                "mae": fold.mae,
+                                "rmse": fold.rmse,
+                                "bias_predicted_minus_actual": fold.bias_predicted_minus_actual,
+                            }
+                            for fold in score.folds
+                        ],
+                    }
+                    for model_id, score in models.items()
+                }
+                for horizon, models in horizon_results.items()
+            }
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
