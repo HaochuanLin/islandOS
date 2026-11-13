@@ -118,8 +118,8 @@ class TestOPSDAdapter(unittest.TestCase):
                                            suffix=".csv", delete=False)
         self.addCleanup(lambda: Path(temp.name).unlink(missing_ok=True))
         temp.write("utc_timestamp,AT_load_actual_entsoe_transparency,"
-                   "AT_load_actual_entsoe_transparency\\n")
-        temp.write("2020-01-01T000000Z,10,11\\n")
+                   "AT_load_actual_entsoe_transparency\n")
+        temp.write("2020-01-01T000000Z,10,11\n")
         temp.close()
         with self.assertRaisesRegex(ValueError, "duplicate column names"):
             load_opsd_singleindex_csv(
