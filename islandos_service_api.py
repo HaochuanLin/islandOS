@@ -7,6 +7,7 @@ The listener is loopback-only and physical device writes do not exist.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hashlib
@@ -55,8 +56,17 @@ class IslandOSStore:
         db.execute("PRAGMA foreign_keys=ON")
         return db
 
+    @contextmanager
+    def session(self):
+        db = self.connect()
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+
     def _initialize(self):
-        with self._lock, self.connect() as db:
+        with self._lock, self.session() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS tenants (
                     id TEXT PRIMARY KEY, name TEXT NOT NULL,
@@ -108,7 +118,7 @@ class IslandOSStore:
             raise ValueError("tenant_name must contain 1–120 characters")
         tenant_id, user_id = secrets.token_hex(16), secrets.token_hex(16)
         salt = secrets.token_bytes(16)
-        with self._lock, self.connect() as db:
+        with self._lock, self.session() as db:
             db.execute("INSERT INTO tenants VALUES (?,?,?)", (tenant_id, tenant_name.strip(), _utcnow()))
             try:
                 db.execute(
@@ -121,7 +131,7 @@ class IslandOSStore:
         return {"tenant_id": tenant_id, "user_id": user_id, "role": "owner"}
 
     def login(self, email, password):
-        with self.connect() as db:
+        with self.session() as db:
             row = db.execute("SELECT * FROM users WHERE email=?", (email.strip().lower(),)).fetchone()
             if row is None:
                 raise PermissionError("invalid credentials")
