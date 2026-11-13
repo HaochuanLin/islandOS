@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from islandos_core.forecast_validation import (
     evaluate_expanding_window,
+    evaluate_horizon_windows,
     expanding_window_slices,
     site_local_calendar_features,
 )
@@ -53,6 +54,30 @@ class TestForecastValidation(unittest.TestCase):
         )
         self.assertEqual(len(result["persistence"].folds), 4)
         self.assertLess(result["step"].mean_mae, result["persistence"].mean_mae)
+
+    def test_horizon_evaluation_keeps_metrics_separate(self):
+        stamps = [datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(240)]
+        values = [float(i % 24) for i in range(240)]
+        def persistence(train, future):
+            return [train[-1]] * len(future)
+        result = evaluate_horizon_windows(
+            stamps, values, {"persistence": persistence},
+            horizons=(1, 6, 24), min_train_size=72, folds=4,
+        )
+        self.assertEqual(set(result), {1, 6, 24})
+        for horizon, models in result.items():
+            self.assertEqual(len(models["persistence"].folds), 4)
+            self.assertTrue(all(fold.samples == horizon for fold in models["persistence"].folds))
+
+    def test_horizon_evaluation_rejects_invalid_horizons(self):
+        stamps = [datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(120)]
+        forecasters = {"persistence": lambda train, future: [train[-1]] * len(future)}
+        for horizons in ((), (1, 1), (0,), (169,), (True,)):
+            with self.assertRaises(ValueError):
+                evaluate_horizon_windows(
+                    stamps, [1.0] * 120, forecasters,
+                    horizons=horizons, min_train_size=72, folds=1,
+                )
 
     def test_rejects_gapped_timestamps_and_non_finite_history(self):
         stamps = [datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(120)]
