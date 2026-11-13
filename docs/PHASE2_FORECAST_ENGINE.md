@@ -6,6 +6,10 @@ Provide a reusable, auditable forecasting service for aligned hourly energy and 
 
 This phase is a forecasting capability, not an end-to-end customer deployment. The current implementation is an experimental prototype and does not claim site-calibrated accuracy.
 
+## Public historical data input
+
+A strict local-file adapter for the Open Power System Data (OPSD) hourly package is available in [`docs/PHASE2_PUBLIC_DATA.md`](PHASE2_PUBLIC_DATA.md). It maps selected region columns for load, solar, wind, and day-ahead price into the engine's aligned UTC data contract, preserving source-column provenance and a SHA-256 digest. The OPSD package is historical (2015 to mid-2020), geographically aggregated, and is intended for reproducible engineering backtests—not live market forecasts or site-level claims. Water demand is not present in this source.
+
 ## Current implementation
 
 `islandos_core/forecast_engine.py` exposes `forecast_signals(...)` and returns a `ForecastBundle` containing:
