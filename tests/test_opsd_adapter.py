@@ -113,6 +113,19 @@ class TestOPSDAdapter(unittest.TestCase):
                 start_utc=datetime(2020, 1, 1),
             )
 
+    def test_rejects_duplicate_csv_headers(self):
+        temp = tempfile.NamedTemporaryFile(mode="w", newline="", encoding="utf-8",
+                                           suffix=".csv", delete=False)
+        self.addCleanup(lambda: Path(temp.name).unlink(missing_ok=True))
+        temp.write("utc_timestamp,AT_load_actual_entsoe_transparency,"
+                   "AT_load_actual_entsoe_transparency\\n")
+        temp.write("2020-01-01T000000Z,10,11\\n")
+        temp.close()
+        with self.assertRaisesRegex(ValueError, "duplicate column names"):
+            load_opsd_singleindex_csv(
+                temp.name, "AT", required_signals=("load",)
+            )
+
     def test_rejects_negative_physical_values_but_keeps_negative_price(self):
         rows = self.make_rows()
         rows[0]["AT_wind_onshore_generation_actual"] = "-1"
