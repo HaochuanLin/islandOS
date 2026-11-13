@@ -1,5 +1,3 @@
-import copy
-
 from islandos_core.safety_governance import evaluate_supervised_trial_readiness
 
 
