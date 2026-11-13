@@ -30,7 +30,7 @@ This is a product-boundary inventory, not a claim that every module is productio
 |---|---|---|
 | Site, assets, topology, readiness | Shared site and asset models plus readiness checks | Do not copy duplicate asset/topology implementations from old branches. |
 | Data quality and provenance | Typed source classes, validation, time-series quality checks, source disclosures | Keep measured, customer-provided, public, synthetic, forecast, inferred, and vendor-spec data distinguishable. |
-| Forecasting | Multi-signal forecast candidates, chronological backtesting, forecast-to-planning handoff | No site-accuracy claim without site-specific backtests. Revisit #189 only for a missing operator workflow, not as a code merge. |
+| Forecasting | New canonical site path: `forecast_signal_catalog.py` (signal semantics + multi-domain orchestration) → `prediction_engine.py` (pluggable candidates, chronological replay, selection, error bands). `forecast_contract.py` remains the validated forecast-to-planning boundary. | New work uses this path. `forecast_engine.py`, `multisignal_forecasting.py`, `forecasting.py`, `tariff_forecasting.py`, and `scenario_forecasting.py` remain compatibility/specialist surfaces; do not add new competing registries. Migrate consumers only with parity tests. No site-accuracy claim without site-specific backtests. |
 | Dispatch and optimization | Resource coordination, tariff-aware flexible-load optimization, constraints and audit outputs | Re-port #182's useful accounting invariants as focused tests only after comparing against existing tests; never bring its old workflow edits wholesale. |
 | Economics | Canonical investment economics and customer-entered assumptions | Keep one lifecycle/investment economics service; do not restore duplicate historical economics modules. |
 | Telemetry and device boundary | Telemetry contracts and gateway scaffolding | Contracts/mock sources are not production device connectivity. No write/control path is implied. |
@@ -56,7 +56,7 @@ This is a product-boundary inventory, not a claim that every module is productio
 
 ## 6. Known boundaries that must not be misrepresented
 
-- The local SQLite workspace in PR #206 is a single-user prototype, not a multi-tenant database, encrypted vault, authentication/authorization system, backup/restore service, or secure deletion system.
+- The local SQLite workspace on `main` is a single-user prototype, not a multi-tenant database, encrypted vault, authentication/authorization system, backup/restore service, or secure deletion system.
 - Existing sensor/telemetry contracts and mock sources do not establish production device connectivity.
 - Dashboard pages and example datasets do not prove real customer data integration.
 - The public Streamlit demo is not a customer data room; confidential site telemetry must not be uploaded without explicit approval and an appropriate environment.
@@ -71,4 +71,4 @@ This is a product-boundary inventory, not a claim that every module is productio
 - [x] Stage B implementation verified on `main`; stale duplicate PR #206 closed without discarding code.
 - [ ] Repository branch cleanup: more than 200 branch refs were observed across the first two API pages; retain branches with unresolved unique work and prune merged/stale refs in a reviewed batch. The available GitHub action interface does not expose branch deletion, so this item remains open.
 
-**Phase A architecture/governance review is substantially complete, but repository hygiene is not fully closed while the large dormant branch set remains.** Main is the sole integration baseline; PR #206 is superseded. Branch pruning remains an explicit cleanup item rather than silently claiming that dormant refs were removed.
+**Phase A has a canonical forward architecture and PR governance, but repository hygiene is not fully closed while the large dormant branch set remains.** Main is the sole integration baseline; PR #206 is superseded. New forecasting work has one designated canonical path. Branch pruning remains an explicit cleanup item rather than silently claiming that dormant refs were removed.
