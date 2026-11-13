@@ -78,11 +78,14 @@ def build_price_aware_ro_schedule(
         required = max(0.0, target_inventory - available_after_demand)
         # Always satisfy the current step first, even when current tariff is high.
         required = max(required, immediate_target - available_after_demand)
-        if required > max_step + 1e-9:
+        immediate_required = max(0.0, immediate_target - available_after_demand)
+        if immediate_required > max_step + 1e-9:
             raise ValueError(
                 f"water service infeasible at step {i}: required RO production "
-                f"{required:.6g} m3 exceeds capacity {max_step:.6g} m3"
+                f"{immediate_required:.6g} m3 exceeds capacity {max_step:.6g} m3"
             )
+        # A larger look-ahead target may take several cheap periods to fill.
+        required = min(required, max_step)
         if available_after_demand + required > spec.tank_capacity_m3 + 1e-9:
             required = max(0.0, spec.tank_capacity_m3 - available_after_demand)
         if available_after_demand + required < spec.reserve_m3 - 1e-9:
