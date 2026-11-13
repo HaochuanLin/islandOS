@@ -55,3 +55,14 @@ The adapter tests cover a complete four-signal hand-off, negative tariff
 preservation, unit mismatch rejection, availability horizon mismatch, optional
 flexible/critical load mapping, critical-load bounds, four-case stress replay,
 physical audit passage, optimizer execution, and forecast provenance.
+
+
+## Customer economics guardrail
+
+The adapter now compares the recommended policy with the explicit `grid_first`
+reference policy using the same forecasts, tariffs, availability, and equipment
+configuration. It reports a modeled cost delta only when total served energy,
+total unmet energy, critical unmet energy, and flexible-load shedding are all
+equivalent within tolerance. Otherwise the cost-reduction field is null and the
+result explicitly withholds a savings claim. The reference is a modeled policy,
+not measured site operation or a customer's actual bill.
