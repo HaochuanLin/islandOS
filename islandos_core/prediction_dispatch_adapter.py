@@ -177,20 +177,29 @@ def optimize_prediction_resource_schedule(
     max_unmet_load_kwh: float | None = None,
     max_critical_unmet_load_kwh: float | None = None,
     terminal_battery_soc_min: float | None = None,
+    water_service=None,
 ) -> dict:
-    """Run the existing offline joint battery/diesel optimizer from generic forecasts.
+    """Run offline joint battery/diesel/flexible-load optimization from site forecasts.
 
-    The four canonical prediction IDs are explicitly mapped to the established
-    dispatch bundle names. This is an offline schedule search, not live control.
+    Optional water demand is converted to a reserve-constrained RO electrical
+    load before physical optimization. Water production is a deterministic
+    just-in-time service policy, not an optimized RO set-point schedule.
     """
     from dataclasses import replace
+    import hashlib
+    import json
     from .forecast_optimizer_adapter import optimize_forecasted_resource_schedule
+    from .water_resource_adapter import WaterServiceSpec, build_ro_energy_load
 
     required = {
         "pv_power_kw": "pv_power",
         "wind_power_kw": "wind_power",
         "load_kw": "essential_load",
         "tariff_per_kwh": "electricity_price",
+    }
+    optional = {
+        "flexible_load_kw": "flexible_load",
+        "critical_load_kw": "critical_load",
     }
     if not isinstance(results, Mapping):
         raise ValueError("results must be a mapping of canonical signal IDs to PredictionResult")
@@ -199,6 +208,7 @@ def optimize_prediction_resource_schedule(
         raise ValueError("missing required resource forecasts: " + ", ".join(missing))
     if not isinstance(price_unit, str) or not price_unit.strip():
         raise ValueError("price_unit must be an explicit non-empty unit")
+
     mapped = {}
     for source_id, dispatch_id in required.items():
         result = results[source_id]
@@ -210,6 +220,68 @@ def optimize_prediction_resource_schedule(
         if result.unit != expected_unit:
             raise ValueError(f"{source_id} must use {expected_unit}; got {result.unit}")
         mapped[dispatch_id] = replace(result, signal_id=dispatch_id)
+
+    for source_id, dispatch_id in optional.items():
+        if source_id not in results:
+            continue
+        result = results[source_id]
+        if not isinstance(result, PredictionResult):
+            raise TypeError(f"{source_id} must be a PredictionResult")
+        if result.signal_id != source_id:
+            raise ValueError(f"result signal_id must match canonical key {source_id}")
+        if result.unit != "kW":
+            raise ValueError(f"{source_id} must use kW; got {result.unit}")
+        mapped[dispatch_id] = replace(result, signal_id=dispatch_id)
+
+    water_result = results.get("water_demand_m3_per_hour")
+    water_load = None
+    if water_result is not None:
+        if not isinstance(water_result, PredictionResult):
+            raise TypeError("water_demand_m3_per_hour must be a PredictionResult")
+        if water_result.signal_id != "water_demand_m3_per_hour":
+            raise ValueError("water demand result signal_id must match its canonical key")
+        if water_result.unit != "m3/h":
+            raise ValueError("water_demand_m3_per_hour must use m3/h")
+        if not isinstance(water_service, WaterServiceSpec):
+            raise ValueError("water_service must be supplied when a water-demand forecast is present")
+        load_result = results["load_kw"]
+        load_targets = tuple(point.timestamp for point in load_result.points)
+        water_targets = tuple(point.timestamp for point in water_result.points)
+        if water_targets != load_targets:
+            raise ValueError("water-demand and electrical-load forecast timestamps must align exactly")
+        # Use the empirical upper planning bound for water service feasibility.
+        water_load = build_ro_energy_load(
+            [point.upper_bound for point in water_result.points],
+            spec=water_service,
+            dt_hours=config.dt_hours,
+        )
+        combined_points = tuple(
+            replace(
+                point,
+                predicted_value=point.predicted_value + ro_kw,
+                lower_bound=point.lower_bound + ro_kw,
+                upper_bound=point.upper_bound + ro_kw,
+            )
+            for point, ro_kw in zip(load_result.points, water_load.ro_power_kw)
+        )
+        combined_digest = hashlib.sha256(json.dumps({
+            "electrical_load_history_sha256": load_result.input_history_sha256,
+            "water_demand_history_sha256": water_result.input_history_sha256,
+            "water_service_spec": {
+                "specific_energy_kwh_per_m3": water_service.specific_energy_kwh_per_m3,
+                "ro_capacity_m3_per_hour": water_service.ro_capacity_m3_per_hour,
+                "tank_capacity_m3": water_service.tank_capacity_m3,
+                "initial_inventory_m3": water_service.initial_inventory_m3,
+                "reserve_m3": water_service.reserve_m3,
+            },
+        }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        mapped["essential_load"] = replace(
+            mapped["essential_load"],
+            input_history_sha256=combined_digest,
+            points=combined_points,
+        )
+    elif water_service is not None:
+        raise ValueError("water_service was supplied without a water-demand forecast")
 
     bundle = build_dispatch_forecast_bundle(
         mapped,
@@ -229,16 +301,16 @@ def optimize_prediction_resource_schedule(
         max_critical_unmet_load_kwh=max_critical_unmet_load_kwh,
         terminal_battery_soc_min=terminal_battery_soc_min,
     )
+    source_ids = sorted(results)
     result["generic_prediction_handoff"] = {
-        "canonical_signal_mapping": required,
-        "source_signal_ids": sorted(required),
+        "canonical_signal_mapping": {**required, **optional},
+        "source_signal_ids": source_ids,
         "forecast_model_versions": {
             key: {"model_id": value.model_id, "model_version": value.model_version}
-            for key, value in sorted(results.items()) if key in required
+            for key, value in sorted(results.items())
         },
         "source_history_sha256": {
             key: value.input_history_sha256 for key, value in sorted(results.items())
-            if key in required
         },
         "target_timestamps_utc": [
             point.timestamp.astimezone(timezone.utc).isoformat()
@@ -247,4 +319,22 @@ def optimize_prediction_resource_schedule(
         "mode": "offline_schedule_search",
         "device_write_authorized": False,
     }
+    if water_result is not None and water_load is not None:
+        result["water_service"] = {
+            "demand_forecast_m3_per_hour": [
+                point.predicted_value for point in water_result.points
+            ],
+            "planning_upper_bound_m3_per_hour": [
+                point.upper_bound for point in water_result.points
+            ],
+            "ro_production_m3": list(water_load.production_m3),
+            "tank_inventory_after_demand_m3": list(water_load.inventory_after_demand_m3),
+            "ro_power_kw_added_to_essential_load": list(water_load.ro_power_kw),
+            "total_demand_upper_bound_m3": water_load.total_demand_m3,
+            "total_ro_production_m3": water_load.total_production_m3,
+            "specific_energy_kwh_per_m3": water_load.specific_energy_kwh_per_m3,
+            "service_feasible": water_load.service_feasible,
+            "production_policy": "reserve-constrained just-in-time; not price-optimized",
+            "device_write_authorized": False,
+        }
     return result
