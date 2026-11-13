@@ -1,6 +1,8 @@
 # islandOS Maturity Assessment and Improvement Plan
 
 Assessment date: 2026-10-24  
+
+> **Historical assessment snapshot (2026-10-24):** The estimates and progress log below are a dated engineering judgment, not an up-to-date product-readiness score or independent certification. For current merged work and remaining gates, use [Engineering stages 1–10 closeout](ENGINEERING_STAGES_1_10_CLOSEOUT.md) and [Productization Roadmap](PRODUCTIZATION_ROADMAP.md).
 Repository: https://github.com/HaochuanLin/islandOS  
 Scope: repository-visible evidence only. Scores are engineering estimates, not a certification or proof of field readiness.
 
