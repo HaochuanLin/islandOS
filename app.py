@@ -1697,16 +1697,17 @@ elif page == "Data onboarding & workspace":
 elif page == "Forecast lab":
     st.title("Forecast lab")
     st.caption("Run chronological model comparison on an inspected CSV signal. No training data leaves this session.")
-    from islandos_core.onboarding import inspect_csv_bytes
+    from islandos_core.onboarding import ALLOWED_SOURCE_TYPES, inspect_csv_bytes
     from islandos_core.prediction_adapter import build_forecast_request
     from islandos_core.prediction_engine import PredictionEngine
 
     st.info("Built-in candidates are statistical baselines, not trained AI models. Use measured or explicitly labelled data; synthetic examples are for workflow demonstration only.")
+    forecast_source_type = st.selectbox("Data provenance", options=sorted(ALLOWED_SOURCE_TYPES), index=1, key="forecast_lab_source_type")
     forecast_file = st.file_uploader("Upload a timestamped CSV", type=["csv"], key="forecast_lab_csv")
     if forecast_file is not None:
         forecast_bytes = forecast_file.getvalue()
         try:
-            import_report = inspect_csv_bytes(forecast_bytes, source_type="customer_provided", source_name=forecast_file.name)
+            import_report = inspect_csv_bytes(forecast_bytes, source_type=forecast_source_type, source_name=forecast_file.name)
             st.metric("Import status", import_report["status"].replace("_", " ").title())
             st.caption(f"{import_report['row_count']} rows · {import_report['error_count']} errors · {import_report['warning_count']} warnings · SHA-256 {import_report['artifact']['sha256'][:16]}…")
             if import_report.get("issues"):
