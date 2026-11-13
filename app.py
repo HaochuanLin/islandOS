@@ -125,7 +125,7 @@ with st.sidebar:
     st.caption("Energy & resource decision support")
     page = st.radio(
         "Navigate",
-        ["Overview", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
+        ["Overview", "Data onboarding & workspace", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -1598,6 +1598,101 @@ elif page == "Historical RO baseline":
             st.error(f"Could not reconstruct historical costs: {exc}")
     else:
         st.info("Upload a customer-supplied RO CSV to reconstruct the costs for its represented period. Data is not independently verified.")
+
+elif page == "Data onboarding & workspace":
+    st.title("Data onboarding & workspace")
+    st.caption("Inspect customer-provided energy data, review provenance and quality, then optionally register metadata in a local workspace.")
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+    from islandos_core.onboarding import ALLOWED_SOURCE_TYPES, evaluate_task_readiness, inspect_csv_bytes, inspect_excel_bytes, inspect_excel_sheets
+    from islandos_core.workspace_store import create_project, initialize_workspace, list_projects, record_import_artifact, verify_audit_chain
+
+    st.warning("Do not upload confidential or personally identifiable information to the public hosted demo. It has no customer authentication. SQLite persistence is disabled unless ISLANDOS_ENABLE_LOCAL_WORKSPACE=1 is set in a trusted local deployment.")
+    uploaded = st.file_uploader("Upload a site dataset", type=["csv", "xlsx"], key="onboarding_upload")
+    source_type = st.selectbox("Data provenance", options=sorted(ALLOWED_SOURCE_TYPES), index=1,
+        help="Choose the true source. Synthetic, inferred, forecast and vendor-specification data are not measured data.")
+    interval = st.selectbox("Expected sampling interval", [None, 5, 10, 15, 30, 60, 1440],
+        format_func=lambda value: "Do not enforce" if value is None else f"{value} minutes")
+    report = None
+    worksheet = None
+    if uploaded is not None:
+        raw_bytes = uploaded.getvalue()
+        try:
+            if uploaded.name.lower().endswith(".csv"):
+                report = inspect_csv_bytes(raw_bytes, source_type=source_type, source_name=uploaded.name, expected_interval_minutes=interval)
+            else:
+                sheets = inspect_excel_sheets(raw_bytes)
+                sheet_names = [item["name"] for item in sheets if item.get("visible", True)]
+                if not sheet_names:
+                    raise ValueError("workbook has no visible worksheets")
+                worksheet = st.selectbox("Worksheet", sheet_names)
+                timezone_name = st.text_input("IANA timezone for naive Excel timestamps (optional)", placeholder="e.g. Asia/Tokyo")
+                report = inspect_excel_bytes(raw_bytes, source_type=source_type, source_name=uploaded.name,
+                    sheet_name=worksheet, timezone_name=timezone_name or None, expected_interval_minutes=interval)
+        except Exception as exc:
+            st.error(f"Import inspection failed: {exc}")
+        if report is not None:
+            metrics = st.columns(4)
+            metrics[0].metric("Quality status", report.get("status", "invalid").replace("_", " ").title())
+            metrics[1].metric("Rows", report.get("row_count", 0))
+            metrics[2].metric("Mapped signals", report.get("recognized_signal_count", 0))
+            metrics[3].metric("Errors / warnings", f"{report.get('error_count', 0)} / {report.get('warning_count', 0)}")
+            st.caption("Original file SHA-256: " + report.get("artifact", {}).get("sha256", "unavailable"))
+            if report.get("column_mappings"):
+                st.subheader("Suggested column mappings")
+                st.dataframe(report["column_mappings"], use_container_width=True, hide_index=True)
+            if report.get("issues"):
+                st.subheader("Quality findings")
+                st.dataframe(report["issues"], use_container_width=True, hide_index=True)
+            cols = st.columns(3)
+            for column, task in zip(cols, ["exploration", "forecasting", "dispatch_optimization"]):
+                gate = evaluate_task_readiness(report, task)
+                column.metric(task.replace("_", " ").title(), "Ready for screening" if gate["can_run"] else "Blocked")
+                if gate["blockers"]:
+                    column.caption("Blockers: " + ", ".join(gate["blockers"]))
+                if gate["warnings"]:
+                    column.caption("Warnings: " + ", ".join(gate["warnings"]))
+            if report.get("preview"):
+                st.subheader("Data preview (first 10 rows)")
+                st.json(report["preview"])
+            st.download_button("Download inspection report", data=json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                file_name="islandos_import_inspection.json", mime="application/json")
+            if os.getenv("ISLANDOS_ENABLE_LOCAL_WORKSPACE", "").strip() == "1":
+                st.divider()
+                st.subheader("Local workspace metadata registration")
+                st.caption("Only metadata and hashes are stored; uploaded raw file bytes are not retained.")
+                db_path = Path(os.getenv("ISLANDOS_WORKSPACE_DB", ".islandos/workspace.sqlite3"))
+                initialize_workspace(db_path, workspace_id=os.getenv("ISLANDOS_WORKSPACE_ID", "local-islandos-workspace"), actor_id="local_operator")
+                projects = list_projects(db_path)
+                options = {f"{p['display_name']} ({p['project_id']})": p["project_id"] for p in projects}
+                selected = st.selectbox("Project", ["Create a new project"] + list(options))
+                if selected == "Create a new project":
+                    project_name = st.text_input("New project name")
+                    project_id = f"project-{uuid4().hex[:12]}"
+                else:
+                    project_name = ""
+                    project_id = options[selected]
+                consent = st.checkbox("I consent to storing project metadata, file name, provenance, quality summary and SHA-256 locally.")
+                if st.button("Register import metadata", disabled=not consent):
+                    if selected == "Create a new project":
+                        if not project_name.strip():
+                            st.error("Enter a project name first.")
+                            st.stop()
+                        create_project(db_path, project_id=project_id, display_name=project_name.strip(),
+                            actor_id="local_operator", consent_to_store_metadata=True)
+                    artifact_id = record_import_artifact(db_path, project_id=project_id, file_name=uploaded.name,
+                        media_type=uploaded.type or "application/octet-stream", sha256=report["artifact"]["sha256"],
+                        source_type=source_type, row_count=report.get("row_count", 0),
+                        signal_count=report.get("recognized_signal_count", 0), quality_status=report.get("status", "unassessed"),
+                        actor_id="local_operator", consent_to_store_metadata=True, worksheet=worksheet)
+                    st.success(f"Import metadata registered. Artifact ID: {artifact_id}")
+                audit = verify_audit_chain(db_path)
+                st.caption(f"Local audit chain: {'valid' if audit['valid'] else 'integrity check failed'} · {audit['event_count']} events")
+            else:
+                st.info("For local SQLite metadata persistence, run IslandOS locally with ISLANDOS_ENABLE_LOCAL_WORKSPACE=1. This remains a single-user prototype.")
+    st.subheader("What happens next")
+    st.markdown("- Exploration: inspect source data and quality.\n- Forecasting: requires a supported target signal, sufficient history, explicit units and regular sampling.\n- Dispatch screening: additionally requires supply/resource signals and confirmed operating constraints.\n\nA readiness result is an analysis gate, not a safety approval or authorization to control equipment.")
 
 else:
     st.title("Data guide")
