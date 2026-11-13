@@ -274,6 +274,76 @@ def evaluate_forecast_stress_scenarios(
     }
 
 
+
+def build_service_equivalent_economics(result: dict, *, tolerance: float = 1e-6) -> dict:
+    """Compare the recommendation with a named reference only at equivalent service."""
+    if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or tolerance < 0:
+        raise ValueError("tolerance must be a finite non-negative number")
+    if not float(tolerance) < float("inf"):
+        raise ValueError("tolerance must be finite")
+    recommended_policy = result["recommendation"]["policy"]
+    by_policy = {row["policy"]: row for row in result["candidates"]}
+    reference_policy = "grid_first"
+    recommended = by_policy[recommended_policy]["summary"]
+    reference = by_policy[reference_policy]["summary"]
+    service_metrics = (
+        "load_served_kwh",
+        "unmet_load_kwh",
+        "critical_unmet_load_kwh",
+        "flexible_load_shed_kwh",
+    )
+    deltas = {
+        key: round(float(recommended.get(key, 0.0)) - float(reference.get(key, 0.0)), 8)
+        for key in service_metrics
+    }
+    equivalent = all(abs(value) <= tolerance for value in deltas.values())
+    cost_components = (
+        "estimated_energy_cost",
+        "gross_energy_cost",
+        "grid_energy_cost",
+        "diesel_energy_cost",
+        "diesel_fuel_cost",
+        "battery_degradation_cost",
+        "grid_demand_charge",
+        "grid_export_revenue",
+    )
+    component_comparison = {
+        key: {
+            "reference": float(reference.get(key, 0.0)),
+            "recommended": float(recommended.get(key, 0.0)),
+            "difference_recommended_minus_reference": round(
+                float(recommended.get(key, 0.0)) - float(reference.get(key, 0.0)), 8
+            ),
+        }
+        for key in cost_components
+    }
+    reference_cost = float(reference["estimated_energy_cost"])
+    recommended_cost = float(recommended["estimated_energy_cost"])
+    cost_delta = round(reference_cost - recommended_cost, 8)
+    return {
+        "reference_policy": reference_policy,
+        "reference_is_measured_site_operation": False,
+        "recommended_policy": recommended_policy,
+        "service_equivalent": equivalent,
+        "service_tolerance": float(tolerance),
+        "service_deltas_recommended_minus_reference": deltas,
+        "cost_components": component_comparison,
+        "cost_comparison_valid": equivalent,
+        "estimated_cost_reduction": cost_delta if equivalent else None,
+        "estimated_cost_reduction_percent": (
+            round(cost_delta / abs(reference_cost) * 100.0, 4)
+            if equivalent and abs(reference_cost) > tolerance else None
+        ),
+        "interpretation": (
+            "A modeled cost difference is shown only because both policies "
+            "deliver equivalent modeled service; this is not a measured customer saving."
+            if equivalent else
+            "Service differs between policies; no cost saving is claimed. "
+            "Compare reliability and load shedding before any economic conclusion."
+        ),
+    }
+
+
 def optimize_forecasted_energy_system(
     bundle: ForecastBundle,
     config: EnergySystemConfig,
@@ -299,6 +369,7 @@ def optimize_forecasted_energy_system(
         grid_export_available=grid_export_available,
     )
     result = optimize_energy_system(coordinated.inputs, config, weights=weights)
+    result["customer_economics"] = build_service_equivalent_economics(result)
     result["forecast_stress_evaluation"] = evaluate_forecast_stress_scenarios(
         coordinated, config
     )
