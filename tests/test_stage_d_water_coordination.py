@@ -63,11 +63,16 @@ def test_water_demand_and_flexible_load_join_forecasted_energy_optimizer():
             initial_inventory_m3=2.0,
             reserve_m3=0.5,
         ),
+        water_schedule_mode="price_aware",
+        water_lookahead_hours=4,
     )
 
     assert result["water_service"]["service_feasible"] is True
     assert len(result["water_service"]["ro_power_kw_added_to_essential_load"]) == 4
     assert result["water_service"]["total_ro_production_m3"] >= 0
+    assert result["water_service"]["electricity_price_forecast_used"] is True
+    assert result["water_service"]["production_policy"] == "cheapest-hour-lookahead-heuristic"
+    assert result["water_service"]["device_write_authorized"] is False
     assert result["model_scope"]["flexible_load_schedule_jointly_optimized"] is True
     assert result["model_scope"]["flexible_load_energy_conserved"] is True
     assert result["generic_prediction_handoff"]["device_write_authorized"] is False
