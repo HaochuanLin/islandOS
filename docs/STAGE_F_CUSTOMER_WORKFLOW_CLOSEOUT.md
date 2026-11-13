@@ -1,6 +1,6 @@
 # Stage F — unified customer workflow and deployment handoff
 
-**Status:** Integration increment in progress; this document records the exact scope and evidence gate, not a production-readiness claim.
+**Status:** Merged to main in PR #219 after all seven associated CI workflows passed on the exact PR head. This closes the Stage F software-integration gate, not production readiness.
 
 ## Why Stage F follows A–E
 
@@ -21,11 +21,11 @@
 
 ## Stage F acceptance evidence
 
-- [ ] Customer-facing forecast-led page calls the canonical signal catalog.
-- [ ] Integration test covers canonical catalog → prediction engine → joint dispatch optimizer.
-- [ ] README and blueprint describe actual mainline capability and do not call delivered D/E work merely planned.
-- [ ] Exact-head CI passes before merge.
-- [ ] No live control, field validation, production SaaS, or verified savings claims are introduced.
+- [x] Customer-facing forecast-led page calls the canonical signal catalog.
+- [x] Integration test covers canonical catalog → prediction engine → joint dispatch optimizer.
+- [x] README and blueprint describe actual mainline capability and do not call delivered D/E work merely planned.
+- [x] Exact-head CI passes before merge (Python unit tests, RO/integration examples, dependency audit, Windows package build, container smoke test, hosted app health and scenario validation).
+- [x] No live control, field validation, production SaaS, or verified savings claims are introduced.
 
 ## Deliberate exclusions
 
