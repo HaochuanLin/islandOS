@@ -77,10 +77,6 @@ class TestTenantScopedServiceStore(unittest.TestCase):
             self.store.latest_telemetry(alice, site["id"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 
 def test_logout_revokes_only_the_current_authenticated_session():
     with tempfile.TemporaryDirectory() as tmp:
@@ -96,3 +92,6 @@ def test_logout_revokes_only_the_current_authenticated_session():
 
         # Revoking one browser session must not sign out the user's other session.
         assert store.authenticate(second["access_token"])["user_id"] == principal["user_id"]
+
+if __name__ == "__main__":
+    unittest.main()
