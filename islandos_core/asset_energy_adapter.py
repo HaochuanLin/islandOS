@@ -26,6 +26,20 @@ class AssetEnergyAdapterError(ValueError):
 _SUPPORTED_TYPES = {
     "pv", "wind", "battery", "grid_connection", "diesel_generator",
 }
+_SUPPORTED_HARD_CONSTRAINTS = {
+    "pv": {"max_power_kw": "max"},
+    "wind": {"max_power_kw": "max"},
+    "battery": {
+        "max_charge_kw": "max", "max_discharge_kw": "max",
+        "soc_min_pct": "min", "soc_max_pct": "max",
+    },
+    "diesel_generator": {
+        "max_power_kw": "max", "min_stable_power_kw": "min",
+    },
+    "grid_connection": {
+        "import_limit_kw": "max", "export_limit_kw": "max",
+    },
+}
 
 
 def _required_parameter(asset: AssetRecord, name: str, unit: str) -> float:
@@ -170,6 +184,25 @@ def build_energy_system_config_from_assets(
                 f"asset type is not yet supported by the energy model: {asset.asset_type}"
             )
         grouped.setdefault(asset.asset_type, []).append(asset)
+        supported_constraints = _SUPPORTED_HARD_CONSTRAINTS[asset.asset_type]
+        for constraint in asset.constraints:
+            if constraint.severity != "hard":
+                continue
+            expected_operator = supported_constraints.get(constraint.parameter)
+            if not constraint.confirmed:
+                raise AssetEnergyAdapterError(
+                    f"{asset.asset_id}: hard constraint is not confirmed: {constraint.parameter}"
+                )
+            if expected_operator is None:
+                raise AssetEnergyAdapterError(
+                    f"{asset.asset_id}: hard constraint is not supported by the energy model: "
+                    f"{constraint.parameter}"
+                )
+            if constraint.operator != expected_operator:
+                raise AssetEnergyAdapterError(
+                    f"{asset.asset_id}: unsupported operator for hard constraint "
+                    f"{constraint.parameter}: {constraint.operator}"
+                )
 
     aggregatable = {"pv", "wind", "grid_connection"}
     unsupported_duplicates = sorted(
