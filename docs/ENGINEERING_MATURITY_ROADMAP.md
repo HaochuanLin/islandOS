@@ -444,3 +444,17 @@ For each software-controlled capability, the midpoint is `baseline + (target - b
 - The exact latest main commit `8f30dfb` passed all 10 push-triggered required checks: unit tests, RO simulation, scenario validation, integration examples, Windows gateway build, container smoke test, and five dependency audits. At the time of this entry, the repository had no open pull requests.
 - Score impact: **no maturity score is raised by these changes alone**. The new invariants improve regression protection, and the dependency queue is cleaner, but they do not validate site-specific physical behavior or operational safety. The hosted Streamlit demo remains access-restricted: anonymous requests still redirect to sign-in until the deployment owner changes the external visibility setting.
 
+
+
+### 2026-11-13 — Authoritative A–F closeout snapshot
+
+- The current six-stage acceptance ledger is [`STAGE_ABC_CLOSEOUT.md`](STAGE_ABC_CLOSEOUT.md). It supersedes older interim status snapshots in this chronological roadmap when they conflict.
+- A: mainline architecture and PR triage are the integration baseline; historical branch refs still require repository-owner cleanup.
+- B: local-first import, workspace persistence, provenance, audit and whole-workspace backup/restore are implemented; original upload-byte retention and portable per-project packages remain gaps.
+- C: canonical signals, pluggable statistical forecasting, chronological replay, metrics and provenance are implemented; no site accuracy or calibrated prediction interval is claimed.
+- D: core forecast-led battery/diesel, flexible-load and RO-demand coordination is implemented; full price-aware cross-period RO/tank optimization remains a known extension.
+- E: tenant-scoped reference service, roles, invitations, member removal, notification inbox, audit and current-session revocation are implemented; Streamlit UI integration, outbound delivery and production identity/security remain.
+- F: local read-only telemetry gateway, normalized sensor validation, duplicate quarantine, offline Shadow Mode replay and production preflight are implemented; hardware drivers and field/production acceptance remain external gates.
+- The hosted Streamlit demo is currently linked as public in the README at [islandos.streamlit.app](https://islandos.streamlit.app/). An earlier note in this roadmap stating that anonymous users were redirected to sign-in is a historical observation from that earlier deployment state, not the current README status. Availability can change independently of repository code.
+- Main at baseline SHA `6afb3480736407f5cdb7d38b9293d94432d22079` has the required CI suite running; record the exact final workflow conclusions after all jobs complete. The unrelated Dependabot PR #202 remains outside the A–F closeout.
+- No maturity score is automatically increased by this summary. Synthetic/offline tests do not establish site performance, production security or safe equipment operation.

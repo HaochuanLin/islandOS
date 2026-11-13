@@ -1,6 +1,6 @@
-# Current six-stage acceptance ledger
+# IslandOS A–F final software closeout ledger
 
-**Baseline:** `main` at the 2026-11-13 repository review.  
+**Baseline:** `main` at commit `6afb3480736407f5cdb7d38b9293d94432d22079` (2026-11-13).  
 **Purpose:** This ledger uses the user's current six-stage definitions. It deliberately distinguishes code completion from site validation and production deployment.
 
 ## Stage A — Code consolidation and architecture convergence
@@ -55,3 +55,38 @@ Boundaries:
 | F — Deployment and field-readiness foundation | Loopback-only local service and telemetry gateway; optional bearer protection; strict normalized sensor contract and duplicate batch quarantine; offline shadow comparison/replay with audit digest; fail-closed production preflight and exact HTTPS origin validation; Windows gateway package and hardened container CI | Managed DB, production TLS/network segmentation, secrets/MFA, hardware-specific read-only vendor drivers, monitoring/alerts, encrypted off-host backup/restore drills, site-connected shadow trial and signed acceptance |
 
 **Stage F software status:** implementation and regression-test foundations are complete on main after PRs #233–#235. Production deployment and field-validation gates remain open because they require external infrastructure, site hardware/protocol documentation, measured data, and independent approvals. No stage claims production control. All physical-device actuation remains disabled pending separate safety, authorization, and engineering acceptance.
+
+
+## Final closeout decision — 2026-11-13
+
+This is the authoritative acceptance summary for the six engineering stages. “Software foundation complete” means the declared offline/local software path is implemented and regression-tested. It does **not** mean a production deployment, customer acceptance, hardware connection, or site-verified performance.
+
+| Stage | Closeout decision | Evidence / remaining boundary |
+|---|---|---|
+| A — Architecture convergence | **Core software closeout met** | Main is the integration baseline and duplicate/superseded PR work was triaged. Historical branch refs still need repository-owner cleanup; they do not block mainline software use. |
+| B — Data onboarding and workspace | **Local-first software closeout met** | CSV/XLSX onboarding, validation, versioned assets, SQLite persistence, provenance, immutable manifests, audit history, and whole-workspace backup/restore exist. Original file-byte archival, portable per-project package, encryption, retention, and cloud sync remain outside this closeout. |
+| C — Unified forecasting | **Software closeout met** | Canonical signal catalog, pluggable prediction engine, chronological replay, per-signal metrics, provenance and empirical error bands are implemented. Built-in candidates remain statistical baselines; site accuracy and calibrated uncertainty require measured data. |
+| D — Multi-resource coordination | **Core coordination closeout met; advanced optimizer remains** | Forecast-led battery/diesel dispatch, flexible-load scheduling, RO demand coupling, tank reserve and service feasibility are implemented. Full price-aware cross-period RO/tank optimization and richer process constraints are not claimed. |
+| E — Customer product and service | **Reference-service closeout met; customer-facing integration remains** | Dashboard/investment-screen foundations, tenant-scoped API, roles/invitations, member removal, notification inbox, audit and logout revocation exist. Streamlit membership/inbox integration, outbound notifications, production identity/security and customer usability validation remain. |
+| F — Deployment and telemetry foundation | **Local software closeout met; production/field gate remains blocked** | Read-only loopback gateway, normalized sensor contract, strict freshness, duplicate quarantine, offline Shadow Mode replay, audit digest, production preflight and Windows package are implemented. Vendor hardware drivers, managed infrastructure, monitoring, off-host recovery drills and site trial remain. |
+
+### Merged implementation evidence
+
+- PR [#229](https://github.com/HaochuanLin/islandOS/pull/229): RO reserve accounting regression fix and D closeout clarification.
+- PR [#231](https://github.com/HaochuanLin/islandOS/pull/231): server-side current-session revocation and E reference-service update.
+- PR [#233](https://github.com/HaochuanLin/islandOS/pull/233): exact HTTPS origin allowlist validation.
+- PR [#234](https://github.com/HaochuanLin/islandOS/pull/234): strict rejection of future-dated Shadow Mode observations.
+- PR [#235](https://github.com/HaochuanLin/islandOS/pull/235): strict telemetry contract, UTC-normalized duplicate batch quarantine and numeric overflow hardening.
+- PR [#236](https://github.com/HaochuanLin/islandOS/pull/236): README and Stage F acceptance documentation.
+
+### Repository-level follow-ups (not hidden as completed)
+
+1. Delete obsolete historical branches using repository-owner branch administration; the connected GitHub workflow used for this closeout did not expose branch deletion.
+2. Complete D's full tariff-aware RO/tank trajectory optimization if that is retained as a required product capability.
+3. Integrate E's member and notification workflows into the Streamlit customer workspace and validate with representative users.
+4. Implement and independently review production security/operations controls, hardware-specific read-only adapters, and site-connected Shadow Mode acceptance before any field deployment.
+5. Keep the Dependabot dependency PR separate from the A–F feature closeout; review and merge it only after its own exact-head checks pass.
+
+### Final safety and evidence statement
+
+No autonomous equipment control, PLC/actuator write, production SaaS readiness, measured customer savings, or site-validated forecast accuracy is claimed. The main branch is a tested local/offline decision-support foundation. Production and site acceptance require external infrastructure, vendor specifications, authorized measured data, security review, operator procedures and signed acceptance.
