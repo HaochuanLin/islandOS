@@ -7,7 +7,7 @@ It does not promote forecast bounds into robust scenarios or authorize control.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from types import MappingProxyType
 from typing import Mapping, Sequence
@@ -67,6 +67,11 @@ def build_coordination_inputs(
         "essential_load": "kW",
         "electricity_price": price_unit,
     }
+    # Flexible demand is additive to essential/base demand. Critical demand is
+    # an explicitly identified subset of the base demand.
+    for optional_signal in ("flexible_load", "critical_load"):
+        if optional_signal in bundle.forecasts:
+            required_units[optional_signal] = "kW"
     planning = build_forecast_planning_input(bundle, required_units)
 
     def as_optimizer_forecast(source_name: str, target_id: str) -> SignalForecastResult:
@@ -105,6 +110,19 @@ def build_coordination_inputs(
     )
     if tuple(timestamps) != planning.timestamps:
         raise ValueError("optimizer input timestamps differ from validated forecast horizon")
+
+    optional_load_fields = {}
+    if "flexible_load" in planning.values:
+        optional_load_fields["flexible_load_kw"] = planning.values["flexible_load"]
+    if "critical_load" in planning.values:
+        critical = planning.values["critical_load"]
+        base = planning.values["essential_load"]
+        if any(value > base_value + 1e-9 for value, base_value in zip(critical, base)):
+            raise ValueError("critical_load forecast cannot exceed essential_load forecast")
+        optional_load_fields["critical_load_kw"] = critical
+    if optional_load_fields:
+        inputs = replace(inputs, **optional_load_fields)
+
     return ForecastCoordinationInputs(
         inputs=inputs,
         timestamps_utc=planning.timestamps,
