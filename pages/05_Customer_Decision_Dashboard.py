@@ -1,0 +1,233 @@
+"""Customer-facing, forecast-led decision dashboard for the generic IslandOS platform.
+
+The default scenario is synthetic. Results are offline planning estimates, not
+measured customer savings, a site-validated forecast, or equipment commands.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import pandas as pd
+import streamlit as st
+
+from islandos_core.energy_system import BatterySpec, EnergySystemConfig
+from islandos_core.forecast_engine import forecast_signals
+from islandos_core.forecast_optimizer_adapter import (
+    build_coordination_inputs,
+    build_service_equivalent_economics,
+    evaluate_forecast_stress_scenarios,
+)
+from optimization.energy_system_optimizer import (
+    OptimizationWeights,
+    optimize_energy_system,
+)
+
+st.set_page_config(
+    page_title="IslandOS | Customer Decision Dashboard",
+    page_icon="⚡",
+    layout="wide",
+)
+
+st.title("Customer decision dashboard")
+st.caption("Forecast → compare operating policies → review cost and reliability trade-offs")
+
+st.info(
+    "Demonstration mode: all default inputs are synthetic. Replace them with "
+    "validated site data before using the results in a customer decision. "
+    "This page performs offline screening only; it does not control equipment."
+)
+
+with st.sidebar:
+    st.subheader("Scenario assumptions")
+    currency = st.text_input("Currency label", value="USD").strip() or "currency"
+    demand_scale = st.slider("Essential load level", 0.6, 1.6, 1.0, 0.05)
+    tariff_scale = st.slider("Electricity tariff level", 0.5, 2.0, 1.0, 0.05)
+    battery_capacity = st.slider("Battery capacity (kWh)", 0, 240, 80, 10)
+    battery_power = st.slider("Battery charge/discharge limit (kW)", 0, 60, 20, 5)
+    cost_priority = st.slider("Cost priority", 0.0, 1.0, 0.7, 0.05)
+    st.caption("The remaining objective weight is assigned to reliability.")
+
+now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+history_stamps = [now - timedelta(hours=168 - index) for index in range(168)]
+history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
+for index, stamp in enumerate(history_stamps):
+    hour = stamp.hour
+    day = stamp.weekday()
+    solar = max(0.0, 34.0 * __import__("math").sin(__import__("math").pi * (hour - 6) / 12.0))
+    pv = solar * (0.82 + 0.12 * __import__("math").sin(index * 0.31))
+    wind = 7.0 + 3.0 * (0.5 + 0.5 * __import__("math").sin(index * 0.23 + 0.8))
+    load = (21.0 + 4.0 * (hour in range(17, 23)) + 2.0 * (hour in range(7, 10))
+            + 1.2 * (day < 5)) * demand_scale
+    tariff = (0.09 if hour < 6 else 0.29 if hour in range(17, 22) else 0.17)
+    tariff *= tariff_scale * (1.0 + 0.04 * __import__("math").sin(index * 0.11))
+    history["pv_power"].append(round(max(0.0, pv), 3))
+    history["wind_power"].append(round(max(0.0, wind), 3))
+    history["essential_load"].append(round(load, 3))
+    history["electricity_price"].append(round(tariff, 4))
+
+units = {
+    "pv_power": "kW",
+    "wind_power": "kW",
+    "essential_load": "kW",
+    "electricity_price": f"{currency}/kWh",
+}
+
+try:
+    bundle = forecast_signals(
+        history_stamps,
+        history,
+        units,
+        horizon=24,
+        non_negative_signals=tuple(history),
+    )
+    coordinated = build_coordination_inputs(
+        bundle,
+        grid_available=[True] * 24,
+        price_unit=f"{currency}/kWh",
+    )
+    battery = None
+    if battery_capacity > 0 and battery_power > 0:
+        battery = BatterySpec(
+            capacity_kwh=float(battery_capacity),
+            max_charge_kw=float(battery_power),
+            max_discharge_kw=float(battery_power),
+            initial_soc=0.60,
+            min_soc=0.10,
+            max_soc=0.95,
+        )
+    config = EnergySystemConfig(
+        pv_rated_kw=40.0,
+        wind_rated_kw=20.0,
+        grid_import_limit_kw=100.0,
+        battery=battery,
+    )
+    weights = OptimizationWeights(
+        cost=float(cost_priority),
+        reliability=float(1.0 - cost_priority),
+        curtailment=0.0,
+        battery_wear=0.0,
+    )
+    result = optimize_energy_system(coordinated.inputs, config, weights=weights)
+    economics = build_service_equivalent_economics(result)
+    stress = evaluate_forecast_stress_scenarios(coordinated, config)
+
+    recommended = result["recommendation"]["policy"]
+    candidates = {row["policy"]: row for row in result["candidates"]}
+    selected = candidates[recommended]["summary"]
+    baseline = candidates["grid_first"]["summary"]
+    service_equal = economics["service_equivalent"]
+
+    st.subheader("Decision snapshot")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Recommended policy", recommended.replace("_", " ").title())
+    m2.metric("Estimated 24h energy cost", f"{selected['estimated_energy_cost']:,.2f} {currency}")
+    m3.metric("Unmet energy", f"{selected['unmet_load_kwh']:,.2f} kWh")
+    if service_equal and economics.get("cost_comparison_valid"):
+        saving = economics.get("estimated_cost_reduction")
+        m4.metric("Modeled cost difference vs grid-first",
+                  f"{saving:,.2f} {currency}" if saving is not None else "Not available")
+    else:
+        m4.metric("Customer savings claim", "Withheld")
+    if not service_equal:
+        st.warning(
+            "The recommended policy does not deliver service equivalent to the grid-first "
+            "reference. A cost reduction is therefore not presented as customer savings."
+        )
+    else:
+        st.caption(
+            "The cost difference is a modeled estimate under identical service in this "
+            "scenario, not a measured or guaranteed customer saving."
+        )
+
+    st.subheader("Forecast: next 24 hours")
+    forecast_rows = []
+    for signal_name in ("pv_power", "wind_power", "essential_load", "electricity_price"):
+        forecast = bundle.forecasts[signal_name]
+        for point in forecast.points:
+            forecast_rows.append({
+                "Timestamp (UTC)": point.timestamp,
+                "Signal": signal_name,
+                "Forecast": point.predicted,
+                "Lower planning bound": point.lower_bound,
+                "Upper planning bound": point.upper_bound,
+            })
+    forecast_frame = pd.DataFrame(forecast_rows)
+    st.line_chart(
+        forecast_frame.pivot(index="Timestamp (UTC)", columns="Signal", values="Forecast"),
+        use_container_width=True,
+    )
+    with st.expander("Forecast model quality and provenance"):
+        st.write(f"Input history SHA-256: `{bundle.input_history_sha256}`")
+        for name, forecast in bundle.forecasts.items():
+            st.write({
+                "signal": name,
+                "model": forecast.model_id,
+                "holdout_MAE": round(forecast.holdout_metrics.mae, 4),
+                "holdout_RMSE": round(forecast.holdout_metrics.rmse, 4),
+                "selected_model_beats_baseline": forecast.selected_model_beats_baseline,
+                "unit": forecast.unit,
+            })
+        st.caption(
+            "Holdout scores describe this synthetic history only. The P90 absolute "
+            "holdout error is a planning envelope, not a calibrated joint confidence interval."
+        )
+
+    st.subheader("Operating policy comparison")
+    comparison = []
+    for policy, item in candidates.items():
+        summary = item["summary"]
+        comparison.append({
+            "Policy": policy.replace("_", " ").title(),
+            "Estimated cost": summary["estimated_energy_cost"],
+            "Grid import (kWh)": summary["grid_import_kwh"],
+            "Unmet load (kWh)": summary["unmet_load_kwh"],
+            "Renewable curtailed (kWh)": summary["renewable_curtailed_kwh"],
+            "Physical audit": "Passed" if item["audit"]["passed"] else "Failed",
+        })
+    st.dataframe(pd.DataFrame(comparison), use_container_width=True, hide_index=True)
+    st.caption(
+        "The optimizer compares two explicit dispatch priorities using the shared "
+        "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
+    )
+
+    st.subheader("Reliability and stress review")
+    stress_rows = []
+    for policy, item in stress["policy_results"].items():
+        for scenario, scenario_result in item["scenario_results"].items():
+            summary = scenario_result["summary"]
+            stress_rows.append({
+                "Policy": policy.replace("_", " ").title(),
+                "Scenario": scenario.replace("_", " ").title(),
+                "Unmet load (kWh)": summary["unmet_load_kwh"],
+                "Critical unmet load (kWh)": summary["critical_unmet_load_kwh"],
+                "Estimated cost": summary["estimated_energy_cost"],
+                "Audit": "Passed" if scenario_result["audit"]["passed"] else "Failed",
+            })
+    st.dataframe(pd.DataFrame(stress_rows), use_container_width=True, hide_index=True)
+    st.caption(
+        "Stress cases are deterministic forecast-envelope and grid-outage replays. "
+        "No scenario probabilities or joint confidence coverage are assigned."
+    )
+
+    report = {
+        "recommended_policy": recommended,
+        "currency": currency,
+        "history_sha256": bundle.input_history_sha256,
+        "forecast_models": {name: item.model_id for name, item in bundle.forecasts.items()},
+        "service_equivalent_to_grid_first": service_equal,
+        "cost_comparison_valid": economics["cost_comparison_valid"],
+        "estimated_cost_reduction": economics.get("estimated_cost_reduction"),
+        "recommended_summary": selected,
+        "reference_summary": baseline,
+        "forecast_stress_scenarios": stress_rows,
+        "scope": "synthetic offline screening; not measured savings or equipment control",
+    }
+    st.download_button(
+        "Download decision report (JSON)",
+        data=__import__("json").dumps(report, indent=2, default=str).encode("utf-8"),
+        file_name="islandos_customer_decision_report.json",
+        mime="application/json",
+    )
+except (ValueError, KeyError, TypeError) as exc:
+    st.error(f"Could not build the decision dashboard: {exc}")
+    st.caption("Check the scenario assumptions and the forecast/optimizer input contracts.")
