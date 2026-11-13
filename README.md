@@ -48,6 +48,8 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Rule-based strategy comparisons, hourly audit outputs, CSV/XLSX onboarding, local-first site workspace, versioned asset records, source hashes, immutable run manifests, append-only audit history, verified whole-workspace SQLite backup/restore, and a unified multi-domain forecast catalog with a replaceable candidate engine.
 - Offline forecast-to-joint-resource workflow with model provenance, chronological backtests, service-equivalence-gated cost comparison, and JSON decision audit. Optional flexible-load forecasts can be scheduled jointly with battery/diesel; water-demand forecasts can be translated into reserve-constrained RO electrical demand before dispatch optimization.
 - Versioned local reference API with tenant-scoped identity/site records and read-only telemetry; local SQLite only, loopback-only, no device writes.
+- Local read-only telemetry gateway with versioned vendor-field/unit mappings, bounded JSON ingress, optional bearer-token protection, strict timestamp/freshness validation, and offline replay. A normalized sensor contract rejects future-dated samples and quarantines duplicate batch identities.
+- Read-only Shadow Mode comparison and JSON replay with tolerance/deviation/blocked outcomes and audit digests; production configuration preflight rejects unsafe origin allowlists and always withholds operational approval. These are deployment-readiness foundations, not live hardware connectivity or production authorization.
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
