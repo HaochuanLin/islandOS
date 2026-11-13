@@ -66,7 +66,9 @@ def build_price_aware_ro_schedule(
         available_after_demand = inventory - consumed
         if available_after_demand < spec.reserve_m3 - 1e-9:
             # Current production must cover demand and preserve the reserve.
-            immediate_target = consumed + spec.reserve_m3
+            # Demand has already been deducted from inventory above. The
+            # target is therefore the reserve itself, not demand + reserve.
+            immediate_target = spec.reserve_m3
         else:
             immediate_target = 0.0
 
