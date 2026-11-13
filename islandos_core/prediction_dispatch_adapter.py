@@ -184,8 +184,9 @@ def optimize_prediction_resource_schedule(
     """Run offline joint battery/diesel/flexible-load optimization from site forecasts.
 
     Optional water demand is converted to a reserve-constrained RO electrical
-    load before physical optimization. Water production is a deterministic
-    just-in-time service policy, not an optimized RO set-point schedule.
+    load before physical optimization. The default just-in-time policy can be
+    replaced by an explicit tariff-look-ahead RO heuristic; neither mode is a
+    globally optimal joint water/energy schedule.
     """
     from dataclasses import replace
     import hashlib
