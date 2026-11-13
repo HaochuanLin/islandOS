@@ -57,7 +57,7 @@ def test_chain_verification_detects_record_tampering(tmp_path):
         db.execute("UPDATE shadow_evidence SET status='blocked' WHERE id=1")
     result = store.verify_chain()
     assert result["valid"] is False
-    assert any("report hash mismatch" in error for error in result["errors"])
+    assert any("record metadata mismatch" in error for error in result["errors"])
 
 
 def test_site_and_limit_validation(tmp_path):
