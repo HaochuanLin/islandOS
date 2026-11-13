@@ -45,10 +45,10 @@ def evaluate_production_preflight(config):
 
     database_url = config.get("database_url")
     if _nonempty_text(database_url):
-        scheme = urlparse(database_url).scheme.lower()
-        if scheme not in {"postgres", "postgresql"}:
+        parsed_database = urlparse(database_url)
+        if parsed_database.scheme.lower() not in {"postgres", "postgresql"} or not parsed_database.netloc:
             blockers.append({"code": "database_not_managed_postgres", "field": "database_url",
-                             "message": "Production database must use a PostgreSQL connection URL; local SQLite is not accepted."})
+                             "message": "Production database must use a valid PostgreSQL connection URL; local SQLite is not accepted."})
 
     for field in ("identity_provider_issuer", "public_base_url"):
         value = config.get(field)
@@ -60,10 +60,10 @@ def evaluate_production_preflight(config):
 
     backup_target = config.get("backup_target_uri")
     if _nonempty_text(backup_target):
-        scheme = urlparse(backup_target).scheme.lower()
-        if scheme not in {"s3", "gs", "az", "azure"}:
+        parsed_backup = urlparse(backup_target)
+        if parsed_backup.scheme.lower() not in {"s3", "gs", "az", "azure"} or not parsed_backup.netloc:
             blockers.append({"code": "backup_not_offhost", "field": "backup_target_uri",
-                             "message": "Backup target must use an approved off-host object-storage URI scheme."})
+                             "message": "Backup target must use a valid approved off-host object-storage URI."})
 
     boolean_requirements = {
         "database_tls_required": "database TLS must be required",
