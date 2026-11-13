@@ -95,7 +95,7 @@ def compare_shadow_run(
     errors = []
     if created > now:
         errors.append("recommendation timestamp is in the future")
-    if age < -30:
+    if age < 0:
         errors.append("observation timestamp is in the future")
     elif age > max_age:
         errors.append("observation is stale")
