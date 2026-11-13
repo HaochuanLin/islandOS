@@ -24,6 +24,11 @@ def main() -> None:
             * (0.90 + 0.08 * math.sin((i // 24) * 0.7))
             for i in range(hours)
         ],
+        "wind_power": [
+            14.0 + 3.5 * math.sin(2.0 * math.pi * i / 24.0 + 0.8)
+            + 1.5 * math.sin(2.0 * math.pi * i / 72.0)
+            for i in range(hours)
+        ],
         "essential_load": [
             18.0 + 2.0 * math.sin(2.0 * math.pi * ((i % 24) - 8) / 24.0)
             + 0.5 * math.sin((i // 24) * 0.4)
@@ -44,12 +49,13 @@ def main() -> None:
         history=history,
         units={
             "pv_power": "kW",
+            "wind_power": "kW",
             "essential_load": "kW",
             "water_demand": "m3/h",
             "electricity_price": "currency/kWh",
         },
         horizon=24,
-        non_negative_signals=("pv_power", "essential_load", "water_demand"),
+        non_negative_signals=("pv_power", "wind_power", "essential_load", "water_demand"),
     )
     report = {
         "data_provenance": "Synthetic demo data — not measured site data",
