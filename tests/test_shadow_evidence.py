@@ -44,7 +44,7 @@ def test_report_digest_and_write_invariants_are_required(tmp_path):
         store.append("site-A", report)
 
     report = _report()
-    report["status"] = "within_tolerance"
+    report["status"] = "deviation"
     with pytest.raises(ValueError, match="digest"):
         store.append("site-A", report)
 
