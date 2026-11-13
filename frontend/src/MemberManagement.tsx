@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 type Member = { id: string; email: string; role: "owner" | "analyst" | "viewer"; created_at: string };
 type Invitation = { invitation_id: string; email: string; role: string; expires_at: string; invitation_token: string; email_delivery_performed: false };
@@ -32,7 +33,7 @@ export default function MemberManagement({ token, role }: { token: string; role:
     refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not load members"));
   }, [refresh]);
 
-  async function invite(event: React.FormEvent) {
+  async function invite(event: FormEvent) {
     event.preventDefault();
     setBusy(true); setError(""); setInvitation(null);
     try {
