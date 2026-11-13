@@ -442,6 +442,17 @@ def optimize_forecasted_resource_schedule(
         name: scenario for name, scenario in scenarios.items()
         if name != "forecast_central"
     }
+    flexible_kwargs = {}
+    flexible_profile = coordinated.inputs.flexible_load_kw
+    if flexible_profile is not None:
+        profile = [float(value) for value in flexible_profile]
+        flexible_energy = sum(profile) * config.dt_hours
+        if flexible_energy > 1e-9:
+            flexible_kwargs = {
+                "flexible_load_energy_kwh": flexible_energy,
+                "flexible_load_available_steps": [value > 1e-9 for value in profile],
+                "flexible_load_max_power_kw": max(profile),
+            }
     result = optimize_battery_and_diesel_schedule(
         coordinated.inputs,
         config,
@@ -453,6 +464,7 @@ def optimize_forecasted_resource_schedule(
         max_unmet_load_kwh=max_unmet_load_kwh,
         max_critical_unmet_load_kwh=max_critical_unmet_load_kwh,
         terminal_battery_soc_min=terminal_battery_soc_min,
+        **flexible_kwargs,
     )
     result["robust_customer_economics"] = _robust_service_equivalent_economics(result)
     result["forecast_provenance"] = {
