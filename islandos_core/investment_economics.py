@@ -25,8 +25,8 @@ class InvestmentEconomics:
 
 
 def _payback_year(cashflows: list[float], discount_rate: float | None = None) -> float | None:
-    cumulative = -cashflows[0]
-    if cumulative <= 0:
+    cumulative = cashflows[0]
+    if cumulative >= 0:
         return 0.0
     for year, amount in enumerate(cashflows[1:], start=1):
         discounted = amount / ((1.0 + discount_rate) ** year) if discount_rate is not None else amount
@@ -136,14 +136,15 @@ def evaluate_investment_economics(
         })
     residual_pv = residual_value / ((1.0 + discount_rate) ** project_life_years)
     npv = -upfront_capex + annual_energy_saving * pv_energy_factor - annual_incremental_om_cost * pv_om_factor - replacement_pv + residual_pv
-    simple_payback = _payback_year(cashflows)
-    discounted_payback = _payback_year(cashflows, discount_rate)
+    simple_payback = _payback_year(cashflows) if annual_net > 0 else None
+    discounted_payback = _payback_year(cashflows, discount_rate) if annual_net > 0 else None
     break_even_saving = (upfront_capex + replacement_pv - residual_pv + annual_incremental_om_cost * pv_om_factor) / pv_energy_factor
 
     sensitivity = {}
-    for label, multiplier in (("low_20pct_energy_saving", 0.8), ("base", 1.0), ("high_20pct_energy_saving", 1.2)):
+    for label, delta in (("low_20pct_energy_saving", -0.2), ("base", 0.0), ("high_20pct_energy_saving", 0.2)):
+        scenario_saving = annual_energy_saving + abs(annual_energy_saving) * delta
         sensitivity[label] = (
-            -upfront_capex + annual_energy_saving * multiplier * pv_energy_factor
+            -upfront_capex + scenario_saving * pv_energy_factor
             - annual_incremental_om_cost * pv_om_factor - replacement_pv + residual_pv
         )
 
