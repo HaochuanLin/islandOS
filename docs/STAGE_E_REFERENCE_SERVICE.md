@@ -13,6 +13,13 @@ Stage E now has a runnable, versioned reference API in `islandos_service_api.py`
 - `POST /api/v1/sites/{site_id}/telemetry` — authenticated, read-only, normalized telemetry ingestion.
 - `GET /api/v1/sites/{site_id}/telemetry/latest` — tenant-scoped latest telemetry.
 - `DELETE /api/v1/sites/{site_id}` — owner-only site deletion, cascading telemetry deletion.
+- `GET /api/v1/members` — tenant-scoped member listing.
+- `POST /api/v1/members/invitations` — owner-only invitation creation for analyst/viewer roles; returns a one-time token to the caller and does not send email.
+- `POST /api/v1/members/invitations/accept` — single-use, expiring invitation acceptance and account creation.
+- `POST /api/v1/members/{user_id}/role` / `DELETE /api/v1/members/{user_id}` — owner-only role changes and member removal.
+- `GET /api/v1/notifications` — tenant/user-scoped inbox with unread filtering and bounded page size.
+- `POST /api/v1/notifications` — analyst/owner event creation with category, severity, optional site/user target and JSON payload.
+- `POST /api/v1/notifications/{notification_id}/read` — mark an accessible inbox item as read.
 
 ### Identity, authorization and audit
 
@@ -21,7 +28,7 @@ Stage E now has a runnable, versioned reference API in `islandos_service_api.py`
 - Bearer tokens are random, only token hashes are persisted, and sessions expire after 12 hours.
 - Site and telemetry queries always include the authenticated tenant ID.
 - Viewer cannot create or delete sites; analyst/owner can create; only owner can delete.
-- Login, tenant creation, site creation/deletion and telemetry ingestion produce audit events.
+- Login, tenant creation, site creation/deletion, telemetry ingestion, invitations, member changes, notification creation and read acknowledgements produce audit events.
 - Unknown or cross-tenant site IDs return the same not-found response.
 
 ### Persistence and lifecycle
@@ -30,6 +37,8 @@ Stage E now has a runnable, versioned reference API in `islandos_service_api.py`
 - The database file is created with owner-only permissions where the host OS supports them.
 - Foreign-key cascade removes site telemetry when a site is deleted.
 - Raw CSV uploads and original customer files are not stored by this service.
+- Invitation tokens are stored only as SHA-256 hashes and are single-use/expiring. Invitation delivery is not implemented; an authorized caller must deliver the one-time token through a separately approved channel.
+- Notifications are persisted inbox records; there is no email/SMS/push delivery scheduler.
 - The reference implementation is single-host and uses local disk; it is not a managed database or encrypted object-storage deployment.
 
 ### Read-only telemetry
@@ -65,7 +74,7 @@ Use the returned access token as `Authorization: Bearer <token>` for protected e
 
 ## Validation
 
-`tests/test_islandos_service_api.py` covers independent tenants, cross-tenant denial, login/session validation, telemetry validation and duplicate rejection, and cascading site deletion. Existing gateway integration tests continue to cover the local read-only HTTP telemetry ingress. CI remains the final merge gate.
+`tests/test_islandos_service_api.py` covers independent tenants, cross-tenant denial, login/session validation, telemetry validation and duplicate rejection, and cascading site deletion. `tests/test_stage_e_members_notifications.py` covers single-use/expiry invitation lifecycle, owner-only role management, member removal, tenant/user-scoped notifications, read state, and payload validation. Existing gateway integration tests continue to cover the local read-only HTTP telemetry ingress. CI remains the final merge gate.
 
 ## Production gaps — do not claim these are complete
 
