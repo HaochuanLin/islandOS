@@ -178,18 +178,27 @@ def optimize_prediction_resource_schedule(
     max_critical_unmet_load_kwh: float | None = None,
     terminal_battery_soc_min: float | None = None,
     water_service=None,
+    water_schedule_mode: str = "just_in_time",
+    water_lookahead_hours: int = 6,
 ) -> dict:
     """Run offline joint battery/diesel/flexible-load optimization from site forecasts.
 
     Optional water demand is converted to a reserve-constrained RO electrical
-    load before physical optimization. Water production is a deterministic
-    just-in-time service policy, not an optimized RO set-point schedule.
+    load before physical optimization. The default just-in-time policy can be
+    replaced by an explicit tariff-look-ahead RO heuristic; neither mode is a
+    globally optimal joint water/energy schedule.
     """
     from dataclasses import replace
     import hashlib
     import json
     from .forecast_optimizer_adapter import optimize_forecasted_resource_schedule
-    from .water_resource_adapter import WaterServiceSpec, build_ro_energy_load
+    from .water_resource_adapter import WaterEnergyLoad, WaterServiceSpec, build_ro_energy_load
+    from .water_dispatch import build_price_aware_ro_schedule
+
+    if water_schedule_mode not in {"just_in_time", "price_aware"}:
+        raise ValueError("water_schedule_mode must be 'just_in_time' or 'price_aware'")
+    if isinstance(water_lookahead_hours, bool) or not isinstance(water_lookahead_hours, int) or water_lookahead_hours < 1:
+        raise ValueError("water_lookahead_hours must be a positive integer")
 
     required = {
         "pv_power_kw": "pv_power",
@@ -250,11 +259,37 @@ def optimize_prediction_resource_schedule(
         if water_targets != load_targets:
             raise ValueError("water-demand and electrical-load forecast timestamps must align exactly")
         # Use the empirical upper planning bound for water service feasibility.
-        water_load = build_ro_energy_load(
-            [point.upper_bound for point in water_result.points],
-            spec=water_service,
-            dt_hours=config.dt_hours,
-        )
+        water_demand_upper = [point.upper_bound for point in water_result.points]
+        if water_schedule_mode == "price_aware":
+            tariff_result = results["tariff_per_kwh"]
+            if tuple(point.timestamp for point in tariff_result.points) != water_targets:
+                raise ValueError("tariff and water-demand forecast timestamps must align exactly")
+            schedule = build_price_aware_ro_schedule(
+                water_demand_upper,
+                [point.predicted_value for point in tariff_result.points],
+                spec=water_service,
+                lookahead_hours=water_lookahead_hours,
+                dt_hours=config.dt_hours,
+            )
+            water_load = WaterEnergyLoad(
+                production_m3=schedule["production_m3"],
+                inventory_after_demand_m3=schedule["inventory_end_m3"],
+                ro_power_kw=schedule["ro_power_kw"],
+                total_demand_m3=schedule["total_demand_m3"],
+                total_production_m3=schedule["total_production_m3"],
+                specific_energy_kwh_per_m3=water_service.specific_energy_kwh_per_m3,
+                service_feasible=schedule["service_feasible"],
+            )
+            water_production_policy = schedule["method"]
+            water_estimated_energy_cost = schedule["estimated_ro_energy_cost"]
+        else:
+            water_load = build_ro_energy_load(
+                water_demand_upper,
+                spec=water_service,
+                dt_hours=config.dt_hours,
+            )
+            water_production_policy = "reserve-constrained just-in-time"
+            water_estimated_energy_cost = None
         combined_points = tuple(
             replace(
                 point,
@@ -344,7 +379,10 @@ def optimize_prediction_resource_schedule(
             "total_ro_production_m3": water_load.total_production_m3,
             "specific_energy_kwh_per_m3": water_load.specific_energy_kwh_per_m3,
             "service_feasible": water_load.service_feasible,
-            "production_policy": "reserve-constrained just-in-time; not price-optimized",
+            "production_policy": water_production_policy,
+            "estimated_ro_energy_cost": water_estimated_energy_cost,
+            "electricity_price_forecast_used": water_schedule_mode == "price_aware",
+            "lookahead_hours": water_lookahead_hours if water_schedule_mode == "price_aware" else None,
             "device_write_authorized": False,
         }
     return result
