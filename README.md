@@ -46,7 +46,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Public interactive Streamlit application with energy–water screening, price-aware flexible-load optimization, and a forecast-led joint battery/diesel decision page (synthetic or user-supplied hourly history). The joint optimizer now uses the same canonical forecast signal catalog as customer data onboarding.
 - Deterministic integrated microgrid accounting baseline for selected PV, wind, battery, grid, backup, RO, and water-inventory flows.
 - Rule-based strategy comparisons, hourly audit outputs, CSV/XLSX onboarding, local-first site workspace, versioned asset records, source hashes, immutable run manifests, append-only audit history, verified whole-workspace SQLite backup/restore, and a unified multi-domain forecast catalog with a replaceable candidate engine.
-- Offline forecast-to-joint-resource workflow with model provenance, chronological backtests, service-equivalence-gated cost comparison, and JSON decision audit.
+- Offline forecast-to-joint-resource workflow with model provenance, chronological backtests, service-equivalence-gated cost comparison, and JSON decision audit. Optional flexible-load forecasts can be scheduled jointly with battery/diesel; water-demand forecasts can be translated into reserve-constrained RO electrical demand before dispatch optimization.
 - Versioned local reference API with tenant-scoped identity/site records and read-only telemetry; local SQLite only, loopback-only, no device writes.
 
 **Experimental**
