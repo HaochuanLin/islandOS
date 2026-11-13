@@ -2,7 +2,7 @@
 
 ## Delivered software slice
 
-`islandos_core/shadow_mode.py` adds a vendor-neutral, read-only comparison between a stored recommendation and later observed telemetry. `islandos_shadow.py` provides an offline JSON replay CLI for recorded recommendation/observation pairs. It checks recommendation/observation identity, timestamp validity and freshness, signal coverage, unit consistency, finite values, and per-signal tolerances declared from an approved asset/sensor specification.
+`islandos_core/shadow_mode.py` adds a vendor-neutral, read-only comparison between a stored recommendation and later observed telemetry. `islandos_shadow.py` provides an offline JSON replay CLI for recorded recommendation/observation pairs. It checks recommendation/observation identity, timestamp validity and strict freshness (any future-dated observation is blocked), signal coverage, unit consistency, finite values, and per-signal tolerances declared from an approved asset/sensor specification.
 
 Each comparison produces an auditable report with a SHA-256 digest and one of three states:
 - `within_tolerance`: all compared signals are within their declared tolerances.
