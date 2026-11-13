@@ -34,7 +34,7 @@ No savings, payback, or purchasing recommendation is valid without traceable sit
 | INPUT | CSV validation, selected data imports, signal/data contracts, device and telemetry experiments | Universal plug-and-play integration, one common schema across all experiments, production live integration |
 | PREDICT | Forecast baselines, water-demand forecast contracts, separate model experiments and chronological evaluation | Unified site-calibrated multi-signal forecasting, proven transfer accuracy, uncertainty consistently propagated into optimization |
 | OPTIMIZE | Integrated deterministic microgrid accounting baseline, rule-based screening, rolling-horizon and search experiments | Unified general multi-resource optimizer, comprehensive constraints for all assets, global optimum, validated savings |
-| DECIDE | Interactive Streamlit screening, charts, CSV exports, selected audit/provenance records, simple advice prototypes | Complete end-to-end recommendation console, customer-ready investment comparison, validated decision reports |
+| DECIDE | Forecast-led Streamlit dashboard, CSV onboarding, service-equivalence-gated dispatch comparison, downloadable provenance report, and a simplified customer-entered CAPEX/O&M/NPV/payback screen | Complete end-to-end recommendation console, validated customer economics, full lifecycle cost coverage, usability evidence, and site-verified decision reports |
 
 The public Streamlit app is an interactive research prototype, not a live operational system. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
 
@@ -72,7 +72,7 @@ The public Streamlit app is an interactive research prototype, not a live operat
 
 ### Phase 4 — Customer economics and decision reporting
 - Establish a customer-confirmed baseline and decision question.
-- Model CAPEX, OPEX, tariffs, fuel, maintenance, replacements, and relevant lifecycle assumptions.
+- Provide a first simplified CAPEX/O&M/NPV/payback screen using customer-entered annual bills, supplier costs, replacement assumptions, and sensitivity; expand coverage to fuel, demand charges, escalation, financing, taxes, and degradation.
 - Report total-cost comparisons, sensitivity, service effects, assumptions, and explicit no-go/not-enough-evidence outcomes.
 - **Exit:** a qualified reviewer can reproduce the comparison and understand why an option is or is not justified.
 

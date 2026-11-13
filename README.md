@@ -117,6 +117,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) | Product phases, customer discovery, economics, and exit gates |
 | [Phase 4 customer dashboard](docs/PHASE4_CUSTOMER_DECISION_DASHBOARD.md) | Forecast-led customer decision view and scope boundaries |
 | [Phase 4 customer data onboarding](docs/PHASE4_CUSTOMER_DATA_ONBOARDING.md) | Hourly CSV schema, validation, provenance, and hosted-upload privacy |
+| [Phase 4 investment economics](docs/PHASE4_CUSTOMER_INVESTMENT_ECONOMICS.md) | Customer-entered CAPEX, O&M, NPV, payback, replacement, and sensitivity screening |
 | [Engineering maturity roadmap](docs/ENGINEERING_MATURITY_ROADMAP.md) | Evidence requirements and delivery gates |
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |
 

@@ -12,7 +12,8 @@ The Streamlit multipage dashboard at `pages/05_Customer_Decision_Dashboard.py`:
 - compares the two existing physical dispatch priorities with the shared energy-system simulator;
 - gates modeled cost differences on service equivalence against the grid-first reference;
 - replays both policies across forecast-envelope and grid-outage stress cases;
-- exposes forecast model IDs, holdout metrics, input-history SHA-256, and a downloadable JSON decision report.
+- exposes forecast model IDs, holdout metrics, input-history SHA-256, and a downloadable JSON decision report;
+- provides a separate lifecycle investment screen using customer-entered annual bills, CAPEX, O&M, replacement, residual value, and discount-rate assumptions.
 
 ## Customer-facing decision logic
 
@@ -21,6 +22,7 @@ The Streamlit multipage dashboard at `pages/05_Customer_Decision_Dashboard.py`:
 - **Recommendation:** the selected policy and objective weights are disclosed.
 - **Savings:** a modeled cost difference is shown only if service is equivalent; otherwise the dashboard withholds the savings figure.
 - **Reliability:** unmet load, critical unmet load, and physical-audit status are shown for each deterministic stress replay.
+- **Investment:** NPV, simple/discounted payback, break-even annual saving, and ±20% annual energy-saving sensitivity are shown only when service equivalence passes.
 
 ## Evidence and limitations
 
@@ -29,7 +31,7 @@ The default scenario is synthetic. The 24-hour forecast is generated from 168 sy
 ## Exit gates for the remaining Phase 4 work
 
 - Replace synthetic-only defaults with a clearly provenance-labelled site-data workflow.
-- Add customer-confirmed tariff, fuel, O&M, demand-charge, and equipment replacement economics where supported by validated inputs.
+- Expand the current simplified investment screen to include validated fuel, demand-charge, escalation, degradation, financing, tax, and lifecycle assumptions where relevant.
 - Add a comparison export that includes all assumptions, source hashes, model versions, and service-equivalence checks.
 - Conduct usability review with non-technical users and verify that risk and uncertainty labels are understood.
 
@@ -37,3 +39,8 @@ The default scenario is synthetic. The 24-hour forecast is generated from 168 sy
 ## Customer-supplied history
 
 The follow-up CSV onboarding increment is documented in [Phase 4 — Customer data onboarding](PHASE4_CUSTOMER_DATA_ONBOARDING.md). It adds a strict hourly input adapter while retaining the synthetic example as the default; see the linked document for the schema and privacy boundary.
+
+
+## Investment economics
+
+See [Phase 4 — Customer investment economics](PHASE4_CUSTOMER_INVESTMENT_ECONOMICS.md) for formulas, required inputs, service-equivalence gate, sensitivity assumptions, and limitations. The investment screen does not annualize a 24-hour dispatch result; it requires explicit annual customer bills and supplier/customer cost assumptions.
