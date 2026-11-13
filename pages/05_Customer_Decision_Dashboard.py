@@ -15,6 +15,7 @@ import streamlit as st
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.forecast_engine import forecast_signals
+from islandos_core.investment_economics import evaluate_investment_economics
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
     build_service_equivalent_economics,
@@ -57,6 +58,19 @@ with st.sidebar:
     site_csv = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
     if site_csv is not None:
         st.caption("Demo load/tariff scaling sliders are ignored when a site CSV is uploaded.")
+    st.divider()
+    st.subheader("Investment assumptions")
+    st.caption("Enter customer-confirmed annual bills and supplier quotes. Do not annualize the 24-hour simulation.")
+    baseline_annual_bill = st.number_input("Baseline annual energy bill", min_value=0.0, value=0.0, step=1000.0)
+    proposed_annual_bill = st.number_input("Proposed annual energy bill", min_value=0.0, value=0.0, step=1000.0)
+    incremental_om = st.number_input("Annual incremental O&M cost (+ cost / − saving)", min_value=-10000000.0, max_value=10000000.0, value=0.0, step=500.0)
+    upfront_capex = st.number_input("Installed equipment CAPEX", min_value=0.0, value=0.0, step=5000.0)
+    project_life = st.slider("Project evaluation life (years)", 1, 30, 10)
+    discount_rate_pct = st.slider("Discount rate (%)", 0.0, 30.0, 8.0, 0.5)
+    has_replacement = st.checkbox("Include a future equipment replacement")
+    replacement_year = st.number_input("Replacement year", min_value=1, max_value=30, value=min(8, project_life), step=1) if has_replacement else None
+    replacement_cost = st.number_input("Replacement cost", min_value=0.0, value=0.0, step=1000.0) if has_replacement else 0.0
+    residual_value = st.number_input("Residual value at end of project", min_value=0.0, value=0.0, step=1000.0)
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
@@ -245,6 +259,59 @@ try:
         "No scenario probabilities or joint confidence coverage are assigned."
     )
 
+    investment = evaluate_investment_economics(
+        baseline_annual_energy_cost=float(baseline_annual_bill),
+        proposed_annual_energy_cost=float(proposed_annual_bill),
+        annual_incremental_om_cost=float(incremental_om),
+        upfront_capex=float(upfront_capex),
+        project_life_years=int(project_life),
+        discount_rate=float(discount_rate_pct) / 100.0,
+        replacement_year=int(replacement_year) if replacement_year is not None else None,
+        replacement_cost=float(replacement_cost),
+        residual_value=float(residual_value),
+        service_equivalent=bool(service_equal and economics.get("cost_comparison_valid")),
+    )
+    st.subheader("Equipment investment screen")
+    st.caption(
+        "Lifecycle results use customer-entered annual bills, supplier CAPEX, and O&M assumptions. "
+        "They are not inferred from the 24-hour simulation and are not a procurement guarantee."
+    )
+    if investment.decision == "blocked":
+        st.warning(investment.reasons[0])
+    else:
+        i1, i2, i3, i4 = st.columns(4)
+        i1.metric("Net present value", f"{investment.net_present_value:,.0f} {currency}")
+        i2.metric("Simple payback", f"{investment.simple_payback_years:.1f} years" if investment.simple_payback_years is not None else "Not achieved")
+        i3.metric("Discounted payback", f"{investment.discounted_payback_years:.1f} years" if investment.discounted_payback_years is not None else "Not achieved")
+        i4.metric("Break-even annual energy saving", f"{investment.break_even_annual_energy_saving:,.0f} {currency}")
+        st.write({
+            "Screen result": investment.decision.replace("_", " ").title(),
+            "Annual energy-bill difference": investment.annual_energy_cost_saving,
+            "Annual net operating benefit after incremental O&M": investment.annual_net_operating_benefit,
+            "Reasons / review notes": investment.reasons,
+        })
+        sensitivity_frame = pd.DataFrame([
+            {"Case": label.replace("_", " ").title(), "NPV": value}
+            for label, value in investment.sensitivity_npv.items()
+        ]).set_index("Case")
+        st.caption("Sensitivity varies the entered annual energy saving by ±20%; all other assumptions remain fixed.")
+        st.bar_chart(sensitivity_frame)
+    investment_report = investment.to_dict()
+    investment_report["assumptions"] = {
+        "baseline_annual_energy_cost": baseline_annual_bill,
+        "proposed_annual_energy_cost": proposed_annual_bill,
+        "annual_incremental_om_cost": incremental_om,
+        "upfront_capex": upfront_capex,
+        "project_life_years": project_life,
+        "discount_rate": discount_rate_pct / 100.0,
+        "replacement_year": replacement_year,
+        "replacement_cost": replacement_cost,
+        "residual_value": residual_value,
+        "currency": currency,
+        "service_equivalence_gate_passed": bool(service_equal and economics.get("cost_comparison_valid")),
+        "input_status": "customer-entered; not independently verified",
+    }
+
     report = {
         "recommended_policy": recommended,
         "currency": currency,
@@ -269,6 +336,7 @@ try:
         "recommended_summary": selected,
         "reference_summary": baseline,
         "forecast_stress_scenarios": stress_rows,
+        "investment_economics": investment_report,
         "scope": "offline screening; not measured savings or equipment control",
     }
     st.download_button(
