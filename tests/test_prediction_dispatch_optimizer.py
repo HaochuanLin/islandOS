@@ -110,3 +110,53 @@ def test_generic_prediction_optimizer_rejects_unit_guessing():
             diesel_available=[True] * 6,
             price_unit="USD/kWh",
         )
+
+
+def test_real_prediction_engine_output_runs_joint_resource_optimizer():
+    from islandos_core.prediction_engine import (
+        ForecastRequest,
+        PredictionEngine,
+        SignalObservation,
+    )
+
+    start = datetime(2026, 11, 1, tzinfo=UTC)
+    history_stamps = tuple(start + timedelta(hours=index) for index in range(72))
+    raw = {
+        "pv_power_kw": ("kW", [max(0.0, 4.0 + 3.0 * ((i % 24) / 24)) for i in range(72)], True),
+        "wind_power_kw": ("kW", [3.0 + (i % 5) * 0.2 for i in range(72)], True),
+        "load_kw": ("kW", [8.0 + (2.0 if i % 24 in range(17, 22) else 0.0) for i in range(72)], True),
+        "tariff_per_kwh": ("USD/kWh", [0.08 if i % 24 < 6 else 0.2 for i in range(72)], False),
+    }
+    engine = PredictionEngine()
+    predictions = {}
+    targets = tuple(history_stamps[-1] + timedelta(hours=step) for step in range(1, 7))
+    for signal_id, (unit, values, non_negative) in raw.items():
+        request = ForecastRequest(
+            signal_id=signal_id,
+            unit=unit,
+            history=tuple(
+                SignalObservation(timestamp=stamp, value=value)
+                for stamp, value in zip(history_stamps, values)
+            ),
+            target_timestamps=targets,
+            non_negative=non_negative,
+        )
+        predictions[signal_id] = engine.forecast(
+            request, backtest_horizon=6, season_length=24
+        )
+
+    result = optimize_prediction_resource_schedule(
+        predictions,
+        _config(),
+        history_start_utc=history_stamps[0],
+        history_end_utc=history_stamps[-1],
+        grid_available=[True] * 6,
+        diesel_available=[True] * 6,
+        price_unit="USD/kWh",
+        population_size=4,
+        generations=1,
+        seed=23,
+    )
+    assert result["generic_prediction_handoff"]["device_write_authorized"] is False
+    assert set(result["generic_prediction_handoff"]["forecast_model_versions"]) == set(raw)
+    assert len(result["recommendation"]["battery_setpoints_kw"]) == 6
