@@ -72,6 +72,8 @@ def test_production_preflight_rejects_non_exact_https_origins():
         "https://*.example.invalid",
         "https://app.example.invalid/path",
         "https://app.example.invalid?tenant=other",
+        "https://app.example.invalid?",
+        "https://app.example.invalid#",
         "https://app.example.invalid#section",
         "https://user@app.example.invalid",
         "https://app.example.invalid:not-a-port",
