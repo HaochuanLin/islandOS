@@ -63,3 +63,26 @@ def test_production_preflight_rejects_non_https_identity_and_short_retention():
     codes = {item["code"] for item in report["blockers"]}
     assert "https_required" in codes
     assert "audit_retention_too_short" in codes
+
+
+
+def test_production_preflight_rejects_non_exact_https_origins():
+    invalid_origins = [
+        "*",
+        "https://*.example.invalid",
+        "https://app.example.invalid/path",
+        "https://app.example.invalid?tenant=other",
+        "https://app.example.invalid#section",
+        "https://user@app.example.invalid",
+        "https://app.example.invalid:not-a-port",
+        " https://app.example.invalid",
+    ]
+    for origin in invalid_origins:
+        config = _valid_config()
+        config["allowed_origins"] = [origin]
+        report = evaluate_production_preflight(config)
+        assert report["status"] == "blocked", origin
+        assert any(
+            item["code"] == "allowed_origins_invalid"
+            for item in report["blockers"]
+        ), origin
