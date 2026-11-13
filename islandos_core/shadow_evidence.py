@@ -160,6 +160,14 @@ class ShadowEvidenceStore:
             try:
                 parsed = json.loads(row["report_json"])
                 _validate_report(parsed)
+                stored_fields = {
+                    "recommendation_id": row["recommendation_id"],
+                    "observation_id": row["observation_id"],
+                    "evaluated_at_utc": row["evaluated_at_utc"],
+                    "status": row["status"],
+                }
+                if any(parsed.get(field) != value for field, value in stored_fields.items()):
+                    errors.append(f"record {row['id']}: record metadata mismatch")
             except (ValueError, TypeError, json.JSONDecodeError) as exc:
                 errors.append(f"record {row['id']}: invalid report ({exc})")
             expected_previous = row["chain_hash"]
