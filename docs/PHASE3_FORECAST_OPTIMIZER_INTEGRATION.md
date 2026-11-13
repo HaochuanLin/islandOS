@@ -80,3 +80,17 @@ maximum total/critical unmet-energy and terminal battery SOC constraints.
 Diesel availability is mandatory. The optimizer rejects configurations whose
 ramp-down or minimum up/down constraints it cannot safely generate. It remains
 a seeded heuristic, not a global optimum or device controller.
+
+
+## Site asset and operating-state gate
+
+The Phase 3 branch now includes the versioned asset registry, provenance-bearing
+parameters, confirmed hard-constraint readiness, declared electrical topology
+validation, and timestamped operational-state checks. The new
+`build_site_energy_configuration` helper fails closed unless static asset
+readiness and fresh, confirmed online-state readiness both pass. It then maps
+the confirmed installed capacities and supported constraints into the shared
+energy-system configuration. A declared topology is checked structurally only;
+this is not load-flow, protection, electrical-safety, or equipment certification.
+A readiness snapshot does not predict future availability; the dispatch horizon
+still requires explicit availability inputs.
