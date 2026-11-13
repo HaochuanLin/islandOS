@@ -49,7 +49,12 @@ with st.sidebar:
     battery_power = st.slider("Battery charge/discharge limit (kW)", 0, 60, 20, 5)
     cost_priority = st.slider("Cost priority", 0.0, 1.0, 0.7, 0.05)
     st.caption("The remaining objective weight is assigned to reliability.")
+    pv_capacity = st.number_input("Installed PV capacity (kW)", min_value=0.0, value=40.0, step=1.0)
+    wind_capacity = st.number_input("Installed wind capacity (kW)", min_value=0.0, value=20.0, step=1.0)
+    grid_limit = st.number_input("Grid import limit (kW)", min_value=0.0, value=100.0, step=5.0)
     site_csv = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
+    if site_csv is not None:
+        st.caption("Demo load/tariff scaling sliders are ignored when a site CSV is uploaded.")
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
@@ -115,9 +120,9 @@ try:
             max_soc=0.95,
         )
     config = EnergySystemConfig(
-        pv_rated_kw=40.0,
-        wind_rated_kw=20.0,
-        grid_import_limit_kw=100.0,
+        pv_rated_kw=float(pv_capacity),
+        wind_rated_kw=float(wind_capacity),
+        grid_import_limit_kw=float(grid_limit),
         battery=battery,
     )
     weights = OptimizationWeights(
@@ -244,6 +249,17 @@ try:
         "history_sha256": bundle.input_history_sha256,
         "source_file_sha256": source_sha256,
         "input_provenance": source_label,
+        "history_rows": len(history_stamps),
+        "assumptions": {
+            "pv_capacity_kw": pv_capacity,
+            "wind_capacity_kw": wind_capacity,
+            "grid_import_limit_kw": grid_limit,
+            "battery_capacity_kwh": battery_capacity,
+            "battery_power_limit_kw": battery_power,
+            "cost_priority": cost_priority,
+            "demand_scale_applied_to_demo_only": demand_scale if site_csv is None else None,
+            "tariff_scale_applied_to_demo_only": tariff_scale if site_csv is None else None,
+        },
         "forecast_models": {name: item.model_id for name, item in bundle.forecasts.items()},
         "service_equivalent_to_grid_first": service_equal,
         "cost_comparison_valid": economics["cost_comparison_valid"],
