@@ -26,9 +26,9 @@ Here, AI refers primarily to forecasting, uncertainty analysis, and optimization
 *The stage labels indicate current maturity. The diagram describes the intended product workflow, not a claim that all four stages are already integrated or deployed.*
 
 1. **INPUT** — organize energy, demand, asset, resource, and constraint data.
-2. **PREDICT** — estimate how selected supply, demand, or system signals may change. Current forecasting work includes baselines and separate model experiments; site accuracy is not established.
-3. **OPTIMIZE** — evaluate candidate operating strategies against declared constraints and objectives. Current work includes rule-based screening and experimental search; results are not guaranteed global optima.
-4. **DECIDE** — present outcomes, trade-offs, and audit information to support human review. Live actuation and autonomous control are not available.
+2. **PREDICT** — validate canonical energy/price signals and compare replaceable statistical forecast candidates with rolling-origin replay. Error bands and model provenance are exposed; site-specific accuracy is not established.
+3. **OPTIMIZE** — pass aligned forecasts into a bounded joint battery/diesel schedule search, compare policies and stress cases, and withhold modeled savings when service equivalence fails. The heuristic is not a guaranteed global optimum.
+4. **DECIDE** — expose model provenance, hourly schedule comparisons, customer-entered economics, and downloadable decision audits. A versioned local reference API supports tenant-scoped sites and read-only telemetry; it is not a public production service.
 
 The workflow is designed to be extensible across use cases such as remote microgrids, essential water services, storage, flexible loads, and other distributed infrastructure. These are potential application areas, not claims of validated deployments.
 
@@ -43,15 +43,17 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 ## Current implementation and maturity
 
 **Implemented on main**
-- Public interactive Streamlit application with energy–water screening, price-aware flexible-load optimization, and a forecast-led customer decision dashboard (synthetic or user-supplied hourly history).
+- Public interactive Streamlit application with energy–water screening, price-aware flexible-load optimization, and a forecast-led joint battery/diesel decision page (synthetic or user-supplied hourly history). The joint optimizer now uses the same canonical forecast signal catalog as customer data onboarding.
 - Deterministic integrated microgrid accounting baseline for selected PV, wind, battery, grid, backup, RO, and water-inventory flows.
-- Rule-based strategy comparisons, hourly audit outputs, CSV validation, and selected data-import workflows.
+- Rule-based strategy comparisons, hourly audit outputs, CSV/XLSX onboarding, local-first site workspace, source hashes, and a unified multi-domain forecast catalog with a replaceable candidate engine.
+- Offline forecast-to-joint-resource workflow with model provenance, chronological backtests, service-equivalence-gated cost comparison, and JSON decision audit.
+- Versioned local reference API with tenant-scoped identity/site records and read-only telemetry; local SQLite only, loopback-only, no device writes.
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
 - Transparent hourly tariff-forecast baseline and price-aware linear-programming optimizer. The interactive page supports scenario CSV import, a seasonal-naive tariff forecast, and equal-energy cost comparison. This remains an experimental baseline, not a trained market model. Run the synthetic optimizer example with `python examples/price_aware_flexible_load_demo.py`.
 - Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
-- Read-only telemetry and selected integration prototypes.
+- Forecast uncertainty and robust dispatch research, alternative optimizers, public-data/site validation, and device-vendor adapter experiments.
 
 **Planned / not yet delivered as one workflow**
 - A unified, site-calibrated multi-signal forecasting service.
