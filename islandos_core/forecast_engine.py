@@ -225,6 +225,12 @@ def _forecast_signal(name: str, unit: str, values: Sequence[float],
     residuals = [abs(pred - truth) for pred, truth in zip(selected_predictions, actual)]
     residual_p90 = float(np.quantile(np.asarray(residuals, dtype=float), 0.90)) if residuals else 0.0
 
+    # Preserve the chronological holdout for model selection, then refit the
+    # winning learned model on every observation available at forecast time.
+    # This keeps validation leakage-free without discarding the latest history.
+    if selected_id == "ridge_autoregressive":
+        coefficients, mean, scale = _fit_ridge(series, stamps, len(series))
+
     future_history = list(series)
     future_points = []
     for offset in range(horizon):
