@@ -71,7 +71,7 @@ def build_price_aware_ro_schedule(
             immediate_target = 0.0
 
         end = min(len(demand), i + lookahead_hours)
-        future_volume = sum(demand[i:end]) * dt
+        future_volume = sum(demand[i + 1:end]) * dt
         window_target = min(spec.tank_capacity_m3, future_volume + spec.reserve_m3)
         locally_cheapest = prices[i] <= min(prices[i:end]) + 1e-12
         target_inventory = window_target if locally_cheapest else immediate_target
