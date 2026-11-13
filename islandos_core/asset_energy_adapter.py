@@ -191,7 +191,7 @@ def build_energy_system_config_from_assets(
             expected_operator = supported_constraints.get(constraint.parameter)
             if not constraint.confirmed:
                 raise AssetEnergyAdapterError(
-                    f"{asset.asset_id}: hard constraint is not confirmed: {constraint.parameter}"
+                    f"{asset.asset_id}: hard constraint is not confirmed; a confirmed hard max/min constraint is required: {constraint.parameter}"
                 )
             if expected_operator is None:
                 raise AssetEnergyAdapterError(
