@@ -49,7 +49,7 @@ class SensorContractTests(unittest.TestCase):
         self.assertTrue(any("ISO-8601" in e for e in validate_message(self.message, now=self.now)))
 
     def test_equivalent_timezone_offsets_are_compared_in_utc(self):
-        self.message["observed_at"] = "2026-10-22T16:00:00+08:00"
+        self.message["observed_at"] = "2026-10-22T16:00:00.000001+08:00"
         self.assertTrue(any("future" in e for e in validate_message(self.message, now=self.now)))
 
     def test_uncertain_quality_is_rejected(self):
@@ -122,6 +122,13 @@ class SensorContractTests(unittest.TestCase):
     def test_batch_rejects_non_sequence(self):
         with self.assertRaises(ValueError):
             validate_batch({"not": "a sequence"}, now=self.now)
+
+    def test_batch_detects_same_instant_with_different_timezone_offsets(self):
+        first = dict(self.message)
+        second = dict(self.message, observed_at="2026-10-22T08:59:00+01:00")
+        results = validate_batch([first, second], now=self.now)
+        self.assertFalse(results[0]["valid"])
+        self.assertFalse(results[1]["valid"])
 
 
 if __name__ == "__main__":
