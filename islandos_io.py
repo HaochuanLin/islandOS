@@ -109,7 +109,7 @@ def apply_device_mapping(payload: Mapping[str, Any], mapping: Mapping[str, Any])
             else:
                 try:
                     normalized[canonical] = float(value) * float(spec.get("scale", 1.0)) + float(spec.get("offset", 0.0))
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     normalized[canonical] = value
         else:
             normalized[canonical] = value
@@ -183,7 +183,7 @@ def validate_telemetry(
             continue
         try:
             number = float(raw)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             errors.append("field must be a finite number: " + field)
             continue
         if not math.isfinite(number):
@@ -203,7 +203,7 @@ def validate_telemetry(
             continue
         try:
             number = float(raw)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             errors.append("optional field must be a finite non-negative number: " + field)
             continue
         if not math.isfinite(number) or number < 0:
