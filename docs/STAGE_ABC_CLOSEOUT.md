@@ -46,12 +46,12 @@ Boundaries:
 - Error bands are empirical historical-error bands, not guaranteed calibrated prediction intervals.
 - Synthetic tests establish software behavior only. Accuracy at a named customer site requires measured data and separate acceptance.
 
-## Current hand-off to D–F
+## Current D–F status
 
-| Stage | Next delivery focus |
-|---|---|
-| D — Multi-resource coordination | Bring water inventory/RO production and flexible loads into the same forecast-to-physics-to-optimizer path; preserve hard service and equipment constraints. |
-| E — Customer product and identity | Complete organization/member lifecycle, permissions, notifications, full decision reports, and customer-grade lifecycle economics. |
-| F — Real deployment and field validation | Production database/security/monitoring/backup, vendor protocol adapters, read-only shadow operation, site-engineer review, and signed pilot acceptance. |
+| Stage | Delivered foundation | Remaining before stage exit |
+|---|---|---|
+| D — Multi-resource coordination | Forecast-led battery/diesel optimization; flexible-load energy scheduling; water-demand-to-RO-power coupling with tank reserve and service feasibility checks | Price-aware RO/tank trajectory optimization, process-specific RO constraints, broader asset classes, and site-calibrated uncertainty |
+| E — Customer product and identity | Existing decision dashboard and customer-entered investment screen; tenant-scoped API, owner-managed invitations/roles, member removal, persistent notification inbox, audit events | Streamlit UI integration for membership/inbox, email/push delivery, richer lifecycle economics, customer usability validation, production identity/security |
+| F — Real deployment and field validation | Loopback-only local service/gateway, Docker/CI hardening, local backup primitive, pilot acceptance template, read-only shadow comparison and JSON replay CLI | Managed DB, TLS/network segmentation, secrets/MFA, live read-only vendor adapters, monitoring/alerts, off-host backup/restore drills, site-connected shadow trial and signed acceptance |
 
 No stage claims production control. All physical-device actuation remains disabled pending separate safety, authorization, and engineering acceptance.
