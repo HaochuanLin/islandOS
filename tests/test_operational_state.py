@@ -1,0 +1,188 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from islandos_core.assets import AssetRecord
+from islandos_core.electrical_topology import AssetPortConnection, ElectricalBus, ElectricalTopology
+from islandos_core.operational_state import (
+    AssetOperationalState,
+    OperationalStateError,
+    evaluate_operational_readiness,
+)
+
+
+NOW = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
+
+
+def asset(asset_id="pv-1", *, site="site-1", available=True):
+    return AssetRecord(
+        asset_id=asset_id, site_id=site, asset_type="generic",
+        nameplate_parameters={}, installed_parameters={}, observed_parameters={},
+        constraints=(), available=available,
+    )
+
+
+def observation(asset_id="pv-1", *, state="online", at=NOW, confirmed=True, site="site-1"):
+    return AssetOperationalState(asset_id, site, state, at, "SCADA export row 42", confirmed)
+
+
+def topology_for(asset_id="pv-1"):
+    bus = ElectricalBus(
+        "main", "site-1", 400, "AC", "line_to_line", 3,
+        "approved SLD rev C", True,
+    )
+    port = AssetPortConnection(
+        "port-1", "site-1", asset_id, "main", "main", "AC",
+        400, "line_to_line", 3, "vendor drawing rev C", True,
+    )
+    return ElectricalTopology("site-1", (bus,), (), (port,))
+
+
+def test_fresh_confirmed_online_state_is_dispatch_screen_ready():
+    result = evaluate_operational_readiness([asset()], [observation()], as_of=NOW)
+    assert result["can_dispatch_screen"] is True
+    assert result["status"] == "operationally_ready"
+
+
+@pytest.mark.parametrize("state", ["offline", "maintenance", "fault", "unknown"])
+def test_non_online_states_block_dispatch_screen(state):
+    result = evaluate_operational_readiness(
+        [asset()], [observation(state=state)], as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is False
+
+
+def test_missing_state_blocks_readiness():
+    result = evaluate_operational_readiness([asset()], [], as_of=NOW)
+    assert "operational_state_missing:pv-1" in result["blockers"]
+
+
+def test_stale_state_blocks_readiness():
+    result = evaluate_operational_readiness(
+        [asset()], [observation(at=NOW - timedelta(minutes=16))], as_of=NOW,
+    )
+    assert "operational_state_stale:pv-1" in result["blockers"]
+
+
+def test_unconfirmed_state_blocks_readiness():
+    result = evaluate_operational_readiness(
+        [asset()], [observation(confirmed=False)], as_of=NOW,
+    )
+    assert "operational_state_unconfirmed:pv-1" in result["blockers"]
+
+
+def test_future_state_timestamp_blocks_readiness():
+    result = evaluate_operational_readiness(
+        [asset()], [observation(at=NOW + timedelta(seconds=1))], as_of=NOW,
+    )
+    assert "operational_state_from_future:pv-1" in result["blockers"]
+
+
+def test_unavailable_asset_blocks_even_with_online_observation():
+    result = evaluate_operational_readiness(
+        [asset(available=False)], [observation()], as_of=NOW,
+    )
+    assert "asset_unavailable:pv-1" in result["blockers"]
+
+
+def test_historical_observations_select_latest_independent_of_input_order():
+    older = observation(state="offline", at=NOW - timedelta(minutes=2))
+    latest = observation(state="online", at=NOW)
+    result = evaluate_operational_readiness(
+        [asset()], [latest, older], as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is True
+    assert result["observed_asset_count"] == 1
+    assert result["selected_observation_timestamps"]["pv-1"] == NOW.isoformat()
+
+
+def test_unknown_asset_observation_is_reported():
+    result = evaluate_operational_readiness(
+        [asset()], [observation(), observation("ghost")], as_of=NOW,
+    )
+    assert "operational_state_asset_missing:ghost" in result["blockers"]
+
+
+def test_conflicting_states_at_latest_timestamp_block_readiness():
+    result = evaluate_operational_readiness(
+        [asset()],
+        [observation(state="online"), observation(state="fault")],
+        as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is False
+    assert "conflicting_operational_state_at_latest_timestamp:pv-1" in result["blockers"]
+
+
+def test_duplicate_latest_timestamp_blocks_readiness_even_if_state_matches():
+    result = evaluate_operational_readiness(
+        [asset()],
+        [observation(), observation()],
+        as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is False
+    assert "duplicate_operational_state_at_latest_timestamp:pv-1" in result["blockers"]
+
+
+def test_stale_historical_record_does_not_override_newer_fresh_state():
+    result = evaluate_operational_readiness(
+        [asset()],
+        [
+            observation(state="offline", at=NOW - timedelta(hours=2)),
+            observation(state="online", at=NOW - timedelta(minutes=1)),
+        ],
+        as_of=NOW,
+    )
+    assert result["can_dispatch_screen"] is True
+
+
+def test_site_mismatch_blocks_readiness():
+    result = evaluate_operational_readiness(
+        [asset()], [observation(site="site-2")], as_of=NOW,
+    )
+    assert "operational_state_site_mismatch:pv-1" in result["blockers"]
+
+
+def test_topology_limits_evaluation_to_connected_assets():
+    result = evaluate_operational_readiness(
+        [asset(), asset("unused")], [observation()], as_of=NOW,
+        topology=topology_for(),
+    )
+    assert result["evaluated_asset_count"] == 1
+    assert result["can_dispatch_screen"] is True
+
+
+def test_naive_timestamps_are_rejected():
+    with pytest.raises(OperationalStateError):
+        observation(at=datetime(2026, 11, 8, 12, 0))
+
+
+
+def test_empty_asset_set_fails_closed():
+    result = evaluate_operational_readiness([], [], as_of=NOW)
+    assert result["can_dispatch_screen"] is False
+    assert "at_least_one_asset_required" in result["blockers"]
+
+
+def test_invalid_topology_argument_raises_domain_error():
+    with pytest.raises(OperationalStateError):
+        evaluate_operational_readiness([asset()], [], as_of=NOW, topology=object())
+
+
+
+def test_unconfirmed_topology_blocks_topology_scoped_operational_readiness():
+    good = topology_for()
+    unconfirmed_bus = ElectricalBus(
+        "main", "site-1", 400, "AC", "line_to_line", 3,
+        "unverified drawing", False,
+    )
+    unconfirmed_port = AssetPortConnection(
+        "port-1", "site-1", "pv-1", "main", "main", "AC",
+        400, "line_to_line", 3, "unverified vendor drawing", False,
+    )
+    unconfirmed = ElectricalTopology("site-1", (unconfirmed_bus,), (), (unconfirmed_port,))
+    result = evaluate_operational_readiness(
+        [asset()], [observation()], as_of=NOW, topology=unconfirmed,
+    )
+    assert result["can_dispatch_screen"] is False
+    assert result["topology_structurally_ready"] is False
+    assert any(item.startswith("topology:") for item in result["blockers"])
