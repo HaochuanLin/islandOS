@@ -55,12 +55,13 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
 - Forecast uncertainty and robust dispatch research, alternative optimizers, public-data/site validation, and device-vendor adapter experiments.
 
-**Planned / not yet delivered as one workflow**
-- A unified, site-calibrated multi-signal forecasting service.
-- A general multi-resource optimizer that consistently consumes forecast uncertainty.
-- A fully site-configured end-to-end decision console with verified customer economics, validated equipment constraints, and customer usability evidence. The current dashboard is an early offline decision-support increment, not a finished commercial console.
+**Still planned / not yet established**
+- Forecast accuracy validated on measured data for a named customer site, with calibrated uncertainty and transfer testing.
+- A broad optimizer covering additional asset classes (for example thermal storage, pumping, process backlog and richer network constraints) with consistently propagated uncertainty.
+- Production-grade managed database/object storage, TLS, secrets management, security review, backup/restore and operational monitoring.
+- Customer usability evidence and verified site economics from a real decision owner.
 
-These capabilities do not yet form a validated, fully forecast-driven end-to-end decision system. Experimental scripts and integrations are not automatically part of the hosted app. See [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
+The repository now contains a tested offline path from canonical customer history through multi-signal forecasting to joint battery/diesel schedule comparison and a local reference API. These pieces do not constitute field validation, a production SaaS deployment, or autonomous control. Experimental scripts and integrations are not automatically part of the hosted app. See [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
 
 ## Quick start
 
