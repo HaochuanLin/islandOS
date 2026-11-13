@@ -68,7 +68,7 @@ with st.sidebar:
     project_life = st.slider("Project evaluation life (years)", 1, 30, 10)
     discount_rate_pct = st.slider("Discount rate (%)", 0.0, 30.0, 8.0, 0.5)
     has_replacement = st.checkbox("Include a future equipment replacement")
-    replacement_year = st.number_input("Replacement year", min_value=1, max_value=30, value=min(8, project_life), step=1) if has_replacement else None
+    replacement_year = st.number_input("Replacement year", min_value=1, max_value=int(project_life), value=min(8, int(project_life)), step=1) if has_replacement else None
     replacement_cost = st.number_input("Replacement cost", min_value=0.0, value=0.0, step=1000.0) if has_replacement else 0.0
     residual_value = st.number_input("Residual value at end of project", min_value=0.0, value=0.0, step=1000.0)
 
