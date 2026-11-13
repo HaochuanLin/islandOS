@@ -40,6 +40,23 @@ The holdout is the final contiguous 20% of the supplied history. The model is tr
 - No missing-value imputation, clipping of source observations, or silent unit conversion is performed.
 - Non-negative forecasts are clipped at zero; negative-price signals must be explicitly allowed by omitting them from `non_negative_signals`.
 
+## Forecast-to-planning hand-off
+
+A validated, policy-free hand-off is available in `islandos_core/forecast_contract.py`:
+
+```python
+from islandos_core.forecast_contract import build_forecast_planning_input
+
+planning_input = build_forecast_planning_input(
+    forecast_bundle,
+    {"pv": "kW", "critical_load": "kW", "tariff": "USD/kWh"},
+)
+```
+
+The caller supplies the exact signal allow-list and expected units. The adapter rejects missing signals, unit mismatches, non-finite values, invalid prediction bounds, malformed history digests, and signals whose forecast timestamps do not align exactly. It returns common target timestamps, point forecasts, lower/upper planning bounds, units, selected model IDs, and the source-history SHA-256 digest. Extra signals are ignored unless explicitly requested.
+
+This is a data contract only: it does not choose equipment schedules, optimize costs, assume asset constraints, or issue commands. A downstream optimizer must still apply physical limits, operating constraints, tariff semantics, and reliability requirements explicitly.
+
 ## Uncertainty and interpretation
 
 The displayed bounds are a simple empirical planning band: forecast ± the 90th percentile of absolute errors from the chronological holdout. They are not a calibrated probabilistic prediction interval and do not guarantee coverage. Forecast errors may grow with horizon, especially under recursive autoregression; the current band does not model horizon-dependent uncertainty.
@@ -51,7 +68,7 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 - No external weather, market, outage, or calendar covariates yet.
 - No deep learning or large pretrained time-series model.
 - No automatic model deployment or continuous online learning.
-- No forecast-to-optimizer closed loop in this phase.
+- No dispatch optimizer, forecast-to-optimizer closed loop, or autonomous control in this phase; only the validated data hand-off is defined.
 - No live telemetry ingestion, equipment command, or autonomous control.
 - No claim of measured customer savings or site accuracy.
 
@@ -60,5 +77,5 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 1. Run the OPSD adapter and CLI on a complete, provenance-documented public historical interval; inspect data quality and rolling-origin scores.
 2. Use `evaluate_signal_rolling(...)` to compare the actual built-in persistence, seasonal-naive, and ridge candidates at multiple horizons; review stability across folds before changing automatic promotion.
 3. Add exogenous covariates only where timestamp alignment and availability-at-decision-time are proven.
-4. Propagate forecast scenarios into the physical evaluator in the subsequent integration phase.
+4. Integrate the validated planning input with the physical evaluator in the subsequent integration phase, then compare forecast-driven decisions against a transparent baseline.
 5. Promote a model only when it consistently beats transparent baselines on relevant held-out data and stress cases.
