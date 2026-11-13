@@ -103,6 +103,43 @@ def _score(actual: Sequence[float], predicted: Sequence[float]) -> FoldMetrics:
     )
 
 
+
+def evaluate_horizon_windows(
+    timestamps: Sequence[datetime],
+    values: Sequence[float],
+    forecasters: Mapping[str, Callable[[Sequence[float], Sequence[datetime]], Sequence[float]]],
+    horizons: Sequence[int] = (1, 6, 12, 24, 48, 168),
+    *,
+    min_train_size: int = 72,
+    folds: int = 4,
+) -> Mapping[int, Mapping[str, ModelBacktest]]:
+    """Evaluate each requested forecast horizon on independent expanding folds.
+
+    Each horizon gets its own validation blocks, so a 1-hour score is not
+    conflated with a 24-hour recursive forecast score. All candidate models
+    receive identical folds at a given horizon; no validation actuals are
+    passed to forecasters.
+    """
+    if isinstance(horizons, (str, bytes)):
+        raise ValueError("horizons must be a non-empty sequence of unique positive integers")
+    requested = list(horizons)
+    if not requested:
+        raise ValueError("horizons must be a non-empty sequence of unique positive integers")
+    if any(isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 168
+           for value in requested):
+        raise ValueError("each horizon must be an integer from 1 to 168 hours")
+    if len(set(requested)) != len(requested):
+        raise ValueError("horizons must not contain duplicates")
+    return {
+        horizon: evaluate_expanding_window(
+            timestamps, values, forecasters,
+            min_train_size=min_train_size,
+            validation_size=horizon,
+            folds=folds,
+        )
+        for horizon in requested
+    }
+
 def evaluate_expanding_window(
     timestamps: Sequence[datetime],
     values: Sequence[float],
