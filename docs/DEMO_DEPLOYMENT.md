@@ -13,7 +13,7 @@ Status: **local research/demo deployment only**. This guide does not describe a 
 
 ## Prerequisites
 
-- Git and Docker Engine with the Docker Compose plugin, or Python 3.11+ for a non-container local run.
+- Git and Docker Engine with the Docker Compose plugin, or Python 3.11+ for a non-container local run. The repository's `requirements.txt` delegates to the exact `requirements-runtime.lock`; use `requirements-ci.lock` when running tests.
 - A checkout of the intended repository revision. Record the Git commit SHA with any result you share.
 
 Check the revision:
