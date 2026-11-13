@@ -130,6 +130,10 @@ class SensorContractTests(unittest.TestCase):
         self.assertFalse(results[0]["valid"])
         self.assertFalse(results[1]["valid"])
 
+    def test_extremely_large_integer_is_rejected_without_exception(self):
+        self.message["value"] = 10 ** 10000
+        self.assertTrue(any("finite number" in e for e in validate_message(self.message, now=self.now)))
+
 
 if __name__ == "__main__":
     unittest.main()
