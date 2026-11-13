@@ -36,6 +36,7 @@ FORECAST_SIGNAL_SPECS: Mapping[str, ForecastSignalSpec] = {
     for spec in (
         ForecastSignalSpec("load_kw", "energy_demand", "kW", True, "Total site electrical load"),
         ForecastSignalSpec("flexible_load_kw", "energy_demand", "kW", True, "Shiftable or controllable electrical demand"),
+        ForecastSignalSpec("critical_load_kw", "energy_demand", "kW", True, "Critical subset of base electrical demand"),
         ForecastSignalSpec("pv_power_kw", "energy_supply", "kW", True, "Solar photovoltaic output"),
         ForecastSignalSpec("wind_power_kw", "energy_supply", "kW", True, "Wind generation output"),
         ForecastSignalSpec("grid_import_kw", "energy_supply", "kW", True, "Grid import power"),
