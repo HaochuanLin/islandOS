@@ -86,6 +86,10 @@ def compare_shadow_run(
         raise ValueError("recommendation signals must be a non-empty mapping")
     if not isinstance(observed_signals, Mapping) or not observed_signals:
         raise ValueError("observation signals must be a non-empty mapping")
+    if any(not isinstance(key, str) or not key.strip() for key in recommended_signals):
+        raise ValueError("recommendation signal IDs must be non-empty strings")
+    if any(not isinstance(key, str) or not key.strip() for key in observed_signals):
+        raise ValueError("observation signal IDs must be non-empty strings")
 
     checks = []
     errors = []
@@ -102,9 +106,6 @@ def compare_shadow_run(
     for signal_id in sorted(recommended_signals):
         expected = recommended_signals[signal_id]
         actual = observed_signals.get(signal_id)
-        if not isinstance(signal_id, str) or not signal_id.strip():
-            errors.append("signal IDs must be non-empty strings")
-            continue
         if not isinstance(expected, Mapping) or not isinstance(actual, Mapping):
             errors.append(f"{signal_id}: signal records must be mappings")
             continue
