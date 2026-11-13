@@ -162,7 +162,7 @@ with members_tab:
         st.subheader("Manage member access")
         if members:
             options = {
-                f"{item.get('email', item.get('user_id', 'member'))} · {item.get('role', 'unknown')}": item
+                f"{item.get('email', item.get('id', 'member'))} · {item.get('role', 'unknown')}": item
                 for item in members if item.get("role") != "owner"
             }
             if options:
@@ -173,7 +173,7 @@ with members_tab:
                     next_role = st.selectbox("Change role to", ["analyst", "viewer"], key="member_role_update")
                     if st.button("Update role"):
                         try:
-                            api_request("POST", f"/api/v1/members/{selected_member['user_id']}/role", {"role": next_role})
+                            api_request("POST", f"/api/v1/members/{selected_member['id']}/role", {"role": next_role})
                             st.success("Role updated.")
                             st.rerun()
                         except (RuntimeError, KeyError) as exc:
