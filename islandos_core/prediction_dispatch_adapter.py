@@ -71,7 +71,7 @@ def build_dispatch_forecast_bundle(
             samples=result.backtest.samples,
             mae=result.backtest.mae,
             rmse=result.backtest.rmse,
-            bias_predicted_minus_actual=0.0,
+            bias_predicted_minus_actual=None,
         )
         forecasts[signal_name] = SignalForecast(
             signal_name=signal_name,
