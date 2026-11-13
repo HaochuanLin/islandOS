@@ -168,6 +168,16 @@ class TestForecastEngine(unittest.TestCase):
                 self.assertTrue(all(fold.samples == horizon for fold in score.folds))
                 self.assertGreaterEqual(score.mean_mae, 0.0)
 
+    def test_builtin_rolling_validation_requires_ridge_minimum_training_size(self):
+        with self.assertRaisesRegex(ValueError, "at least 72"):
+            evaluate_signal_rolling(
+                self.timestamps,
+                [5.0] * 240,
+                horizons=(1,),
+                min_train_size=48,
+                folds=1,
+            )
+
     def test_builtin_rolling_validation_rejects_negative_physical_history(self):
         values = [5.0] * 900
         values[100] = -1.0
