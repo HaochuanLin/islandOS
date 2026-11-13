@@ -8,11 +8,21 @@ It does not promote forecast bounds into robust scenarios or authorize control.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import MappingProxyType
 from typing import Mapping, Sequence
 
 from islandos_core.forecast_contract import build_forecast_planning_input
+from islandos_core.assets import AssetRecord, evaluate_asset_readiness
+from islandos_core.asset_energy_adapter import (
+    AssetEnergyAdapterError,
+    build_energy_system_config_from_assets,
+)
+from islandos_core.electrical_topology import ElectricalTopology
+from islandos_core.operational_state import (
+    AssetOperationalState,
+    evaluate_operational_readiness,
+)
 from islandos_core.forecast_engine import ForecastBundle
 from islandos_core.energy_system import EnergySystemConfig, EnergySystemInputs
 from islandos_core.multisignal_forecasting import (
@@ -41,6 +51,66 @@ class ForecastCoordinationInputs:
     price_unit: str
     lower_bounds: Mapping[str, tuple[float, ...]]
     upper_bounds: Mapping[str, tuple[float, ...]]
+
+
+
+def build_site_energy_configuration(
+    assets: Sequence[AssetRecord],
+    observations: Sequence[AssetOperationalState],
+    *,
+    as_of: datetime,
+    operating_assumptions: Mapping[str, object] | None = None,
+    topology: ElectricalTopology | None = None,
+    max_state_age: timedelta = timedelta(minutes=15),
+    dt_hours: float = 1.0,
+) -> dict:
+    """Create a dispatch config only after static and operational readiness pass.
+
+    This is a fail-closed offline screening adapter. It requires confirmed
+    installed asset parameters, hard constraints, fresh confirmed online state,
+    and—when supplied—a structurally validated declared topology.
+    """
+    if not assets:
+        raise AssetEnergyAdapterError("at least one site asset is required")
+    static = [evaluate_asset_readiness(asset) for asset in assets]
+    blocked = [
+        item for item in static if item.get("can_screen") is not True
+    ]
+    if blocked:
+        detail = "; ".join(
+            f"{item['asset_id']}:{','.join(item['blockers'])}" for item in blocked
+        )
+        raise AssetEnergyAdapterError(
+            "site assets are not ready for offline screening: " + detail
+        )
+    operational = evaluate_operational_readiness(
+        assets,
+        observations,
+        as_of=as_of,
+        max_age=max_state_age,
+        topology=topology,
+    )
+    if operational.get("can_dispatch_screen") is not True:
+        raise AssetEnergyAdapterError(
+            "site operational readiness is blocked: "
+            + ", ".join(operational.get("blockers", []))
+        )
+    config = build_energy_system_config_from_assets(
+        assets,
+        dt_hours=dt_hours,
+        operating_assumptions=operating_assumptions,
+    )
+    return {
+        "site_id": assets[0].site_id,
+        "asset_ids": [asset.asset_id for asset in assets],
+        "config": config,
+        "static_asset_readiness": static,
+        "operational_readiness": operational,
+        "scope": (
+            "offline asset-to-energy-model configuration; state readiness is a "
+            "snapshot, not a future availability forecast or device authorization"
+        ),
+    }
 
 
 def build_coordination_inputs(
