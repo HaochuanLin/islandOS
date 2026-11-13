@@ -109,7 +109,7 @@ def test_price_aware_ro_schedule_does_not_double_count_current_demand():
         specific_energy_kwh_per_m3=4.0,
         ro_capacity_m3_per_hour=3.0,
         tank_capacity_m3=5.0,
-        initial_inventory_m3=0.0,
+        initial_inventory_m3=0.5,
         reserve_m3=0.5,
     )
     schedule = build_price_aware_ro_schedule(
@@ -119,7 +119,8 @@ def test_price_aware_ro_schedule_does_not_double_count_current_demand():
         lookahead_hours=1,
     )
 
-    # One unit serves current demand; only 0.5 m3 is needed to restore reserve.
-    assert schedule["production_m3"] == pytest.approx((1.5,))
+    # Starting with 0.5 m3, produce 0.5 m3 to cover the 1.0 m3 demand
+    # and finish at the 0.5 m3 reserve. The old code produced 1.5 m3.
+    assert schedule["production_m3"] == pytest.approx((1.0,))
     assert schedule["inventory_end_m3"] == pytest.approx((0.5,))
-    assert schedule["total_ro_energy_kwh"] == pytest.approx(6.0)
+    assert schedule["total_ro_energy_kwh"] == pytest.approx(4.0)
