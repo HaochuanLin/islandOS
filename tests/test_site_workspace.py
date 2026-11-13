@@ -9,6 +9,7 @@ import pytest
 
 from islandos_core.site_workspace import (
     export_project_package,
+    import_project_package,
     inspect_project_package,
     list_site_profiles,
     read_retained_source_file,
@@ -20,6 +21,7 @@ from islandos_core.workspace_store import (
     create_project,
     initialize_workspace,
     record_import_artifact,
+    list_import_artifacts,
     verify_audit_chain,
 )
 
@@ -152,3 +154,54 @@ def test_package_inspection_rejects_tampered_payload(tmp_path):
     content[-10] ^= 0x01
     with pytest.raises(WorkspaceStoreError):
         inspect_project_package(bytes(content))
+
+
+def test_project_package_import_creates_new_project_and_revalidates_sources(tmp_path):
+    source_db = make_workspace(tmp_path / "source")
+    save_site_profile(
+        source_db, project_id="site-1",
+        profile={
+            "site_name": "Portable site", "site_type": "community",
+            "country": "Japan", "timezone": "Asia/Tokyo", "currency": "JPY",
+        },
+        actor_id="tester",
+    )
+    source_bytes = b"timestamp,load_kw\\n2026-01-01T00:00:00Z,10\\n"
+    digest = hashlib.sha256(source_bytes).hexdigest()
+    old_artifact = record_import_artifact(
+        source_db, project_id="site-1", file_name="meter.csv", media_type="text/csv",
+        sha256=digest, source_type="measured", row_count=1, signal_count=1,
+        quality_status="valid", actor_id="tester", consent_to_store_metadata=True,
+    )
+    source_storage = tmp_path / "source-files"
+    retain_source_file(
+        source_db, source_storage, project_id="site-1", artifact_id=old_artifact,
+        file_name="meter.csv", content=source_bytes, actor_id="tester",
+        explicit_consent=True,
+    )
+    package_path = tmp_path / "portable.zip"
+    export_project_package(
+        source_db, package_path, project_id="site-1",
+        storage_dir=source_storage, include_retained_sources=True,
+    )
+
+    destination_db = tmp_path / "destination" / "workspace.sqlite3"
+    initialize_workspace(destination_db, workspace_id="destination-workspace", actor_id="importer")
+    destination_storage = tmp_path / "destination-files"
+    imported = import_project_package(
+        destination_db, package_path.read_bytes(), actor_id="importer",
+        new_project_id="site-imported", new_project_name="Imported site",
+        consent_to_store_metadata=True, storage_dir=destination_storage,
+        retain_sources=True,
+    )
+    assert imported["project_id"] == "site-imported"
+    assert imported["site_profile_versions_imported"] == 1
+    assert imported["import_artifacts_imported"] == 1
+    assert imported["source_files_retained"] == 1
+    imported_artifacts = list_import_artifacts(destination_db, project_id="site-imported")
+    assert len(imported_artifacts) == 1
+    _, restored = read_retained_source_file(
+        destination_db, destination_storage, artifact_id=imported_artifacts[0]["artifact_id"]
+    )
+    assert restored == source_bytes
+    assert verify_audit_chain(destination_db)["valid"] is True
