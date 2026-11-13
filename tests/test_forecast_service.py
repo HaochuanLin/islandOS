@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from islandos_core.forecast_service import ForecastBundleRequest, ForecastService
-from islandos_core.prediction_engine import ForecastRequest, SignalObservation
+from islandos_core.prediction_engine import ForecastRequest, PredictionEngine, SignalObservation
 
 
 def make_signal(signal_id, unit, values, *, start=None, non_negative=True):
@@ -78,8 +78,26 @@ def test_forecast_bundle_rejects_model_selection_for_unknown_signal():
         )
 
 
+class NegativeOutputCandidate:
+    model_id = "unsafe_negative"
+    version = "1"
+
+    def predict(self, history, horizon, *, season_length):
+        return [-1.0] * horizon
+
+
 def test_forecast_bundle_fails_closed_when_one_signal_cannot_be_forecast():
     values = [float(index % 24) for index in range(72)]
-    # The history contract rejects negative values for a non-negative signal.
-    with pytest.raises(ValueError, match="non-negative"):
-        make_signal("battery_soc", "%", [50.0, -1.0, *values[2:]])
+    request = ForecastBundleRequest((
+        make_signal("load", "kW", values),
+        make_signal("battery_soc", "%", [50.0 + value for value in values]),
+    ))
+    engine = PredictionEngine()
+    engine.register(NegativeOutputCandidate())
+    service = ForecastService(engine)
+    with pytest.raises(ValueError, match="cannot be negative"):
+        service.forecast_bundle(
+            request,
+            model_ids={"battery_soc": "unsafe_negative"},
+            initial_history=48,
+        )
