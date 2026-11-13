@@ -18,6 +18,9 @@ import streamlit as st
 st.set_page_config(page_title="IslandOS | Local Workspace", page_icon="🔐", layout="wide")
 st.title("Customer workspace")
 st.caption("Local reference UI for tenant members and notifications")
+logout_notice = st.session_state.pop("islandos_logout_notice", None)
+if logout_notice:
+    st.info(logout_notice)
 
 API_BASE = os.environ.get("ISLANDOS_API_BASE_URL", "").strip().rstrip("/")
 parsed = urlparse(API_BASE) if API_BASE else None
@@ -119,6 +122,14 @@ if not st.session_state.get("islandos_access_token"):
 st.sidebar.success(f"Signed in · role: {st.session_state.get('islandos_role', 'unknown')}")
 st.sidebar.caption(f"Tenant: {st.session_state.get('islandos_tenant_id', 'not returned')}")
 if st.sidebar.button("Sign out"):
+    try:
+        api_request("POST", "/api/v1/auth/logout", {})
+        st.session_state["islandos_logout_notice"] = "Signed out. The current server-side session was revoked."
+    except RuntimeError as exc:
+        st.session_state["islandos_logout_notice"] = (
+            "Signed out locally, but server-side revocation could not be confirmed. "
+            f"The token may remain valid until expiry: {exc}"
+        )
     st.session_state.pop("islandos_access_token", None)
     st.session_state.pop("islandos_role", None)
     st.session_state.pop("islandos_tenant_id", None)

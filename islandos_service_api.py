@@ -187,6 +187,22 @@ class IslandOSStore:
                 raise PermissionError("session is invalid or expired")
             return dict(row)
 
+    def revoke_session(self, token, principal):
+        """Revoke only the authenticated caller's current bearer session."""
+        if not isinstance(token, str) or not token:
+            raise PermissionError("bearer token required")
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        with self._lock, self.session() as db:
+            cursor = db.execute(
+                "DELETE FROM sessions WHERE token_hash=? AND user_id=?",
+                (digest, principal["user_id"]),
+            )
+            if cursor.rowcount != 1:
+                raise PermissionError("session is invalid or already revoked")
+            self._audit(db, principal["tenant_id"], principal["user_id"],
+                        "auth.logout", "session", digest[:16], {})
+        return {"revoked": True}
+
     @staticmethod
     def _audit(db, tenant_id, user_id, action, resource_type, resource_id, details):
         db.execute(
@@ -527,6 +543,9 @@ def make_handler(store, allow_registration=False):
                                             "mode": "single_host_reference", "device_write_enabled": False})
             try:
                 who = self.principal()
+                if path == "/api/v1/auth/logout":
+                    token = self.headers.get("Authorization", "")[7:]
+                    return self.send_json(200, store.revoke_session(token, who))
                 if path == "/api/v1/sites":
                     return self.send_json(200, {"sites": store.list_sites(who)})
                 if path == "/api/v1/members":
