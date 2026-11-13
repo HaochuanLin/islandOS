@@ -67,6 +67,8 @@ with st.sidebar:
     upfront_capex = st.number_input("Installed equipment CAPEX", min_value=0.0, value=0.0, step=5000.0)
     project_life = st.slider("Project evaluation life (years)", 1, 30, 10)
     discount_rate_pct = st.slider("Discount rate (%)", 0.0, 30.0, 8.0, 0.5)
+    energy_saving_escalation_pct = st.slider("Annual energy-saving escalation (%)", -10.0, 20.0, 0.0, 0.5)
+    om_escalation_pct = st.slider("Annual O&M escalation (%)", -10.0, 20.0, 0.0, 0.5)
     has_replacement = st.checkbox("Include a future equipment replacement")
     replacement_year = st.number_input("Replacement year", min_value=1, max_value=int(project_life), value=min(8, int(project_life)), step=1) if has_replacement else None
     replacement_cost = st.number_input("Replacement cost", min_value=0.0, value=0.0, step=1000.0) if has_replacement else 0.0
@@ -266,6 +268,8 @@ try:
         upfront_capex=float(upfront_capex),
         project_life_years=int(project_life),
         discount_rate=float(discount_rate_pct) / 100.0,
+        annual_energy_saving_escalation_rate=float(energy_saving_escalation_pct) / 100.0,
+        annual_om_escalation_rate=float(om_escalation_pct) / 100.0,
         replacement_year=int(replacement_year) if replacement_year is not None else None,
         replacement_cost=float(replacement_cost),
         residual_value=float(residual_value),
@@ -294,8 +298,11 @@ try:
             {"Case": label.replace("_", " ").title(), "NPV": value}
             for label, value in investment.sensitivity_npv.items()
         ]).set_index("Case")
-        st.caption("Sensitivity varies the entered annual energy saving by ±20%; all other assumptions remain fixed.")
+        st.caption("Sensitivity varies year-one energy-bill saving by ±20%; all other assumptions and escalation rates remain fixed.")
         st.bar_chart(sensitivity_frame)
+        st.subheader("Annual investment cashflow")
+        cashflow_frame = pd.DataFrame(investment.annual_cashflows)
+        st.dataframe(cashflow_frame, use_container_width=True, hide_index=True)
     investment_report = investment.to_dict()
     investment_report["assumptions"] = {
         "baseline_annual_energy_cost": baseline_annual_bill,
@@ -304,6 +311,8 @@ try:
         "upfront_capex": upfront_capex,
         "project_life_years": project_life,
         "discount_rate": discount_rate_pct / 100.0,
+        "annual_energy_saving_escalation_rate": energy_saving_escalation_pct / 100.0,
+        "annual_om_escalation_rate": om_escalation_pct / 100.0,
         "replacement_year": replacement_year,
         "replacement_cost": replacement_cost,
         "residual_value": residual_value,
