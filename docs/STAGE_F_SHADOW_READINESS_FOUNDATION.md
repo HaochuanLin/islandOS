@@ -31,7 +31,7 @@ Exit codes: 0 = within tolerance, 1 = valid observation with deviation, 2 = bloc
 - Local Docker Compose deployment is loopback-bound, read-only filesystem, dropped Linux capabilities, no-new-privileges, resource-limited, and has bounded container logs.
 - The local service API uses tenant-scoped SQLite, opaque expiring bearer sessions, and a loopback-only listener.
 - Workspace backup/restore has SQLite integrity and audit-chain verification.
-- Telemetry gateway validates timestamps, freshness, units, required fields, and source quality; it is read-only and loopback-only.
+- Telemetry gateway validates timestamps (future timestamps rejected by default), freshness, units, required fields, and source quality; it is read-only and loopback-only. The normalized sensor contract also supports batch duplicate quarantine.
 - CI runs unit/integration tests, dependency audit, Windows gateway packaging, container health smoke, and scenario validation.
 
 ## Production deployment gates — still open
