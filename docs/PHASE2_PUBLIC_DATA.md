@@ -75,10 +75,12 @@ python examples/phase2_opsd_backtest.py \
   --csv ./time_series_60min_singleindex.csv \
   --region AT \
   --signals load solar wind price \
-  --horizon 24
+  --horizon 24 \
+  --rolling-validation \
+  --rolling-horizons 1 6 24 168
 ```
 
-The JSON report includes the exact source columns, selected region, history window, observation count, data digest, baseline comparisons, holdout metrics, and forecast output. It uses the engine's current single chronological holdout gate; it does **not** claim rolling-origin qualification. Use `--start-utc` and `--end-utc` to restrict ingestion to a chosen contiguous interval, or omit unavailable signals with `--signals`.
+The JSON report includes the exact source columns, selected region, history window, observation count, data digest, baseline comparisons, holdout metrics, and forecast output. Add `--rolling-validation` to evaluate the same built-in persistence, seasonal-naive, and ridge candidates over expanding folds at the requested horizons. The rolling report is separate from automatic model promotion. Use `--start-utc` and `--end-utc` to restrict ingestion to a chosen contiguous interval, or omit unavailable signals with `--signals`. Each horizon requires at least `72 + horizon × folds` observations; with four folds and the default 168-hour horizon, at least 744 contiguous hourly observations are required.
 
 ## Attribution
 
