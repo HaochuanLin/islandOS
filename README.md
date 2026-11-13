@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml"><img src="https://github.com/HaochuanLin/islandOS/actions/workflows/ro-tests.yml/badge.svg?branch=main" alt="Regression tests"></a>
+  <a href="https://github.com/HaochuanLin/islandOS/actions/workflows/python-unit-tests.yml"><img src="https://github.com/HaochuanLin/islandOS/actions/workflows/python-unit-tests.yml/badge.svg?branch=main" alt="Python unit tests"></a>
   <img src="https://img.shields.io/badge/status-research%20prototype-orange" alt="Research prototype">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
 </p>
@@ -133,6 +133,12 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Site workspace guide](docs/SITE_WORKSPACE.md) | Local projects, site profiles, equipment records, source retention, and portable project packages |
 | [Stage 3 prediction engine](docs/STAGE_3_PREDICTION_ENGINE.md) | Aligned multi-signal forecasts, model eligibility, uncertainty bands, and reproducible evidence bundles |
 | [Stage 4 multi-resource coordination](docs/STAGE_4_MULTI_RESOURCE_COORDINATION.md) | Battery, diesel, flexible load, RO water service, forecast stress cases, and automatic RO policy comparison |
+| [Stage 5 customer economics](docs/STAGE_5_CUSTOMER_ECONOMICS.md) | NPV, cashflow, payback, break-even, sensitivity and service-equivalence safeguards |
+| [Stage 6 React customer frontend](docs/STAGE_6_CUSTOMER_FRONTEND.md) | React console scope, local API setup and frontend security boundaries |
+| [Stage 7 customer workflows](docs/STAGE_7_CUSTOMER_WORKFLOWS.md) | Tenant membership, owner invitations, role changes and current identity limitations |
+| [Stage 8 deployment onboarding](docs/STAGE_8_DEPLOYMENT_ONBOARDING.md) | Local CLI commands, Compose workflow and deployment limits |
+| [Stage 9 Shadow Mode evidence](docs/STAGE_9_SHADOW_EVIDENCE.md) | Persistent SQLite evidence ledger, digest/hash-chain verification and no-write boundary |
+| [Stage 10 safety governance](docs/STAGE_10_SAFETY_GOVERNANCE.md) | Fail-closed supervised-trial review package and operational authorization boundary |
 
 The earlier RO simulation screenshot has been retained as a historical example in [Early RO simulation demo](docs/EARLY_RO_SIMULATION_DEMO.md); it is not the product workflow diagram.
 
