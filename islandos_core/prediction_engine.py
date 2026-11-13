@@ -351,15 +351,19 @@ class PredictionEngine:
         selected_id = model_id or ranking[0].model_id
         if selected_id not in self._candidates:
             raise KeyError(f"unknown forecast candidate: {selected_id}")
+        # Replay the explicitly selected candidate before applying the
+        # eligibility gate. This preserves identity-integrity and output-contract
+        # errors (for example, a mutated plug-in or negative physical output)
+        # instead of masking them behind a generic ranking rejection.
+        selected_metrics, absolute_errors = self._replay(
+            selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
+            season_length=season_length, non_negative=request.non_negative,
+        )
         eligible_ids = {item.model_id for item in ranking}
         if selected_id not in eligible_ids:
             raise ValueError(
                 f"forecast candidate is ineligible for this signal's backtest: {selected_id}"
             )
-        selected_metrics, absolute_errors = self._replay(
-            selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
-            season_length=season_length, non_negative=request.non_negative,
-        )
         _, registered_version = self._candidates[selected_id]
         predictions = self._predict(
             selected_id, values, len(request.target_timestamps),
