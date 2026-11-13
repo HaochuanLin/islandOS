@@ -6,6 +6,7 @@ from islandos_core.forecast_engine import forecast_signals
 from islandos_core.energy_system import EnergySystemConfig
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
+    evaluate_forecast_stress_scenarios,
     optimize_forecasted_energy_system,
 )
 
@@ -87,6 +88,30 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
                 bundle, grid_available=[True] * 6, price_unit="USD/kWh"
             )
 
+    def test_stress_evaluation_replays_same_policies_across_all_scenarios(self):
+        coordinated = build_coordination_inputs(
+            make_bundle(), grid_available=[True] * 6, price_unit="USD/kWh"
+        )
+        config = EnergySystemConfig(
+            pv_rated_kw=30.0,
+            wind_rated_kw=15.0,
+            grid_import_limit_kw=100.0,
+        )
+        stress = evaluate_forecast_stress_scenarios(coordinated, config)
+        self.assertEqual(stress["scenario_count"], 4)
+        self.assertIn("combined_supply_and_grid_stress", stress["scenario_names"])
+        self.assertEqual(set(stress["policy_results"]), {"battery_first", "grid_first"})
+        for result in stress["policy_results"].values():
+            self.assertTrue(result["all_scenarios_passed_physical_audit"])
+            self.assertEqual(
+                set(result["scenario_results"]),
+                set(stress["scenario_names"]),
+            )
+        self.assertIn(stress["recommendation"]["policy"],
+                      ("battery_first", "grid_first"))
+        self.assertFalse(stress["method_scope"]["scenario_probabilities_assigned"])
+        self.assertFalse(stress["method_scope"]["robust_global_optimization_claimed"])
+
     def test_runs_optimizer_and_preserves_forecast_provenance(self):
         bundle = make_bundle()
         config = EnergySystemConfig(
@@ -106,7 +131,9 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
         provenance = result["forecast_provenance"]
         self.assertEqual(provenance["history_sha256"], bundle.input_history_sha256)
         self.assertEqual(len(provenance["target_timestamps_utc"]), 6)
-        self.assertFalse(provenance["uncertainty_bounds_used_by_optimizer"])
+        self.assertFalse(provenance["uncertainty_bounds_used_by_point_optimizer"])
+        self.assertTrue(provenance["uncertainty_bounds_used_by_stress_evaluation"])
+        self.assertEqual(result["forecast_stress_evaluation"]["scenario_count"], 4)
         self.assertIn("not robust optimization", result["decision_scope"])
 
 
