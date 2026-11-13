@@ -127,6 +127,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |
 | [Site workspace guide](docs/SITE_WORKSPACE.md) | Local projects, site profiles, equipment records, source retention, and portable project packages |
 | [Stage 3 prediction engine](docs/STAGE_3_PREDICTION_ENGINE.md) | Aligned multi-signal forecasts, model eligibility, uncertainty bands, and reproducible evidence bundles |
+| [Stage 4 multi-resource coordination](docs/STAGE_4_MULTI_RESOURCE_COORDINATION.md) | Battery, diesel, flexible load, RO water service, forecast stress cases, and automatic RO policy comparison |
 
 The earlier RO simulation screenshot has been retained as a historical example in [Early RO simulation demo](docs/EARLY_RO_SIMULATION_DEMO.md); it is not the product workflow diagram.
 
