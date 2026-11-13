@@ -50,6 +50,10 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Versioned local reference API with tenant-scoped identity/site records and read-only telemetry; local SQLite only, loopback-only, no device writes.
 - Local read-only telemetry gateway with versioned vendor-field/unit mappings, bounded JSON ingress, optional bearer-token protection, strict timestamp/freshness validation, and offline replay. A normalized sensor contract rejects future-dated samples and quarantines duplicate batch identities.
 - Read-only Shadow Mode comparison and JSON replay with tolerance/deviation/blocked outcomes and audit digests; production configuration preflight rejects unsafe origin allowlists and always withholds operational approval. These are deployment-readiness foundations, not live hardware connectivity or production authorization.
+- React + TypeScript customer-console foundation for sign-in, tenant-scoped sites, site creation, latest telemetry and notifications; owner-managed membership, invitations, role changes and removal. The API remains a loopback-only local reference service, not production identity infrastructure.
+- Local deployment CLI (`python tools/islandos_local.py doctor|up|status|down`) for the existing loopback Streamlit Compose demo; it is not yet an installer for the complete React + API stack.
+- Persistent read-only Shadow Mode evidence ledger in SQLite with report-digest validation, duplicate prevention, SHA-256 hash-chain verification and per-site queries.
+- Fail-closed supervised-trial review-package gate requiring evidence, interlock/isolation, rollback, emergency/stop procedures and distinct approvals. It never grants operational authority or enables device writes.
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
@@ -63,7 +67,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Production-grade managed database/object storage, TLS, secrets management, security review, backup/restore and operational monitoring.
 - Customer usability evidence and verified site economics from a real decision owner.
 
-The repository now contains a tested offline path from canonical customer history through multi-signal forecasting to joint battery/diesel schedule comparison and a local reference API. These pieces do not constitute field validation, a production SaaS deployment, or autonomous control. Experimental scripts and integrations are not automatically part of the hosted app. See [A–F final closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) for the current acceptance decision and remaining gates, [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions, and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
+The first implementation slice of all ten engineering stages is now merged into `main`. This is a software-foundation milestone, not completion of production or field-acceptance gates. See the [numbered 1–10 engineering closeout](docs/ENGINEERING_STAGES_1_10_CLOSEOUT.md) for merged PRs, current CI evidence and remaining customer/site gates. The earlier [A–F closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) documents a separate historical workstream. Also see the [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for research scopes.
 
 ## Quick start
 
@@ -120,6 +124,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Price-aware flexible-load scheduling](docs/PRICE_AWARE_FLEXIBLE_LOAD_SCHEDULING.md) | Experimental hourly tariff baseline, tariff-to-optimizer workflow, continuous-load LP, and limitations |
 | [SIC reference migration assessment](docs/SIC_REFERENCE_MIGRATION_ASSESSMENT.md) | What was learned from the SIC repositories, what was adopted, and what is deliberately deferred |
 | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) | Product phases, customer discovery, economics, and exit gates |
+| [Engineering stages 1–10 closeout](docs/ENGINEERING_STAGES_1_10_CLOSEOUT.md) | Merged implementation slices, CI evidence, and remaining customer/site gates |
 | [Phase 4 customer dashboard](docs/PHASE4_CUSTOMER_DECISION_DASHBOARD.md) | Forecast-led customer decision view and scope boundaries |
 | [Phase 4 customer data onboarding](docs/PHASE4_CUSTOMER_DATA_ONBOARDING.md) | Hourly CSV schema, validation, provenance, and hosted-upload privacy |
 | [Phase 4 investment economics](docs/PHASE4_CUSTOMER_INVESTMENT_ECONOMICS.md) | Customer-entered CAPEX, O&M, NPV, payback, replacement, and sensitivity screening |
