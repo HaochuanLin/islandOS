@@ -69,7 +69,7 @@ class TestShadowMode(unittest.TestCase):
         self.assertFalse(report["device_write_authorized"])
 
     def test_future_observation_is_rejected(self):
-        self.observation["timestamp_utc"] = "2026-11-13T10:10:00Z"
+        self.observation["timestamp_utc"] = "2026-11-13T10:05:10Z"
         report = self.compare()
         self.assertEqual(report["status"], "blocked")
         self.assertTrue(any("future" in item for item in report["errors"]))
