@@ -18,6 +18,7 @@
 3. Keep the optimizer offline and fail closed on missing/misaligned signals or unit errors; keep service-equivalence gating and the no-device-write boundary.
 4. Align README, product blueprint and productization roadmap with merged A–E code and the actual Stage F integration.
 5. Retain a reproducible integration test that starts with canonical hourly histories, forecasts the four dispatch signals, and executes the joint optimizer.
+6. Provide a vendor-neutral normalized sensor envelope, strict UTC timestamp validation, duplicate batch quarantine, offline replay, and a loopback-only read-only HTTP telemetry gateway.
 
 ## Stage F acceptance evidence
 
@@ -26,7 +27,9 @@
 - [x] README and blueprint describe actual mainline capability and do not call delivered D/E work merely planned.
 - [x] Exact-head CI passes before merge (Python unit tests, RO/integration examples, dependency audit, Windows package build, container smoke test, hosted app health and scenario validation).
 - [x] No live control, field validation, production SaaS, or verified savings claims are introduced.
+- [x] Sensor samples reject all future timestamps by default; duplicate site/device/signal/instant identities are quarantined as a batch.
+- [x] Telemetry ingress remains loopback-only, optionally bearer-protected, size-bounded, and explicitly read-only.
 
 ## Deliberate exclusions
 
-Stage F does not turn the local API into a public service. Managed database/object storage, TLS termination, secrets management, MFA, rate limiting, backup/restore, penetration testing, device identity, vendor protocol adapters, site acceptance and any device-write path remain separate work requiring security and engineering review.
+Stage F does not turn the local API into a public service. Managed database/object storage, TLS termination, secrets management, MFA, rate limiting, backup/restore, penetration testing, device identity, hardware-specific vendor protocol drivers, site acceptance and any device-write path remain separate work requiring security and engineering review.
