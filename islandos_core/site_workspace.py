@@ -439,9 +439,9 @@ def import_project_package(
 ) -> dict[str, Any]:
     """Import a verified project package as a new project in the local workspace.
 
-    The source package's audit events are preserved as evidence in the package;
-    the destination workspace receives a new local import event rather than
-    pretending the source hash chain is part of its own chain.
+    Source audit events are preserved as embedded evidence. The destination
+    workspace records a new local import event rather than pretending the
+    source chain is part of its own audit chain.
     """
     from datetime import datetime
     from io import BytesIO
@@ -453,10 +453,11 @@ def import_project_package(
 
     if consent_to_store_metadata is not True:
         raise WorkspaceStoreError("explicit consent is required before importing project metadata")
-    if retain_sources is not False and retain_sources is not True:
+    if not isinstance(retain_sources, bool):
         raise WorkspaceStoreError("retain_sources must be a boolean")
     if not all(isinstance(value, str) and value.strip() for value in (actor_id, new_project_id, new_project_name)):
         raise WorkspaceStoreError("actor_id, new_project_id and new_project_name are required")
+
     inspected = inspect_project_package(content)
     with zipfile.ZipFile(BytesIO(content), "r") as archive:
         package = json.loads(archive.read("project.json"))
@@ -467,29 +468,76 @@ def import_project_package(
                 raise WorkspaceStoreError("storage_dir is required to retain imported source files")
             for name in names:
                 if name.startswith("source_files/"):
-                    stem = Path(name).stem
-                    source_payloads[stem] = archive.read(name)
+                    source_payloads[Path(name).stem] = archive.read(name)
 
-    # Validate all structured records before creating any destination rows.
+    # Prevalidate all records before creating any destination project rows.
     prepared_profiles = []
     for item in package.get("site_profiles", []):
         profile = item.get("profile")
         if not isinstance(profile, dict):
             raise WorkspaceStoreError("package contains an invalid site profile")
+        allowed = {"schema_version", "site_name", "site_type", "country", "timezone", "currency", "description"}
+        if set(profile) - allowed or profile.get("schema_version", "1.0") != "1.0":
+            raise WorkspaceStoreError("package contains an unsupported site profile schema")
+        if not isinstance(profile.get("site_name"), str) or not profile["site_name"].strip():
+            raise WorkspaceStoreError("package contains a site profile without a site name")
+        if profile.get("site_type", "other") not in SITE_TYPES:
+            raise WorkspaceStoreError("package contains an unsupported site type")
+        try:
+            ZoneInfo(profile.get("timezone", "UTC"))
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise WorkspaceStoreError("package contains an invalid IANA timezone") from exc
+        currency = profile.get("currency", "USD")
+        if not isinstance(currency, str) or not _CURRENCY.fullmatch(currency):
+            raise WorkspaceStoreError("package contains an invalid reporting currency")
         prepared_profiles.append(profile)
-    prepared_assets = []
-    for item in package.get("assets", []):
-        raw_asset = item.get("asset")
-        prepared_assets.append(AssetRecord.from_mapping(raw_asset))
+
+    prepared_assets = [
+        AssetRecord.from_mapping(item.get("asset"))
+        for item in package.get("assets", [])
+    ]
     prepared_imports = package.get("imports", [])
+    allowed_sources = {
+        "measured", "customer_provided", "public_reanalysis", "synthetic",
+        "forecast", "vendor_specification", "inferred",
+    }
     for item in prepared_imports:
-        if item.get("sha256") is None or not _SHA256.fullmatch(item["sha256"]):
+        if not isinstance(item.get("sha256"), str) or not _SHA256.fullmatch(item["sha256"]):
             raise WorkspaceStoreError("package contains an invalid import digest")
-        if item.get("source_type") not in {
-            "measured", "customer_provided", "public_reanalysis", "synthetic",
-            "forecast", "vendor_specification", "inferred",
-        }:
+        if item.get("source_type") not in allowed_sources:
             raise WorkspaceStoreError("package contains an unsupported source type")
+        if not isinstance(item.get("file_name"), str) or not item["file_name"].strip():
+            raise WorkspaceStoreError("package contains an invalid import file name")
+        if not isinstance(item.get("media_type"), str) or not item["media_type"].strip():
+            raise WorkspaceStoreError("package contains an invalid import media type")
+
+    if retain_sources:
+        imports_by_id = {item["artifact_id"]: item for item in prepared_imports}
+        for old_id, source_bytes in source_payloads.items():
+            source_record = imports_by_id.get(old_id)
+            if source_record is None or hashlib.sha256(source_bytes).hexdigest() != source_record["sha256"]:
+                raise AuditIntegrityError("package source file does not match its registered import metadata")
+
+    import_hashes = {item["sha256"] for item in prepared_imports}
+    for item in package.get("run_manifests", []):
+        manifest = item.get("manifest", {})
+        if not isinstance(manifest, dict) or item.get("sha256") != _hash(_json(manifest)):
+            raise AuditIntegrityError("package contains a run manifest with an invalid content hash")
+        if not set(manifest.get("input_artifact_hashes", [])).issubset(import_hashes):
+            raise WorkspaceStoreError("run manifest references an import that is absent from the package")
+
+    for event in package.get("audit_events", []):
+        body = {
+            "event_id": event.get("event_id"),
+            "created_at": event.get("created_at"),
+            "actor_id": event.get("actor_id"),
+            "event_type": event.get("event_type"),
+            "project_id": event.get("project_id"),
+            "payload": event.get("payload"),
+            "previous_hash": event.get("previous_hash"),
+        }
+        if not isinstance(event.get("event_hash"), str) or event["event_hash"] != _hash(_json(body)):
+            raise AuditIntegrityError("package contains an audit event with an invalid content hash")
 
     with _connect(db_path) as connection:
         workspace_row = connection.execute(
@@ -510,23 +558,6 @@ def import_project_package(
             db_path, project_id=new_project_id, profile=profile,
             actor_id=actor_id, created_at=timestamp,
         ))
-
-    for item in package.get("run_manifests", []):
-        manifest = item.get("manifest", {})
-        if not isinstance(manifest, dict) or item.get("sha256") != _hash(_json(manifest)):
-            raise AuditIntegrityError("package contains a run manifest with an invalid content hash")
-    for event in package.get("audit_events", []):
-        body = {
-            "event_id": event.get("event_id"),
-            "created_at": event.get("created_at"),
-            "actor_id": event.get("actor_id"),
-            "event_type": event.get("event_type"),
-            "project_id": event.get("project_id"),
-            "payload": event.get("payload"),
-            "previous_hash": event.get("previous_hash"),
-        }
-        if not isinstance(event.get("event_hash"), str) or event["event_hash"] != _hash(_json(body)):
-            raise AuditIntegrityError("package contains an audit event with an invalid content hash")
 
     artifact_ids = {}
     for item in prepared_imports:
@@ -560,7 +591,7 @@ def import_project_package(
 
     imported_runs = []
     for item in package.get("run_manifests", []):
-        manifest = item.get("manifest", {})
+        manifest = item["manifest"]
         created = manifest.get("created_at")
         timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
         imported_runs.append(create_run_manifest(
