@@ -290,6 +290,7 @@ class IslandOSStore:
             created.timestamp() + expires_in_seconds, timezone.utc
         ).isoformat().replace("+00:00", "Z")
         with self._lock, self.session() as db:
+            db.execute("DELETE FROM invitations WHERE expires_at<=?", (_utcnow(),))
             if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
                 raise ValueError("email is already registered")
             existing = db.execute(
@@ -457,10 +458,12 @@ class IslandOSStore:
         args.append(limit)
         with self.connect() as db:
             rows = db.execute(query, args).fetchall()
-        return [
-            {**dict(row), "payload": json.loads(row["payload_json"])}
-            for row in rows
-        ]
+        items = []
+        for row in rows:
+            item = dict(row)
+            item["payload"] = json.loads(item.pop("payload_json"))
+            items.append(item)
+        return items
 
     def mark_notification_read(self, principal, notification_id):
         with self._lock, self.session() as db:
