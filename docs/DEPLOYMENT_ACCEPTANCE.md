@@ -88,4 +88,5 @@ Retain together: Git SHA, runtime lock/version, source-data provenance and hash,
 - Python dependency audit/SBOM artifacts are retained per lock for 30 days. The container smoke workflow separately generates a CycloneDX SBOM from the built image, including detectable OS packages; this does not sign the image.
 - The Docker base is pinned by immutable manifest digest; weekly Dependabot proposals keep tag/digest changes reviewable.
 - Production security review, signed image/release artifacts, authenticated multi-user deployment, site-specific economics, owner-approved acceptance thresholds, and field/pilot authorization: **not established**. The container-image SBOM is generated in CI, but signing and production deployment controls are not.
+- A new read-only shadow comparison primitive is available in `islandos_core/shadow_mode.py`; it checks timestamp freshness, signal coverage, units, tolerances, and produces a SHA-256 audit report. It is not connected to a live feed or alerting system.
 - Decision: **offline research/demo only; no operational control authorization**.
