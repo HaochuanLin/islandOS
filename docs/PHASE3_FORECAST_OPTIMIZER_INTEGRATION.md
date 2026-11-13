@@ -14,11 +14,16 @@ The adapter requires four explicitly named forecasts:
 | `wind_power` | kW | Available wind generation |
 | `essential_load` | kW | Base electrical demand (treated as critical by the current model) |
 | `electricity_price` | caller-declared, e.g. USD/kWh | Grid import price |
+| `flexible_load` | kW, optional | Additive deferrable demand |
+| `critical_load` | kW, optional | Critical subset of base/essential demand; cannot exceed it |
 
 All forecast signals must have identical contiguous hourly target timestamps.
 The adapter delegates timestamp, bounds, finite-value, and provenance checks to
 the Phase 2 forecast planning contract. It does not silently convert units.
-Negative electricity prices are preserved.
+Negative electricity prices are preserved. Optional flexible and critical load
+forecasts are mapped to the physical model's dedicated inputs; when omitted,
+the model treats the entire essential load as critical and assumes no additional
+flexible demand.
 
 ## Decision path
 
