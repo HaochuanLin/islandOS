@@ -18,7 +18,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 import threading
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from islandos_io import validate_telemetry
 
@@ -104,6 +104,32 @@ class IslandOSStore:
                     user_id TEXT, action TEXT NOT NULL, resource_type TEXT NOT NULL,
                     resource_id TEXT, created_at TEXT NOT NULL, details_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS invitations (
+                    id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                    email TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('analyst','viewer')),
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL REFERENCES users(id),
+                    UNIQUE(tenant_id,email)
+                );
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                    site_id TEXT REFERENCES sites(id) ON DELETE CASCADE,
+                    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+                    category TEXT NOT NULL,
+                    severity TEXT NOT NULL CHECK(severity IN ('info','warning','critical')),
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    read_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS notifications_inbox
+                    ON notifications(tenant_id,user_id,created_at DESC);
             """)
 
     @staticmethod
@@ -246,6 +272,218 @@ class IslandOSStore:
         return {"deleted": True, "site_id": site_id}
 
 
+    def create_invitation(self, principal, email, role="analyst", expires_in_seconds=604800):
+        if principal["role"] != "owner":
+            raise PermissionError("owner role required")
+        email = email.strip().lower() if isinstance(email, str) else ""
+        if len(email) > 254 or "@" not in email:
+            raise ValueError("a valid email address is required")
+        if role not in {"analyst", "viewer"}:
+            raise ValueError("invited role must be analyst or viewer")
+        if isinstance(expires_in_seconds, bool) or not isinstance(expires_in_seconds, int) or not 3600 <= expires_in_seconds <= 2592000:
+            raise ValueError("invitation expiry must be between one hour and 30 days")
+        invitation_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(invitation_token.encode("utf-8")).hexdigest()
+        invitation_id = secrets.token_hex(16)
+        created = datetime.now(timezone.utc)
+        expires = datetime.fromtimestamp(
+            created.timestamp() + expires_in_seconds, timezone.utc
+        ).isoformat().replace("+00:00", "Z")
+        with self._lock, self.session() as db:
+            db.execute("DELETE FROM invitations WHERE expires_at<=?", (_utcnow(),))
+            if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+                raise ValueError("email is already registered")
+            existing = db.execute(
+                "SELECT id FROM invitations WHERE tenant_id=? AND email=?",
+                (principal["tenant_id"], email),
+            ).fetchone()
+            if existing:
+                raise ValueError("an invitation for this email already exists")
+            db.execute(
+                "INSERT INTO invitations VALUES (?,?,?,?,?,?,?,?)",
+                (invitation_id, principal["tenant_id"], email, role, token_hash,
+                 expires, _utcnow(), principal["user_id"]),
+            )
+            self._audit(db, principal["tenant_id"], principal["user_id"],
+                        "member.invitation.create", "invitation", invitation_id,
+                        {"email": email, "role": role, "expires_at": expires})
+        # The caller must deliver this secret through an approved channel.
+        # The reference service intentionally has no email-sending integration.
+        return {
+            "invitation_id": invitation_id, "email": email, "role": role,
+            "expires_at": expires, "invitation_token": invitation_token,
+            "email_delivery_performed": False,
+        }
+
+    def accept_invitation(self, invitation_token, password):
+        if not isinstance(invitation_token, str) or not 20 <= len(invitation_token) <= 256:
+            raise PermissionError("invitation is invalid or expired")
+        if not isinstance(password, str) or not 12 <= len(password) <= 256:
+            raise ValueError("password must contain 12–256 characters")
+        token_hash = hashlib.sha256(invitation_token.encode("utf-8")).hexdigest()
+        with self._lock, self.session() as db:
+            row = db.execute(
+                "SELECT * FROM invitations WHERE token_hash=?", (token_hash,)
+            ).fetchone()
+            if row is None or row["expires_at"] <= _utcnow():
+                raise PermissionError("invitation is invalid or expired")
+            if db.execute("SELECT 1 FROM users WHERE email=?", (row["email"],)).fetchone():
+                raise ValueError("email is already registered")
+            user_id = secrets.token_hex(16)
+            salt = secrets.token_bytes(16)
+            db.execute(
+                "INSERT INTO users VALUES (?,?,?,?,?,?,?)",
+                (user_id, row["tenant_id"], row["email"], salt.hex(),
+                 self._password(password, salt), row["role"], _utcnow()),
+            )
+            invitation_id = row["id"]
+            tenant_id = row["tenant_id"]
+            role = row["role"]
+            db.execute("DELETE FROM invitations WHERE id=?", (invitation_id,))
+            self._audit(db, tenant_id, user_id, "member.invitation.accept",
+                        "user", user_id, {"invitation_id": invitation_id, "role": role})
+        return {"tenant_id": tenant_id, "user_id": user_id, "role": role}
+
+    def list_members(self, principal):
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT id,email,role,created_at FROM users WHERE tenant_id=? ORDER BY email",
+                (principal["tenant_id"],),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_member_role(self, principal, user_id, role):
+        if principal["role"] != "owner":
+            raise PermissionError("owner role required")
+        if role not in {"analyst", "viewer"}:
+            raise ValueError("member role must be analyst or viewer")
+        with self._lock, self.session() as db:
+            target = db.execute(
+                "SELECT role FROM users WHERE id=? AND tenant_id=?",
+                (user_id, principal["tenant_id"]),
+            ).fetchone()
+            if target is None:
+                raise LookupError("member not found")
+            if target["role"] == "owner":
+                raise ValueError("owner role cannot be changed through member management")
+            db.execute(
+                "UPDATE users SET role=? WHERE id=? AND tenant_id=?",
+                (role, user_id, principal["tenant_id"]),
+            )
+            self._audit(db, principal["tenant_id"], principal["user_id"],
+                        "member.role.update", "user", user_id, {"role": role})
+        return {"user_id": user_id, "role": role}
+
+    def remove_member(self, principal, user_id):
+        if principal["role"] != "owner":
+            raise PermissionError("owner role required")
+        if user_id == principal["user_id"]:
+            raise ValueError("owner cannot remove their own account")
+        with self._lock, self.session() as db:
+            target = db.execute(
+                "SELECT role FROM users WHERE id=? AND tenant_id=?",
+                (user_id, principal["tenant_id"]),
+            ).fetchone()
+            if target is None:
+                raise LookupError("member not found")
+            if target["role"] == "owner":
+                raise ValueError("owner account cannot be removed through member management")
+            self._audit(db, principal["tenant_id"], principal["user_id"],
+                        "member.remove", "user", user_id, {})
+            db.execute("DELETE FROM users WHERE id=? AND tenant_id=?",
+                       (user_id, principal["tenant_id"]))
+        return {"removed": True, "user_id": user_id}
+
+    def create_notification(
+        self, principal, *, title, message, category="decision", severity="info",
+        site_id=None, user_id=None, payload=None,
+    ):
+        if principal["role"] not in {"owner", "analyst"}:
+            raise PermissionError("analyst or owner role required")
+        if category not in {"decision", "data_quality", "asset", "system", "security"}:
+            raise ValueError("unsupported notification category")
+        if severity not in {"info", "warning", "critical"}:
+            raise ValueError("severity must be info, warning, or critical")
+        if not isinstance(title, str) or not title.strip() or len(title) > 120:
+            raise ValueError("notification title must contain 1–120 characters")
+        if not isinstance(message, str) or not message.strip() or len(message) > 2000:
+            raise ValueError("notification message must contain 1–2000 characters")
+        if payload is None:
+            payload = {}
+        if not isinstance(payload, dict):
+            raise ValueError("notification payload must be an object")
+        payload_json = json.dumps(payload, sort_keys=True, allow_nan=False)
+        notification_id = secrets.token_hex(16)
+        with self._lock, self.session() as db:
+            if site_id is not None and not db.execute(
+                "SELECT 1 FROM sites WHERE id=? AND tenant_id=?",
+                (site_id, principal["tenant_id"]),
+            ).fetchone():
+                raise LookupError("site not found")
+            if user_id is not None and not db.execute(
+                "SELECT 1 FROM users WHERE id=? AND tenant_id=?",
+                (user_id, principal["tenant_id"]),
+            ).fetchone():
+                raise LookupError("member not found")
+            created = _utcnow()
+            db.execute(
+                "INSERT INTO notifications VALUES (?,?,?,?,?,?,?,?,?,?,NULL)",
+                (notification_id, principal["tenant_id"], site_id, user_id,
+                 category, severity, title.strip(), message.strip(), payload_json, created),
+            )
+            self._audit(db, principal["tenant_id"], principal["user_id"],
+                        "notification.create", "notification", notification_id,
+                        {"category": category, "severity": severity, "site_id": site_id,
+                         "target_user_id": user_id})
+        return {
+            "id": notification_id, "site_id": site_id, "user_id": user_id,
+            "category": category, "severity": severity, "title": title.strip(),
+            "message": message.strip(), "payload": payload, "created_at": created,
+            "read_at": None,
+        }
+
+    def list_notifications(self, principal, *, unread_only=False, limit=50):
+        if not isinstance(unread_only, bool):
+            raise ValueError("unread_only must be a boolean")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be an integer from 1 to 100")
+        query = (
+            "SELECT id,site_id,user_id,category,severity,title,message,payload_json,created_at,read_at "
+            "FROM notifications WHERE tenant_id=? AND (user_id IS NULL OR user_id=?)"
+        )
+        args = [principal["tenant_id"], principal["user_id"]]
+        if unread_only:
+            query += " AND read_at IS NULL"
+        query += " ORDER BY created_at DESC,id DESC LIMIT ?"
+        args.append(limit)
+        with self.connect() as db:
+            rows = db.execute(query, args).fetchall()
+        items = []
+        for row in rows:
+            item = dict(row)
+            item["payload"] = json.loads(item.pop("payload_json"))
+            items.append(item)
+        return items
+
+    def mark_notification_read(self, principal, notification_id):
+        with self._lock, self.session() as db:
+            row = db.execute(
+                "SELECT id,read_at FROM notifications WHERE id=? AND tenant_id=? "
+                "AND (user_id IS NULL OR user_id=?)",
+                (notification_id, principal["tenant_id"], principal["user_id"]),
+            ).fetchone()
+            if row is None:
+                raise LookupError("notification not found")
+            read_at = row["read_at"] or _utcnow()
+            db.execute(
+                "UPDATE notifications SET read_at=? WHERE id=? AND tenant_id=?",
+                (read_at, notification_id, principal["tenant_id"]),
+            )
+            self._audit(db, principal["tenant_id"], principal["user_id"],
+                        "notification.read", "notification", notification_id, {})
+        return {"id": notification_id, "read_at": read_at}
+
+
 def make_handler(store, allow_registration=False):
     class Handler(BaseHTTPRequestHandler):
         server_version = "IslandOSServiceAPI/1.0"
@@ -282,7 +520,8 @@ def make_handler(store, allow_registration=False):
             return store.authenticate(header[7:])
 
         def do_GET(self):
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
             if path == "/api/v1/health":
                 return self.send_json(200, {"status": "ok", "api_version": "v1",
                                             "mode": "single_host_reference", "device_write_enabled": False})
@@ -290,6 +529,22 @@ def make_handler(store, allow_registration=False):
                 who = self.principal()
                 if path == "/api/v1/sites":
                     return self.send_json(200, {"sites": store.list_sites(who)})
+                if path == "/api/v1/members":
+                    return self.send_json(200, {"members": store.list_members(who)})
+                if path == "/api/v1/notifications":
+                    query = parse_qs(parsed.query)
+                    unread_value = query.get("unread_only", ["false"])[0].lower()
+                    if unread_value not in {"true", "false", "1", "0"}:
+                        raise ValueError("unread_only must be true or false")
+                    limit_value = query.get("limit", ["50"])[0]
+                    try:
+                        limit = int(limit_value)
+                    except ValueError as exc:
+                        raise ValueError("limit must be an integer from 1 to 100") from exc
+                    items = store.list_notifications(
+                        who, unread_only=unread_value in {"true", "1"}, limit=limit
+                    )
+                    return self.send_json(200, {"notifications": items})
                 prefix, suffix = "/api/v1/sites/", "/telemetry/latest"
                 if path.startswith(prefix) and path.endswith(suffix):
                     site_id = path[len(prefix):-len(suffix)].strip("/")
@@ -300,6 +555,8 @@ def make_handler(store, allow_registration=False):
                 return self.send_json(401, {"error": str(exc)})
             except LookupError as exc:
                 return self.send_json(404, {"error": str(exc)})
+            except ValueError as exc:
+                return self.send_json(400, {"error": str(exc)})
 
         def do_POST(self):
             path = urlparse(self.path).path
@@ -313,10 +570,38 @@ def make_handler(store, allow_registration=False):
                     return self.send_json(201, result)
                 if path == "/api/v1/auth/login":
                     return self.send_json(200, store.login(body.get("email", ""), body.get("password", "")))
+                if path == "/api/v1/members/invitations/accept":
+                    result = store.accept_invitation(
+                        body.get("invitation_token", ""), body.get("password", "")
+                    )
+                    return self.send_json(201, result)
                 who = self.principal()
                 if path == "/api/v1/sites":
                     result = store.create_site(who, body.get("name"), body.get("timezone"))
                     return self.send_json(201, result)
+                if path == "/api/v1/members/invitations":
+                    result = store.create_invitation(
+                        who, body.get("email", ""), body.get("role", "analyst"),
+                        body.get("expires_in_seconds", 604800),
+                    )
+                    return self.send_json(201, result)
+                if path == "/api/v1/notifications":
+                    result = store.create_notification(
+                        who, title=body.get("title"), message=body.get("message"),
+                        category=body.get("category", "decision"),
+                        severity=body.get("severity", "info"),
+                        site_id=body.get("site_id"), user_id=body.get("user_id"),
+                        payload=body.get("payload"),
+                    )
+                    return self.send_json(201, result)
+                prefix, suffix = "/api/v1/notifications/", "/read"
+                if path.startswith(prefix) and path.endswith(suffix):
+                    notification_id = path[len(prefix):-len(suffix)].strip("/")
+                    return self.send_json(200, store.mark_notification_read(who, notification_id))
+                prefix, suffix = "/api/v1/members/", "/role"
+                if path.startswith(prefix) and path.endswith(suffix):
+                    user_id = path[len(prefix):-len(suffix)].strip("/")
+                    return self.send_json(200, store.update_member_role(who, user_id, body.get("role")))
                 prefix = "/api/v1/sites/"
                 suffix = "/telemetry"
                 if path.startswith(prefix) and path.endswith(suffix):
@@ -333,17 +618,23 @@ def make_handler(store, allow_registration=False):
 
         def do_DELETE(self):
             path = urlparse(self.path).path
-            prefix = "/api/v1/sites/"
-            if not path.startswith(prefix):
-                return self.send_json(404, {"error": "not found"})
             try:
                 who = self.principal()
-                site_id = path[len(prefix):].strip("/")
-                return self.send_json(200, store.delete_site(who, site_id))
+                member_prefix = "/api/v1/members/"
+                if path.startswith(member_prefix):
+                    user_id = path[len(member_prefix):].strip("/")
+                    return self.send_json(200, store.remove_member(who, user_id))
+                site_prefix = "/api/v1/sites/"
+                if path.startswith(site_prefix):
+                    site_id = path[len(site_prefix):].strip("/")
+                    return self.send_json(200, store.delete_site(who, site_id))
+                return self.send_json(404, {"error": "not found"})
             except PermissionError as exc:
                 return self.send_json(403 if "role required" in str(exc) else 401, {"error": str(exc)})
             except LookupError as exc:
                 return self.send_json(404, {"error": str(exc)})
+            except ValueError as exc:
+                return self.send_json(400, {"error": str(exc)})
 
         def log_message(self, fmt, *args):
             # Never log request bodies or bearer tokens.
