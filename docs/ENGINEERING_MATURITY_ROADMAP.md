@@ -1,5 +1,7 @@
 # Engineering maturity roadmap
 
+> **Historical assessment snapshot (2026-10-24):** The scores, branch/PR counts, and progress notes below describe the repository at that date. They are not current maturity ratings or current CI status. For the current numbered engineering-stage status and latest mainline checks, use [Engineering stages 1–10 closeout](ENGINEERING_STAGES_1_10_CLOSEOUT.md).
+
 This roadmap turns the project's maturity scores into evidence-based release gates. Scores are engineering assessments, not measured scientific quantities. A score may rise only when the listed evidence exists in the repository or in a documented, reviewable test run.
 
 ## Baseline and target scorecard
