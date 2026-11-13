@@ -492,10 +492,15 @@ def import_project_package(
             raise WorkspaceStoreError("package contains an invalid reporting currency")
         prepared_profiles.append(profile)
 
-    prepared_assets = [
-        AssetRecord.from_mapping(item.get("asset"))
-        for item in package.get("assets", [])
-    ]
+    prepared_assets = []
+    for item in package.get("assets", []):
+        raw_asset = item.get("asset")
+        if not isinstance(raw_asset, dict):
+            raise WorkspaceStoreError("package contains an invalid asset record")
+        if raw_asset.get("site_id") != inspected["project_id"]:
+            raise WorkspaceStoreError("package asset site_id does not match the source project")
+        remapped_asset = {**raw_asset, "site_id": new_project_id}
+        prepared_assets.append(AssetRecord.from_mapping(remapped_asset))
     prepared_imports = package.get("imports", [])
     allowed_sources = {
         "measured", "customer_provided", "public_reanalysis", "synthetic",
