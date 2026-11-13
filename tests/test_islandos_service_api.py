@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import tempfile
 import unittest
+import pytest
 from pathlib import Path
 
 from islandos_service_api import IslandOSStore
@@ -78,3 +79,19 @@ class TestTenantScopedServiceStore(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+def test_logout_revokes_only_the_current_authenticated_session():
+    store = IslandOSStore(":memory:")
+    store.register("logout@example.test", "a-correct-long-password", "Logout tenant")
+    first = store.login("logout@example.test", "a-correct-long-password")
+    second = store.login("logout@example.test", "a-correct-long-password")
+    principal = store.authenticate(first["access_token"])
+
+    assert store.revoke_session(first["access_token"], principal) == {"revoked": True}
+    with pytest.raises(PermissionError, match="invalid or expired"):
+        store.authenticate(first["access_token"])
+
+    # Revoking one browser session must not sign out the user's other session.
+    assert store.authenticate(second["access_token"])["user_id"] == principal["user_id"]
