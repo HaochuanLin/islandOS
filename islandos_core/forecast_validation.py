@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Mapping, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -121,12 +121,28 @@ def evaluate_expanding_window(
         raise ValueError("timestamps and values must have equal lengths")
     if not forecasters or any(not isinstance(k, str) or not k.strip() for k in forecasters):
         raise ValueError("forecasters must be a non-empty mapping with named models")
+    normalized_timestamps = []
     for stamp in timestamps:
         if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
             raise ValueError("all timestamps must be timezone-aware")
-    for left, right in zip(timestamps, timestamps[1:]):
-        if right <= left:
-            raise ValueError("timestamps must be strictly increasing")
+        normalized_timestamps.append(stamp.astimezone(timezone.utc))
+    for left, right in zip(normalized_timestamps, normalized_timestamps[1:]):
+        if right - left != timedelta(hours=1):
+            raise ValueError("timestamps must be strictly increasing and contiguous hourly instants")
+
+    normalized_values = []
+    for index, value in enumerate(values):
+        if isinstance(value, bool):
+            raise ValueError(f"training and validation values must be finite numbers (index {index})")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"training and validation values must be finite numbers (index {index})") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"training and validation values must be finite numbers (index {index})")
+        normalized_values.append(number)
+    timestamps = normalized_timestamps
+    values = normalized_values
     splits = expanding_window_slices(
         len(values), min_train_size=min_train_size,
         validation_size=validation_size, folds=folds,
