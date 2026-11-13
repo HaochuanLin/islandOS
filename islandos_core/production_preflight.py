@@ -28,6 +28,31 @@ def _nonempty_text(value):
     return isinstance(value, str) and bool(value.strip())
 
 
+def _valid_exact_https_origin(value):
+    """Accept only exact HTTPS origins, never wildcard or URL-like targets."""
+    if not isinstance(value, str) or not value or value != value.strip() or "*" in value:
+        return False
+    parsed = urlparse(value)
+    try:
+        hostname = parsed.hostname
+        parsed.port  # Force validation of a malformed port, if present.
+    except ValueError:
+        return False
+    return bool(
+        parsed.scheme == "https"
+        and parsed.netloc
+        and hostname
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+        and "?" not in value
+        and "#" not in value
+        and not any(character.isspace() for character in value)
+    )
+
+
 def evaluate_production_preflight(config):
     """Return blockers/warnings without echoing credentials or connection strings."""
     if not isinstance(config, dict):
@@ -84,11 +109,7 @@ def evaluate_production_preflight(config):
     if not isinstance(origins, list) or not origins:
         blockers.append({"code": "allowed_origins_missing", "field": "allowed_origins",
                          "message": "At least one explicit HTTPS origin is required; wildcard origins are not accepted."})
-    elif any(
-        not isinstance(origin, str) or origin == "*" or urlparse(origin).scheme != "https"
-        or not urlparse(origin).netloc or urlparse(origin).path not in {"", "/"}
-        for origin in origins
-    ):
+    elif any(not _valid_exact_https_origin(origin) for origin in origins):
         blockers.append({"code": "allowed_origins_invalid", "field": "allowed_origins",
                          "message": "Every allowed origin must be an exact HTTPS origin without wildcard, path, query, or fragment."})
 
