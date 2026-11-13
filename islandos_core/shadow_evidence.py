@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
 import threading
@@ -56,7 +57,7 @@ class ShadowEvidenceStore:
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS shadow_evidence (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,10 +76,14 @@ class ShadowEvidenceStore:
             """)
             db.execute("CREATE INDEX IF NOT EXISTS shadow_evidence_site_time ON shadow_evidence(site_ref,id DESC)")
 
-    def _connect(self):
+    @contextmanager
+    def _connection(self):
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _chain_hash(previous_hash: str, site_ref: str, report_sha256: str) -> str:
@@ -128,7 +133,7 @@ class ShadowEvidenceStore:
             raise ValueError("site_ref is required")
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
             raise ValueError("limit must be an integer from 1 to 500")
-        with self._connect() as db:
+        with self._connection() as db:
             rows = db.execute(
                 """SELECT id,site_ref,recommendation_id,observation_id,evaluated_at_utc,
                    status,report_sha256,previous_hash,chain_hash,created_at_utc
@@ -141,7 +146,7 @@ class ShadowEvidenceStore:
         errors = []
         expected_previous = _ZERO_HASH
         checked = 0
-        with self._connect() as db:
+        with self._connection() as db:
             rows = db.execute("SELECT * FROM shadow_evidence ORDER BY id ASC").fetchall()
         for row in rows:
             checked += 1
