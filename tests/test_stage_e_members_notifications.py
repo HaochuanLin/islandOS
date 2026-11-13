@@ -52,9 +52,19 @@ class TestStageEMemberAndNotificationLifecycle(unittest.TestCase):
             self.store.authenticate(analyst_login["access_token"])
 
     def test_invitation_is_tenant_scoped_and_owner_only(self):
-        other = self.principal("other@example.test", "Customer B")
+        other_owner = self.principal("other@example.test", "Customer B")
+        other_invitation = self.store.create_invitation(
+            other_owner, "other-analyst@example.test", role="analyst",
+        )
+        self.store.accept_invitation(
+            other_invitation["invitation_token"], "other-tenant-password",
+        )
+        other_login = self.store.login(
+            "other-analyst@example.test", "other-tenant-password",
+        )
+        other_analyst = self.store.authenticate(other_login["access_token"])
         with self.assertRaises(PermissionError):
-            self.store.create_invitation(other, "new@example.test")
+            self.store.create_invitation(other_analyst, "new@example.test")
         invitation = self.store.create_invitation(self.owner, "new@example.test")
         with self.assertRaises(ValueError):
             self.store.create_invitation(self.owner, "new@example.test")
