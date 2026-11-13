@@ -4,7 +4,11 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import islandos_core.forecast_engine as forecast_module
-from islandos_core.forecast_engine import ForecastMetrics, forecast_signals
+from islandos_core.forecast_engine import (
+    ForecastMetrics,
+    evaluate_signal_rolling,
+    forecast_signals,
+)
 
 
 class TestForecastEngine(unittest.TestCase):
@@ -137,6 +141,46 @@ class TestForecastEngine(unittest.TestCase):
         for point in result.forecasts["demand"].points:
             self.assertLessEqual(point.lower_bound, point.predicted)
             self.assertGreaterEqual(point.upper_bound, point.predicted)
+
+
+    def test_builtin_rolling_validation_scores_same_candidates_by_horizon(self):
+        hours = 900
+        stamps = [
+            datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i)
+            for i in range(hours)
+        ]
+        values = [
+            20.0 + 3.0 * __import__("math").sin(2.0 * __import__("math").pi * i / 24.0)
+            + 0.5 * __import__("math").sin(2.0 * __import__("math").pi * i / 168.0)
+            for i in range(hours)
+        ]
+        result = evaluate_signal_rolling(
+            stamps, values, horizons=(1, 24, 168), folds=2
+        )
+        self.assertEqual(set(result), {1, 24, 168})
+        for horizon, models in result.items():
+            self.assertEqual(
+                set(models),
+                {"persistence", "seasonal_naive_24h", "ridge_autoregressive"},
+            )
+            for score in models.values():
+                self.assertEqual(len(score.folds), 2)
+                self.assertTrue(all(fold.samples == horizon for fold in score.folds))
+                self.assertGreaterEqual(score.mean_mae, 0.0)
+
+    def test_builtin_rolling_validation_rejects_negative_physical_history(self):
+        values = [5.0] * 900
+        values[100] = -1.0
+        with self.assertRaisesRegex(ValueError, "negative values"):
+            evaluate_signal_rolling(
+                self.timestamps[:240] + [
+                    self.timestamps[-1] + timedelta(hours=i)
+                    for i in range(1, 661)
+                ],
+                values,
+                horizons=(1,),
+                non_negative=True,
+            )
 
 
 if __name__ == "__main__":
