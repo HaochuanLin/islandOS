@@ -15,6 +15,8 @@ import streamlit as st
 from islandos_core.assets import AssetRecord, evaluate_asset_readiness
 from islandos_core.site_workspace import (
     export_project_package,
+    import_project_package,
+    inspect_project_package,
     list_site_profiles,
     save_site_profile,
 )
@@ -145,6 +147,8 @@ with st.expander("Add or version an asset"):
         try:
             raw = json.loads(asset_json)
             asset = AssetRecord.from_mapping(raw)
+            if asset.site_id != project_id:
+                raise ValueError("Asset site_id must match the active project ID.")
             saved = save_asset_record(db_path, project_id=project_id, asset=asset, actor_id=actor_id)
             st.success(f"Saved {saved['asset_id']} version {saved['version']}.")
             st.json(saved["readiness"])
@@ -201,6 +205,33 @@ if st.button("Build verified project package"):
         )
     except Exception as exc:
         st.error(f"Project export failed: {exc}")
+
+with st.expander("Import a portable project package"):
+    st.caption("Import creates a new project; it does not overwrite the active project. Source audit events remain embedded evidence, while the destination workspace records a new import event.")
+    package_upload = st.file_uploader("IslandOS project ZIP", type=["zip"], key="project_package_import")
+    imported_name = st.text_input("New project name for imported package")
+    retain_imported_sources = st.checkbox("Retain included original CSV/XLSX files locally (separate consent)", value=False)
+    if package_upload is not None:
+        package_bytes = package_upload.getvalue()
+        try:
+            package_report = inspect_project_package(package_bytes)
+            st.success(f"Package verified · {package_report['project_name']} · {package_report['asset_count']} asset versions · {package_report['import_count']} imports")
+            st.caption(f"Package SHA-256: {package_report['sha256']}")
+            import_consent = st.checkbox("I consent to importing this project's metadata and configuration into this local workspace.")
+            if st.button("Import as a new project", disabled=not import_consent):
+                import uuid
+                name = imported_name.strip() or (package_report["project_name"] + " (imported)")
+                imported = import_project_package(
+                    db_path, package_bytes, actor_id=actor_id,
+                    new_project_id="site-" + uuid.uuid4().hex[:12],
+                    new_project_name=name, consent_to_store_metadata=True,
+                    storage_dir=storage_root, retain_sources=retain_imported_sources,
+                )
+                st.success(f"Imported project {imported['project_id']} · {imported['asset_versions_imported']} asset versions · {imported['import_artifacts_imported']} datasets")
+                st.json(imported)
+                st.rerun()
+        except Exception as exc:
+            st.error(f"Package validation failed: {exc}")
 
 audit = verify_audit_chain(db_path)
 st.divider()
