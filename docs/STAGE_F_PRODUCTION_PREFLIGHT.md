@@ -7,7 +7,7 @@
 - HTTPS identity-provider and public application URLs;
 - secret-manager, network-policy, backup-key, and metrics-auth references;
 - MFA, database TLS, trusted proxy configuration, authenticated metrics, and encrypted off-host backup flags;
-- explicit HTTPS origin allowlists and minimum audit retention;
+- exact HTTPS origin allowlists (rejecting wildcard subdomains, paths, query strings, fragments, user-info, whitespace and malformed ports) and minimum audit retention;
 - a mandatory `device_write_enabled=false` boundary.
 
 The report does not echo connection strings or secret values. A passing result is named `configuration_checks_passed`, not “production ready”, and always sets `operational_approval=false`.
