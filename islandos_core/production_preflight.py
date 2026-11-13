@@ -32,8 +32,8 @@ def _valid_exact_https_origin(value):
     """Accept only exact HTTPS origins, never wildcard or URL-like targets."""
     if not isinstance(value, str) or not value or value != value.strip() or "*" in value:
         return False
-    parsed = urlparse(value)
     try:
+        parsed = urlparse(value)
         hostname = parsed.hostname
         parsed.port  # Force validation of a malformed port, if present.
     except ValueError:
