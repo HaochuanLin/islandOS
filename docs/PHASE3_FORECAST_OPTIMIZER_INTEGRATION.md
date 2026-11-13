@@ -66,3 +66,17 @@ total unmet energy, critical unmet energy, and flexible-load shedding are all
 equivalent within tolerance. Otherwise the cost-reduction field is null and the
 result explicitly withholds a savings claim. The reference is a modeled policy,
 not measured site operation or a customer's actual bill.
+
+
+## Joint battery–diesel schedule search
+
+For sites with both a configured battery and diesel generator, the adapter now
+exposes `optimize_forecasted_resource_schedule`. It forwards Phase 2 forecasts
+into the existing mixed real/binary evolutionary optimizer and supplies the
+conservative forecast envelope, grid-outage, and combined-stress cases as
+additional scenarios. The same candidate schedule is replayed in all cases;
+the optimizer aggregates objectives by worst case and can enforce explicit
+maximum total/critical unmet-energy and terminal battery SOC constraints.
+Diesel availability is mandatory. The optimizer rejects configurations whose
+ramp-down or minimum up/down constraints it cannot safely generate. It remains
+a seeded heuristic, not a global optimum or device controller.
