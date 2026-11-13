@@ -16,7 +16,7 @@
 | PR | Scope and evidence | Decision |
 |---|---|---|
 | #207 | Architecture rules and stale-PR triage; documentation-only; six associated CI workflow runs passed on exact head before merge. | **Merged** to main. |
-| #206 | Generic CSV/XLSX onboarding, local SQLite workspace, run manifests, audit chain, governance docs. Eight commits ahead and one behind main after #207; six associated CI workflow runs passed on its exact head. | **Stage B candidate; not merged yet.** Refresh against current main, review integration and security boundaries, rerun exact-head CI, then merge. |
+| #206 | Generic CSV/XLSX onboarding, local SQLite workspace, run manifests, audit chain, governance docs. All eight changed files were verified to have identical Git blob SHAs on current main. | **Closed as superseded without merge** on 2026-11-13; no code was discarded because all eight files already exist byte-for-byte on main. |
 | #189 | Rolling-lab forecast/objective-weight controls; 3 commits ahead and 130 behind at review; confined to one old Streamlit page and test. | Closed without merge. Re-port only if the current forecast-led dashboard demonstrably lacks the same operator workflow. |
 | #182 | Dispatch accounting invariant stress suite; 6 commits ahead and 136 behind at review; useful seeded accounting tests bundled with unrelated workflow/README/roadmap edits. | Closed without merge. Retain the test ideas as a targeted test gap; do not import the stale branch wholesale. |
 | #190 | Large Nan'ao scenario-pilot branch; 121 commits ahead and 584 behind at review; bundled generic work with Nan'ao-specific scenario code and replaced generic README narrative. | Closed without merge. Nan'ao scripts and competition material stay out of generic main. Recover generic code only if a per-file comparison proves a concrete gap. |
@@ -35,7 +35,7 @@ This is a product-boundary inventory, not a claim that every module is productio
 | Economics | Canonical investment economics and customer-entered assumptions | Keep one lifecycle/investment economics service; do not restore duplicate historical economics modules. |
 | Telemetry and device boundary | Telemetry contracts and gateway scaffolding | Contracts/mock sources are not production device connectivity. No write/control path is implied. |
 | Customer decision experience | Streamlit customer dashboard, scenario comparison, audit and export | Current pages are prototype UX; no multi-tenant user system or production service is implied. |
-| Customer data onboarding and workspace | Candidate implementation in #206: UI-independent CSV/XLSX inspection, local SQLite metadata workspace, run manifests, audit chain | Stage B candidate only. Single-user/local prototype; not encrypted multi-tenant storage, authentication, backup/restore, or secure deletion. |
+| Customer data onboarding and workspace | `islandos_core/onboarding.py`, `islandos_core/workspace_store.py`, asset records and onboarding tests | Integrated local-first Stage B foundation. Single-user/local prototype; not encrypted multi-tenant storage, authentication, backup/restore, or secure deletion. |
 
 ## 4. Mainline architecture rules
 
@@ -50,7 +50,7 @@ This is a product-boundary inventory, not a claim that every module is productio
 ## 5. CI evidence and limits
 
 - PR #207's exact head `520bde3cf3f6a0b406c8ef5b9413ff00035a593f` had six associated GitHub Actions workflow runs, all completed successfully, before squash merge. The PR changed documentation only.
-- PR #206's reviewed head `b83b953289b53e3b25371f494c99722beb6873c5` also had six associated workflow runs, all completed successfully. That head is now one commit behind main because #207 was merged; it must be refreshed and CI rerun before merge.
+- PR #206 was closed as superseded after all eight changed files were compared against `main` and found to have identical Git blob SHAs. Its earlier CI evidence is historical only; no merge was needed.
 - The available connector did not expose a post-merge push-run record for the squash commit. Therefore this records the PR integration gate, not a claim that a separate post-merge main workflow ran.
 - Passing synthetic tests establishes tested software invariants only; it does not certify physical fidelity, forecast accuracy, site safety, or savings.
 
@@ -68,6 +68,7 @@ This is a product-boundary inventory, not a claim that every module is productio
 - [x] Canonical module responsibilities and historical recovery decisions inventoried.
 - [x] Architecture rules, data provenance, and product maturity boundaries documented.
 - [x] Exact-head integration CI evidence recorded, including the limitation that no separate post-merge push run was exposed.
-- [x] Stage B candidate identified without misrepresenting it as merged or production-ready.
+- [x] Stage B implementation verified on `main`; stale duplicate PR #206 closed without discarding code.
+- [ ] Repository branch cleanup: more than 200 branch refs were observed across the first two API pages; retain branches with unresolved unique work and prune merged/stale refs in a reviewed batch. The available GitHub action interface does not expose branch deletion, so this item remains open.
 
-**Phase A is complete as an architecture/governance consolidation.** The remaining Stage B implementation work is tracked separately; PR #206 must be refreshed and independently reviewed before merge.
+**Phase A architecture/governance review is substantially complete, but repository hygiene is not fully closed while the large dormant branch set remains.** Main is the sole integration baseline; PR #206 is superseded. Branch pruning remains an explicit cleanup item rather than silently claiming that dormant refs were removed.
