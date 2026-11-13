@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from islandos_sensors.contract import validate_message
+from islandos_sensors.contract import validate_batch, validate_message
 from islandos_sensors.mock_source import make_mock_message
 
 
@@ -40,9 +40,17 @@ class SensorContractTests(unittest.TestCase):
         self.message["observed_at"] = "2026-10-22T08:06:00+00:00"
         self.assertTrue(any("future" in e for e in validate_message(self.message, now=self.now)))
 
-    def test_small_future_clock_skew_is_tolerated(self):
-        self.message["observed_at"] = "2026-10-22T08:04:00+00:00"
-        self.assertEqual(validate_message(self.message, now=self.now), [])
+    def test_any_future_timestamp_is_rejected(self):
+        self.message["observed_at"] = "2026-10-22T08:00:00.000001+00:00"
+        self.assertTrue(any("future" in e for e in validate_message(self.message, now=self.now)))
+
+    def test_timestamp_must_be_a_string(self):
+        self.message["observed_at"] = 1792656000
+        self.assertTrue(any("ISO-8601" in e for e in validate_message(self.message, now=self.now)))
+
+    def test_equivalent_timezone_offsets_are_compared_in_utc(self):
+        self.message["observed_at"] = "2026-10-22T16:00:00+08:00"
+        self.assertTrue(any("future" in e for e in validate_message(self.message, now=self.now)))
 
     def test_uncertain_quality_is_rejected(self):
         self.message["quality"] = "uncertain"
@@ -94,6 +102,26 @@ class SensorContractTests(unittest.TestCase):
 
     def test_invalid_message_type_is_rejected(self):
         self.assertTrue(validate_message(None, now=self.now))
+
+
+    def test_batch_quarantines_duplicate_sample_identity(self):
+        first = dict(self.message)
+        second = dict(self.message, value=13.0)
+        results = validate_batch([first, second], now=self.now)
+        self.assertFalse(results[0]["valid"])
+        self.assertFalse(results[1]["valid"])
+        self.assertTrue(any("duplicate sample identity" in e for e in results[0]["errors"]))
+        self.assertTrue(any("duplicate sample identity" in e for e in results[1]["errors"]))
+
+    def test_batch_preserves_distinct_samples(self):
+        first = dict(self.message)
+        second = dict(self.message, observed_at="2026-10-22T07:58:00+00:00")
+        results = validate_batch([first, second], now=self.now)
+        self.assertTrue(all(item["valid"] for item in results))
+
+    def test_batch_rejects_non_sequence(self):
+        with self.assertRaises(ValueError):
+            validate_batch({"not": "a sequence"}, now=self.now)
 
 
 if __name__ == "__main__":
