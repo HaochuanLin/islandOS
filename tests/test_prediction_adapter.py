@@ -11,7 +11,7 @@ NOW = datetime(2026, 11, 13, tzinfo=timezone.utc)
 
 
 def _csv(signal="load_kw", values=(10, 11, 12, 13, 14, 15)):
-    rows = ["timestamp," + signal]
+    header = "tariff (currency/kWh)" if signal == "tariff_per_kwh" else signal\n    rows = ["timestamp," + header]
     for index, value in enumerate(values):
         rows.append(f"2026-11-01T{index:02d}:00:00Z,{value}")
     return ("\n".join(rows) + "\n").encode()
