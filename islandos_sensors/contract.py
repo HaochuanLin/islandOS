@@ -66,26 +66,83 @@ def validate_message(message: dict, *, now: datetime | None = None,
         errors.append(f"unsupported source_type: {source_type}")
 
     value = message["value"]
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         errors.append("value must be a finite number")
-    elif signal_spec is not None and value < signal_spec["min"]:
-        errors.append("value is below the allowed minimum")
+    else:
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError, OverflowError):
+            numeric_value = float("nan")
+        if not math.isfinite(numeric_value):
+            errors.append("value must be a finite number")
+        elif signal_spec is not None and numeric_value < signal_spec["min"]:
+            errors.append("value is below the allowed minimum")
 
     try:
-        observed = datetime.fromisoformat(message["observed_at"].replace("Z", "+00:00"))
-        if observed.tzinfo is None:
+        timestamp_text = message["observed_at"]
+        if not isinstance(timestamp_text, str):
+            raise ValueError("timestamp must be text")
+        normalized_timestamp = timestamp_text[:-1] + "+00:00" if timestamp_text.endswith("Z") else timestamp_text
+        observed = datetime.fromisoformat(normalized_timestamp)
+        if observed.tzinfo is None or observed.utcoffset() is None:
             errors.append("observed_at must include a timezone offset")
         else:
             reference = now if now is not None else datetime.now(timezone.utc)
-            if not isinstance(reference, datetime) or reference.tzinfo is None:
+            if not isinstance(reference, datetime) or reference.tzinfo is None or reference.utcoffset() is None:
                 errors.append("now must include a timezone")
             elif isinstance(max_age_seconds, int) and not isinstance(max_age_seconds, bool) and max_age_seconds > 0:
-                age = (reference - observed).total_seconds()
-                if age < -300:
-                    errors.append("sample timestamp is more than 5 minutes in the future")
+                age = (reference.astimezone(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()
+                if age < 0:
+                    errors.append("sample timestamp is in the future")
                 elif age > max_age_seconds:
                     errors.append(f"sample is stale ({age:.0f}s old; limit {max_age_seconds}s)")
     except (TypeError, ValueError, AttributeError, OverflowError):
         errors.append("observed_at must be a valid ISO-8601 timestamp with timezone")
 
     return errors
+
+
+
+def validate_batch(messages, *, now: datetime | None = None,
+                   max_age_seconds: int = 3600) -> list[dict]:
+    """Validate a batch and quarantine duplicate device/signal/timestamp keys.
+
+    Each result preserves the input index and original message. Duplicate
+    identities are all rejected rather than silently selecting one reading.
+    """
+    if not isinstance(messages, (list, tuple)):
+        raise ValueError("messages must be a list or tuple")
+    results = []
+    seen: dict[tuple, list[int]] = {}
+    for index, message in enumerate(messages):
+        errors = validate_message(message, now=now, max_age_seconds=max_age_seconds)
+        key = None
+        if isinstance(message, dict):
+            fields = ("site_id", "device_id", "signal_id", "observed_at")
+            if all(isinstance(message.get(field), str) and message[field].strip() for field in fields):
+                try:
+                    timestamp_text = message["observed_at"]
+                    timestamp_text = timestamp_text[:-1] + "+00:00" if timestamp_text.endswith("Z") else timestamp_text
+                    parsed_timestamp = datetime.fromisoformat(timestamp_text)
+                    if parsed_timestamp.tzinfo is not None and parsed_timestamp.utcoffset() is not None:
+                        key = (
+                            message["site_id"], message["device_id"], message["signal_id"],
+                            parsed_timestamp.astimezone(timezone.utc).isoformat(),
+                        )
+                except (TypeError, ValueError, OverflowError):
+                    key = None
+        if key is not None:
+            prior = seen.setdefault(key, [])
+            if prior:
+                errors.append("duplicate sample identity; quarantined with rows " +
+                              ", ".join(str(item + 1) for item in prior))
+                for prior_index in prior:
+                    prior_result = results[prior_index]
+                    prior_result["errors"].append(
+                        "duplicate sample identity; quarantined with row " + str(index + 1)
+                    )
+                    prior_result["valid"] = False
+            prior.append(index)
+        results.append({"row": index + 1, "valid": not errors,
+                        "errors": list(dict.fromkeys(errors)), "message": message})
+    return results

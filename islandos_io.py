@@ -78,7 +78,13 @@ def load_device_mapping(path: str) -> dict:
         for option in ("scale", "offset"):
             if option in spec:
                 value = spec[option]
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise ValueError("mapped field %s %s must be finite numeric" % (canonical, option))
+                try:
+                    finite_value = math.isfinite(float(value))
+                except (TypeError, ValueError, OverflowError):
+                    finite_value = False
+                if not finite_value:
                     raise ValueError("mapped field %s %s must be finite numeric" % (canonical, option))
         if canonical == "timestamp_utc" and ("scale" in spec or "offset" in spec):
             raise ValueError("timestamp_utc cannot use numeric scale or offset")
@@ -109,7 +115,7 @@ def apply_device_mapping(payload: Mapping[str, Any], mapping: Mapping[str, Any])
             else:
                 try:
                     normalized[canonical] = float(value) * float(spec.get("scale", 1.0)) + float(spec.get("offset", 0.0))
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     normalized[canonical] = value
         else:
             normalized[canonical] = value
@@ -142,16 +148,26 @@ def validate_telemetry(
     received_at: Optional[datetime] = None,
     required_fields: Tuple[str, ...] = DEFAULT_REQUIRED_FIELDS,
     max_age_seconds: float = 300.0,
-    future_tolerance_seconds: float = 30.0,
+    future_tolerance_seconds: float = 0.0,
 ) -> TelemetryFrame:
     """Validate a vendor-neutral telemetry message without imputing missing data."""
     if not isinstance(payload, Mapping):
         raise TypeError("payload must be a mapping")
     if not str(source).strip():
         raise ValueError("source must be a non-empty identifier")
-    if not math.isfinite(float(max_age_seconds)) or max_age_seconds < 0:
+    try:
+        max_age_finite = math.isfinite(float(max_age_seconds))
+    except (TypeError, ValueError, OverflowError):
+        max_age_finite = False
+    try:
+        future_tolerance_finite = math.isfinite(float(future_tolerance_seconds))
+    except (TypeError, ValueError, OverflowError):
+        future_tolerance_finite = False
+    if (isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, (int, float))
+            or not max_age_finite or max_age_seconds < 0):
         raise ValueError("max_age_seconds must be finite and non-negative")
-    if not math.isfinite(float(future_tolerance_seconds)) or future_tolerance_seconds < 0:
+    if (isinstance(future_tolerance_seconds, bool) or not isinstance(future_tolerance_seconds, (int, float))
+            or not future_tolerance_finite or future_tolerance_seconds < 0):
         raise ValueError("future_tolerance_seconds must be finite and non-negative")
 
     errors = []
@@ -170,7 +186,7 @@ def validate_telemetry(
     if not errors and age_seconds > max_age_seconds:
         errors.append("telemetry is stale")
     if not errors and age_seconds < -future_tolerance_seconds:
-        errors.append("telemetry timestamp is too far in the future")
+        errors.append("telemetry timestamp is in the future")
 
     values = {}
     for field in required_fields:
@@ -183,7 +199,7 @@ def validate_telemetry(
             continue
         try:
             number = float(raw)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             errors.append("field must be a finite number: " + field)
             continue
         if not math.isfinite(number):
@@ -203,7 +219,7 @@ def validate_telemetry(
             continue
         try:
             number = float(raw)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             errors.append("optional field must be a finite non-negative number: " + field)
             continue
         if not math.isfinite(number) or number < 0:

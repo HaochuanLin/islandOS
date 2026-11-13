@@ -3,7 +3,8 @@
 ## What is ready now
 
 - Stable normalized message format in `islandos_sensors/contract.py`.
-- Basic checks for required fields, supported signal names/units, finite non-negative values, timestamp offset, freshness, and quality.
+- Strict checks for required fields, supported signal names/units, finite non-negative values, timezone-aware timestamps, stale/future samples, and source quality.
+- Batch validation that quarantines every duplicate site/device/signal/timestamp identity rather than silently selecting one.
 - Explicitly synthetic mock source and examples.
 - A documented adapter contract for future hardware-specific drivers.
 
@@ -21,7 +22,7 @@ Example use:
 
 ```python
 from datetime import datetime, timezone
-from islandos_sensors.contract import validate_message
+from islandos_sensors.contract import validate_batch, validate_message
 from islandos_sensors.mock_source import make_mock_message
 
 message = make_mock_message("pv_power", 12.5, "kW")
@@ -29,6 +30,10 @@ errors = validate_message(message, now=datetime.now(timezone.utc))
 if errors:
     raise ValueError("Reject telemetry: " + "; ".join(errors))
 print("Contract valid; this remains synthetic test data, not a real measurement.")
+
+batch = validate_batch([message], now=datetime.now(timezone.utc))
+if not all(row["valid"] for row in batch):
+    raise ValueError("Reject batch: " + repr(batch))
 ```
 
 ## How to connect a real device later

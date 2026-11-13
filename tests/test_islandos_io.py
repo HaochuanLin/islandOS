@@ -121,7 +121,7 @@ class TestTelemetryValidation(unittest.TestCase):
         payload = good_payload()
         payload["timestamp_utc"] = (NOW + timedelta(minutes=2)).isoformat()
         frame = validate_telemetry(payload, "gateway", received_at=NOW)
-        self.assertIn("telemetry timestamp is too far in the future", frame.errors)
+        self.assertIn("telemetry timestamp is in the future", frame.errors)
 
     def test_rejects_timestamp_without_timezone(self):
         payload = good_payload()
@@ -297,6 +297,41 @@ class TestControlAuthorization(unittest.TestCase):
     def test_rejects_nonfinite_recommendation(self):
         with self.assertRaisesRegex(ValueError, "requested_value must be finite"):
             build_recommendation("ro_power", float("nan"), "kW", "test", "test", "v1")
+
+    def test_rejects_future_timestamp_within_one_second(self):
+        payload = good_payload()
+        payload["timestamp_utc"] = (NOW + timedelta(milliseconds=1)).isoformat()
+        frame = validate_telemetry(payload, "gateway", received_at=NOW)
+        self.assertIn("telemetry timestamp is in the future", frame.errors)
+
+    def test_explicit_future_tolerance_is_opt_in_only(self):
+        payload = good_payload()
+        payload["timestamp_utc"] = (NOW + timedelta(seconds=2)).isoformat()
+        frame = validate_telemetry(
+            payload, "gateway", received_at=NOW, future_tolerance_seconds=3
+        )
+        self.assertTrue(frame.valid)
+
+    def test_rejects_extremely_large_integer_without_exception(self):
+        payload = good_payload()
+        payload["renewable_surplus_kw"] = 10 ** 10000
+        frame = validate_telemetry(payload, "gateway", received_at=NOW)
+        self.assertFalse(frame.valid)
+        self.assertTrue(any("finite number" in error for error in frame.errors))
+
+    def test_rejects_invalid_freshness_configuration_without_exception(self):
+        payload = good_payload()
+        for value in ("300", True, 10 ** 10000, float("nan")):
+            with self.subTest(value_type=type(value).__name__):
+                with self.assertRaises(ValueError):
+                    validate_telemetry(payload, "gateway", received_at=NOW, max_age_seconds=value)
+
+    def test_rejects_invalid_future_tolerance_configuration(self):
+        payload = good_payload()
+        for value in ("0", True, 10 ** 10000, float("inf")):
+            with self.subTest(value_type=type(value).__name__):
+                with self.assertRaises(ValueError):
+                    validate_telemetry(payload, "gateway", received_at=NOW, future_tolerance_seconds=value)
 
 
 if __name__ == "__main__":

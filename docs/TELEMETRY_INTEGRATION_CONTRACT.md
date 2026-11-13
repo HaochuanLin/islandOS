@@ -33,7 +33,7 @@ The example mapping expects source keys `ts`, `solar_power_w`, `water_demand_l`,
 - `GET /advice?weight_profile=balanced`: read-only dispatch recommendation. Supported weight profiles are reported by the API error if an unknown profile is supplied.
 - `GET /dashboard`: local operator review page.
 
-General responses include `Cache-Control: no-store`; request bodies larger than 65,536 bytes or empty bodies are rejected. An optional bearer token, when configured, protects these endpoints and returns HTTP 401 when missing or invalid. Keep device and sensor timestamps synchronized: messages that are stale or too far in the future are rejected according to the configured freshness window.
+General responses include `Cache-Control: no-store`; request bodies larger than 65,536 bytes or empty bodies are rejected. An optional bearer token, when configured, protects these endpoints and returns HTTP 401 when missing or invalid. Keep device and sensor timestamps synchronized: stale messages are rejected according to the configured freshness window, and every future-dated timestamp is rejected by default (including sub-second skew). A non-zero future tolerance requires an explicit caller override and is not enabled by the default gateway.
 
 ## Example request
 
@@ -57,3 +57,8 @@ With token protection, add `-H "Authorization: Bearer $ISLANDOS_GATEWAY_TOKEN"` 
 - [ ] Keep the control path disabled. Require a separate hazard review, interlock design, operator authorization, and device-specific acceptance tests before any future actuation work.
 
 The current project does not establish field accuracy, vendor certification, universal plug-and-play compatibility, or permission to control equipment. Synthetic replay verifies software behavior only.
+
+
+## Timestamp freshness hardening
+
+The default normalized telemetry validator rejects every future-dated sample, including sub-second clock skew. An explicit non-zero `future_tolerance_seconds` is available only for a caller that has documented and approved a bounded clock policy; it is not enabled by the default gateway or sensor contract. Timestamps are compared as timezone-aware UTC instants.

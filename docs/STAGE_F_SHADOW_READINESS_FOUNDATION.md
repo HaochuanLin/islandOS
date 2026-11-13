@@ -2,7 +2,7 @@
 
 ## Delivered software slice
 
-`islandos_core/shadow_mode.py` adds a vendor-neutral, read-only comparison between a stored recommendation and later observed telemetry. `islandos_shadow.py` provides an offline JSON replay CLI for recorded recommendation/observation pairs. It checks recommendation/observation identity, timestamp validity and strict freshness (any future-dated observation is blocked), signal coverage, unit consistency, finite values, and per-signal tolerances declared from an approved asset/sensor specification.
+`islandos_sensors/contract.py` rejects every future-dated sample and provides batch-level duplicate-identity quarantine. `islandos_core/shadow_mode.py` adds a vendor-neutral, read-only comparison between a stored recommendation and later observed telemetry. `islandos_shadow.py` provides an offline JSON replay CLI for recorded recommendation/observation pairs. It checks recommendation/observation identity, timestamp validity and strict freshness (any future-dated observation is blocked), signal coverage, unit consistency, finite values, and per-signal tolerances declared from an approved asset/sensor specification.
 
 Each comparison produces an auditable report with a SHA-256 digest and one of three states:
 - `within_tolerance`: all compared signals are within their declared tolerances.
@@ -31,7 +31,7 @@ Exit codes: 0 = within tolerance, 1 = valid observation with deviation, 2 = bloc
 - Local Docker Compose deployment is loopback-bound, read-only filesystem, dropped Linux capabilities, no-new-privileges, resource-limited, and has bounded container logs.
 - The local service API uses tenant-scoped SQLite, opaque expiring bearer sessions, and a loopback-only listener.
 - Workspace backup/restore has SQLite integrity and audit-chain verification.
-- Telemetry gateway validates timestamps, freshness, units, required fields, and source quality; it is read-only and loopback-only.
+- Telemetry gateway validates timestamps (future timestamps rejected by default), freshness, units, required fields, and source quality; it is read-only and loopback-only. The normalized sensor contract also supports batch duplicate quarantine.
 - CI runs unit/integration tests, dependency audit, Windows gateway packaging, container health smoke, and scenario validation.
 
 ## Production deployment gates — still open
