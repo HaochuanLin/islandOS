@@ -46,6 +46,26 @@ class TestForecastPlanningContract(unittest.TestCase):
                 )
             ))
 
+    def test_normalizes_equivalent_timezone_offsets_to_utc(self):
+        forecasts = dict(self.bundle.forecasts)
+        signal = forecasts["pv"]
+        local_zone = timezone(timedelta(hours=8))
+        points = [
+            replace(point, timestamp=point.timestamp.astimezone(local_zone))
+            for point in signal.points
+        ]
+        forecasts["pv"] = replace(signal, points=tuple(points))
+        equivalent_instants = replace(self.bundle, forecasts=forecasts)
+        result = build_forecast_planning_input(
+            equivalent_instants, {"pv": "kW", "load": "kW"}
+        )
+        self.assertTrue(all(stamp.utcoffset() == timedelta(0) for stamp in result.timestamps))
+
+    def test_returned_signal_mappings_are_read_only(self):
+        result = build_forecast_planning_input(self.bundle, {"pv": "kW"})
+        with self.assertRaises(TypeError):
+            result.values["pv"] = (999.0,)
+
     def test_rejects_missing_required_signal(self):
         with self.assertRaisesRegex(ValueError, "missing"):
             build_forecast_planning_input(self.bundle, {"battery": "kWh"})
