@@ -339,6 +339,8 @@ def evaluate_signal_rolling(
     """
     from .forecast_validation import evaluate_horizon_windows
 
+    if isinstance(min_train_size, bool) or not isinstance(min_train_size, int) or min_train_size < 72:
+        raise ValueError("min_train_size must be an integer of at least 72 for the built-in ridge model")
     stamps = _timestamps(timestamps)
     series = _finite_series(values, "rolling_validation")
     if len(series) != len(stamps):
