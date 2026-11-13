@@ -1623,7 +1623,9 @@ elif page == "Data onboarding & workspace":
                 report = inspect_csv_bytes(raw_bytes, source_type=source_type, source_name=uploaded.name, expected_interval_minutes=interval)
             else:
                 sheets = inspect_excel_sheets(raw_bytes)
-                sheet_names = [item["sheet_name"] for item in sheets]
+                sheet_names = [item["name"] for item in sheets if item.get("visible", True)]
+                if not sheet_names:
+                    raise ValueError("workbook has no visible worksheets")
                 worksheet = st.selectbox("Worksheet", sheet_names)
                 timezone_name = st.text_input("IANA timezone for naive Excel timestamps (optional)", placeholder="e.g. Asia/Tokyo")
                 report = inspect_excel_bytes(raw_bytes, source_type=source_type, source_name=uploaded.name,
