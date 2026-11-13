@@ -733,3 +733,68 @@ def test_battery_end_of_life_fraction_without_cycle_life_fails_closed():
         build_energy_system_config_from_assets(
             [battery], operating_assumptions=assumptions,
         )
+
+
+
+def test_unsupported_confirmed_hard_diesel_ramp_constraint_fails_closed():
+    generator = asset(
+        "diesel_generator",
+        {"configured_power_kw": (30, "kW")},
+        {
+            "max_power_kw": ("max", 30, "kW"),
+            "min_stable_power_kw": ("min", 5, "kW"),
+        },
+    )
+    from dataclasses import replace
+    from islandos_core.assets import OperatingConstraint
+
+    generator = replace(
+        generator,
+        constraints=generator.constraints + (
+            OperatingConstraint(
+                constraint_id="diesel-ramp-down",
+                parameter="ramp_limit_kw_per_min",
+                severity="hard",
+                unit="kW/min",
+                operator="max",
+                upper_bound=2.0,
+                source_reference="vendor manual section 7",
+                confirmed=True,
+            ),
+        ),
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="hard constraint is not supported"):
+        build_energy_system_config_from_assets(
+            [generator],
+            operating_assumptions={
+                "diesel_variable_cost_per_kwh": assumption(0.25, "USD/kWh"),
+            },
+        )
+
+
+def test_unconfirmed_additional_hard_constraint_fails_closed():
+    pv = asset(
+        "pv",
+        {"configured_power_kw": (20, "kW")},
+        {"max_power_kw": ("max", 20, "kW")},
+    )
+    from dataclasses import replace
+    from islandos_core.assets import OperatingConstraint
+
+    pv = replace(
+        pv,
+        constraints=pv.constraints + (
+            OperatingConstraint(
+                constraint_id="pv-export-limit",
+                parameter="export_limit_kw",
+                severity="hard",
+                unit="kW",
+                operator="max",
+                upper_bound=5.0,
+                source_reference="unconfirmed interconnection note",
+                confirmed=False,
+            ),
+        ),
+    )
+    with pytest.raises(AssetEnergyAdapterError, match="hard constraint is not confirmed"):
+        build_energy_system_config_from_assets([pv])
