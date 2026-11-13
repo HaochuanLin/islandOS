@@ -31,6 +31,14 @@ class ModelBacktest:
     def mean_mae(self) -> float:
         return sum(fold.mae for fold in self.folds) / len(self.folds)
 
+    @property
+    def mean_rmse(self) -> float:
+        return sum(fold.rmse for fold in self.folds) / len(self.folds)
+
+    @property
+    def mean_bias(self) -> float:
+        return sum(fold.bias_predicted_minus_actual for fold in self.folds) / len(self.folds)
+
 
 def site_local_calendar_features(timestamp: datetime, site_timezone: str) -> tuple[float, ...]:
     """Return cyclic hour and weekday features in an IANA site timezone."""
