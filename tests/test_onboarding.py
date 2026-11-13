@@ -170,9 +170,9 @@ def test_invalid_arguments_fail_explicitly():
 
 def test_water_and_flexible_load_headers_use_shared_signal_catalog():
     raw = (
-        "timestamp,Water Demand (m3/h),flexible_load_kw\\n"
-        "2026-11-07T10:00:00Z,2.5,12\\n"
-        "2026-11-07T11:00:00Z,2.7,13\\n"
+        "timestamp,Water Demand (m3/h),flexible_load_kw\n"
+        "2026-11-07T10:00:00Z,2.5,12\n"
+        "2026-11-07T11:00:00Z,2.7,13\n"
     ).encode("utf-8")
     report = inspect_csv_bytes(
         raw, source_type="measured", source_name="resource-demand.csv",
