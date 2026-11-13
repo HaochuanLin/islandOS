@@ -15,11 +15,8 @@ import streamlit as st
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
 from islandos_core.prediction_dispatch_adapter import optimize_prediction_resource_schedule
-from islandos_core.prediction_engine import (
-    ForecastRequest,
-    PredictionEngine,
-    SignalObservation,
-)
+from islandos_core.forecast_signal_catalog import forecast_site_signals
+
 
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
 st.title("Forecast-led joint resource optimizer")
