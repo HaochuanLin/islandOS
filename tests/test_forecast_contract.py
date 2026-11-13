@@ -57,8 +57,10 @@ class TestForecastPlanningContract(unittest.TestCase):
     def test_rejects_misaligned_signal_timestamps(self):
         forecasts = dict(self.bundle.forecasts)
         signal = forecasts["load"]
-        points = list(signal.points)
-        points[0] = replace(points[0], timestamp=points[0].timestamp + timedelta(hours=1))
+        points = [
+            replace(point, timestamp=point.timestamp + timedelta(hours=1))
+            for point in signal.points
+        ]
         forecasts["load"] = replace(signal, points=tuple(points))
         broken = replace(self.bundle, forecasts=forecasts)
         with self.assertRaisesRegex(ValueError, "identical target timestamps"):
