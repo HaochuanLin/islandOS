@@ -167,7 +167,7 @@ if assets:
     with st.expander("Inspect asset records"):
         for item in assets:
             st.markdown(f"**{item['asset_id']} · v{item['version']}**")
-            st.json(item["record"])
+            st.json(item["asset"].to_mapping())
 else:
     st.info("No equipment has been registered in this project yet.")
 
