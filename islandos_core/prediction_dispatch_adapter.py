@@ -280,6 +280,16 @@ def optimize_prediction_resource_schedule(
             input_history_sha256=combined_digest,
             points=combined_points,
         )
+        if "critical_load" in mapped:
+            mapped["critical_load"] = replace(
+                mapped["critical_load"],
+                points=tuple(
+                    replace(point, predicted_value=point.predicted_value + ro_kw,
+                            lower_bound=point.lower_bound + ro_kw,
+                            upper_bound=point.upper_bound + ro_kw)
+                    for point, ro_kw in zip(mapped["critical_load"].points, water_load.ro_power_kw)
+                ),
+            )
     elif water_service is not None:
         raise ValueError("water_service was supplied without a water-demand forecast")
 
