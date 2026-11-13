@@ -9,6 +9,7 @@ Stage E now has a runnable, versioned reference API in `islandos_service_api.py`
 - `GET /api/v1/health` — API version, service mode and explicit disabled device-write status.
 - `POST /api/v1/auth/register` — controlled first-tenant bootstrap; disabled unless `--allow-registration` is supplied.
 - `POST /api/v1/auth/login` — PBKDF2-HMAC-SHA256 password verification and opaque expiring bearer session.
+- `POST /api/v1/auth/logout` — authenticated revocation of the current bearer session only; other active sessions remain valid.
 - `GET /api/v1/sites` / `POST /api/v1/sites` — tenant-scoped site metadata.
 - `POST /api/v1/sites/{site_id}/telemetry` — authenticated, read-only, normalized telemetry ingestion.
 - `GET /api/v1/sites/{site_id}/telemetry/latest` — tenant-scoped latest telemetry.
@@ -79,7 +80,7 @@ Use the returned access token as `Authorization: Bearer <token>` for protected e
 ## Production gaps — do not claim these are complete
 
 - Replace local SQLite with a managed relational database and reviewed migration/backup/restore procedures.
-- Add TLS termination, managed secrets, rate limiting, MFA, email verification, password reset, session revocation and security monitoring.
+- Add TLS termination, managed secrets, rate limiting, MFA, email verification, password reset, all-device/session management and security monitoring. Current-session logout revocation is implemented; administrative session management is not.
 - Add explicit per-role site membership and finer-grained authorization if tenant-wide roles are insufficient.
 - Add encrypted private object storage, retention schedules and verified export/deletion workflows for uploaded source files.
 - Add authenticated device identity, key rotation, signed messages and device-specific protocol adapters before connecting field equipment.
