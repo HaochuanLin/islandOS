@@ -81,14 +81,18 @@ assert verify_audit_chain(db)["valid"]
 ## Important limitations and next steps
 
 - No raw customer data is retained by the store.
-- No encryption-at-rest, user login, role-based access, cloud sync, backup
-  manager, retention scheduler, or secure deletion workflow is implemented.
+- Atomic whole-workspace SQLite backup and restore are implemented with
+  SQLite integrity checks, audit-chain verification, SHA-256 output, and
+  explicit overwrite opt-in. These functions back up workspace metadata,
+  asset versions, run manifests, and audit history; they do not include the
+  original uploaded CSV/XLSX bytes.
 - The SQLite file must be placed in an OS-approved user-data directory by the
   desktop shell, not beside the executable.
-- A full customer-facing workflow still needs project export/import, backup
-  and restore, retention controls, deletion/purge policy, multi-user approvals,
-  and a security review. Override proposals are recorded as history only; a
-separate authorization model and signed approval workflow are required before
-a reviewed value can be treated as an approved site constraint.
+- Project-level portable export/import, raw source-file retention, retention
+  controls, deletion/purge policy, multi-user approvals, cloud synchronization,
+  encryption-at-rest, and a security review remain unimplemented. Override
+  proposals are recorded as history only; a separate authorization model and
+  signed approval workflow are required before a reviewed value can be treated
+  as an approved site constraint.
 - A manifest records what the application says it used; it does not prove
   sensor calibration, source authenticity, or physical correctness.
