@@ -63,3 +63,17 @@ def test_irregular_cadence_is_rejected():
     report = _report(raw)
     with pytest.raises(ValueError, match="regular cadence"):
         build_forecast_request(raw, report, signal_id="load_kw")
+
+
+def test_adapter_rejects_report_for_different_file_bytes():
+    raw = _csv()
+    report = _report(raw)
+    with pytest.raises(ValueError, match="does not match"):
+        build_forecast_request(raw + b" ", report, signal_id="load_kw")
+
+
+def test_semicolon_csv_uses_inspection_dialect():
+    raw = b"timestamp;load_kw\n2026-11-01T00:00:00Z;1\n2026-11-01T01:00:00Z;2\n2026-11-01T02:00:00Z;3\n2026-11-01T03:00:00Z;4\n"
+    report = _report(raw)
+    request = build_forecast_request(raw, report, signal_id="load_kw", horizon=1)
+    assert [item.value for item in request.history] == [1.0, 2.0, 3.0, 4.0]
