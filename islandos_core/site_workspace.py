@@ -421,3 +421,159 @@ def inspect_project_package(content: bytes, *, max_package_bytes: int = 100 * 10
             }
     except (zipfile.BadZipFile, json.JSONDecodeError, KeyError) as exc:
         raise WorkspaceStoreError("project package is not a valid IslandOS export") from exc
+
+
+def import_project_package(
+    db_path: str | Path,
+    content: bytes,
+    *,
+    actor_id: str,
+    new_project_id: str,
+    new_project_name: str,
+    consent_to_store_metadata: bool,
+    storage_dir: str | Path | None = None,
+    retain_sources: bool = False,
+) -> dict[str, Any]:
+    """Import a verified project package as a new project in the local workspace.
+
+    The source package's audit events are preserved as evidence in the package;
+    the destination workspace receives a new local import event rather than
+    pretending the source hash chain is part of its own chain.
+    """
+    from datetime import datetime
+    from io import BytesIO
+    from islandos_core.assets import AssetRecord
+    from islandos_core.workspace_store import (
+        create_project, create_run_manifest, record_import_artifact, save_asset_record,
+    )
+
+    if consent_to_store_metadata is not True:
+        raise WorkspaceStoreError("explicit consent is required before importing project metadata")
+    if retain_sources is not False and retain_sources is not True:
+        raise WorkspaceStoreError("retain_sources must be a boolean")
+    if not all(isinstance(value, str) and value.strip() for value in (actor_id, new_project_id, new_project_name)):
+        raise WorkspaceStoreError("actor_id, new_project_id and new_project_name are required")
+    inspected = inspect_project_package(content)
+    with zipfile.ZipFile(BytesIO(content), "r") as archive:
+        package = json.loads(archive.read("project.json"))
+        names = set(archive.namelist())
+        source_payloads = {}
+        if retain_sources:
+            if storage_dir is None and any(name.startswith("source_files/") for name in names):
+                raise WorkspaceStoreError("storage_dir is required to retain imported source files")
+            for name in names:
+                if name.startswith("source_files/"):
+                    stem = Path(name).stem
+                    source_payloads[stem] = archive.read(name)
+
+    # Validate all structured records before creating any destination rows.
+    prepared_profiles = []
+    for item in package.get("site_profiles", []):
+        profile = item.get("profile")
+        if not isinstance(profile, dict):
+            raise WorkspaceStoreError("package contains an invalid site profile")
+        prepared_profiles.append(profile)
+    prepared_assets = []
+    for item in package.get("assets", []):
+        raw_asset = item.get("asset")
+        prepared_assets.append(AssetRecord.from_mapping(raw_asset))
+    prepared_imports = package.get("imports", [])
+    for item in prepared_imports:
+        if item.get("sha256") is None or not _SHA256.fullmatch(item["sha256"]):
+            raise WorkspaceStoreError("package contains an invalid import digest")
+        if item.get("source_type") not in {
+            "measured", "customer_provided", "public_reanalysis", "synthetic",
+            "forecast", "vendor_specification", "inferred",
+        }:
+            raise WorkspaceStoreError("package contains an unsupported source type")
+
+    initialize = __import__("islandos_core.workspace_store", fromlist=["initialize_workspace"]).initialize_workspace
+    initialize(db_path, workspace_id="local-islandos-workspace", actor_id=actor_id)
+    create_project(
+        db_path, project_id=new_project_id, display_name=new_project_name.strip(),
+        actor_id=actor_id, consent_to_store_metadata=True,
+    )
+
+    profile_versions = []
+    for item, profile in zip(package.get("site_profiles", []), prepared_profiles):
+        created = item.get("created_at")
+        timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
+        profile_versions.append(save_site_profile(
+            db_path, project_id=new_project_id, profile=profile,
+            actor_id=actor_id, created_at=timestamp,
+        ))
+
+    artifact_ids = {}
+    for item in prepared_imports:
+        imported = item.get("imported_at")
+        timestamp = datetime.fromisoformat(imported.replace("Z", "+00:00")) if imported else None
+        artifact_id = record_import_artifact(
+            db_path, project_id=new_project_id, file_name=item["file_name"],
+            media_type=item["media_type"], sha256=item["sha256"],
+            source_type=item["source_type"], row_count=item["row_count"],
+            signal_count=item["signal_count"], quality_status=item["quality_status"],
+            actor_id=actor_id, consent_to_store_metadata=True,
+            worksheet=item.get("worksheet"), imported_at=timestamp,
+        )
+        artifact_ids[item["artifact_id"]] = artifact_id
+        if retain_sources and item["artifact_id"] in source_payloads:
+            retain_source_file(
+                db_path, storage_dir, project_id=new_project_id,
+                artifact_id=artifact_id, file_name=item["file_name"],
+                content=source_payloads[item["artifact_id"]], actor_id=actor_id,
+                explicit_consent=True,
+            )
+
+    saved_assets = []
+    for item, asset in zip(package.get("assets", []), prepared_assets):
+        created = item.get("created_at")
+        timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
+        saved_assets.append(save_asset_record(
+            db_path, project_id=new_project_id, asset=asset,
+            actor_id=actor_id, saved_at=timestamp,
+        ))
+
+    imported_runs = []
+    for item in package.get("run_manifests", []):
+        manifest = item.get("manifest", {})
+        created = manifest.get("created_at")
+        timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
+        imported_runs.append(create_run_manifest(
+            db_path, project_id=new_project_id,
+            input_artifact_hashes=manifest.get("input_artifact_hashes", []),
+            configuration=manifest.get("configuration", {}),
+            model_versions=manifest.get("model_versions", {}),
+            software_version=manifest.get("software_version", "unknown"),
+            output_summary=manifest.get("output_summary", {}),
+            actor_id=actor_id, random_seed=manifest.get("random_seed"),
+            created_at=timestamp,
+        ))
+
+    package_digest = hashlib.sha256(content).hexdigest()
+    with _connect(db_path) as connection:
+        _append_event(
+            connection, actor_id=actor_id, event_type="project_package_imported",
+            project_id=new_project_id,
+            payload={
+                "source_project_id": inspected["project_id"],
+                "package_sha256": package_digest,
+                "source_audit_event_count": len(package.get("audit_events", [])),
+                "retained_source_count": sum(
+                    1 for old_id in source_payloads if old_id in artifact_ids
+                ) if retain_sources else 0,
+            },
+            created_at=_timestamp(),
+        )
+    return {
+        "project_id": new_project_id,
+        "project_name": new_project_name.strip(),
+        "source_project_id": inspected["project_id"],
+        "package_sha256": package_digest,
+        "site_profile_versions_imported": len(profile_versions),
+        "asset_versions_imported": len(saved_assets),
+        "import_artifacts_imported": len(artifact_ids),
+        "run_manifests_imported": len(imported_runs),
+        "source_files_retained": sum(
+            1 for old_id in source_payloads if old_id in artifact_ids
+        ) if retain_sources else 0,
+    }
