@@ -58,7 +58,7 @@ _TIMESTAMP_ALIASES = {"timestamp", "timestamp_utc", "datetime", "date_time", "ti
 _UNIT_SUFFIXES = {
     "kw": "kW", "w": "W", "mw": "MW",
     "%": "%", "pct": "%", "l/h": "L/h", "lph": "L/h",
-    "c": "degC", "°c": "degC",
+    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh",
 }
 
 
