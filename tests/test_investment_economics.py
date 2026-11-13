@@ -68,3 +68,10 @@ def test_no_annual_net_benefit_has_no_payback():
 def test_invalid_assumptions_are_rejected(overrides, message):
     with pytest.raises(ValueError, match=message):
         base(**overrides)
+
+
+def test_negative_energy_saving_sensitivity_remains_ordered():
+    result = base(proposed_annual_energy_cost=120_000)
+    values = result.sensitivity_npv
+    assert values["low_20pct_energy_saving"] < values["base"]
+    assert values["base"] < values["high_20pct_energy_saving"]
