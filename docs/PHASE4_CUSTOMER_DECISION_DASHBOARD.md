@@ -32,3 +32,8 @@ The default scenario is synthetic. The 24-hour forecast is generated from 168 sy
 - Add customer-confirmed tariff, fuel, O&M, demand-charge, and equipment replacement economics where supported by validated inputs.
 - Add a comparison export that includes all assumptions, source hashes, model versions, and service-equivalence checks.
 - Conduct usability review with non-technical users and verify that risk and uncertainty labels are understood.
+
+
+## Customer-supplied history
+
+The follow-up CSV onboarding increment is documented in [Phase 4 — Customer data onboarding](PHASE4_CUSTOMER_DATA_ONBOARDING.md). It adds a strict hourly input adapter while retaining the synthetic example as the default; see the linked document for the schema and privacy boundary.

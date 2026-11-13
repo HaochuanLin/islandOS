@@ -43,20 +43,20 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 ## Current implementation and maturity
 
 **Implemented on main**
-- Public interactive Streamlit application for energy–water strategy screening.
+- Public interactive Streamlit application with energy–water screening, price-aware flexible-load optimization, and a forecast-led customer decision dashboard (synthetic or user-supplied hourly history).
 - Deterministic integrated microgrid accounting baseline for selected PV, wind, battery, grid, backup, RO, and water-inventory flows.
 - Rule-based strategy comparisons, hourly audit outputs, CSV validation, and selected data-import workflows.
 
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
-- Experimental hourly tariff-forecast baseline and price-aware linear-programming optimizer with an interactive Streamlit scenario page on this branch. Users can upload historical hourly prices to generate a 24-hour seasonal-naive forecast, feed that forecast into the optimizer, and inspect an equal-energy cost comparison with provenance. The forecast is not a trained market model, and the page is not live in the public hosted app until this PR is merged. Run the synthetic optimizer example with `python examples/price_aware_flexible_load_demo.py`.
+- Transparent hourly tariff-forecast baseline and price-aware linear-programming optimizer. The interactive page supports scenario CSV import, a seasonal-naive tariff forecast, and equal-energy cost comparison. This remains an experimental baseline, not a trained market model. Run the synthetic optimizer example with `python examples/price_aware_flexible_load_demo.py`.
 - Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
 - Read-only telemetry and selected integration prototypes.
 
 **Planned / not yet delivered as one workflow**
 - A unified, site-calibrated multi-signal forecasting service.
 - A general multi-resource optimizer that consistently consumes forecast uncertainty.
-- A complete end-to-end decision console with customer-ready economic comparisons.
+- A fully site-configured end-to-end decision console with verified customer economics, validated equipment constraints, and customer usability evidence. The current dashboard is an early offline decision-support increment, not a finished commercial console.
 
 These capabilities do not yet form a validated, fully forecast-driven end-to-end decision system. Experimental scripts and integrations are not automatically part of the hosted app. See [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for individual research scopes.
 
@@ -115,6 +115,8 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Price-aware flexible-load scheduling](docs/PRICE_AWARE_FLEXIBLE_LOAD_SCHEDULING.md) | Experimental hourly tariff baseline, tariff-to-optimizer workflow, continuous-load LP, and limitations |
 | [SIC reference migration assessment](docs/SIC_REFERENCE_MIGRATION_ASSESSMENT.md) | What was learned from the SIC repositories, what was adopted, and what is deliberately deferred |
 | [Productization roadmap](docs/PRODUCTIZATION_ROADMAP.md) | Product phases, customer discovery, economics, and exit gates |
+| [Phase 4 customer dashboard](docs/PHASE4_CUSTOMER_DECISION_DASHBOARD.md) | Forecast-led customer decision view and scope boundaries |
+| [Phase 4 customer data onboarding](docs/PHASE4_CUSTOMER_DATA_ONBOARDING.md) | Hourly CSV schema, validation, provenance, and hosted-upload privacy |
 | [Engineering maturity roadmap](docs/ENGINEERING_MATURITY_ROADMAP.md) | Evidence requirements and delivery gates |
 | [Deployment guide](docs/DEMO_DEPLOYMENT.md) | Local deployment, health checks, and operational boundaries |
 
