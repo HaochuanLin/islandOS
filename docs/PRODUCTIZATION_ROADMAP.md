@@ -31,12 +31,12 @@ No savings, payback, or purchasing recommendation is valid without traceable sit
 
 | Stage | Current repository evidence | Not yet established |
 |---|---|---|
-| INPUT | CSV validation, selected data imports, signal/data contracts, device and telemetry experiments | Universal plug-and-play integration, one common schema across all experiments, production live integration |
-| PREDICT | Forecast baselines, water-demand forecast contracts, separate model experiments and chronological evaluation | Unified site-calibrated multi-signal forecasting, proven transfer accuracy, uncertainty consistently propagated into optimization |
-| OPTIMIZE | Integrated deterministic microgrid accounting baseline, rule-based screening, rolling-horizon and search experiments | Unified general multi-resource optimizer, comprehensive constraints for all assets, global optimum, validated savings |
-| DECIDE | Forecast-led Streamlit dashboard, CSV onboarding, service-equivalence-gated dispatch comparison, downloadable provenance report, and a simplified customer-entered CAPEX/O&M/NPV/payback screen | Complete end-to-end recommendation console, validated customer economics, full lifecycle cost coverage, usability evidence, and site-verified decision reports |
+| INPUT | CSV/XLSX onboarding, local-first site workspace, asset records, source hashes, canonical signal catalog, and read-only telemetry contract | Universal vendor plug-and-play, managed multi-site storage, production live integration |
+| PREDICT | Canonical multi-domain signal catalog, replaceable prediction candidates, rolling-origin model comparison, model/version and history-hash provenance, empirical error bands | Site-calibrated accuracy, transfer validation, calibrated uncertainty consistently propagated into optimization |
+| OPTIMIZE | Forecast-to-joint battery/diesel schedule search, deterministic stress scenarios, policy comparison, service-equivalence gate, bounded heuristic and audit export | Broad asset coverage, calibrated probabilistic robust optimization, global optimality, validated savings |
+| DECIDE | Forecast-led customer decision page, model provenance, hourly schedule comparison, JSON audit, simplified customer-entered economics, versioned local reference API, tenant-scoped site records and read-only telemetry | Production service/security operations, full lifecycle customer economics, usability evidence, site-verified decision reports |
 
-The public Streamlit app is an interactive research prototype, not a live operational system. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
+The public Streamlit app is an interactive research prototype, not a live operational system. Stages A–E are represented on `main` as reusable foundations and offline workflows; the canonical catalog-to-optimizer path is being consolidated in the Stage F integration increment. Experimental modules elsewhere in the repository do not automatically form part of the hosted application.
 
 ## Productization principles
 
@@ -87,6 +87,15 @@ The public Streamlit app is an interactive research prototype, not a live operat
 - Surface data quality, maturity, assumptions, uncertainty, infeasibility, and audit history.
 - Keep interfaces on shared domain services; add operational controls according to validated user needs.
 - **Exit:** independent users can complete a bounded workflow and reproduce its report without developer assistance.
+
+
+### Stage F — unified customer workflow and deployment handoff
+
+- Route customer-facing forecast and optimization pages through the same canonical signal catalog used by onboarding; do not duplicate signal semantics in UI code.
+- Keep INPUT provenance, PREDICT model identity/backtests/error bands, OPTIMIZE feasibility/service-equivalence checks, and DECIDE audit exports visible in one reproducible path.
+- Connect the local reference API only through explicit service boundaries; retain loopback-only defaults and read-only telemetry.
+- Align README, product blueprint, maturity labels, and runnable workflow documentation with merged code.
+- **Exit:** the customer decision page uses the canonical forecast catalog; an integration test covers catalog → forecast → joint optimizer; docs describe actual mainline capability and remaining production gaps. This is still an offline research workflow, not site validation or production SaaS.
 
 ## Customer discovery
 

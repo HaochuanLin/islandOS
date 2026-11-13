@@ -1,7 +1,7 @@
 # Phase A — Architecture Consolidation and Repository Hygiene
 
 **Review date:** 2026-11-13  
-**Status:** Consolidation review; see the verified exit checklist below.  
+**Status:** Core architecture and integration governance are closed on main; dormant branch-ref cleanup remains an operational repository-hygiene item because the connected GitHub interface does not expose branch deletion.  
 **Scope:** Generic, reusable IslandOS platform. Nan'ao/competition-specific experiments are not product architecture.
 
 ## 1. Current baseline
