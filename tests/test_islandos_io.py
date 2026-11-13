@@ -312,6 +312,13 @@ class TestControlAuthorization(unittest.TestCase):
         )
         self.assertTrue(frame.valid)
 
+    def test_rejects_extremely_large_integer_without_exception(self):
+        payload = good_payload()
+        payload["renewable_surplus_kw"] = 10 ** 10000
+        frame = validate_telemetry(payload, "gateway", received_at=NOW)
+        self.assertFalse(frame.valid)
+        self.assertTrue(any("finite number" in error for error in frame.errors))
+
 
 if __name__ == "__main__":
     unittest.main()
