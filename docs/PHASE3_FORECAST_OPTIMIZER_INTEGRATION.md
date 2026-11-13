@@ -52,5 +52,6 @@ flexible demand.
 ## Validation
 
 The adapter tests cover a complete four-signal hand-off, negative tariff
-preservation, unit mismatch rejection, availability horizon mismatch, optimizer
-execution, and forecast provenance in the returned result.
+preservation, unit mismatch rejection, availability horizon mismatch, optional
+flexible/critical load mapping, critical-load bounds, four-case stress replay,
+physical audit passage, optimizer execution, and forecast provenance.
