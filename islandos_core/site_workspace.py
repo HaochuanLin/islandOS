@@ -511,6 +511,23 @@ def import_project_package(
             actor_id=actor_id, created_at=timestamp,
         ))
 
+    for item in package.get("run_manifests", []):
+        manifest = item.get("manifest", {})
+        if not isinstance(manifest, dict) or item.get("sha256") != _hash(_json(manifest)):
+            raise AuditIntegrityError("package contains a run manifest with an invalid content hash")
+    for event in package.get("audit_events", []):
+        body = {
+            "event_id": event.get("event_id"),
+            "created_at": event.get("created_at"),
+            "actor_id": event.get("actor_id"),
+            "event_type": event.get("event_type"),
+            "project_id": event.get("project_id"),
+            "payload": event.get("payload"),
+            "previous_hash": event.get("previous_hash"),
+        }
+        if not isinstance(event.get("event_hash"), str) or event["event_hash"] != _hash(_json(body)):
+            raise AuditIntegrityError("package contains an audit event with an invalid content hash")
+
     artifact_ids = {}
     for item in prepared_imports:
         imported = item.get("imported_at")
