@@ -30,6 +30,15 @@ def test_positive_screen_calculates_npv_payback_and_sensitivity():
     assert result.discounted_payback_years is not None
     assert result.sensitivity_npv["low_20pct_energy_saving"] < result.sensitivity_npv["base"]
     assert result.sensitivity_npv["base"] < result.sensitivity_npv["high_20pct_energy_saving"]
+    assert len(result.annual_cashflows) == 10
+
+
+def test_escalation_changes_year_by_year_cashflows_and_npv():
+    flat = base()
+    escalated = base(annual_energy_saving_escalation_rate=0.04, annual_om_escalation_rate=0.03)
+    assert escalated.annual_cashflows[1]["energy_bill_saving"] == pytest.approx(31_200)
+    assert escalated.annual_cashflows[1]["incremental_om_cost"] == pytest.approx(5_150)
+    assert escalated.net_present_value > flat.net_present_value
 
 
 def test_non_equivalent_service_blocks_all_investment_metrics():
@@ -38,6 +47,7 @@ def test_non_equivalent_service_blocks_all_investment_metrics():
     assert result.net_present_value is None
     assert result.simple_payback_years is None
     assert result.break_even_annual_energy_saving is None
+    assert result.annual_cashflows is None
 
 
 def test_negative_npv_is_a_no_go_screen():
@@ -63,6 +73,7 @@ def test_no_annual_net_benefit_has_no_payback():
         ({"replacement_year": 11}, "replacement_year must fall"),
         ({"replacement_cost": 1, "replacement_year": None}, "replacement_cost requires"),
         ({"baseline_annual_energy_cost": float("nan")}, "must be a finite number"),
+        ({"annual_energy_saving_escalation_rate": 1.5}, "must be between -0.5 and 1.0"),
     ],
 )
 def test_invalid_assumptions_are_rejected(overrides, message):
