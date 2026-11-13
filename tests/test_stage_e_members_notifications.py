@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta, timezone
 import sqlite3
 import tempfile
 import unittest
@@ -70,6 +69,18 @@ class TestStageEMemberAndNotificationLifecycle(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.store.accept_invitation(
                 invitation["invitation_token"], "another-correct-horse-password",
+            )
+
+    def test_invitation_expiry_is_enforced(self):
+        invitation = self.store.create_invitation(self.owner, "expired@example.test")
+        with sqlite3.connect(self.store.path) as db:
+            db.execute(
+                "UPDATE invitations SET expires_at=? WHERE id=?",
+                ("2000-01-01T00:00:00Z", invitation["invitation_id"]),
+            )
+        with self.assertRaises(PermissionError):
+            self.store.accept_invitation(
+                invitation["invitation_token"], "a-long-enough-password",
             )
 
     def test_notification_inbox_is_tenant_and_user_scoped(self):
