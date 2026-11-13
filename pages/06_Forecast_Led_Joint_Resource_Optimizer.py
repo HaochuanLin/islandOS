@@ -1,4 +1,4 @@
-"""Generic prediction-to-joint-resource decision page (Stage D).
+"""Generic canonical-catalog prediction-to-joint-resource decision page (Stage F).
 
 Synthetic inputs are used by default. Uploaded site history is not independently
 verified. Outputs are offline schedule-search estimates, never device commands.
@@ -72,30 +72,34 @@ else:
 st.caption(f"Data provenance: {source}")
 st.caption(f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} ({len(timestamps)} hourly rows)")
 
-target_timestamps = tuple(timestamps[-1] + timedelta(hours=i) for i in range(1, 25))
-signal_specs = {
-    "pv_power_kw": ("pv_power", "kW", True),
-    "wind_power_kw": ("wind_power", "kW", True),
-    "load_kw": ("essential_load", "kW", True),
-    "tariff_per_kwh": ("electricity_price", f"{currency}/kWh", False),
+signal_history = {
+    "pv_power_kw": values["pv_power"],
+    "wind_power_kw": values["wind_power"],
+    "load_kw": values["essential_load"],
+    "tariff_per_kwh": values["electricity_price"],
 }
-engine = PredictionEngine()
+signal_units = {
+    "pv_power_kw": "kW",
+    "wind_power_kw": "kW",
+    "load_kw": "kW",
+    "tariff_per_kwh": f"{currency}/kWh",
+}
 predictions = {}
 try:
-    for canonical_id, (history_key, unit, non_negative) in signal_specs.items():
-        request = ForecastRequest(
-            signal_id=canonical_id,
-            unit=unit,
-            history=tuple(
-                SignalObservation(timestamp=stamp, value=float(value))
-                for stamp, value in zip(timestamps, values[history_key])
-            ),
-            target_timestamps=target_timestamps,
-            non_negative=non_negative,
-        )
-        predictions[canonical_id] = engine.forecast(
-            request, backtest_horizon=24, season_length=24, confidence_level=0.90
-        )
+    # The UI now uses the same canonical signal catalog as customer onboarding.
+    forecast_bundle = forecast_site_signals(
+        timestamps,
+        signal_history,
+        signal_units,
+        horizon=24,
+        backtest_horizon=24,
+        season_length=24,
+        confidence_level=0.90,
+    )
+    predictions = dict(forecast_bundle.results)
+    target_timestamps = tuple(
+        point.timestamp for point in predictions["pv_power_kw"].points
+    )
 
     config = EnergySystemConfig(
         pv_rated_kw=float(pv_capacity),
