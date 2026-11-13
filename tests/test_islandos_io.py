@@ -319,6 +319,20 @@ class TestControlAuthorization(unittest.TestCase):
         self.assertFalse(frame.valid)
         self.assertTrue(any("finite number" in error for error in frame.errors))
 
+    def test_rejects_invalid_freshness_configuration_without_exception(self):
+        payload = good_payload()
+        for value in ("300", True, 10 ** 10000, float("nan")):
+            with self.subTest(value_type=type(value).__name__):
+                with self.assertRaises(ValueError):
+                    validate_telemetry(payload, "gateway", received_at=NOW, max_age_seconds=value)
+
+    def test_rejects_invalid_future_tolerance_configuration(self):
+        payload = good_payload()
+        for value in ("0", True, 10 ** 10000, float("inf")):
+            with self.subTest(value_type=type(value).__name__):
+                with self.assertRaises(ValueError):
+                    validate_telemetry(payload, "gateway", received_at=NOW, future_tolerance_seconds=value)
+
 
 if __name__ == "__main__":
     unittest.main()
