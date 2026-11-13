@@ -94,7 +94,7 @@ The numbered engineering sequence (1–10) tracks implementation slices in the r
 - **Exit:** independent users can complete a bounded workflow and reproduce its report without developer assistance.
 
 
-### Current Stage F — real deployment and field-validation foundation
+### Earlier A–F workstream: Stage F — real deployment and field-validation foundation
 
 - Implemented a vendor-neutral read-only shadow comparison and offline JSON replay CLI. It checks timestamps/freshness, signal coverage, units, finite values, and declared per-signal tolerances; outputs include an audit digest and explicit no-command/no-write invariants.
 - Existing local foundations include a loopback-only reference API and telemetry gateway, SQLite persistence, whole-workspace backup/restore, Docker hardening, CI SBOM/dependency checks, and a deployment/pilot acceptance template.
