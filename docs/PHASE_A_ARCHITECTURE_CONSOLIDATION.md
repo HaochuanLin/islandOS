@@ -51,7 +51,7 @@
 - [x] Open PRs compared against current main by commit divergence and changed-file scope.
 - [x] Destructive/obsolete whole-branch merge paths identified and explicitly rejected.
 - [x] Generic product architecture rules and evidence boundaries documented.
-- [ ] Stale PR queue closed or converted into fresh, current-main-based work.
+- [x] Stale PR queue closed; source branches remain available for selective re-port.
 - [ ] Generic components worth recovering from historical branches inventoried per module.
 - [ ] Exact-main CI and smoke-test baseline recorded after consolidation.
 
