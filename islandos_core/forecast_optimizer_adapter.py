@@ -347,6 +347,63 @@ def evaluate_forecast_stress_scenarios(
 
 
 
+
+def _robust_service_equivalent_economics(result: dict, *, tolerance: float = 1e-6) -> dict:
+    """Gate worst-case modeled cost comparisons on service equivalence per scenario."""
+    reference = result["baseline_comparison"]["policies"]["grid_first"]["scenario_results"]
+    recommended = result["recommendation"]["scenario_results"]
+    service_metrics = (
+        "load_served_kwh",
+        "unmet_load_kwh",
+        "critical_unmet_load_kwh",
+        "flexible_load_shed_kwh",
+    )
+    per_scenario = {}
+    equivalent = set(reference) == set(recommended)
+    if equivalent:
+        for name in reference:
+            ref_summary = reference[name]["summary"]
+            rec_summary = recommended[name]["summary"]
+            deltas = {
+                metric: round(
+                    float(rec_summary.get(metric, 0.0))
+                    - float(ref_summary.get(metric, 0.0)), 8
+                )
+                for metric in service_metrics
+            }
+            scenario_equal = all(abs(value) <= tolerance for value in deltas.values())
+            equivalent = equivalent and scenario_equal
+            per_scenario[name] = {
+                "service_equivalent": scenario_equal,
+                "service_deltas_recommended_minus_reference": deltas,
+            }
+    reference_worst_cost = float(
+        result["baseline_comparison"]["policies"]["grid_first"]
+        ["worst_case_objectives"]["estimated_energy_cost"]
+    )
+    recommended_worst_cost = float(
+        result["recommendation"]["objectives"]["estimated_energy_cost"]
+    )
+    reduction = reference_worst_cost - recommended_worst_cost
+    return {
+        "reference_policy": "grid_first",
+        "reference_is_measured_site_operation": False,
+        "service_equivalent_in_every_scenario": equivalent,
+        "service_tolerance": tolerance,
+        "scenario_service_checks": per_scenario,
+        "worst_case_reference_cost": reference_worst_cost,
+        "worst_case_recommended_cost": recommended_worst_cost,
+        "cost_comparison_valid": equivalent,
+        "estimated_worst_case_cost_reduction": round(reduction, 8) if equivalent else None,
+        "interpretation": (
+            "Worst-case modeled cost difference is shown because service is equivalent "
+            "in every supplied scenario; this is not a measured customer saving."
+            if equivalent else
+            "Service differs in at least one scenario; no savings claim is made."
+        ),
+    }
+
+
 def optimize_forecasted_resource_schedule(
     bundle: ForecastBundle,
     config: EnergySystemConfig,
@@ -397,6 +454,7 @@ def optimize_forecasted_resource_schedule(
         max_critical_unmet_load_kwh=max_critical_unmet_load_kwh,
         terminal_battery_soc_min=terminal_battery_soc_min,
     )
+    result["robust_customer_economics"] = _robust_service_equivalent_economics(result)
     result["forecast_provenance"] = {
         "history_sha256": coordinated.history_sha256,
         "model_ids": dict(coordinated.model_ids),
