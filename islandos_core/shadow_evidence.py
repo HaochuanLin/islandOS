@@ -82,6 +82,10 @@ class ShadowEvidenceStore:
         db.row_factory = sqlite3.Row
         try:
             yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -99,7 +103,7 @@ class ShadowEvidenceStore:
         value = _validate_report(report)
         rendered = _canonical(value)
         report_hash = _sha256(rendered)
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             duplicate = db.execute(
                 "SELECT id FROM shadow_evidence WHERE site_ref=? AND recommendation_id=? AND observation_id=?",
                 (site_ref, value["recommendation_id"], value["observation_id"]),
