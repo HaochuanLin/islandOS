@@ -73,6 +73,9 @@ def evaluate_supervised_trial_readiness(
         if manifest.get(field) is not True:
             blockers.append({"code": "safety_control_not_verified", "field": field})
 
+    import math
+    if isinstance(max_telemetry_age_seconds, bool) or isinstance(max_approval_age_hours, bool):
+        raise ValueError("freshness limits must be positive finite numbers")
     try:
         max_age = float(max_telemetry_age_seconds)
         approval_age = float(max_approval_age_hours)
@@ -80,7 +83,6 @@ def evaluate_supervised_trial_readiness(
             raise ValueError
     except (TypeError, ValueError, OverflowError):
         raise ValueError("freshness limits must be positive finite numbers")
-    import math
     if not math.isfinite(max_age) or not math.isfinite(approval_age):
         raise ValueError("freshness limits must be positive finite numbers")
 
