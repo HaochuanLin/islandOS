@@ -1,8 +1,10 @@
 """Tests for the baseline-gated multi-signal forecast engine."""
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
-from islandos_core.forecast_engine import forecast_signals
+import islandos_core.forecast_engine as forecast_module
+from islandos_core.forecast_engine import ForecastMetrics, forecast_signals
 
 
 class TestForecastEngine(unittest.TestCase):
@@ -85,6 +87,23 @@ class TestForecastEngine(unittest.TestCase):
             forecast_signals(self.timestamps, {"load": [1.0] * 240}, {"load": "kW"}, 0)
         with self.assertRaisesRegex(ValueError, "(?i)at least 72"):
             forecast_signals(self.timestamps[:71], {"load": [1.0] * 71}, {"load": "kW"}, 1)
+
+    def test_selected_ridge_is_refit_on_all_available_history(self):
+        metrics = [
+            ForecastMetrics(samples=48, mae=2.0, rmse=2.0, bias_predicted_minus_actual=0.0),
+            ForecastMetrics(samples=48, mae=1.0, rmse=1.0, bias_predicted_minus_actual=0.0),
+            ForecastMetrics(samples=48, mae=0.5, rmse=0.5, bias_predicted_minus_actual=0.0),
+        ]
+        with patch.object(forecast_module, "_metrics", side_effect=metrics):
+            with patch.object(forecast_module, "_fit_ridge", wraps=forecast_module._fit_ridge) as fit:
+                result = forecast_signals(
+                    self.timestamps,
+                    {"load": [10.0 + (i % 24) * 0.2 for i in range(240)]},
+                    {"load": "kW"},
+                    6,
+                )
+        self.assertEqual(result.forecasts["load"].model_id, "ridge_autoregressive")
+        self.assertEqual([call.args[2] for call in fit.call_args_list], [192, 240])
 
     def test_negative_prices_are_not_clipped(self):
         values = [-0.1 if i % 24 < 8 else 0.2 for i in range(240)]
