@@ -291,7 +291,14 @@ def export_project_package(
     if len(projects) != 1:
         raise WorkspaceStoreError("project_id does not exist")
     imports = list_import_artifacts(db_path, project_id=project_id)
-    assets = list_asset_records(db_path, project_id=project_id, include_history=True)
+    asset_records = list_asset_records(db_path, project_id=project_id, include_history=True)
+    assets = [
+        {
+            **{key: value for key, value in item.items() if key != "asset"},
+            "asset": item["asset"].to_mapping(),
+        }
+        for item in asset_records
+    ]
     profiles = list_site_profiles(db_path, project_id=project_id)
     with _connect(db_path) as connection:
         manifests = connection.execute(
