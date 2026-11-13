@@ -14,6 +14,7 @@ import json
 import re
 from typing import Mapping, Sequence
 
+from .forecast_service import ForecastBundleRequest, ForecastService
 from .prediction_engine import (
     ForecastRequest,
     PredictionEngine,
@@ -131,7 +132,11 @@ def forecast_site_signals(
     if not isinstance(predictor, PredictionEngine):
         raise TypeError("engine must be a PredictionEngine instance")
 
-    results: dict[str, PredictionResult] = {}
+    requests = []
+    targets = tuple(
+        stamps[-1] + timedelta(hours=offset)
+        for offset in range(1, horizon + 1)
+    )
     for signal_id in sorted(history):
         if not isinstance(signal_id, str) or not signal_id.strip():
             raise ValueError("signal identifiers must be non-empty strings")
@@ -152,24 +157,21 @@ def forecast_site_signals(
             SignalObservation(timestamp=stamp, value=value)
             for stamp, value in zip(stamps, values)
         )
-        targets = tuple(
-            stamps[-1] + timedelta(hours=offset)
-            for offset in range(1, horizon + 1)
-        )
-        request = ForecastRequest(
+        requests.append(ForecastRequest(
             signal_id=signal_id,
             unit=unit,
             history=observations,
             target_timestamps=targets,
             non_negative=non_negative,
-        )
-        results[signal_id] = predictor.forecast(
-            request,
-            backtest_horizon=backtest_horizon,
-            season_length=season_length,
-            confidence_level=confidence_level,
-        )
+        ))
 
+    bundle = ForecastService(predictor).forecast_bundle(
+        ForecastBundleRequest(tuple(requests)),
+        backtest_horizon=backtest_horizon,
+        season_length=season_length,
+        confidence_level=confidence_level,
+    )
+    results = dict(bundle.forecasts)
     digest_payload = {
         signal_id: results[signal_id].input_history_sha256
         for signal_id in sorted(results)
