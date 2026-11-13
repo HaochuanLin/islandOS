@@ -178,6 +178,27 @@ class TestForecastEngine(unittest.TestCase):
                 folds=1,
             )
 
+    def test_builtin_rolling_validation_refits_ridge_inside_each_fold(self):
+        hours = 900
+        stamps = [
+            datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i)
+            for i in range(hours)
+        ]
+        values = [
+            15.0 + 2.0 * __import__("math").sin(2.0 * __import__("math").pi * i / 24.0)
+            for i in range(hours)
+        ]
+        with patch.object(
+            forecast_module, "_fit_ridge", wraps=forecast_module._fit_ridge
+        ) as fit:
+            evaluate_signal_rolling(stamps, values, horizons=(1, 24), folds=2)
+        self.assertEqual(fit.call_count, 4)
+        self.assertTrue(all(call.args[2] == len(call.args[0]) for call in fit.call_args_list))
+        self.assertEqual(
+            [len(call.args[0]) for call in fit.call_args_list],
+            [898, 899, 852, 876],
+        )
+
     def test_builtin_rolling_validation_rejects_negative_physical_history(self):
         values = [5.0] * 900
         values[100] = -1.0
