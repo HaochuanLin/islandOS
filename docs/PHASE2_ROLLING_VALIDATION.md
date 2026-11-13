@@ -28,14 +28,10 @@ representative, site-authorized data and stress periods.
 
 ## Current boundary
 
-These utilities are implemented and unit-tested as standalone primitives.
-The current `forecast_signals` API still uses its original single holdout
-selection and UTC calendar features until a separately reviewed integration
-change wires these helpers into model fitting and records the selected site
-timezone in forecast provenance. They do not establish site accuracy.
+These utilities remain separate from automatic model promotion, but the built-in candidate models can now be evaluated directly through `evaluate_signal_rolling(...)` in `islandos_core/forecast_engine.py`. That helper evaluates the same persistence, seasonal-naive, and ridge implementations used by `forecast_signals`, refitting ridge independently inside each training fold and recursively forecasting each validation block. It returns per-fold MAE, RMSE, and signed bias for each horizon. The production `forecast_signals` selection gate is deliberately unchanged: a rolling score report is evidence for model review, not an automatic deployment decision. These results do not establish site accuracy.
 
 ## Horizon-specific validation
 
 The module also exposes `evaluate_horizon_windows(...)`, which runs an independent expanding-window evaluation for each requested horizon (1–168 hours). This keeps short-horizon and long-horizon errors separate instead of reporting one blended score. The default horizon set is 1, 6, 12, 24, 48, and 168 hours; each horizon requires enough history for its own requested number of folds. Model callbacks still receive only training values and future timestamps.
 
-This is an evaluation utility, not yet the selection policy used by `forecast_signals`. The engine's automatic model choice remains based on its documented final chronological holdout until the horizon-wise results are integrated and reviewed.
+The `phase2_opsd_backtest.py` CLI can opt into this evaluation with `--rolling-validation` and choose horizons with `--rolling-horizons 1 6 24 168`. Four folds are evaluated per horizon with at least 72 training observations in the first fold. The CLI reports each model's mean MAE and individual fold MAE/RMSE/bias. The standard forecast selection remains holdout-gated until a separate policy change is justified by representative data.
