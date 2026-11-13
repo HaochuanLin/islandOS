@@ -9,7 +9,7 @@ This is a reusable data-ingestion component, not an IslandOS site integration. N
 ## Source and limitations
 
 - Dataset: Open Power System Data, Time series package, version 2020-10-06.
-- Source page: https://data.open-power-system.org/time_series/2020-10-06/
+- Source page: https://data.open-power-system-data.org/time_series/2020-10-06/
 - Coverage: 32 European countries; the package version documents data from 2015 to mid-2020.
 - Available signals include electricity load, day-ahead prices, solar generation, and wind generation.
 - Data is aggregated by country, control area, or bidding zone; it is not representative of an individual facility or microgrid.
