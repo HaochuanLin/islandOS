@@ -34,6 +34,8 @@ CANONICAL_UNITS = {
 
 _HEADER_ALIASES = {
     "load_kw": {"load", "load_kw", "demand", "demand_kw", "site_load", "site_load_kw", "critical_load_kw", "critical_load", "active_load_kw"},
+    "flexible_load_kw": {"flexible_load", "flexible_load_kw", "shiftable_load_kw", "controllable_load_kw"},
+    "water_demand_m3_per_hour": {"water_demand", "water_demand_m3_per_hour", "water_demand_m3h", "water_use_m3_per_hour"},
     "pv_power_kw": {"pv", "pv_kw", "pv_power", "pv_power_kw", "solar", "solar_kw", "solar_power_kw"},
     "wind_power_kw": {"wind", "wind_kw", "wind_power", "wind_power_kw"},
     "grid_import_kw": {"grid_import", "grid_import_kw", "import_kw", "utility_import_kw"},
@@ -50,7 +52,7 @@ _TIMESTAMP_ALIASES = {"timestamp", "timestamp_utc", "datetime", "date_time", "ti
 _UNIT_SUFFIXES = {
     "kw": "kW", "w": "W", "mw": "MW",
     "%": "%", "pct": "%", "l/h": "L/h", "lph": "L/h",
-    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh",
+    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh", "m3/h": "m3/h",
 }
 
 
