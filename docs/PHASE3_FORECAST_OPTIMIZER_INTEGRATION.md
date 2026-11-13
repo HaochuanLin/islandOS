@@ -94,3 +94,10 @@ energy-system configuration. A declared topology is checked structurally only;
 this is not load-flow, protection, electrical-safety, or equipment certification.
 A readiness snapshot does not predict future availability; the dispatch horizon
 still requires explicit availability inputs.
+
+
+For the joint battery–diesel schedule path, worst-case cost comparison against
+the `grid_first` reference is also withheld unless total served energy, total
+unmet energy, critical unmet energy, and flexible-load shedding match in every
+scenario. The reference is a modeled policy under identical scenarios, not
+measured customer operation.
