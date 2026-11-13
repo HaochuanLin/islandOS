@@ -517,7 +517,8 @@ def make_handler(store, allow_registration=False):
             return store.authenticate(header[7:])
 
         def do_GET(self):
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
             if path == "/api/v1/health":
                 return self.send_json(200, {"status": "ok", "api_version": "v1",
                                             "mode": "single_host_reference", "device_write_enabled": False})
@@ -525,6 +526,22 @@ def make_handler(store, allow_registration=False):
                 who = self.principal()
                 if path == "/api/v1/sites":
                     return self.send_json(200, {"sites": store.list_sites(who)})
+                if path == "/api/v1/members":
+                    return self.send_json(200, {"members": store.list_members(who)})
+                if path == "/api/v1/notifications":
+                    query = parse_qs(parsed.query)
+                    unread_value = query.get("unread_only", ["false"])[0].lower()
+                    if unread_value not in {"true", "false", "1", "0"}:
+                        raise ValueError("unread_only must be true or false")
+                    limit_value = query.get("limit", ["50"])[0]
+                    try:
+                        limit = int(limit_value)
+                    except ValueError as exc:
+                        raise ValueError("limit must be an integer from 1 to 100") from exc
+                    items = store.list_notifications(
+                        who, unread_only=unread_value in {"true", "1"}, limit=limit
+                    )
+                    return self.send_json(200, {"notifications": items})
                 prefix, suffix = "/api/v1/sites/", "/telemetry/latest"
                 if path.startswith(prefix) and path.endswith(suffix):
                     site_id = path[len(prefix):-len(suffix)].strip("/")
@@ -535,6 +552,8 @@ def make_handler(store, allow_registration=False):
                 return self.send_json(401, {"error": str(exc)})
             except LookupError as exc:
                 return self.send_json(404, {"error": str(exc)})
+            except ValueError as exc:
+                return self.send_json(400, {"error": str(exc)})
 
         def do_POST(self):
             path = urlparse(self.path).path
@@ -548,10 +567,38 @@ def make_handler(store, allow_registration=False):
                     return self.send_json(201, result)
                 if path == "/api/v1/auth/login":
                     return self.send_json(200, store.login(body.get("email", ""), body.get("password", "")))
+                if path == "/api/v1/members/invitations/accept":
+                    result = store.accept_invitation(
+                        body.get("invitation_token", ""), body.get("password", "")
+                    )
+                    return self.send_json(201, result)
                 who = self.principal()
                 if path == "/api/v1/sites":
                     result = store.create_site(who, body.get("name"), body.get("timezone"))
                     return self.send_json(201, result)
+                if path == "/api/v1/members/invitations":
+                    result = store.create_invitation(
+                        who, body.get("email", ""), body.get("role", "analyst"),
+                        body.get("expires_in_seconds", 604800),
+                    )
+                    return self.send_json(201, result)
+                if path == "/api/v1/notifications":
+                    result = store.create_notification(
+                        who, title=body.get("title"), message=body.get("message"),
+                        category=body.get("category", "decision"),
+                        severity=body.get("severity", "info"),
+                        site_id=body.get("site_id"), user_id=body.get("user_id"),
+                        payload=body.get("payload"),
+                    )
+                    return self.send_json(201, result)
+                prefix, suffix = "/api/v1/notifications/", "/read"
+                if path.startswith(prefix) and path.endswith(suffix):
+                    notification_id = path[len(prefix):-len(suffix)].strip("/")
+                    return self.send_json(200, store.mark_notification_read(who, notification_id))
+                prefix, suffix = "/api/v1/members/", "/role"
+                if path.startswith(prefix) and path.endswith(suffix):
+                    user_id = path[len(prefix):-len(suffix)].strip("/")
+                    return self.send_json(200, store.update_member_role(who, user_id, body.get("role")))
                 prefix = "/api/v1/sites/"
                 suffix = "/telemetry"
                 if path.startswith(prefix) and path.endswith(suffix):
@@ -568,17 +615,23 @@ def make_handler(store, allow_registration=False):
 
         def do_DELETE(self):
             path = urlparse(self.path).path
-            prefix = "/api/v1/sites/"
-            if not path.startswith(prefix):
-                return self.send_json(404, {"error": "not found"})
             try:
                 who = self.principal()
-                site_id = path[len(prefix):].strip("/")
-                return self.send_json(200, store.delete_site(who, site_id))
+                member_prefix = "/api/v1/members/"
+                if path.startswith(member_prefix):
+                    user_id = path[len(member_prefix):].strip("/")
+                    return self.send_json(200, store.remove_member(who, user_id))
+                site_prefix = "/api/v1/sites/"
+                if path.startswith(site_prefix):
+                    site_id = path[len(site_prefix):].strip("/")
+                    return self.send_json(200, store.delete_site(who, site_id))
+                return self.send_json(404, {"error": "not found"})
             except PermissionError as exc:
                 return self.send_json(403 if "role required" in str(exc) else 401, {"error": str(exc)})
             except LookupError as exc:
                 return self.send_json(404, {"error": str(exc)})
+            except ValueError as exc:
+                return self.send_json(400, {"error": str(exc)})
 
         def log_message(self, fmt, *args):
             # Never log request bodies or bearer tokens.
