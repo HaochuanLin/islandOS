@@ -6,6 +6,7 @@ from islandos_core.forecast_engine import forecast_signals
 from islandos_core.energy_system import EnergySystemConfig
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
+    build_service_equivalent_economics,
     evaluate_forecast_stress_scenarios,
     optimize_forecasted_energy_system,
 )
@@ -87,6 +88,50 @@ class ForecastOptimizerAdapterTests(unittest.TestCase):
             build_coordination_inputs(
                 bundle, grid_available=[True] * 6, price_unit="USD/kWh"
             )
+
+    def test_economics_withholds_savings_when_service_is_not_equivalent(self):
+        result = {
+            "recommendation": {"policy": "battery_first"},
+            "candidates": [
+                {"policy": "grid_first", "summary": {
+                    "load_served_kwh": 100.0, "unmet_load_kwh": 0.0,
+                    "critical_unmet_load_kwh": 0.0, "flexible_load_shed_kwh": 0.0,
+                    "estimated_energy_cost": 50.0, "gross_energy_cost": 52.0,
+                }},
+                {"policy": "battery_first", "summary": {
+                    "load_served_kwh": 95.0, "unmet_load_kwh": 5.0,
+                    "critical_unmet_load_kwh": 0.0, "flexible_load_shed_kwh": 5.0,
+                    "estimated_energy_cost": 40.0, "gross_energy_cost": 42.0,
+                }},
+            ],
+        }
+        economics = build_service_equivalent_economics(result)
+        self.assertFalse(economics["service_equivalent"])
+        self.assertFalse(economics["cost_comparison_valid"])
+        self.assertIsNone(economics["estimated_cost_reduction"])
+        self.assertIn("no cost saving is claimed", economics["interpretation"])
+
+    def test_economics_reports_modeled_delta_only_at_equivalent_service(self):
+        result = {
+            "recommendation": {"policy": "battery_first"},
+            "candidates": [
+                {"policy": "grid_first", "summary": {
+                    "load_served_kwh": 100.0, "unmet_load_kwh": 0.0,
+                    "critical_unmet_load_kwh": 0.0, "flexible_load_shed_kwh": 0.0,
+                    "estimated_energy_cost": 50.0, "gross_energy_cost": 52.0,
+                }},
+                {"policy": "battery_first", "summary": {
+                    "load_served_kwh": 100.0, "unmet_load_kwh": 0.0,
+                    "critical_unmet_load_kwh": 0.0, "flexible_load_shed_kwh": 0.0,
+                    "estimated_energy_cost": 45.0, "gross_energy_cost": 47.0,
+                }},
+            ],
+        }
+        economics = build_service_equivalent_economics(result)
+        self.assertTrue(economics["service_equivalent"])
+        self.assertTrue(economics["cost_comparison_valid"])
+        self.assertEqual(economics["estimated_cost_reduction"], 5.0)
+        self.assertFalse(economics["reference_is_measured_site_operation"])
 
     def test_stress_evaluation_replays_same_policies_across_all_scenarios(self):
         coordinated = build_coordination_inputs(
