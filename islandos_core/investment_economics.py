@@ -130,13 +130,16 @@ def evaluate_investment_economics(
         (upfront_capex + replacement_pv - residual_pv) / annuity_factor
         + annual_incremental_om_cost
     )
+    saving_delta = abs(annual_energy_saving) * 0.2
+    low_saving = annual_energy_saving - saving_delta
+    high_saving = annual_energy_saving + saving_delta
     sensitivity = {
         "low_20pct_energy_saving": -upfront_capex
-        + (annual_energy_saving * 0.8 - annual_incremental_om_cost) * annuity_factor
+        + (low_saving - annual_incremental_om_cost) * annuity_factor
         - replacement_pv + residual_pv,
         "base": npv,
         "high_20pct_energy_saving": -upfront_capex
-        + (annual_energy_saving * 1.2 - annual_incremental_om_cost) * annuity_factor
+        + (high_saving - annual_incremental_om_cost) * annuity_factor
         - replacement_pv + residual_pv,
     }
     reasons = []
