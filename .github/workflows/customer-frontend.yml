@@ -25,7 +25,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package.json
-      - run: npm install --no-audit --no-fund
+      - run: npm install --no-package-lock --no-audit --no-fund
       - run: npm run build
