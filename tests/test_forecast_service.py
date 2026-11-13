@@ -43,17 +43,21 @@ def test_forecast_service_returns_aligned_reproducible_multi_signal_bundle():
 
 def test_forecast_bundle_rejects_misaligned_history_or_target_grid():
     values = [float(index % 24) for index in range(72)]
-    first = make_signal("load", "kW", values)
-    second = make_signal(
-        "solar", "kW", values,
-        start=datetime(2026, 1, 1, 1, tzinfo=timezone.utc),
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    first = make_signal("load", "kW", values, start=start)
+    # Same cadence and target grid, but one additional earlier history point.
+    longer_history = tuple(
+        SignalObservation(start - timedelta(hours=1) + timedelta(hours=index), float(index % 24))
+        for index in range(73)
+    )
+    history_misaligned = ForecastRequest(
+        "solar", "kW", longer_history, first.target_timestamps,
     )
     with pytest.raises(ValueError, match="historical timestamps"):
-        ForecastBundleRequest((first, second))
+        ForecastBundleRequest((first, history_misaligned))
 
     target_misaligned = ForecastRequest(
-        "solar", "kW", second.history,
-        tuple(stamp + timedelta(hours=1) for stamp in second.target_timestamps),
+        "solar", "kW", first.history, first.target_timestamps[:-1],
     )
     with pytest.raises(ValueError, match="target timestamps"):
         ForecastBundleRequest((first, target_misaligned))
