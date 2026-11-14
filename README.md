@@ -123,6 +123,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Five-step product workflow, internal architecture mapping, current implementation, and maturity boundaries |
 | [AI architecture](docs/AI_ARCHITECTURE.md) | Forecasting, coordination, comparison, maturity labels and technical guardrails |
 | [Repository map](docs/REPOSITORY_MAP.md) | Where code, experiments, tests, and documentation live |
+| [Repository convergence audit](docs/REPOSITORY_CONVERGENCE_AUDIT_2026-11-14.md) | Branch/PR reconciliation, application call paths, overlapping modules, and staged consolidation plan |
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
 | [Forecasting baseline](docs/SCENARIO_FORECASTING_BASELINE.md) | Current transparent forecast baseline and evaluation boundary |
