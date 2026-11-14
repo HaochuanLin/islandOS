@@ -1,177 +1,109 @@
-# IslandOS AI Architecture — Working Draft
+# IslandOS AI and Decision Architecture
 
-**Status:** working design plus experimental simulation components. Planned features are identified explicitly; no field deployment is claimed.
+**Status:** architecture reference for the current research prototype. Implementation maturity is stated per capability; this document does not claim a field-validated or production control system.
 
-## 1. Design goal
+## 1. Product role
 
-Build a simulation-first decision-support system that allocates available renewable electricity among essential demand and flexible resource-producing loads. The system should explain its choices and demonstrate improvements against a transparent baseline under repeatable scenarios.
+IslandOS is an AI-assisted, simulation-first decision-support platform for energy-constrained infrastructure. It combines data onboarding, forecasting, constrained resource coordination, scenario comparison, and human-reviewed decisions.
 
-The core is the contract between input data and forecasts, a physical simulation model, flexible-load models, a planner/optimizer, constraint validation and metrics, and decision explanations.
+AI refers to statistical and machine-learning forecasting, uncertainty analysis, and algorithmic optimization. A language model may assist explanation or interaction, but must not replace validated data, physical accounting, constraint checks, or operator authority.
 
-## 2. Decision loop
+## 2. Canonical user-facing workflow
 
-For each planning time step:
+The only public product workflow is:
 
-1. Read current renewable output, essential demand, resource inventories, and load states.
-2. Obtain forecasts for a finite horizon. Forecasts must be distinct from future observations used only for post-run evaluation.
-3. Generate candidate schedules for flexible loads.
-4. Reject or penalize infeasible schedules according to clearly defined hard constraints.
-5. Evaluate feasible schedules with the same simulator and objective definitions.
-6. Maintain a non-dominated candidate set when using a multi-objective method.
-7. Choose an operational action from the feasible candidate set using an explicit policy; never select a recommendation from a disconnected optimization run.
-8. Execute only the near-term action, observe the updated state, and re-plan.
+**INPUT → FORECAST → COORDINATE → COMPARE → DECIDE**
 
-This rolling-horizon workflow is proposed, not yet implemented.
+| Step | Responsibility | Evidence / output | Maturity boundary |
+|---|---|---|---|
+| INPUT | Ingest and validate data, units, asset records, constraints, provenance and site configuration | Validated inputs, data-quality findings, asset/configuration records | CSV/XLSX onboarding and local workspace foundations exist; arbitrary vendor plug-and-play is not established |
+| FORECAST | Estimate future generation, demand, resource needs, prices or availability where suitable data exists | Forecast series, chronological backtests, baseline metrics, provenance and uncertainty information where supported | Canonical forecast catalog and candidate interfaces exist; candidate quality is dataset-specific; site-calibrated accuracy is unproven |
+| COORDINATE | Generate candidate schedules and allocate supported resources under explicit technical and service constraints | Feasible/infeasible schedules, resource allocations and constraint diagnostics | Bounded dispatch and selected battery/diesel/flexible-load/RO paths exist; broad universal multi-resource optimization is not established |
+| COMPARE | Replay baseline and candidate alternatives under common assumptions and compare cost, service, reliability and resource-use trade-offs | Like-for-like metrics, service-equivalence checks, stress-case and sensitivity outputs | Selected comparisons exist; comprehensive cross-asset scorecards and customer-validated economics remain incomplete |
+| DECIDE | Present rationale, assumptions, risks and audit records for human review | Decision summary, provenance, downloadable audit and unresolved-data needs | Decision/audit foundations exist; output is advisory and does not authorize equipment operation |
 
-## 3. Essential services and flexible loads
+`PREDICT` in older code or documents means the forecasting responsibility now named `FORECAST`. `OPTIMIZE` refers to algorithms used within `COORDINATE`; it is not a separate public workflow step.
 
-Essential electricity demand must be treated as a priority. Flexible loads may consume only the power left after essential demand and other modelled constraints are accounted for. If backup generation or a battery is included later, its power and energy limits, efficiency, and costs must be explicit.
+## 3. Technical pipeline
 
-Each plug-in should expose identity/configuration, operating state, feasibility constraints, resource conversion, inventory/demand, economics where known, and validation. A module must not claim benefits outside its physical model. Freshwater shifts electricity consumption in time; it does not regenerate electricity. Ice storage provides cooling service, not electricity.
+1. **Input contracts:** parse source data, validate schema, timestamps, units, missingness and provenance. Reject or quarantine malformed, stale, duplicate or future-dated critical observations according to the relevant contract.
+2. **Signal preparation:** map source columns to canonical signal identifiers and retain source identity, units, timezone, interval and transformation metadata.
+3. **Forecast generation:** use transparent persistence/seasonal baselines first. Optional statistical or machine-learning candidates must share input/output contracts and chronological evaluation folds.
+4. **Constraint-aware coordination:** translate forecast signals into supported model inputs; enforce hard service and equipment constraints; explicitly report infeasible requests.
+5. **Common-model comparison:** evaluate baseline and candidate schedules with the same physical/accounting model, time horizon, tariff and service requirements.
+6. **Decision evidence:** persist model identity, input provenance, assumptions, constraints, scenario identifiers and output metrics so a reviewer can reproduce the result.
 
-## 4. Candidate modules
+A module existing in the repository does not prove it is connected end-to-end to the hosted application. A passing software test does not establish forecast skill, field feasibility, safety, customer value or savings.
 
-| Module | State/inventory | Key constraints | Useful output | Status |
-|---|---|---|---|---|
-| RO desalination | Reservoir volume, simplified run state | Rated power, minimum run time, reservoir bounds | Freshwater | Experimental plug-in; separate from legacy demo |
-| Ice making / cold storage | Stored thermal energy | Chiller power, COP, storage capacity, cooling demand | Cooling | Simplified experimental plug-in |
-| Hydrogen | Hydrogen inventory | Efficiency, operating limits, storage and safety | Hydrogen | Planned |
-| Municipal services | Process backlog or treatment state | Service deadlines, environmental constraints | Public service | Planned |
-| Deferrable computing | Pending work | Deadline, interruptibility, maximum power | Completed jobs | Planned |
+## 4. Forecasting requirements
 
-## 5. Shared-budget dispatch engine (experimental implementation)
+- Preserve chronological ordering; do not randomly shuffle time-series observations when doing forward-looking evaluation.
+- Use rolling-origin or otherwise time-respecting holdouts appropriate to the data.
+- Compare candidates with persistence or seasonal-naive baselines on identical folds.
+- Report MAE, RMSE, bias and WAPE only where the denominator and interpretation are appropriate.
+- Record target signal, units, horizon, cadence, timezone, training window, test window, model version and data provenance.
+- Keep future actual observations unavailable to forecast generation; use them only for retrospective scoring.
+- Label synthetic-data performance as synthetic; public data from another geography is not site validation.
+- Treat uncertainty intervals as empirical or model-derived only to the extent the method supports; do not call them calibrated without calibration evidence.
 
-dispatch_engine.py introduces a sequential, priority-based dispatcher over a single renewable-surplus budget.
+## 5. Coordination and optimization requirements
 
-- The caller provides loads in priority order and one demand series per load.
-- Each load receives only the residual power left by earlier-priority loads.
-- For RO, the dispatcher constructs a forecast window from the residual time series. This preserves shared-budget accounting but still assumes perfect look-ahead over the supplied series.
-- Renewable power draw is calculated as total load power minus explicitly reported backup power.
-- The dispatcher checks that no load exceeds its residual renewable budget and verifies the conservation identity: initial surplus equals total renewable allocation plus remaining surplus.
-- Backup is reported separately; this module does not model the dispatch of a diesel generator or battery.
+- Essential services and explicitly declared reserves take precedence over flexible consumption.
+- Enforce rated power, energy, storage state, availability, minimum run/stop, time windows and process service requirements when represented by the model.
+- If a required constraint cannot be represented, disclose the omission rather than implying it is enforced.
+- Reject or flag infeasible schedules; do not silently shed critical service to improve cost.
+- Replay all compared schedules through the same physical/accounting model.
+- Describe heuristic search as bounded candidate search, not a guaranteed global optimum.
+- Include cost, emissions, degradation or lifecycle terms only when their inputs, units and accounting boundary are documented.
+- Forecast uncertainty and robust optimization remain experimental unless an end-to-end tested path proves otherwise.
 
-This is a transparent baseline policy, not an optimizer. Priority order can materially change results and must be reported when comparing scenarios.
+## 6. Current model boundaries
 
-## 6. Forecasting: start with honest baselines
+The deterministic integrated microgrid model provides a selected energy/water accounting baseline for supported PV, wind, battery, grid, backup, RO and water-inventory flows. It is not a universal digital twin and does not model every network, protection, transient, plant-safety or process-chemistry behavior.
 
-Candidate approaches include persistence or seasonal-naive baselines, simple statistical models, and machine-learning models when data quantity and quality justify them. Evaluate forecasts on held-out periods with documented metrics such as MAE or RMSE. Avoid data leakage: future actual values must not be used to generate a forecast. For synthetic experiments, disclose the data-generation process and test robustness to its assumptions.
+The device-level flexibility planner supports selected task classes and constraints. Its outputs are planning demonstrations, not measured savings. Tariff forecasting and price-aware flexible-load LP are experimental baselines, not trained market-price services.
 
-## 7. Optimization: compare before committing
+Rolling-horizon and alternative multi-objective algorithms are research workflows. Their presence must not be interpreted as live MPC or operational control.
 
-Candidate methods include an interpretable rule-based heuristic, NSGA-II, and multi-objective simulated annealing (MOSA) if its acceptance rule, archive management, and diversity strategy are implemented and tested. Algorithm choice should be based on schedule representation, constraints, runtime, repeatability, and solution quality—not branding.
+## 7. Technology responsibility boundaries
 
-Potential objectives include operating cost, unserved essential electricity, unmet water/cooling demand, renewable curtailment, defensible battery degradation, and value of useful resources. Critical services may be hard constraints. Cost, emissions, and degradation terms should be included only with documented assumptions.
+| Technology | Role | Guardrail |
+|---|---|---|
+| Physical equations / system model | Account for energy, power, storage, conversion and resource inventory | Never silently infer unknown physical parameters |
+| Statistics and ML | Forecast signals when data supports the target and horizon | Chronological baselines, leakage prevention, provenance and limitations |
+| Scenario analysis | Explore forecast error, outages, low renewable supply, demand spikes and derating | State seeds, distributions and calibration status |
+| LP / MILP / heuristics / NSGA-II | Generate candidate schedules and explore trade-offs | Feasibility checks; no unsupported global-optimum claims |
+| Rolling-horizon / MPC concepts | Re-plan as observations change | Advisory/simulation first; no execution without separate approval and site safety review |
+| LLM | Explain outputs and summarize risks | Must not invent measurements, bypass constraints or issue device commands |
 
-A credible Pareto workflow generates candidates, simulates all candidates with the same model, filters infeasible and dominated candidates, checks duplicates and diversity, reports each candidate's objective values and feasibility, and selects any recommendation from that same evaluated archive using a disclosed decision rule. An approximate archive is not proof of the complete Pareto front or a global optimum.
+## 8. Evidence required for claims
 
-## 8. Evaluation protocol
+Every metric should identify scenario, source, time window, seed where applicable, baseline, assumptions, units and model/software version.
 
-Compare baseline and optimized strategies on the same scenarios, including multiple random seeds, low/medium/high renewable conditions, demand peaks, resource shortages, forecast errors, module availability changes, and equipment boundary cases.
+| Evidence family | Required evidence |
+|---|---|
+| Physical correctness | Energy/resource balance residuals; SOC and inventory-bound violations |
+| Service reliability | Unserved essential energy/hours; unmet resource demand; reserve violations |
+| Energy performance | Renewable utilization/curtailment, grid imports, backup generation, storage throughput |
+| Economic performance | Explicit tariff, fuel, CAPEX/OPEX, maintenance, replacement and sensitivity assumptions |
+| Forecast performance | MAE/RMSE/bias against chronological baselines on held-out periods |
+| Coordination quality | Feasible-schedule rate, service equivalence, trade-offs, runtime and repeatability |
+| Robustness | Paired seeds, forecast error, outages, demand spikes, price shocks, equipment derating and invalid telemetry |
+| Integration readiness | Adapter contract tests, freshness/unit checks, read-only shadow logs, operator review and rollback evidence |
 
-Report renewable curtailment, essential electricity not served, each load's electricity and useful output, resource shortages and inventories, cost only if modelled, degradation only if modelled, constraint violations, runtime, seed, and configuration. Lower curtailment alone is not sufficient if essential service or resource delivery worsens.
+A benchmark is not product proof if it uses future actuals unavailable at decision time, compares against a deliberately weak baseline, or hides unmet service.
 
-## 9. Implementation stages
+## 9. Maturity labels
 
-1. **Simulation integrity:** test energy and water balance; expose equipment constraints; preserve the existing CLI demo.
-2. **Load interface:** an experimental common contract exists in flexible_loads.py with two initial load plug-ins.
-3. **Shared budget:** an experimental sequential dispatcher allocates residual renewable power and checks conservation; further cross-load and edge-case validation is required.
-4. **Forecasting and rolling planning:** implement a baseline forecast, separate forecast inputs from future actuals, and re-plan after observations.
-5. **Multi-objective optimization:** centralize objective calculation, constraint validation, Pareto filtering, and selection from the same candidate archive.
-6. **Scenario evaluation:** compare controlled scenarios and publish reproducible configurations and output summaries.
+- **IMPLEMENTED:** present on `main` and supported by appropriate tests or reproducible evidence for the stated scope.
+- **EXPERIMENTAL:** code or workflow exists but remains exploratory, limited, incompletely integrated, or not validated for general use.
+- **PLANNED:** target capability without a usable current workflow.
+- **LONG-TERM:** depends on site integration, independent review, operational approval, security, hardware or commercial validation.
 
-## 10. Non-goals for the first AI MVP
+A pull request is not part of mainline implementation until merged. Software tests do not establish site accuracy, safety acceptance or commercial outcomes.
 
-- No real-world cost savings claims without site-specific comparative evidence.
-- No battery replacement/lifetime-extension claims without a defined battery model and baseline.
-- No claim of autonomous control or hardware integration; this is simulation-only.
-- No language model added merely for an AI label if it does not improve forecasting, planning, explanation, or decisions.
+## 10. Explicit non-claims
 
-## 11. Definition of a credible milestone
+IslandOS does not currently claim universal plug-and-play integration, validated all-signal forecasting at a customer site, globally optimal dispatch, certified safety, autonomous online learning, live PLC actuation, field-proven savings or bankable ROI. These require evidence beyond repository code and synthetic simulations.
 
-A milestone is ready to describe as implemented when code exists, automated tests cover its core constraints, commands reproduce results, units and assumptions are documented, results are compared against a baseline, and limitations accompany claims.
-
-
-## 12. Connected optimization prototype
-
-The experimental module `optimization/grid_search_optimizer.py` connects candidate generation, the shared-budget simulator, Pareto filtering, and recommendation selection in one pipeline.
-
-- **Search space:** eight candidates formed by two load priority orders and four RO minimum-run durations.
-- **Evaluation:** every candidate uses `dispatch_flexible_loads` and the same scenario input.
-- **Objectives:** minimize unmet water demand, unmet cooling demand, and remaining surplus. This objective set is illustrative; lower remaining surplus is not inherently better if it comes at an unacceptable resource or operating cost.
-- **Feasibility:** candidates with modelled constraint-violation hours are excluded from the archive.
-- **Archive:** candidates are retained if no other feasible evaluated candidate is at least as good in all three objectives and strictly better in one.
-- **Recommendation:** a disclosed weighted normalized score selects one candidate from the same archive; the selected ID is checked by tests to belong to that archive.
-- **Limitations:** the search space is small and manually parameterized. This is grid search, not AI/ML or a guarantee of a globally optimal schedule. The scenario profiles are synthetic, and the weights encode a policy choice rather than an objective truth.
-
-
-## 13. Physical accounting and horizon-boundary checks
-
-The RO plug-in refuses to start a new minimum-run cycle if the simulation has fewer than the required run hours remaining. This prevents the model from initiating a cycle that it knowingly cannot complete inside the simulated horizon. A cycle that was already running before the horizon boundary is still a modelling edge case for future rolling-horizon work.
-
-Automated tests now assert stepwise accounting identities:
-- RO water inventory at the next step equals current inventory plus production minus spill and water delivered.
-- Cold-storage inventory at the next step equals current thermal inventory plus cooling produced minus cooling served and spill.
-- Served demand plus unmet demand equals the requested demand for each time step.
-- Inventories remain within configured bounds.
-
-These are accounting invariants, not field validation. They test whether the code conserves its modelled quantities, not whether the chosen process assumptions match a real installation.
-
-
-## 14. Forecast-error policy-selection sensitivity
-
-`experiments/forecast_error_robustness.py` tests 12 deterministic cases: three synthetic surplus scenarios crossed with four forecast-error profiles (perfect, +20%, -20%, and alternating +/-20%).
-
-For each case, the grid-search optimizer selects a policy candidate from the perturbed forecast profile. That selected candidate and a fixed RO-first, two-hour minimum-run baseline are evaluated on the original synthetic profile. The optimizer run on the original profile is shown as a perfect-information hindsight reference, not a deployable policy.
-
-This is a **policy-selection sensitivity test**, not a forecast-model evaluation. The dispatch engine receives the original per-step power when candidates are replayed, so it remains reactive rather than executing a locked schedule planned from the forecast. No learned forecasting model, real weather data, probabilistic calibration, or field data are included. A future version should introduce a rolling-horizon planner that commits actions before observing realized generation, then score forecast errors against that locked plan.
-
-
-## 15. Rolling-horizon prototype
-
-`experiments/rolling_horizon_dispatch.py` adds a first receding-horizon loop. At each hour it evaluates two priority orders over a three-hour forecast window, commits only the first-hour action against realized available surplus, carries freshwater and cold-storage inventories forward, and replans at the next step. It compares rolling decisions with fixed priority policies and a perfect-information hindsight reference under synthetic forecast-error profiles.
-
-This is a **prototype of the control loop**, not a validated plant controller. It deliberately sets RO minimum-run duration to one hour in this experiment so the current load interface can carry inventory state between single-step executions; startup persistence, ramping, minimum-down time, forecast uncertainty distributions, and safety interlocks remain unmodeled. Forecasts and demands are synthetic. The older policy-selection sensitivity experiment remains a separate, simpler analysis.
-
-
-## 16. Objective-weight sensitivity audit
-
-`experiments/weight_sensitivity_audit.py` re-scores the existing 12 rolling-dispatch scenario/error outcomes under five illustrative objective weight sets. It reports the number of cases where rolling dispatch scores better than, ties, or scores worse than the best fixed priority policy, plus the mean and range of score deltas. The simulated outcomes are held constant so this analysis isolates the effect of objective weights.
-
-The weights are not calibrated from island operators or residents. This audit therefore reveals whether conclusions are sensitive to scoring assumptions; it does not establish a universal winner, validate physical models, or prove real-world performance.
-
-
-## 17. Data ingestion contract and quality gate
-
-`data_quality.py` provides a standard-library-only CSV validation boundary before time-series data enter experiments. The required schema is timestamp (timezone-aware ISO-8601), wind_kw, pv_kw, critical_load_kw, water_demand_m3, and cooling_demand_kw_th. Numeric fields must be finite and non-negative; timestamps must be unique, increasing, and match the configured interval (60 minutes by default).
-
-The caller must explicitly label provenance as measured, public, synthetic, or forecast. The report does not infer or certify provenance. Invalid data are rejected with issue codes; the validator does not fill gaps, alter values, convert units, or silently repair time series.
-
-This is a structural gate, not a complete scientific data-governance system. Source documentation must still establish units, sampling conventions, sensor calibration, time-zone interpretation, and data rights. Capacity plausibility, forecast-vs-observation leakage, missing-period policies, and field validation remain future work.
-
-
-## 18. Public environmental-data source adapter
-
-`data_sources/nasa_power_hourly.py` provides an opt-in importer for the NASA POWER Hourly Point API. It requests hourly global horizontal surface shortwave radiation (`ALLSKY_SFC_SW_DWN`), 2 m air temperature (`T2M`), and 10 m wind speed (`WS10M`) using UTC timestamps. The output includes a CSV plus a JSON sidecar with query parameters, retrieval time, location, response metadata, and caveats.
-
-The adapter intentionally does not transform irradiance or wind speed into generated electricity: that requires explicit PV/wind-system parameters and validated conversion models. Nor does it supply critical electrical demand, water demand, or cooling demand. Environmental covariates are kept separate from the operational dataset until an explicit, tested alignment and feature-engineering layer exists.
-
-The NASA POWER service documentation notes that its hourly time standards include UTC and Local Solar Time, and that the data are gridded/model- and satellite-derived products rather than equivalent to measurements at a particular island site. See the official [hourly API documentation](https://power.larc.nasa.gov/docs/services/api/temporal/hourly/) and [data FAQ](https://power.larc.nasa.gov/docs/faqs/data/). Unit conversions must be driven by the returned parameter metadata, not assumptions.
-
-
-
-## 19. Environmental feature-preparation layer
-
-`data_sources/prepare_environmental_features.py` converts the raw NASA POWER CSV into an auditable model-feature table while keeping source provenance separate. It requires the sidecar, checks that the three requested source parameters have reported units, verifies ordered continuous hourly timestamps, and rejects missing, non-numeric, or non-finite values without imputation.
-
-Features include cyclic hour and day-of-year encodings, current environmental covariates, and 1-, 3-, and 24-hour lags. The first 24 observations are omitted because the longest lag is unavailable. A metadata sidecar records units, row counts, feature columns, warm-up omission, and limitations.
-
-This is feature engineering only; it is not a trained forecasting model and does not create operational dispatch inputs. Current-hour covariates can leak future information if used to predict a target that would not be known at that hour. A deployment-grade forecast must define the target and forecast origin, and use only observations or weather forecasts available at that decision time. The six-column operational dataset still requires separately sourced or explicitly synthetic renewable generation and demand.
-
-
-## 20. Weather-parameter forecast baseline evaluation
-
-`experiments/forecasting_baselines.py` establishes a reproducible first forecasting evaluation on the raw NASA POWER hourly series. The default target is `ALLSKY_SFC_SW_DWN`; the two baselines are persistence (previous hour) and seasonal-naive (24 hours earlier), evaluated for a one-hour-ahead target. The script validates timezone-aware, continuous hourly observations and requires source-reported target units in the NASA metadata sidecar.
-
-The primary split is chronological: the final configured fraction (30% by default) of eligible target rows is held out. In addition, the JSON sidecar reports an expanding-history evaluation over multiple contiguous chronological windows (four by default, configurable with `--rolling-folds`), including per-window and aggregate MAE, RMSE, and signed bias. The prediction CSV includes actual values and both baseline predictions; the sidecar records target units, row counts, and test time range. Each one-hour-ahead baseline uses observations earlier than its target timestamp.
-
-This is a **weather-parameter forecasting proxy**, not a trained model or a renewable-generation forecast. It does not create PV/wind electrical output, island demand, or dispatch recommendations. The rolling-origin windows are still a simple evaluation, not full seasonal cross-validation, and may be unrepresentative of other seasons or locations. A credible next stage needs a defined operational forecast origin, site-relevant target data, multiple chronological evaluation windows, and comparison against these baselines before introducing a more complex model.
+See [Product System Blueprint](PRODUCT_SYSTEM_BLUEPRINT.md), [Repository Map](REPOSITORY_MAP.md), [Productization Roadmap](PRODUCTIZATION_ROADMAP.md), and [Engineering Stages 1–10 Closeout](ENGINEERING_STAGES_1_10_CLOSEOUT.md) for related architecture and delivery boundaries.
