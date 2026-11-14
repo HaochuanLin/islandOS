@@ -101,6 +101,34 @@ replay = dispatch_energy_system(
     EnergySystemConfig(pv_rated_kw=12.0, wind_rated_kw=4.5, grid_import_limit_kw=20.0),
 )
 metrics = replay["summary"]
+
+# Like-for-like reference: same devices, required energy, windows and generation,
+# but place each flexible task at its earliest feasible low-level schedule rather
+# than using the time-varying tariff. This is a transparent reference, not a
+# claimed real-world operating baseline.
+reference_schedule = schedule_device_tasks(tasks, [1.0] * 24, task_power_budget)
+reference_inputs = attach_device_task_schedule(energy_inputs, reference_schedule)
+reference_replay = dispatch_energy_system(
+    reference_inputs,
+    EnergySystemConfig(pv_rated_kw=12.0, wind_rated_kw=4.5, grid_import_limit_kw=20.0),
+)
+reference_metrics = reference_replay["summary"]
+
+st.subheader("Like-for-like operating comparison")
+comparison = pd.DataFrame([
+    {"Metric": "Grid import (kWh)", "Tariff-aware plan": metrics["grid_import_kwh"], "Earliest-feasible reference": reference_metrics["grid_import_kwh"]},
+    {"Metric": "Modeled energy cost", "Tariff-aware plan": metrics["estimated_energy_cost"], "Earliest-feasible reference": reference_metrics["estimated_energy_cost"]},
+    {"Metric": "Critical unmet energy (kWh)", "Tariff-aware plan": metrics["critical_unmet_load_kwh"], "Earliest-feasible reference": reference_metrics["critical_unmet_load_kwh"]},
+    {"Metric": "Flexible load shed (kWh)", "Tariff-aware plan": metrics["flexible_load_shed_kwh"], "Earliest-feasible reference": reference_metrics["flexible_load_shed_kwh"]},
+    {"Metric": "Peak grid import (kW)", "Tariff-aware plan": max(row["grid_import_kw"] for row in replay["rows"]), "Earliest-feasible reference": max(row["grid_import_kw"] for row in reference_replay["rows"])},
+])
+st.dataframe(comparison, use_container_width=True, hide_index=True)
+st.caption(
+    "Both cases use the same device requirements, time windows, residual task budget, PV/wind profiles and grid limits. "
+    "The reference is an earliest-feasible scheduling heuristic, not historical customer operation. "
+    "This is a synthetic scenario comparison, not measured savings or a global optimum."
+)
+
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Grid import", f"{metrics['grid_import_kwh']:.1f} kWh")
 c2.metric("Energy cost", f"{metrics['estimated_energy_cost']:.2f}")
