@@ -120,6 +120,7 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         result = bundle.results[signal_id]
         signals[source_signal] = {
             "canonical_signal_id": signal_id,
+            "input_history_sha256": result.input_history_sha256,
             "unit": result.unit,
             "selected_model": result.model_id,
             "selected_model_version": result.model_version,
@@ -159,6 +160,7 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
     return {
         "engine": "canonical PredictionEngine via forecast_site_signals",
         "source_data_sha256": dataset.data_sha256,
+        "canonical_bundle_history_sha256": bundle.input_history_sha256,
         "source_to_canonical_mapping": source_mapping,
         "candidate_selection": "lowest aggregate MAE among registered candidates on chronological rolling-origin replay; not a deployment promotion gate",
         "rolling_evaluation_scope": (
