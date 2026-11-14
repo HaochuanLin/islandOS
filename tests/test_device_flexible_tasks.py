@@ -67,9 +67,6 @@ class DeviceTaskSchedulingTests(unittest.TestCase):
         self.assertAlmostEqual(result.schedules[0].energy_kwh,4)
         self.assertTrue(all(p<=c+1e-9 for p,c in zip(result.total_power_kw,[2,2,2,2])))
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_critical_profile_rejects_nan(self):
         task = DeviceTask("clinic", "Clinic", "critical", 5, 1, 0, 1,
                           critical_power_profile_kw=(float("nan"),))
@@ -81,3 +78,6 @@ if __name__ == "__main__":
                           min_power_kw=2, critical_power_profile_kw=(1,))
         with self.assertRaisesRegex(ValueError, "at least min_power_kw"):
             schedule_device_tasks([task], [0.1], [5])
+
+if __name__ == "__main__":
+    unittest.main()
