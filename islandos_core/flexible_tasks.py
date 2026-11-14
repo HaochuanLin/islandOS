@@ -14,6 +14,7 @@ class DeviceTask:
     required_energy_kwh: float
     earliest_start_step: int
     latest_finish_step: int
+    min_power_kw: float = 0.0
     minimum_run_steps: int = 1
     interruptible: bool = True
     priority: int = 100
@@ -72,6 +73,8 @@ def _validate_task(task: DeviceTask, horizon: int) -> None:
         raise ValueError(f"unsupported load_class: {task.load_class}")
     if isinstance(task.rated_power_kw, bool) or not isinstance(task.rated_power_kw, (int, float)) or not 0 < task.rated_power_kw < float("inf"):
         raise ValueError("rated_power_kw must be finite and positive")
+    if isinstance(task.min_power_kw, bool) or not isinstance(task.min_power_kw, (int, float)) or not 0 <= task.min_power_kw <= task.rated_power_kw:
+        raise ValueError("min_power_kw must be between zero and rated_power_kw")
     if isinstance(task.required_energy_kwh, bool) or not isinstance(task.required_energy_kwh, (int, float)) or not 0 <= task.required_energy_kwh < float("inf"):
         raise ValueError("required_energy_kwh must be finite and non-negative")
     if (isinstance(task.earliest_start_step, bool) or not isinstance(task.earliest_start_step, int)
