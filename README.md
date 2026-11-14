@@ -43,7 +43,8 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 ## Current implementation and maturity
 
 **Implemented on main**
-- Public interactive Streamlit application with energy–water screening, price-aware flexible-load optimization, and a forecast-led joint battery/diesel decision page (synthetic or user-supplied hourly history). The joint optimizer now uses the same canonical forecast signal catalog as customer data onboarding.
+- Public interactive Streamlit application with energy–water screening, price-aware flexible-load optimization, a forecast-led joint battery/diesel decision page (synthetic or user-supplied hourly history), and a device-level flexibility planner for critical, semi-flexible and fully-flexible tasks. The joint optimizer now uses the same canonical forecast signal catalog as customer data onboarding.
+- Device task schedules can be replayed through the shared PV/wind/grid/battery/diesel energy accounting and compared against an earliest-feasible reference under identical service requirements. The comparison and per-device hourly CSV are synthetic planning evidence, not measured savings.
 - Deterministic integrated microgrid accounting baseline for selected PV, wind, battery, grid, backup, RO, and water-inventory flows.
 - Rule-based strategy comparisons, hourly audit outputs, CSV/XLSX onboarding, local-first site workspace, versioned asset records, source hashes, immutable run manifests, append-only audit history, verified whole-workspace SQLite backup/restore, and a unified multi-domain forecast catalog with a replaceable candidate engine.
 - Offline forecast-to-joint-resource workflow with model provenance, chronological backtests, service-equivalence-gated cost comparison, and JSON decision audit. Optional flexible-load forecasts can be scheduled jointly with battery/diesel; water-demand forecasts can be translated into reserve-constrained RO electrical demand before dispatch optimization.
@@ -58,7 +59,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 **Experimental**
 - Rolling-horizon dispatch and candidate-search workflows.
 - Transparent hourly tariff-forecast baseline and price-aware linear-programming optimizer. The interactive page supports scenario CSV import, a seasonal-naive tariff forecast, and equal-energy cost comparison. This remains an experimental baseline, not a trained market model. Run the synthetic optimizer example with `python examples/price_aware_flexible_load_demo.py`.
-- Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments.
+- Forecasting baselines, replaceable plug-in interfaces, and separate model evaluation experiments. An optional Random Forest candidate is available through the prediction engine and is evaluated with chronological backtesting; it is not yet exposed as a selector in the public Streamlit workflow and has no site-validated accuracy claim.
 - Forecast uncertainty and robust dispatch research, alternative optimizers, public-data/site validation, and device-vendor adapter experiments.
 
 **Still planned / not yet established**
@@ -67,7 +68,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Production-grade managed database/object storage, TLS, secrets management, security review, backup/restore and operational monitoring.
 - Customer usability evidence and verified site economics from a real decision owner.
 
-The first implementation slice of all ten engineering stages is now merged into `main`. This is a software-foundation milestone, not completion of production or field-acceptance gates. See the [numbered 1–10 engineering closeout](docs/ENGINEERING_STAGES_1_10_CLOSEOUT.md) for merged PRs, current CI evidence and remaining customer/site gates. The earlier [A–F closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) documents a separate historical workstream. Also see the [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for research scopes.
+The first implementation slice of all ten numbered engineering stages is merged into `main`. The follow-on G–K delivery adds an opt-in Random Forest candidate and an equipment-aware flexibility demonstration; see the [G–K execution plan](docs/STAGES_G_K_EXECUTION_PLAN.md), [device flexibility scope](docs/STAGE_H_DEVICE_FLEXIBILITY.md), [device dispatch integration](docs/STAGE_I_DEVICE_TASK_DISPATCH.md), and [release/video runbook](docs/STAGE_K_RELEASE_AND_VIDEO_RUNBOOK.md) for exact scope and limitations. This is a software-foundation milestone, not completion of production or field-acceptance gates. See the [numbered 1–10 engineering closeout](docs/ENGINEERING_STAGES_1_10_CLOSEOUT.md) for merged PRs, current CI evidence and remaining customer/site gates. The earlier [A–F closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) documents a separate historical workstream. Also see the [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for research scopes.
 
 ## Quick start
 
