@@ -125,3 +125,15 @@ def test_dispatch_bundle_rejects_bounds_that_do_not_contain_prediction():
             history_start_utc=start - timedelta(days=7),
             history_end_utc=start,
         )
+
+ 
+def test_dispatch_bundle_rejects_forecast_grid_not_starting_after_history_end():
+    history_end = datetime(2026, 11, 1, tzinfo=UTC)
+    shifted = _result("pv_power", history_end + timedelta(hours=1), "a")
+
+    with pytest.raises(ValueError, match="first forecast timestamp must follow history_end_utc"):
+        build_dispatch_forecast_bundle(
+            {"pv_power": shifted},
+            history_start_utc=history_end - timedelta(days=7),
+            history_end_utc=history_end,
+        )
