@@ -165,8 +165,9 @@ def schedule_device_tasks(tasks: Sequence[DeviceTask], price_per_kwh: Sequence[f
             candidates = []
             for start in eligible:
                 block = list(range(start, start + count))
-                block_available = all(task.availability is None or task.availability[t] for t in block)
-                if block[-1] < task.latest_finish_step and block_available and all(remaining[t] >= task.rated_power_kw - 1e-9 for t in block):
+                if (block[-1] < task.latest_finish_step
+                    and all(task.availability is None or task.availability[t] for t in block)
+                    and all(remaining[t] >= task.rated_power_kw - 1e-9 for t in block)):
                     cost = sum(prices[t] * task.rated_power_kw * dt_hours for t in block)
                     candidates.append((cost, start, block))
             if not candidates:
