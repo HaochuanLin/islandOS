@@ -15,20 +15,21 @@ IslandOS is an **AI-assisted, simulation-first energy and resource coordination 
 
 Here, AI refers primarily to forecasting, uncertainty analysis, and optimization. Language models may assist with interaction or explanation, but do not replace data validation, physical models, or constraint enforcement.
 
-> **Current scope:** IslandOS is an early-stage research prototype. Its four-step workflow is the product direction; individual modules have different maturity levels. It is not a deployed plant controller, and it does not autonomously operate physical equipment.
+> **Current scope:** IslandOS is an early-stage research prototype. Its five-step workflow is the product direction; individual modules have different maturity levels. It is not a deployed plant controller, and it does not autonomously operate physical equipment.
 
-## The four-step decision workflow
+## The five-step decision workflow
 
 <p align="center">
-  <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS four-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
+  <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS five-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
 </p>
 
 *The core offline path from validated inputs through forecasting and constrained schedule comparison to human-reviewed decision outputs is implemented. The diagram does not imply live equipment control, production deployment, or site validation.*
 
-1. **INPUT** — organize energy, demand, asset, resource, and constraint data.
-2. **PREDICT** — validate canonical energy/price signals and compare replaceable statistical forecast candidates with rolling-origin replay. Error bands and model provenance are exposed; site-specific accuracy is not established.
-3. **OPTIMIZE** — pass aligned forecasts into a bounded joint battery/diesel schedule search, compare policies and stress cases, and withhold modeled savings when service equivalence fails. The heuristic is not a guaranteed global optimum.
-4. **DECIDE** — expose model provenance, hourly schedule comparisons, customer-entered economics, and downloadable decision audits. A versioned local reference API supports tenant-scoped sites and read-only telemetry; it is not a public production service.
+1. **INPUT** — organize energy supply, demand, assets, resources, operating constraints, data quality, and provenance.
+2. **FORECAST** — estimate future signals using documented statistical or experimental model candidates. Chronological replay and model provenance are available; site-specific accuracy is not established.
+3. **COORDINATE** — evaluate bounded schedules across supported resources and flexible loads under explicit modelled constraints. Current coverage is limited; a heuristic is not a guaranteed global optimum.
+4. **COMPARE** — compare baselines and candidate scenarios using declared service, cost, reliability, resource-use, and sensitivity assumptions. Withhold savings claims when service equivalence is not established.
+5. **DECIDE** — present rationale, assumptions, risks, model provenance, and auditable outputs for human review. Local reference API and read-only telemetry foundations are not a public production service.
 
 The workflow is designed to be extensible across use cases such as remote microgrids, essential water services, storage, flexible loads, and other distributed infrastructure. These are potential application areas, not claims of validated deployments.
 
@@ -68,7 +69,7 @@ You can explore the built-in synthetic scenario or upload hourly data, adjust se
 - Production-grade managed database/object storage, TLS, secrets management, security review, backup/restore and operational monitoring.
 - Customer usability evidence and verified site economics from a real decision owner.
 
-The first implementation slice of all ten numbered engineering stages is merged into `main`. The follow-on G–K delivery adds an opt-in Random Forest candidate and an equipment-aware flexibility demonstration; see the [G–K execution plan](docs/STAGES_G_K_EXECUTION_PLAN.md), [device flexibility scope](docs/STAGE_H_DEVICE_FLEXIBILITY.md), [device dispatch integration](docs/STAGE_I_DEVICE_TASK_DISPATCH.md), and [release/video runbook](docs/STAGE_K_RELEASE_AND_VIDEO_RUNBOOK.md) for exact scope and limitations. This is a software-foundation milestone, not completion of production or field-acceptance gates. See the [numbered 1–10 engineering closeout](docs/ENGINEERING_STAGES_1_10_CLOSEOUT.md) for merged PRs, current CI evidence and remaining customer/site gates. The earlier [A–F closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) documents a separate historical workstream. Also see the [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for research scopes.
+The first implementation slice of all ten numbered engineering stages is merged into `main`. The follow-on G–K delivery added an opt-in Random Forest candidate and an equipment-aware flexibility demonstration; see the [G–K closeout and remaining-gates record](docs/STAGES_G_K_EXECUTION_PLAN.md), [device flexibility scope](docs/STAGE_H_DEVICE_FLEXIBILITY.md), [device dispatch integration](docs/STAGE_I_DEVICE_TASK_DISPATCH.md), and [release/video runbook](docs/STAGE_K_RELEASE_AND_VIDEO_RUNBOOK.md) for exact scope and limitations. This is a software-foundation milestone, not completion of production or field-acceptance gates. See the [numbered 1–10 engineering closeout](docs/ENGINEERING_STAGES_1_10_CLOSEOUT.md) for merged PRs, current CI evidence and remaining customer/site gates. The earlier [A–F closeout ledger](docs/STAGE_ABC_CLOSEOUT.md) documents a separate historical workstream. Also see the [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) for maturity definitions and [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) for research scopes.
 
 ## Quick start
 
@@ -119,7 +120,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 
 | Start with | What it covers |
 |---|---|
-| [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Four-step product workflow, internal architecture mapping, current implementation, and maturity boundaries |
+| [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Five-step product workflow, internal architecture mapping, current implementation, and maturity boundaries |
 | [Repository map](docs/REPOSITORY_MAP.md) | Where code, experiments, tests, and documentation live |
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
@@ -173,7 +174,7 @@ Passing tests verify software behavior, not forecast accuracy, engineering feasi
 
 ## Experimental pilot
 
-The Nan'ao emergency desalination scenario is a bounded experimental pilot case. It is not the IslandOS product identity or the limit of its intended application scope. Its scenario assumptions are not measured site data.
+Nan'ao is a historical, bounded experimental scenario only; it is not the IslandOS product identity or a validated customer deployment. The archived seed-20261021 CSV/JSON outputs are superseded historical artifacts and must not be used as current product results. The active Nan'ao regression script and test remain for reproducibility; all scenario assumptions are unmeasured.
 
 ## License
 
