@@ -80,6 +80,20 @@ class ForecastCandidate(Protocol):
         ...
 
 
+class PersistenceCandidate:
+    """Repeat the latest observed value as a transparent no-skill baseline."""
+
+    model_id = "persistence"
+    version = "1.0"
+
+    def predict(self, history: Sequence[float], horizon: int, *, season_length: int) -> list[float]:
+        if not history:
+            raise ValueError("history cannot be empty")
+        if horizon < 1 or season_length < 1:
+            raise ValueError("horizon and season_length must be positive")
+        return [float(history[-1])] * horizon
+
+
 class SeasonalNaiveCandidate:
     model_id = "seasonal_naive"
     version = "1.0"
@@ -210,7 +224,7 @@ class PredictionEngine:
     def __init__(self, *, include_builtin_candidates: bool = True) -> None:
         self._candidates: dict[str, tuple[ForecastCandidate, str]] = {}
         if include_builtin_candidates:
-            for candidate in (SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate()):
+            for candidate in (PersistenceCandidate(), SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate()):
                 self.register(candidate)
 
     def register(self, candidate: ForecastCandidate) -> None:
@@ -383,13 +397,14 @@ class PredictionEngine:
             model_version=registered_version,
             input_history_sha256=_history_digest(request),
             confidence_level=float(confidence_level),
-            interval_method="finite-sample conformal-style symmetric absolute-error quantile from rolling-origin replay",
+            interval_method="empirical symmetric absolute-error quantile from rolling-origin replay; not independently calibrated",
             interval_calibration_samples=len(absolute_errors),
             backtest=selected_metrics,
             points=tuple(points),
             limitations=(
                 "Built-in candidates are statistical baselines, not trained AI models.",
                 "Error bands summarize historical rolling-origin residuals; they are not guaranteed prediction intervals.",
+                "Candidate selection and error-band estimation reuse the same rolling-origin replay; bands are descriptive, not independently calibrated.",
                 "Backtest skill on supplied history does not establish future accuracy or site-wide operational suitability.",
                 "Forecasts are decision-support inputs and do not issue equipment commands.",
             ),
