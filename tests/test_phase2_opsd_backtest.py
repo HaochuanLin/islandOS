@@ -86,3 +86,27 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
                     fold["train_samples"] > 0 and fold["samples"] > 0
                     for fold in model["fold_metrics"]
                 )
+
+ 
+def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
+    report = _canonical_prediction_report(
+        _dataset(count=125),
+        forecast_horizon=6,
+        rolling_horizons=(24,),
+    )
+
+    evaluation = report["signals"]["load"]["rolling_origin_candidate_evaluations"]["24"]
+    window = evaluation["evaluation_window"]
+
+    assert window == {
+        "initial_history_samples": 48,
+        "validation_horizon_hours": 24,
+        "complete_folds": 3,
+        "scored_samples": 72,
+        "excluded_trailing_samples": 5,
+    }
+    assert all(
+        len(model["fold_metrics"]) == 3
+        for model in evaluation["models"]
+    )
+    assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"]
