@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -62,6 +63,65 @@ def test_dispatch_bundle_rejects_key_signal_mismatch():
     with pytest.raises(ValueError, match="key does not match"):
         build_dispatch_forecast_bundle(
             {"solar": _result("pv_power", start, "a")},
+            history_start_utc=start - timedelta(days=7),
+            history_end_utc=start,
+        )
+
+ 
+def test_dispatch_bundle_normalizes_forecast_points_to_utc():
+    offset = timezone(timedelta(hours=5))
+    start = datetime(2026, 11, 1, tzinfo=offset)
+    bundle = build_dispatch_forecast_bundle(
+        {"pv_power": _result("pv_power", start, "a")},
+        history_start_utc=start - timedelta(days=7),
+        history_end_utc=start,
+    )
+
+    point = bundle.forecasts["pv_power"].points[0]
+    assert point.timestamp.tzinfo == UTC
+    assert point.timestamp == (start + timedelta(hours=1)).astimezone(UTC)
+
+
+def test_dispatch_bundle_rejects_naive_forecast_timestamp():
+    start = datetime(2026, 11, 1, tzinfo=UTC)
+    result = _result("pv_power", start, "a")
+    points = list(result.points)
+    points[0] = replace(points[0], timestamp=datetime(2026, 11, 1, 1))
+    malformed = replace(result, points=tuple(points))
+
+    with pytest.raises(ValueError, match="timestamp must be timezone-aware"):
+        build_dispatch_forecast_bundle(
+            {"pv_power": malformed},
+            history_start_utc=start - timedelta(days=7),
+            history_end_utc=start,
+        )
+
+
+def test_dispatch_bundle_rejects_non_hourly_forecast_timestamps():
+    start = datetime(2026, 11, 1, tzinfo=UTC)
+    result = _result("pv_power", start, "a")
+    points = list(result.points)
+    points[1] = replace(points[1], timestamp=points[1].timestamp + timedelta(minutes=15))
+    malformed = replace(result, points=tuple(points))
+
+    with pytest.raises(ValueError, match="contiguous hourly"):
+        build_dispatch_forecast_bundle(
+            {"pv_power": malformed},
+            history_start_utc=start - timedelta(days=7),
+            history_end_utc=start,
+        )
+
+
+def test_dispatch_bundle_rejects_bounds_that_do_not_contain_prediction():
+    start = datetime(2026, 11, 1, tzinfo=UTC)
+    result = _result("pv_power", start, "a")
+    points = list(result.points)
+    points[0] = replace(points[0], lower_bound=13.0)
+    malformed = replace(result, points=tuple(points))
+
+    with pytest.raises(ValueError, match="bounds must contain its prediction"):
+        build_dispatch_forecast_bundle(
+            {"pv_power": malformed},
             history_start_utc=start - timedelta(days=7),
             history_end_utc=start,
         )
