@@ -50,7 +50,7 @@ A configured site may contain:
 
 The engineering problem is to evaluate coupled energy and resource balances while protecting declared critical services—not merely optimize one machine in isolation.
 
-## 2. Internal technical architecture mapped to the four-step workflow
+## 2. Internal technical architecture mapped to the five-step workflow
 
 | Product workflow | Internal technical responsibilities | Repository foundation | Current maturity / gap |
 |---|---|---|---|
