@@ -100,7 +100,19 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                         "samples": item.samples,
                         "mae": item.mae,
                         "rmse": item.rmse,
+                        "bias_predicted_minus_actual": item.bias_predicted_minus_actual,
                         "wape_percent": item.wape_percent,
+                        "fold_metrics": [
+                            {
+                                "fold_index": fold.fold_index,
+                                "train_samples": fold.train_samples,
+                                "samples": fold.samples,
+                                "mae": fold.mae,
+                                "rmse": fold.rmse,
+                                "bias_predicted_minus_actual": fold.bias_predicted_minus_actual,
+                            }
+                            for fold in item.fold_metrics
+                        ],
                     }
                     for item in ranking
                 ],
@@ -116,6 +128,7 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                 "samples": result.backtest.samples,
                 "mae": result.backtest.mae,
                 "rmse": result.backtest.rmse,
+                "bias_predicted_minus_actual": result.backtest.bias_predicted_minus_actual,
                 "wape_percent": result.backtest.wape_percent,
             },
             "rolling_origin_candidate_evaluations": candidate_evaluations,
