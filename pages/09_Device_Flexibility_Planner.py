@@ -143,9 +143,12 @@ st.subheader("Like-for-like operating comparison")
 comparison = pd.DataFrame([
     {"Metric": "Grid import (kWh)", "Tariff-aware plan": metrics["grid_import_kwh"], "Earliest-feasible reference": reference_metrics["grid_import_kwh"]},
     {"Metric": "Modeled energy cost", "Tariff-aware plan": metrics["estimated_energy_cost"], "Earliest-feasible reference": reference_metrics["estimated_energy_cost"]},
+    {"Metric": "Diesel generation (kWh)", "Tariff-aware plan": metrics["diesel_generation_kwh"], "Earliest-feasible reference": reference_metrics["diesel_generation_kwh"]},
+    {"Metric": "Renewable curtailment (kWh)", "Tariff-aware plan": metrics["renewable_curtailed_kwh"], "Earliest-feasible reference": reference_metrics["renewable_curtailed_kwh"]},
+    {"Metric": "Battery throughput (kWh)", "Tariff-aware plan": metrics["battery_throughput_kwh"], "Earliest-feasible reference": reference_metrics["battery_throughput_kwh"]},
     {"Metric": "Critical unmet energy (kWh)", "Tariff-aware plan": metrics["critical_unmet_load_kwh"], "Earliest-feasible reference": reference_metrics["critical_unmet_load_kwh"]},
     {"Metric": "Flexible load shed (kWh)", "Tariff-aware plan": metrics["flexible_load_shed_kwh"], "Earliest-feasible reference": reference_metrics["flexible_load_shed_kwh"]},
-    {"Metric": "Peak grid import (kW)", "Tariff-aware plan": max(row["grid_import_kw"] for row in replay["rows"]), "Earliest-feasible reference": max(row["grid_import_kw"] for row in reference_replay["rows"])},
+    {"Metric": "Peak grid import (kW)", "Tariff-aware plan": metrics["peak_grid_import_kw"], "Earliest-feasible reference": reference_metrics["peak_grid_import_kw"]},
 ])
 st.dataframe(comparison, use_container_width=True, hide_index=True)
 st.caption(
