@@ -168,8 +168,9 @@ csv = pd.DataFrame({
     "wind_generation_kw": wind,
     "grid_import_kw": [x["grid_import_kw"] for x in replay["rows"]],
     "reference_grid_import_kw": [x["grid_import_kw"] for x in reference_replay["rows"]],
-    "battery_power_kw": [x["battery_power_kw"] for x in replay["rows"]],
-    "diesel_power_kw": [x["diesel_power_kw"] for x in replay["rows"]],
+    "battery_charge_kw": [x["battery_charge_kw"] for x in replay["rows"]],
+    "battery_discharge_kw": [x["battery_discharge_kw"] for x in replay["rows"]],
+    "diesel_generation_kw": [x["diesel_generation_kw"] for x in replay["rows"]],
     "flexible_load_shed_kw": [x["flexible_load_shed_kw"] for x in replay["rows"]],
     "reference_flexible_load_shed_kw": [x["flexible_load_shed_kw"] for x in reference_replay["rows"]],
 })
