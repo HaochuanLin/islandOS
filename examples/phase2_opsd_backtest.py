@@ -130,6 +130,17 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                 "rmse": result.backtest.rmse,
                 "bias_predicted_minus_actual": result.backtest.bias_predicted_minus_actual,
                 "wape_percent": result.backtest.wape_percent,
+                "fold_metrics": [
+                    {
+                        "fold_index": fold.fold_index,
+                        "train_samples": fold.train_samples,
+                        "samples": fold.samples,
+                        "mae": fold.mae,
+                        "rmse": fold.rmse,
+                        "bias_predicted_minus_actual": fold.bias_predicted_minus_actual,
+                    }
+                    for fold in result.backtest.fold_metrics
+                ],
             },
             "rolling_origin_candidate_evaluations": candidate_evaluations,
             "forecast_points": [
