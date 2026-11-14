@@ -76,3 +76,10 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
             assert horizon_result["best_by_mae"] in {
                 item["model_id"] for item in horizon_result["models"]
             }
+            for model in horizon_result["models"]:
+                assert "bias_predicted_minus_actual" in model
+                assert model["fold_metrics"]
+                assert all(
+                    fold["train_samples"] > 0 and fold["samples"] > 0
+                    for fold in model["fold_metrics"]
+                )
