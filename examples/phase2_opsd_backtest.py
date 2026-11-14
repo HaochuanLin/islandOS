@@ -11,7 +11,9 @@ from datetime import datetime
 from typing import Sequence
 
 from islandos_core.forecast_engine import evaluate_signal_rolling, forecast_signals
+from islandos_core.forecast_signal_catalog import FORECAST_SIGNAL_SPECS, forecast_site_signals
 from islandos_core.opsd_adapter import load_opsd_singleindex_csv
+from islandos_core.prediction_engine import PredictionEngine
 
 
 def _utc_bound(raw: str | None) -> datetime | None:
@@ -21,6 +23,132 @@ def _utc_bound(raw: str | None) -> datetime | None:
     if value.tzinfo is None or value.utcoffset() is None:
         raise argparse.ArgumentTypeError("date bounds must include a UTC offset, e.g. 2020-01-01T00:00:00Z")
     return value
+
+
+_OPSD_CANONICAL_SIGNAL_MAP = {
+    # OPSD source units are retained by the loader. These explicit scale factors
+    # adapt them to IslandOS canonical units without silently changing the source.
+    "load": ("load_kw", "MW", "kW", 1000.0, "MW × 1000 = kW"),
+    "solar": ("pv_power_kw", "MW", "kW", 1000.0, "MW × 1000 = kW"),
+    "wind": ("wind_power_kw", "MW", "kW", 1000.0, "MW × 1000 = kW"),
+    "price": ("tariff_per_kwh", "EUR/MWh", "EUR/kWh", 0.001, "EUR/MWh × 0.001 = EUR/kWh"),
+}
+
+
+def _canonicalize_opsd_history(dataset):
+    """Convert OPSD fields to canonical IslandOS IDs with explicit unit scaling."""
+    canonical_history = {}
+    canonical_units = {}
+    source_mapping = {}
+    for source_signal, values in dataset.history.items():
+        if source_signal not in _OPSD_CANONICAL_SIGNAL_MAP:
+            raise ValueError(f"unsupported OPSD signal for canonical forecasting: {source_signal}")
+        signal_id, expected_source_unit, forecast_unit, factor, expression = _OPSD_CANONICAL_SIGNAL_MAP[source_signal]
+        actual_source_unit = dataset.units.get(source_signal)
+        if actual_source_unit != expected_source_unit:
+            raise ValueError(
+                f"{source_signal} source unit mismatch: expected {expected_source_unit}, got {actual_source_unit}"
+            )
+        canonical_history[signal_id] = tuple(float(value) * factor for value in values)
+        canonical_units[signal_id] = forecast_unit
+        source_mapping[source_signal] = {
+            "canonical_signal_id": signal_id,
+            "source_unit": expected_source_unit,
+            "forecast_unit": forecast_unit,
+            "multiplier": factor,
+            "conversion": expression,
+        }
+    if not canonical_history:
+        raise ValueError("OPSD dataset contains no signals for canonical forecasting")
+    return canonical_history, canonical_units, source_mapping
+
+
+def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizons=()):
+    """Evaluate the current canonical PredictionEngine on OPSD public history."""
+    canonical_history, canonical_units, source_mapping = _canonicalize_opsd_history(dataset)
+    engine = PredictionEngine()
+    bundle = forecast_site_signals(
+        dataset.timestamps,
+        canonical_history,
+        canonical_units,
+        forecast_horizon,
+        engine=engine,
+        backtest_horizon=24,
+        season_length=24,
+    )
+    initial_history = min(48, len(dataset.timestamps) - 1)
+    signals = {}
+    for source_signal, mapping in source_mapping.items():
+        signal_id = mapping["canonical_signal_id"]
+        spec = FORECAST_SIGNAL_SPECS[signal_id]
+        candidate_evaluations = {}
+        for validation_horizon in rolling_horizons:
+            ranking = engine.evaluate_candidates(
+                canonical_history[signal_id],
+                initial_history=initial_history,
+                horizon=validation_horizon,
+                season_length=24,
+                non_negative=spec.non_negative,
+            )
+            candidate_evaluations[str(validation_horizon)] = {
+                "best_by_mae": ranking[0].model_id,
+                "models": [
+                    {
+                        "model_id": item.model_id,
+                        "model_version": item.model_version,
+                        "folds": item.folds,
+                        "samples": item.samples,
+                        "mae": item.mae,
+                        "rmse": item.rmse,
+                        "wape_percent": item.wape_percent,
+                    }
+                    for item in ranking
+                ],
+            }
+        result = bundle.results[signal_id]
+        signals[source_signal] = {
+            "canonical_signal_id": signal_id,
+            "unit": result.unit,
+            "selected_model": result.model_id,
+            "selected_model_version": result.model_version,
+            "selection_backtest": {
+                "folds": result.backtest.folds,
+                "samples": result.backtest.samples,
+                "mae": result.backtest.mae,
+                "rmse": result.backtest.rmse,
+                "wape_percent": result.backtest.wape_percent,
+            },
+            "rolling_origin_candidate_evaluations": candidate_evaluations,
+            "forecast_points": [
+                {
+                    "timestamp_utc": point.timestamp.isoformat(),
+                    "predicted_value": point.predicted_value,
+                    "lower_bound": point.lower_bound,
+                    "upper_bound": point.upper_bound,
+                }
+                for point in result.points
+            ],
+            "interval_method": result.interval_method,
+            "interval_calibration_samples": result.interval_calibration_samples,
+            "limitations": list(result.limitations),
+        }
+    return {
+        "engine": "canonical PredictionEngine via forecast_site_signals",
+        "source_data_sha256": dataset.data_sha256,
+        "source_to_canonical_mapping": source_mapping,
+        "candidate_selection": "lowest aggregate MAE among registered candidates on chronological rolling-origin replay; not a deployment promotion gate",
+        "rolling_evaluation_scope": (
+            "Each requested horizon is replayed in chronological blocks using only prior observations. "
+            "The final block may be shorter than the requested horizon."
+        ),
+        "signals": signals,
+        "limitations": [
+            "OPSD observations are geographically aggregated public history, not facility telemetry.",
+            "Unit scaling is explicit and does not convert country-level values into site-level values.",
+            "Candidate selection and empirical error-band estimation reuse rolling-origin history; intervals are descriptive and not independently calibrated.",
+            "No site accuracy, operational feasibility, or customer savings are established.",
+        ],
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--horizon", type=int, default=24, help="Forecast horizon in hours (1–168)")
     parser.add_argument(
         "--rolling-validation", action="store_true",
-        help="Also evaluate persistence, seasonal-naive, and ridge on expanding windows",
+        help="Also evaluate legacy persistence, seasonal-naive, and ridge candidates on expanding windows",
     )
     parser.add_argument(
         "--rolling-horizons", nargs="+", type=int, default=(1, 6, 24, 168),
@@ -105,6 +233,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             for name, forecast in bundle.forecasts.items()
         },
     }
+    canonical_horizons = tuple(args.rolling_horizons) if args.rolling_validation else ()
+    report["canonical_prediction_service"] = _canonical_prediction_report(
+        dataset, args.horizon, rolling_horizons=canonical_horizons
+    )
     if args.rolling_validation:
         report["rolling_validation"] = {
             "method": "expanding_window",
