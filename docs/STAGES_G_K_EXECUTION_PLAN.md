@@ -1,83 +1,60 @@
-# IslandOS next delivery cycle — stages G to K
+# IslandOS stages G–K — implementation closeout and remaining gates
 
-**Integration baseline:** `main`, after the numbered engineering stages 1–10 foundation.
-**Purpose:** turn the existing software foundation into a concise, evidence-backed customer demonstration. These stages extend existing modules; they do not restart the earlier A–F or numbered 1–10 workstreams.
+**Integration baseline:** `main`  
+**Purpose:** record what the G–K delivery cycle added, what remains experimental, and what must be validated next. This document is no longer a forward-looking instruction to rebuild G–K.
 
-## What is already present and must not be rebuilt
+## Status summary
+
+The current mainline README and implementation record identify the following G–K outcomes. These are software-foundation outcomes, not field acceptance or production readiness.
+
+| Stage | Scope | Current mainline status | Remaining gate |
+|---|---|---|---|
+| G | Evidence-gated ML forecasting | Optional Random Forest candidate exists behind the prediction engine and can be evaluated with chronological backtesting. It is not exposed as a selector in the public Streamlit workflow. | Verify identical folds and baselines, data provenance, model eligibility and reproducible benchmark evidence; no site-validated accuracy claim. |
+| H | Device-level load flexibility | Device-level planner represents critical, semi-flexible and fully-flexible tasks with selected power, energy, timing, run and priority constraints. | Broaden asset classes and prove edge cases across realistic site configurations; synthetic schedules are not measured savings. |
+| I | Multi-resource coordination | Device task schedules can be replayed through shared PV/wind/grid/battery/diesel accounting and compared with an earliest-feasible reference under equal service requirements. | Broader uncertainty propagation, additional asset models, stress tests and real-site engineering review remain. A bounded search is not a global optimum. |
+| J | Customer decision workflow and demo | Public Streamlit workflow includes selected forecast-led decision, flexible-load planning, strategy comparison and economics screening paths. | Validate fresh-user completion, consistency across modules, traceability and customer usability; React/API remain a separate foundation. |
+| K | Verification, release and demo evidence | CI workflows, runbooks, synthetic demo guidance and release/video documentation are present. | Re-run current default-branch CI, public demo smoke test and all submission artifact checks at release freeze. |
+
+## Existing foundations that must not be rebuilt
 
 - Stage 2 data onboarding, site workspace, asset records and provenance.
-- Stage 3 model-agnostic multi-signal forecast bundles, chronological replay, metrics and empirical uncertainty bands. Built-in candidates are statistical baselines.
-- Stage 4 forecast-led battery/diesel/grid coordination, optional flexible-load coupling, RO demand coupling and service-equivalence checks. The search is bounded and is not a global optimum.
+- Stage 3 multi-signal forecast catalog, replaceable candidates, chronological replay and per-signal metrics.
+- Stage 4 forecast-led battery/diesel/grid coordination, selected flexible-load coupling, RO demand coupling and service-equivalence checks.
 - Stage 5 customer-entered economics screening.
-- Stage 6 React + TypeScript console foundation; this is not yet a complete customer decision workflow.
-- Independent continuous flexible-load tariff LP and seasonal-naive tariff baseline from the SIC reference assessment.
+- Stage 6 React + TypeScript console foundation; this is not a complete production customer workflow.
+- Stage 7 tenant membership and owner-managed workflow foundations; not production identity infrastructure.
+- Stage 8 local Streamlit Compose deployment helper; not a full-stack installer.
+- Stage 9 local read-only Shadow Mode evidence ledger and verification.
+- Stage 10 fail-closed supervised-trial review-package gate; it does not grant operational authority.
 
-## Stage G — Evidence-gated ML forecasting
+## Required next work
 
-**Objective:** add and benchmark optional ML candidates without removing transparent baselines.
+1. **Integration audit:** trace which forecast, coordination and comparison modules are actually called by the public app; distinguish integrated paths from standalone experiments.
+2. **Forecast evidence:** retain persistence/seasonal baselines, verify chronological splits and data provenance, and evaluate candidates on identical folds.
+3. **Device/asset constraints:** test infeasibility, energy conservation, availability, minimum run, time windows and critical-load protection across edge cases.
+4. **Common comparison:** replay baseline and candidate schedules through the same accounting model and disclose any omitted physics or service.
+5. **Customer validation:** conduct authorized stakeholder discovery and obtain permission before using measured site data; do not invent willingness to pay or savings.
+6. **Release freeze:** run current CI, local quick start, hosted demo smoke test, documentation/link checks and submission PDF verification.
 
-- Add a Random Forest candidate behind the existing `ForecastCandidate` interface.
-- Keep persistence/seasonal-naive, recent-mean and linear-trend candidates.
-- Use identical chronological rolling-origin folds and report MAE, RMSE and WAPE where defined.
-- Promote a candidate only when it passes the same input/output contract and demonstrates lower error on the same held-out folds.
-- Keep model/data provenance and the no-site-validation boundary explicit.
+## Evidence boundaries
 
-**Exit gate:** automated tests pass; the model can be explicitly selected and compared; the public demo does not imply that it was trained on UK-DALE or LCL unless the exact dataset is obtained, licensed/verified and reproducibly processed.
+- Random Forest availability does not mean it is the public app's default or that it has site-validated accuracy.
+- Device flexibility comparisons are synthetic planning evidence, not measured savings.
+- Forecast-to-dispatch integration is limited to supported signal and asset contracts.
+- React frontend and local API foundations are separate from the hosted Streamlit deployment.
+- Shadow Mode is read-only; no device writes or operational approval are enabled.
+- Field validation, production deployment, universal plug-and-play, autonomous control and bankable ROI remain non-claims.
 
-## Stage H — Device-level load flexibility
+## Release checklist
 
-**Objective:** move beyond aggregate flexible kW toward equipment-aware tasks.
+- [ ] Confirm all relevant changes are merged to `main`.
+- [ ] Run Python unit tests, dependency audit, container smoke test, RO tests, Nan'ao regression and Windows gateway build.
+- [ ] Verify Streamlit public demo availability and synthetic-data labels.
+- [ ] Check README, product blueprint, AI architecture, repository map and screenshots against actual mainline behavior.
+- [ ] Check all links and ensure no obsolete workflow diagram is presented as current.
+- [ ] Freeze application PDF only after code and claims are reconciled.
+- [ ] Preserve test logs, commit SHA, scenario seed and input provenance for the frozen release.
 
-- Define critical, semi-flexible and fully flexible load classes.
-- Model device identity, rated/min/max power, required energy or duration, earliest start, latest finish, minimum run, interruptibility, priority and availability.
-- Protect critical loads as hard constraints.
-- Enforce each flexible task's energy, time window and run constraints; reject infeasible schedules rather than silently shedding required service.
-- Keep the existing continuous tariff LP as a simple mode; use a mixed-integer formulation only where discrete device operation requires it.
+## Historical relationship
 
-**Exit gate:** unit tests prove task energy conservation, time-window compliance, power bounds, critical-load protection and explicit infeasibility. Any aggregate approximation is labelled as such.
-
-## Stage I — Multi-resource coordination quality
-
-**Objective:** strengthen the existing forecast-to-dispatch path, not replace it.
-
-- Feed selected forecast candidates and uncertainty envelopes into the current shared energy accounting and optimizer.
-- Connect device-level flexible tasks to battery, diesel, grid import/export, PV/wind and optional RO demand.
-- Add common baseline-vs-optimized comparisons with equal service, explicit unmet demand, peak import, fuel use, renewable curtailment and operating cost.
-- Add stress cases for forecast error, grid outage, low renewable output, demand spikes and equipment derating.
-- Add tariff and demand-charge assumptions only when their billing basis is explicit.
-
-**Exit gate:** all candidate schedules are replayed through the same physical accounting; service constraints are visible; economic comparisons are like-for-like; deterministic regression tests pass. Do not describe a bounded heuristic as globally optimal.
-
-## Stage J — Customer decision workflow and demo
-
-**Objective:** make one coherent journey understandable to a non-technical customer and judge.
-
-- Prioritize the public Streamlit path rather than replacing the application with a new frontend.
-- Provide one guided flow: import/inspect data → configure site/assets → forecast → compare operating strategies → review economics → export an auditable report.
-- Show model identity, backtest metrics, assumptions, constraints, feasibility, baseline and recommendation rationale.
-- Keep React as a foundation until a full-stack deployment is justified and testable.
-- Use a clearly labelled synthetic demonstration scenario if no authorized site data is available.
-
-**Exit gate:** a fresh user can complete the demo without developer intervention; every displayed result can be traced to inputs and assumptions; synthetic data is visibly labelled.
-
-## Stage K — Verification, release, PDF and video
-
-**Objective:** freeze a credible submission/demo baseline quickly.
-
-- Run the full CI suite, local quick-start and public demo smoke test.
-- Verify README, docs, screenshots, app labels and PDF claims against the merged default branch.
-- Capture evidence for implemented, experimental and planned features separately.
-- Prepare a 2–3 minute video: customer problem, data input, forecast, constraints, strategy comparison, economics, audit/export, honest limitations.
-- Keep field validation, customer savings, production deployment, universal plug-and-play and autonomous control as non-claims unless independently evidenced.
-
-**Exit gate:** clean mainline, passing CI, working public demo, consistent PDF, reproducible video scenario and no unsupported performance claims.
-
-## Fast-track order
-
-1. Finish Stage G candidate tests and merge only after CI passes.
-2. Implement Stage H's minimal but correct device task model and tests.
-3. Connect H to the existing Stage I dispatch path; add only the highest-value stress/economic checks.
-4. Polish the Streamlit customer journey and capture the video scenario.
-5. Freeze the PDF after the actual mainline merge state is verified.
-
-The five stages are deliberately scoped for a demonstrable research prototype. They do not authorize live equipment control or replace site engineering and safety acceptance.
+G–K follows the numbered engineering stages 1–10 and the earlier A–F workstream. These stage labels represent different historical delivery plans; they must not be treated as one continuous sequence of product workflow steps. See [Engineering Stages 1–10 Closeout](ENGINEERING_STAGES_1_10_CLOSEOUT.md) and [Stage A–F Closeout](STAGE_ABC_CLOSEOUT.md).
