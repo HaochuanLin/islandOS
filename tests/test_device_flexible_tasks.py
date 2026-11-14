@@ -69,3 +69,15 @@ class DeviceTaskSchedulingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_critical_profile_rejects_nan(self):
+        task = DeviceTask("clinic", "Clinic", "critical", 5, 1, 0, 1,
+                          critical_power_profile_kw=(float("nan"),))
+        with self.assertRaisesRegex(ValueError, "finite"):
+            schedule_device_tasks([task], [0.1], [5])
+
+    def test_critical_profile_respects_minimum_power(self):
+        task = DeviceTask("clinic", "Clinic", "critical", 5, 2, 0, 1,
+                          min_power_kw=2, critical_power_profile_kw=(1,))
+        with self.assertRaisesRegex(ValueError, "at least min_power_kw"):
+            schedule_device_tasks([task], [0.1], [5])
