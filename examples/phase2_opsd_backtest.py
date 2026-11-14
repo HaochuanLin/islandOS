@@ -90,7 +90,18 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                 season_length=24,
                 non_negative=spec.non_negative,
             )
+            scored_samples = ranking[0].samples
+            excluded_trailing_samples = (
+                len(canonical_history[signal_id]) - initial_history - scored_samples
+            )
             candidate_evaluations[str(validation_horizon)] = {
+                "evaluation_window": {
+                    "initial_history_samples": initial_history,
+                    "validation_horizon_hours": validation_horizon,
+                    "complete_folds": ranking[0].folds,
+                    "scored_samples": scored_samples,
+                    "excluded_trailing_samples": excluded_trailing_samples,
+                },
                 "best_by_mae": ranking[0].model_id,
                 "models": [
                     {
@@ -164,8 +175,9 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         "source_to_canonical_mapping": source_mapping,
         "candidate_selection": "lowest aggregate MAE among registered candidates on chronological rolling-origin replay; not a deployment promotion gate",
         "rolling_evaluation_scope": (
-            "Each requested horizon is replayed in chronological blocks using only prior observations. "
-            "The final block may be shorter than the requested horizon."
+            "Each requested horizon is replayed in chronological expanding-window blocks using only observations "
+            "available before that block. Only complete blocks are scored; incomplete trailing observations are "
+            "excluded rather than shortened into a different horizon."
         ),
         "signals": signals,
         "limitations": [
