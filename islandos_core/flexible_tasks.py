@@ -92,10 +92,15 @@ def _validate_task(task: DeviceTask, horizon: int) -> None:
         for p in task.critical_power_profile_kw:
             if isinstance(p, bool) or not isinstance(p, (int, float)) or not 0 <= p <= task.rated_power_kw:
                 raise ValueError("critical profile power must be between zero and rated_power_kw")
+        if any(task.critical_power_profile_kw[t] > 0 for t in range(horizon)
+               if not task.earliest_start_step <= t < task.latest_finish_step):
+            raise ValueError("critical profile cannot consume power outside its operating window")
     elif task.critical_power_profile_kw is not None:
         raise ValueError("only critical tasks may define critical_power_profile_kw")
     elif task.required_energy_kwh > 0 and task.minimum_run_steps > task.latest_finish_step - task.earliest_start_step:
         raise ValueError("minimum_run_steps exceeds operating window")
+    if task.load_class == "fully_flexible" and task.interruptible and task.minimum_run_steps != 1:
+        raise ValueError("interruptible tasks currently require minimum_run_steps=1; use non-interruptible for contiguous runs")
 
 def schedule_device_tasks(tasks: Sequence[DeviceTask], price_per_kwh: Sequence[float],
                           available_power_kw: Sequence[float], dt_hours: float = 1.0) -> DeviceSchedulingResult:
@@ -157,7 +162,8 @@ def schedule_device_tasks(tasks: Sequence[DeviceTask], price_per_kwh: Sequence[f
             candidates = []
             for start in eligible:
                 block = list(range(start, start + count))
-                if block[-1] < task.latest_finish_step and all(remaining[t] >= task.rated_power_kw - 1e-9 for t in block):
+                block_available = all(task.availability is None or task.availability[t] for t in block)
+                if block[-1] < task.latest_finish_step and block_available and all(remaining[t] >= task.rated_power_kw - 1e-9 for t in block):
                     cost = sum(prices[t] * task.rated_power_kw * dt_hours for t in block)
                     candidates.append((cost, start, block))
             if not candidates:
