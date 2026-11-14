@@ -93,8 +93,11 @@ def _validate_task(task: DeviceTask, horizon: int) -> None:
         if task.availability is not None:
             raise ValueError("critical tasks use their fixed profile, not an availability mask")
         for p in task.critical_power_profile_kw:
-            if isinstance(p, bool) or not isinstance(p, (int, float)) or not 0 <= p <= task.rated_power_kw:
-                raise ValueError("critical profile power must be between zero and rated_power_kw")
+            if (isinstance(p, bool) or not isinstance(p, (int, float))
+                or not 0 <= p <= task.rated_power_kw or not float("-inf") < float(p) < float("inf")):
+                raise ValueError("critical profile power must be finite and between zero and rated_power_kw")
+            if 0 < p < task.min_power_kw:
+                raise ValueError("critical profile power must be zero or at least min_power_kw")
         if any(task.critical_power_profile_kw[t] > 0 for t in range(horizon)
                if not task.earliest_start_step <= t < task.latest_finish_step):
             raise ValueError("critical profile cannot consume power outside its operating window")
