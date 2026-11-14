@@ -41,6 +41,10 @@ class DeviceTaskSchedulingTests(unittest.TestCase):
         task=DeviceTask("pump","Pump","fully_flexible",2,2,1,4,availability=(True,False,True,True))
         result=schedule_device_tasks([task],[.01,.02,.3,.1],[2]*4)
         self.assertEqual(result.schedules[0].operating_steps,(3,))
+    def test_minimum_power_cannot_exceed_rated_power(self):
+        task=DeviceTask("pump","Pump","fully_flexible",2,2,0,2,min_power_kw=3)
+        with self.assertRaisesRegex(ValueError,"min_power_kw"):
+            schedule_device_tasks([task],[.1,.2],[2,2])
     def test_invalid_window_rejected(self):
         task=DeviceTask("pump","Pump","fully_flexible",2,2,3,2)
         with self.assertRaisesRegex(ValueError,"operating window"):
