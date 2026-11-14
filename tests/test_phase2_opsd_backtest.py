@@ -29,7 +29,7 @@ def test_opsd_units_are_explicitly_converted_to_canonical_site_units():
     history, units, mapping = _canonicalize_opsd_history(_dataset(count=4))
 
     assert history["load_kw"] == pytest.approx((1000.0, 1010.0, 1020.0, 1030.0))
-    assert history["tariff_per_kwh"] == pytest.approx((-0.01, 0.04, 0.04, 0.04))
+    assert history["tariff_per_kwh"] == pytest.approx((-0.01, -0.01, -0.01, 0.04))
     assert units == {
         "load_kw": "kW",
         "pv_power_kw": "kW",
