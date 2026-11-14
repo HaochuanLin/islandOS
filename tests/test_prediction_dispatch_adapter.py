@@ -10,7 +10,7 @@ UTC = timezone.utc
 
 
 def _result(signal_id, start, digest_char):
-    metrics = CandidateMetrics(signal_id + "_model", "1.0", 2, 4, 0.5, 0.7, 4.0)
+    metrics = CandidateMetrics(signal_id + "_model", "1.0", 2, 4, 0.5, 0.7, 4.0, -0.25)
     return PredictionResult(
         signal_id=signal_id,
         unit="kW",
@@ -41,6 +41,7 @@ def test_prediction_results_convert_to_aligned_dispatch_bundle():
     )
     assert set(bundle.forecasts) == {"pv_power", "wind_power"}
     assert bundle.forecasts["pv_power"].points[0].predicted == 11.0
+    assert bundle.forecasts["pv_power"].holdout_metrics.bias_predicted_minus_actual == -0.25
     assert bundle.forecasts["wind_power"].unit == "kW"
     assert len(bundle.input_history_sha256) == 64
 
