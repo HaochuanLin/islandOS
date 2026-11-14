@@ -76,6 +76,28 @@ class TestPredictionEngine(unittest.TestCase):
         self.assertEqual([fold.samples for fold in score.fold_metrics], [2, 2])
         self.assertTrue(all(fold.bias_predicted_minus_actual < 0 for fold in score.fold_metrics))
 
+    def test_replay_excludes_incomplete_final_horizon_block(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        score = engine.evaluate_candidates(
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            initial_history=2,
+            horizon=2,
+            season_length=24,
+        )[0]
+        self.assertEqual(score.folds, 2)
+        self.assertEqual(score.samples, 4)
+        self.assertEqual([fold.samples for fold in score.fold_metrics], [2, 2])
+
+    def test_replay_requires_one_complete_horizon_block(self):
+        engine = PredictionEngine()
+        with self.assertRaisesRegex(ValueError, "one complete 24-hour validation block"):
+            engine.evaluate_candidates(
+                [float(index) for index in range(60)],
+                initial_history=48,
+                horizon=24,
+            )
+
     def test_chronological_candidate_selection_and_forecast(self):
         values = [float(index % 24) for index in range(96)]
         engine = PredictionEngine()
@@ -130,7 +152,7 @@ class TestPredictionEngine(unittest.TestCase):
                 make_request(values), model_id="invalid", initial_history=48,
             )
 
-    def test_interval_uses_finite_sample_conformal_rank(self):
+    def test_interval_reports_empirical_non_independent_error_band(self):
         values = [float(index % 24) for index in range(96)]
         result = PredictionEngine().forecast(
             make_request(values), initial_history=48, backtest_horizon=24,
