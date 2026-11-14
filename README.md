@@ -20,7 +20,7 @@ Here, AI refers primarily to forecasting, uncertainty analysis, and optimization
 ## The five-step decision workflow
 
 <p align="center">
-  <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS five-step workflow: INPUT organizes system data, PREDICT estimates future conditions, OPTIMIZE evaluates feasible alternatives, and DECIDE supports human review, with operational feedback returning to future inputs." width="100%">
+  <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS five-step workflow: INPUT validates data and assets, FORECAST estimates future conditions, COORDINATE generates resource schedules, COMPARE evaluates trade-offs, and DECIDE supports human review." width="100%">
 </p>
 
 *The core offline path from validated inputs through forecasting and constrained schedule comparison to human-reviewed decision outputs is implemented. The diagram does not imply live equipment control, production deployment, or site validation.*
