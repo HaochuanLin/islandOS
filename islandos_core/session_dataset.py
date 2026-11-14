@@ -10,6 +10,7 @@ import hmac
 from typing import Any, MutableMapping
 
 SESSION_DATASET_KEY = "islandos_session_site_dataset"
+MAX_SESSION_DATASET_BYTES = 25 * 1024 * 1024
 
 
 def store_session_dataset(
@@ -22,6 +23,10 @@ def store_session_dataset(
     """Store an uploaded CSV in the current session and return safe metadata."""
     if not isinstance(payload, bytes) or not payload:
         raise ValueError("dataset payload must be non-empty bytes")
+    if len(payload) > MAX_SESSION_DATASET_BYTES:
+        raise ValueError(
+            f"dataset exceeds the {MAX_SESSION_DATASET_BYTES // (1024 * 1024)} MiB session handoff limit"
+        )
     if not isinstance(file_name, str) or not file_name.strip():
         raise ValueError("file_name must be a non-empty string")
     if not isinstance(source_type, str) or not source_type.strip():
