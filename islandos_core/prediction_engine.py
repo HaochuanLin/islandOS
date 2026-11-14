@@ -300,8 +300,10 @@ class PredictionEngine:
         cutoff = initial_history
         folds = 0
         fold_metrics = []
-        while cutoff < len(values):
-            fold_horizon = min(horizon, len(values) - cutoff)
+        while cutoff + horizon <= len(values):
+            # Score only complete blocks so a requested 168-hour evaluation
+            # never silently includes a shorter final block.
+            fold_horizon = horizon
             train = values[:cutoff]
             predicted = self._predict(
                 model_id, train, fold_horizon,
@@ -350,6 +352,11 @@ class PredictionEngine:
             raise ValueError("history requires at least three values and initial_history must be in [2, len(history))")
         if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
             raise ValueError("horizon must be a positive integer")
+        if len(values) - initial_history < horizon:
+            raise ValueError(
+                f"history must contain at least one complete {horizon}-hour validation block "
+                "after initial_history"
+            )
         if isinstance(season_length, bool) or not isinstance(season_length, int) or season_length < 1:
             raise ValueError("season_length must be a positive integer")
         if not isinstance(non_negative, bool):
@@ -413,9 +420,9 @@ class PredictionEngine:
             season_length=season_length, non_negative=request.non_negative,
         )
         ordered_errors = sorted(absolute_errors)
-        # Finite-sample conformal rank. When the requested quantile lies
-        # beyond the available calibration sample, the largest observed
-        # residual is used and the limitation remains explicit.
+        # Empirical finite-sample rank over rolling-origin residuals. These
+        # same residuals also select the model, so the resulting band is
+        # descriptive only and is not independent conformal calibration.
         rank = min(len(ordered_errors), math.ceil((len(ordered_errors) + 1) * confidence_level))
         radius = ordered_errors[max(0, rank - 1)]
         points = []
