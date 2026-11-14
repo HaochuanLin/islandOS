@@ -10,16 +10,17 @@ IslandOS organizes system data, estimates future conditions, evaluates feasible 
 
 ## External product workflow
 
-The user-facing product workflow is always:
+The canonical user-facing product workflow is always:
 
 | Step | Purpose | Typical outputs |
 |---|---|---|
 | **INPUT** | Organize energy supply, demand, assets, resource requirements, operating constraints, data quality, and provenance | Validated scenario, asset inventory, data-quality report, assumptions |
-| **PREDICT** | Estimate relevant future supply, demand, prices, availability, and system state; quantify uncertainty where supported | Forecast series, baseline comparison, error metrics, uncertainty/scenario information |
-| **OPTIMIZE** | Evaluate feasible operating and investment alternatives against technical, service, economic, and environmental objectives | Candidate plans, feasibility checks, trade-off comparisons, sensitivity results |
+| **FORECAST** | Estimate relevant future supply, demand, prices, availability, and system state; quantify uncertainty where supported | Forecast series, baseline comparison, error metrics, uncertainty/scenario information |
+| **COORDINATE** | Generate and evaluate feasible resource schedules across supported assets and flexible loads under explicit constraints | Candidate schedules, constraint checks, resource allocation and feasibility results |
+| **COMPARE** | Compare baselines and candidate schedules against common service, economic, reliability and resource-use measures | Like-for-like trade-offs, sensitivity results, unmet-service and cost comparisons |
 | **DECIDE** | Explain recommendations, trade-offs, risks, assumptions, and evidence for human review | Decision report, recommendation rationale, unresolved data needs, audit record |
 
-The four steps describe the product experience, not the number of internal packages, services, or engineering layers. Internal architecture may contain data adapters, asset registries, physical models, forecasting services, optimization algorithms, audit services, and user interfaces.
+The five steps describe the product experience, not the number of internal packages, services, or engineering layers. Internal architecture may contain data adapters, asset registries, physical models, forecasting services, optimization algorithms, audit services, and user interfaces.
 
 ## Scope boundary
 
@@ -54,9 +55,10 @@ The engineering problem is to evaluate coupled energy and resource balances whil
 | Product workflow | Internal technical responsibilities | Repository foundation | Current maturity / gap |
 |---|---|---|---|
 | **INPUT** | Data ingestion, schema and unit normalization, provenance, data-quality checks, asset identity, configuration, system state | `islandos_core/onboarding.py`, `islandos_core/workspace_store.py`, `islandos_core/forecast_signal_catalog.py`, `islandos_sensors/`, gateway and telemetry modules | CSV/XLSX onboarding, local-first workspace, canonical signal vocabulary and read-only telemetry reference exist. Universal vendor mapping and production integration are not implemented. |
-| **PREDICT** | Time-series baselines, forecasting contracts, model evaluation, forecast uncertainty and scenarios | `islandos_core/forecast_signal_catalog.py`, `islandos_core/prediction_engine.py`, `islandos_core/forecast_contract.py`, experiments | Canonical multi-domain orchestration and replaceable candidates with rolling-origin replay exist. Site-calibrated accuracy and calibrated uncertainty remain unproven. |
-| **OPTIMIZE** | Physical/system simulation, asset constraints, scenario evaluation, candidate generation, feasibility filtering, multi-objective ranking | `islandos_core/microgrid_model.py`, `islandos_core/prediction_dispatch_adapter.py`, `optimization/`, rolling-horizon and NSGA-II experiments | Forecast-driven joint battery/diesel schedule search with deterministic stress cases and service-equivalence gating exists. Broader asset coverage and calibrated robust optimization remain incomplete. |
-| **DECIDE** | Recommendation policy, trade-off explanation, economic comparison, operator review, report generation, audit and feedback | `pages/06_Forecast_Led_Joint_Resource_Optimizer.py`, `frontend/`, `islandos_service_api.py`, `islandos_core/decision.py`, `islandos_core/audit.py`, `islandos_core/shadow_evidence.py`, `islandos_core/safety_governance.py` | Forecast-led schedule comparison, model provenance, JSON audit, simplified customer economics, React customer-console and membership foundations, local tenant-scoped reference API, persistent read-only shadow evidence and fail-closed review-package gate exist. Full-stack production deployment, continuous site telemetry, site economics, independent safety acceptance and customer usability remain unvalidated. |
+| **FORECAST** | Time-series baselines, forecasting contracts, model evaluation, forecast uncertainty and scenarios | `islandos_core/forecast_signal_catalog.py`, `islandos_core/prediction_engine.py`, `islandos_core/forecast_contract.py`, experiments | Canonical multi-domain orchestration and replaceable candidates with rolling-origin replay exist. Site-calibrated accuracy and calibrated uncertainty remain unproven. |
+| **COORDINATE** | Physical/system simulation, asset constraints, candidate schedule generation, feasibility filtering, and resource allocation | `islandos_core/microgrid_model.py`, `islandos_core/prediction_dispatch_adapter.py`, `optimization/`, rolling-horizon and NSGA-II experiments | Forecast-driven joint battery/diesel schedule search with deterministic stress cases and service-equivalence gating exists. Broader asset coverage and calibrated robust optimization remain incomplete. |
+| **COMPARE** | Common-baseline evaluation, service-equivalence checks, cost/reliability/resource-use trade-offs and sensitivity reporting | Shared simulation, comparison and economics modules | Candidate comparison and selected economics screens exist; wider multi-resource scorecard and customer-validated economics remain incomplete. |
+| **DECIDE** | Recommendation policy, trade-off explanation, operator review, report generation, audit and feedback | `pages/06_Forecast_Led_Joint_Resource_Optimizer.py`, `frontend/`, `islandos_service_api.py`, `islandos_core/decision.py`, `islandos_core/audit.py`, `islandos_core/shadow_evidence.py`, `islandos_core/safety_governance.py` | Forecast-led schedule comparison, model provenance, JSON audit, simplified customer economics, React customer-console and membership foundations, local tenant-scoped reference API, persistent read-only shadow evidence and fail-closed review-package gate exist. Full-stack production deployment, continuous site telemetry, site economics, independent safety acceptance and customer usability remain unvalidated. |
 
 ## 3. System-level constraints and objectives
 
@@ -130,10 +132,15 @@ A benchmark is not product proof if it compares against a deliberately weak base
 - **Optimization:** evaluate all candidates with common physics and explicit feasibility rules; disclose heuristic limits.
 - **Decision economics:** compare baseline and alternatives with traceable CAPEX, OPEX, maintenance, replacement, and sensitivity assumptions.
 - **Supervised pilot:** begin with offline replay and read-only review; require site approval before any operational integration.
-- **Product interface:** guide users through INPUT → PREDICT → OPTIMIZE → DECIDE and generate reproducible decision reports.
+- **Product interface:** guide users through INPUT → FORECAST → COORDINATE → COMPARE → DECIDE and generate reproducible decision reports.
 
 See [Productization Roadmap](PRODUCTIZATION_ROADMAP.md) for phase exit gates and customer-discovery requirements, and [Engineering stages 1–10 closeout](ENGINEERING_STAGES_1_10_CLOSEOUT.md) for merged implementation slices and remaining field gates.
 
 ## 8. Explicit non-claims
 
 IslandOS does not currently claim universal plug-and-play integration, a validated all-signal forecast service, globally optimal dispatch, certified safety, autonomous online learning, live PLC actuation, field-proven savings, or bankable ROI. Those claims require evidence beyond repository code and synthetic simulations.
+
+
+## Canonical terminology and mapping
+
+The product vocabulary is intentionally five steps: **INPUT → FORECAST → COORDINATE → COMPARE → DECIDE**. Older internal notes may use `PREDICT` as a synonym for `FORECAST`, and `OPTIMIZE` for algorithmic work within `COORDINATE`. Those older labels are implementation terminology, not alternate product workflows. Optimization is a method used during coordination; comparison is a distinct evaluation stage; the final decision remains human-reviewed.
