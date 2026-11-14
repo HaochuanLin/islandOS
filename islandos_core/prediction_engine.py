@@ -158,7 +158,7 @@ class CandidateMetrics:
     mae: float
     rmse: float
     wape_percent: float | None
-    bias_predicted_minus_actual: float = 0.0
+    bias_predicted_minus_actual: float | None = None
     fold_metrics: tuple[CandidateFoldMetrics, ...] = ()
 
 
@@ -348,8 +348,14 @@ class PredictionEngine:
         non_negative: bool = True,
     ) -> tuple[CandidateMetrics, ...]:
         values = list(history)
-        if len(values) < 3 or initial_history < 2 or initial_history >= len(values):
-            raise ValueError("history requires at least three values and initial_history must be in [2, len(history))")
+        if (
+            len(values) < 3
+            or isinstance(initial_history, bool)
+            or not isinstance(initial_history, int)
+            or initial_history < 2
+            or initial_history >= len(values)
+        ):
+            raise ValueError("history requires at least three values and initial_history must be an integer in [2, len(history))")
         if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
             raise ValueError("horizon must be a positive integer")
         if len(values) - initial_history < horizon:
