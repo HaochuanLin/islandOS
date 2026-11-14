@@ -13,6 +13,13 @@ The task scheduler's available-power budget must be calculated after other
 fixed site loads; this avoids allocating the same capacity twice. The adapter
 does not infer missing assets, grid availability, tariffs or site constraints.
 
+The customer demo compares the tariff-aware task placement with an
+earliest-feasible reference using the same task requirements, operating
+windows, residual task budget, PV/wind profiles and grid limits. It reports
+grid import, modeled energy cost, critical unmet energy, flexible shedding and
+peak grid import side by side. The reference is a transparent scheduling
+heuristic, not a measured historical baseline or a claim of customer savings.
+
 This closes the software hand-off between device-level tasks and the shared
 energy balance. It does not turn the heuristic scheduler into a global
 multi-resource optimizer, nor does it establish site savings or control
