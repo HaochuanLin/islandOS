@@ -39,6 +39,7 @@ from islandos_core.app_workflow import (
     parse_uploaded_csv,
     run_uploaded_strategy_comparison,
 )
+from islandos_core.demo_datasets import synthetic_forecast_history_csv
 from islandos_core.simulation_adapter import simulation_row_to_screening_signals
 from islandos_core.virtual_instrument import make_virtual_reading
 from ro_costing import ROCostRates, calculate_ro_operating_cost
@@ -131,10 +132,18 @@ with st.sidebar:
     st.divider()
     st.caption("Research prototype · not for real-time control")
     st.download_button(
-        "⬇ Download CSV template",
+        "⬇ Download energy–water CSV template",
         data=csv_template_bytes(),
-        file_name="islandos_site_data_template.csv",
+        file_name="islandos_energy_water_template.csv",
         mime="text/csv",
+        use_container_width=True,
+    )
+    st.download_button(
+        "⬇ Download 7-day synthetic forecast CSV",
+        data=synthetic_forecast_history_csv(),
+        file_name="islandos_synthetic_forecast_demo.csv",
+        mime="text/csv",
+        help="168 hourly UTC rows using the canonical forecast input columns. Synthetic demonstration data, not measured site data.",
         use_container_width=True,
     )
 
