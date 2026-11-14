@@ -123,7 +123,19 @@ reference_schedule = schedule_device_tasks(tasks, [1.0] * 24, task_power_budget)
 reference_inputs = attach_device_task_schedule(energy_inputs, reference_schedule)
 reference_replay = dispatch_energy_system(
     reference_inputs,
-    EnergySystemConfig(pv_rated_kw=12.0, wind_rated_kw=4.5, grid_import_limit_kw=20.0),
+    EnergySystemConfig(
+        pv_rated_kw=12.0,
+        wind_rated_kw=4.5,
+        grid_import_limit_kw=20.0,
+        battery=BatterySpec(
+            capacity_kwh=12.0, max_charge_kw=4.0, max_discharge_kw=4.0,
+            initial_soc=0.60, min_soc=0.10, max_soc=0.95,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=5.0, variable_cost_per_kwh=0.35,
+            ramp_up_kw_per_hour=5.0,
+        ),
+    ),
 )
 reference_metrics = reference_replay["summary"]
 
@@ -148,7 +160,7 @@ c2.metric("Energy cost", f"{metrics['estimated_energy_cost']:.2f}")
 c3.metric("Critical unmet", f"{metrics['critical_unmet_load_kwh']:.2f} kWh")
 c4.metric("Flexible load shed", f"{metrics['flexible_load_shed_kwh']:.2f} kWh")
 st.caption(
-    "The device schedule is passed into the same chronological PV/wind/grid energy accounting used by IslandOS. "
+    "The device schedule is passed into the same chronological PV/wind/battery/grid/diesel energy accounting used by IslandOS. "
     "This example uses a transparent rule-based dispatch baseline, not a global optimum."
 )
 
