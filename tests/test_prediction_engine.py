@@ -57,6 +57,25 @@ class TestPredictionEngine(unittest.TestCase):
             [3.0, 3.0, 3.0, 3.0],
         )
 
+    def test_rolling_metrics_include_fold_level_signed_bias(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        score = engine.evaluate_candidates(
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            initial_history=2,
+            horizon=2,
+            season_length=24,
+        )[0]
+        self.assertEqual(score.folds, 2)
+        self.assertEqual(score.samples, 4)
+        self.assertAlmostEqual(score.mae, 1.5)
+        self.assertAlmostEqual(score.rmse, (2.5) ** 0.5)
+        self.assertAlmostEqual(score.bias_predicted_minus_actual, -1.5)
+        self.assertEqual(len(score.fold_metrics), 2)
+        self.assertEqual([fold.train_samples for fold in score.fold_metrics], [2, 4])
+        self.assertEqual([fold.samples for fold in score.fold_metrics], [2, 2])
+        self.assertTrue(all(fold.bias_predicted_minus_actual < 0 for fold in score.fold_metrics))
+
     def test_chronological_candidate_selection_and_forecast(self):
         values = [float(index % 24) for index in range(96)]
         engine = PredictionEngine()
