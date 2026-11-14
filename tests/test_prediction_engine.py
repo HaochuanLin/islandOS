@@ -6,6 +6,7 @@ from islandos_core.prediction_engine import (
     ForecastRequest,
     LinearTrendCandidate,
     PredictionEngine,
+    PersistenceCandidate,
     RecentMeanCandidate,
     SeasonalNaiveCandidate,
     SignalObservation,
@@ -47,8 +48,65 @@ class TestPredictionEngine(unittest.TestCase):
         engine = PredictionEngine()
         self.assertEqual(
             {name for name, _ in engine.available_candidates()},
-            {"seasonal_naive", "recent_mean", "linear_trend"},
+            {"persistence", "seasonal_naive", "recent_mean", "linear_trend"},
         )
+
+    def test_persistence_baseline_repeats_last_observation(self):
+        self.assertEqual(
+            PersistenceCandidate().predict([1.0, 2.5, 3.0], 4, season_length=24),
+            [3.0, 3.0, 3.0, 3.0],
+        )
+
+    def test_rolling_metrics_include_fold_level_signed_bias(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        score = engine.evaluate_candidates(
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            initial_history=2,
+            horizon=2,
+            season_length=24,
+        )[0]
+        self.assertEqual(score.folds, 2)
+        self.assertEqual(score.samples, 4)
+        self.assertAlmostEqual(score.mae, 1.5)
+        self.assertAlmostEqual(score.rmse, (2.5) ** 0.5)
+        self.assertAlmostEqual(score.bias_predicted_minus_actual, -1.5)
+        self.assertEqual(len(score.fold_metrics), 2)
+        self.assertEqual([fold.train_samples for fold in score.fold_metrics], [2, 4])
+        self.assertEqual([fold.samples for fold in score.fold_metrics], [2, 2])
+        self.assertTrue(all(fold.bias_predicted_minus_actual < 0 for fold in score.fold_metrics))
+
+    def test_replay_excludes_incomplete_final_horizon_block(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        score = engine.evaluate_candidates(
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            initial_history=2,
+            horizon=2,
+            season_length=24,
+        )[0]
+        self.assertEqual(score.folds, 2)
+        self.assertEqual(score.samples, 4)
+        self.assertEqual([fold.samples for fold in score.fold_metrics], [2, 2])
+
+    def test_replay_rejects_non_integer_initial_history(self):
+        engine = PredictionEngine()
+        for invalid in (True, 48.0, "48"):
+            with self.assertRaisesRegex(ValueError, "initial_history must be an integer"):
+                engine.evaluate_candidates(
+                    [float(index) for index in range(96)],
+                    initial_history=invalid,
+                    horizon=24,
+                )
+
+    def test_replay_requires_one_complete_horizon_block(self):
+        engine = PredictionEngine()
+        with self.assertRaisesRegex(ValueError, "one complete 24-hour validation block"):
+            engine.evaluate_candidates(
+                [float(index) for index in range(60)],
+                initial_history=48,
+                horizon=24,
+            )
 
     def test_chronological_candidate_selection_and_forecast(self):
         values = [float(index % 24) for index in range(96)]
@@ -104,13 +162,14 @@ class TestPredictionEngine(unittest.TestCase):
                 make_request(values), model_id="invalid", initial_history=48,
             )
 
-    def test_interval_uses_finite_sample_conformal_rank(self):
+    def test_interval_reports_empirical_non_independent_error_band(self):
         values = [float(index % 24) for index in range(96)]
         result = PredictionEngine().forecast(
             make_request(values), initial_history=48, backtest_horizon=24,
             confidence_level=0.90,
         )
-        self.assertIn("finite-sample conformal-style", result.interval_method)
+        self.assertIn("not independently calibrated", result.interval_method)
+        self.assertTrue(any("reuse the same rolling-origin replay" in item for item in result.limitations))
 
     def test_irregular_history_rejected(self):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)

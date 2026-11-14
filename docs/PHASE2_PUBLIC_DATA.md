@@ -80,7 +80,14 @@ python examples/phase2_opsd_backtest.py \
   --rolling-horizons 1 6 24 168
 ```
 
-The JSON report includes the exact source columns, selected region, history window, observation count, data digest, baseline comparisons, holdout metrics, and forecast output. Add `--rolling-validation` to evaluate the same built-in persistence, seasonal-naive, and ridge candidates over expanding folds at the requested horizons. The rolling report is separate from automatic model promotion. Use `--start-utc` and `--end-utc` to restrict ingestion to a chosen contiguous interval, or omit unavailable signals with `--signals`. Each horizon requires at least `72 + horizon × folds` observations; with four folds and the default 168-hour horizon, at least 744 contiguous hourly observations are required.
+The JSON report includes the exact source columns, selected region, history window, observation count, source-data digest, baseline comparisons, holdout metrics, and forecast output. It now contains two clearly separated evaluation paths:
+
+- **Legacy Phase 2 engine:** persistence, 24-hour seasonal-naive, and Ridge autoregression, including its original chronological holdout and optional four-fold expanding-window comparison.
+- **Canonical prediction service:** the current `forecast_site_signals(...)` / `PredictionEngine` path used by the mainline workflow. It reports the selected model and rolling-origin candidate metrics for the same public history. The built-in candidates include persistence, seasonal-naive, recent mean, and linear trend.
+
+The canonical path records explicit unit scaling from OPSD MW to IslandOS kW (×1000) and EUR/MWh to EUR/kWh (×0.001). These are unit conversions only; country-level values are not scaled into facility values. Its candidate reports include aggregate and per-fold MAE, RMSE, signed bias (prediction minus actual), WAPE where defined, and each fold's training/validation sample counts. Add `--rolling-validation` to evaluate both paths at the requested horizons. The rolling report is evidence for model review, not automatic model promotion. Use `--start-utc` and `--end-utc` to restrict ingestion to a chosen contiguous interval, or omit unavailable signals with `--signals`. The legacy four-fold evaluator requires at least `72 + horizon × folds` observations; with four folds and the default 168-hour horizon, at least 744 contiguous hourly observations are required. The canonical evaluator reports all complete chronological blocks for each requested horizon and excludes an incomplete trailing block, so scores are not blended across different horizon lengths. Each signal/horizon report records the initial-history sample count, complete fold count, scored sample count, and excluded trailing sample count so reviewers can reproduce the exact evaluation window.
+
+Running the CLI on a real downloaded OPSD file is still required before claiming public-data backtest results. Synthetic adapter/CLI tests verify software behavior only.
 
 ## Attribution
 

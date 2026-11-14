@@ -80,6 +80,20 @@ class ForecastCandidate(Protocol):
         ...
 
 
+class PersistenceCandidate:
+    """Repeat the latest observed value as a transparent no-skill baseline."""
+
+    model_id = "persistence"
+    version = "1.0"
+
+    def predict(self, history: Sequence[float], horizon: int, *, season_length: int) -> list[float]:
+        if not history:
+            raise ValueError("history cannot be empty")
+        if horizon < 1 or season_length < 1:
+            raise ValueError("horizon and season_length must be positive")
+        return [float(history[-1])] * horizon
+
+
 class SeasonalNaiveCandidate:
     model_id = "seasonal_naive"
     version = "1.0"
@@ -126,6 +140,16 @@ class LinearTrendCandidate:
 
 
 @dataclass(frozen=True)
+class CandidateFoldMetrics:
+    fold_index: int
+    train_samples: int
+    samples: int
+    mae: float
+    rmse: float
+    bias_predicted_minus_actual: float
+
+
+@dataclass(frozen=True)
 class CandidateMetrics:
     model_id: str
     model_version: str
@@ -134,6 +158,8 @@ class CandidateMetrics:
     mae: float
     rmse: float
     wape_percent: float | None
+    bias_predicted_minus_actual: float | None = None
+    fold_metrics: tuple[CandidateFoldMetrics, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -179,15 +205,16 @@ def _validate_predictions(values: Sequence[float], horizon: int, *, non_negative
     return clean
 
 
-def _metrics(actual: Sequence[float], predicted: Sequence[float]) -> tuple[float, float, float | None]:
+def _metrics(actual: Sequence[float], predicted: Sequence[float]) -> tuple[float, float, float, float | None]:
     if not actual or len(actual) != len(predicted):
         raise ValueError("actual and predicted must have equal non-empty lengths")
     errors = [float(guess) - float(truth) for truth, guess in zip(actual, predicted)]
     mae = sum(abs(error) for error in errors) / len(errors)
     rmse = math.sqrt(sum(error * error for error in errors) / len(errors))
     denominator = sum(abs(float(value)) for value in actual)
+    bias = sum(errors) / len(errors)
     wape = None if denominator == 0 else sum(abs(error) for error in errors) / denominator * 100.0
-    return mae, rmse, wape
+    return mae, rmse, bias, wape
 
 
 def _history_digest(request: ForecastRequest) -> str:
@@ -210,7 +237,7 @@ class PredictionEngine:
     def __init__(self, *, include_builtin_candidates: bool = True) -> None:
         self._candidates: dict[str, tuple[ForecastCandidate, str]] = {}
         if include_builtin_candidates:
-            for candidate in (SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate()):
+            for candidate in (PersistenceCandidate(), SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate()):
                 self.register(candidate)
 
     def register(self, candidate: ForecastCandidate) -> None:
@@ -272,19 +299,42 @@ class PredictionEngine:
         predicted_all: list[float] = []
         cutoff = initial_history
         folds = 0
-        while cutoff < len(values):
-            fold_horizon = min(horizon, len(values) - cutoff)
+        fold_metrics = []
+        while cutoff + horizon <= len(values):
+            # Score only complete blocks so a requested 168-hour evaluation
+            # never silently includes a shorter final block.
+            fold_horizon = horizon
+            train = values[:cutoff]
             predicted = self._predict(
-                model_id, values[:cutoff], fold_horizon,
+                model_id, train, fold_horizon,
                 season_length=season_length, non_negative=non_negative,
             )
             actual = [float(value) for value in values[cutoff:cutoff + fold_horizon]]
+            fold_mae, fold_rmse, fold_bias, _ = _metrics(actual, predicted)
+            fold_metrics.append(CandidateFoldMetrics(
+                fold_index=folds + 1,
+                train_samples=len(train),
+                samples=len(actual),
+                mae=fold_mae,
+                rmse=fold_rmse,
+                bias_predicted_minus_actual=fold_bias,
+            ))
             actual_all.extend(actual)
             predicted_all.extend(predicted)
             cutoff += fold_horizon
             folds += 1
-        mae, rmse, wape = _metrics(actual_all, predicted_all)
-        return CandidateMetrics(model_id, version, folds, len(actual_all), mae, rmse, wape), [
+        mae, rmse, bias, wape = _metrics(actual_all, predicted_all)
+        return CandidateMetrics(
+            model_id=model_id,
+            model_version=version,
+            folds=folds,
+            samples=len(actual_all),
+            mae=mae,
+            rmse=rmse,
+            wape_percent=wape,
+            bias_predicted_minus_actual=bias,
+            fold_metrics=tuple(fold_metrics),
+        ), [
             abs(guess - truth) for truth, guess in zip(actual_all, predicted_all)
         ]
 
@@ -298,10 +348,21 @@ class PredictionEngine:
         non_negative: bool = True,
     ) -> tuple[CandidateMetrics, ...]:
         values = list(history)
-        if len(values) < 3 or initial_history < 2 or initial_history >= len(values):
-            raise ValueError("history requires at least three values and initial_history must be in [2, len(history))")
+        if (
+            len(values) < 3
+            or isinstance(initial_history, bool)
+            or not isinstance(initial_history, int)
+            or initial_history < 2
+            or initial_history >= len(values)
+        ):
+            raise ValueError("history requires at least three values and initial_history must be an integer in [2, len(history))")
         if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
             raise ValueError("horizon must be a positive integer")
+        if len(values) - initial_history < horizon:
+            raise ValueError(
+                f"history must contain at least one complete {horizon}-hour validation block "
+                "after initial_history"
+            )
         if isinstance(season_length, bool) or not isinstance(season_length, int) or season_length < 1:
             raise ValueError("season_length must be a positive integer")
         if not isinstance(non_negative, bool):
@@ -365,9 +426,9 @@ class PredictionEngine:
             season_length=season_length, non_negative=request.non_negative,
         )
         ordered_errors = sorted(absolute_errors)
-        # Finite-sample conformal rank. When the requested quantile lies
-        # beyond the available calibration sample, the largest observed
-        # residual is used and the limitation remains explicit.
+        # Empirical finite-sample rank over rolling-origin residuals. These
+        # same residuals also select the model, so the resulting band is
+        # descriptive only and is not independent conformal calibration.
         rank = min(len(ordered_errors), math.ceil((len(ordered_errors) + 1) * confidence_level))
         radius = ordered_errors[max(0, rank - 1)]
         points = []
@@ -383,13 +444,14 @@ class PredictionEngine:
             model_version=registered_version,
             input_history_sha256=_history_digest(request),
             confidence_level=float(confidence_level),
-            interval_method="finite-sample conformal-style symmetric absolute-error quantile from rolling-origin replay",
+            interval_method="empirical symmetric absolute-error quantile from rolling-origin replay; not independently calibrated",
             interval_calibration_samples=len(absolute_errors),
             backtest=selected_metrics,
             points=tuple(points),
             limitations=(
                 "Built-in candidates are statistical baselines, not trained AI models.",
                 "Error bands summarize historical rolling-origin residuals; they are not guaranteed prediction intervals.",
+                "Candidate selection and error-band estimation reuse the same rolling-origin replay; bands are descriptive, not independently calibrated.",
                 "Backtest skill on supplied history does not establish future accuracy or site-wide operational suitability.",
                 "Forecasts are decision-support inputs and do not issue equipment commands.",
             ),
