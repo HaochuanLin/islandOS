@@ -66,9 +66,11 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
 
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
     assert report["source_data_sha256"] == "a" * 64
+    assert len(report["canonical_bundle_history_sha256"]) == 64
     assert set(report["signals"]) == {"load", "solar", "wind", "price"}
     for signal in report["signals"].values():
         assert signal["selected_model"]
+        assert len(signal["input_history_sha256"]) == 64
         assert signal["selection_backtest"]["fold_metrics"]
         assert len(signal["forecast_points"]) == 6
         assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
