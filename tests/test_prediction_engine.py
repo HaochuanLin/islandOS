@@ -89,6 +89,16 @@ class TestPredictionEngine(unittest.TestCase):
         self.assertEqual(score.samples, 4)
         self.assertEqual([fold.samples for fold in score.fold_metrics], [2, 2])
 
+    def test_replay_rejects_non_integer_initial_history(self):
+        engine = PredictionEngine()
+        for invalid in (True, 48.0, "48"):
+            with self.assertRaisesRegex(ValueError, "initial_history must be an integer"):
+                engine.evaluate_candidates(
+                    [float(index) for index in range(96)],
+                    initial_history=invalid,
+                    horizon=24,
+                )
+
     def test_replay_requires_one_complete_horizon_block(self):
         engine = PredictionEngine()
         with self.assertRaisesRegex(ValueError, "one complete 24-hour validation block"):
