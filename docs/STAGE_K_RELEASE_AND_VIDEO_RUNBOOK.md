@@ -39,12 +39,13 @@ semi-flexible ice-making block and the fully-flexible pumping intervals.
 Point out the operating windows, priority order and infeasibility rejection.
 
 **1:35–2:05 — Multi-resource decision**
-Show the shared energy replay with PV, wind, grid import, cost, critical unmet
-energy and flexible load shedding. Explain that the same physical accounting
-is used to evaluate the combined demand.
+Show the like-for-like tariff-aware versus earliest-feasible comparison.
+Point out grid import, modeled cost, peak import, critical unmet energy and
+flexible load shedding. Explain that both plans use the same device service
+requirements and the same physical energy accounting.
 
 **2:05–2:30 — Audit and limits**
-Export the CSV. Close with: "This is an auditable planning prototype using
+Export the per-device hourly CSV, including the reference replay series. Close with: "This is an auditable planning prototype using
 synthetic demonstration inputs. It does not send commands to equipment, and
 the displayed cost is not measured customer savings. The next validation step
 is a supervised pilot using authorized site data and engineering review."
