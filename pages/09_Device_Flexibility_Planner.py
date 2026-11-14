@@ -139,16 +139,24 @@ st.caption(
     "This example uses a transparent rule-based dispatch baseline, not a global optimum."
 )
 
+device_power = {
+    item.task_id: item.power_kw for item in schedule.schedules
+}
 csv = pd.DataFrame({
     "hour": hours,
     "tariff_per_kwh": prices,
+    "clinic_essential_kw": device_power["clinic-critical"],
+    "ice_production_kw": device_power["ice-maker"],
+    "water_transfer_pumping_kw": device_power["water-pump"],
     "critical_load_kw": schedule.critical_power_kw,
     "total_device_task_kw": schedule.total_power_kw,
     "residual_task_budget_kw": schedule.residual_power_kw,
     "pv_generation_kw": pv,
     "wind_generation_kw": wind,
     "grid_import_kw": [x["grid_import_kw"] for x in replay["rows"]],
+    "reference_grid_import_kw": [x["grid_import_kw"] for x in reference_replay["rows"]],
     "flexible_load_shed_kw": [x["flexible_load_shed_kw"] for x in replay["rows"]],
+    "reference_flexible_load_shed_kw": [x["flexible_load_shed_kw"] for x in reference_replay["rows"]],
 })
 st.download_button(
     "Export auditable schedule CSV",
