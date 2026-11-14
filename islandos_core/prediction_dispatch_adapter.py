@@ -114,6 +114,9 @@ def build_dispatch_forecast_bundle(
         )
         digests[signal_name] = digest
 
+    if common_targets[0] - end != timedelta(hours=1):
+        raise ValueError("first forecast timestamp must follow history_end_utc by one hour")
+
     canonical = json.dumps(digests, sort_keys=True, separators=(",", ":"))
     aggregate_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return ForecastBundle(
