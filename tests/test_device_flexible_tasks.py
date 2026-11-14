@@ -63,9 +63,9 @@ class DeviceTaskSchedulingTests(unittest.TestCase):
             schedule_device_tasks([task],[.1,.2,.3],[2,2,2])
     def test_energy_and_power_accounting(self):
         task=DeviceTask("pump","Pump","fully_flexible",2,4,0,3)
-        result=schedule_device_tasks([task],[.1,.2,.3],[2,2,2],dt_hours=.5)
+        result=schedule_device_tasks([task],[.1,.2,.3,.4],[2,2,2,2],dt_hours=.5)
         self.assertAlmostEqual(result.schedules[0].energy_kwh,4)
-        self.assertTrue(all(p<=c+1e-9 for p,c in zip(result.total_power_kw,[2,2,2])))
+        self.assertTrue(all(p<=c+1e-9 for p,c in zip(result.total_power_kw,[2,2,2,2])))
 
 if __name__ == "__main__":
     unittest.main()
