@@ -6,6 +6,7 @@ from islandos_core.prediction_engine import (
     ForecastRequest,
     LinearTrendCandidate,
     PredictionEngine,
+    PersistenceCandidate,
     RecentMeanCandidate,
     SeasonalNaiveCandidate,
     SignalObservation,
@@ -47,7 +48,13 @@ class TestPredictionEngine(unittest.TestCase):
         engine = PredictionEngine()
         self.assertEqual(
             {name for name, _ in engine.available_candidates()},
-            {"seasonal_naive", "recent_mean", "linear_trend"},
+            {"persistence", "seasonal_naive", "recent_mean", "linear_trend"},
+        )
+
+    def test_persistence_baseline_repeats_last_observation(self):
+        self.assertEqual(
+            PersistenceCandidate().predict([1.0, 2.5, 3.0], 4, season_length=24),
+            [3.0, 3.0, 3.0, 3.0],
         )
 
     def test_chronological_candidate_selection_and_forecast(self):
@@ -110,7 +117,8 @@ class TestPredictionEngine(unittest.TestCase):
             make_request(values), initial_history=48, backtest_horizon=24,
             confidence_level=0.90,
         )
-        self.assertIn("finite-sample conformal-style", result.interval_method)
+        self.assertIn("not independently calibrated", result.interval_method)
+        self.assertTrue(any("reuse the same rolling-origin replay" in item for item in result.limitations))
 
     def test_irregular_history_rejected(self):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)
