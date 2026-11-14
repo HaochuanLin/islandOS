@@ -18,6 +18,10 @@ cross-signal causal relationships or multivariate dynamics.
   target timestamps across all included signals.
 - Every signal retains its own unit, model ID/version, input-history SHA-256,
   rolling-origin backtest metrics and uncertainty bands.
+- Default transparent candidates include persistence, seasonal-naive,
+  recent-mean and linear-trend models. Candidate evaluation reports aggregate
+  MAE, RMSE, signed bias (prediction minus actual), WAPE where defined, and
+  per-fold MAE/RMSE/bias with training and validation sample counts.
 - Forecasting is fail-closed: if one signal cannot be forecast, no partial
   bundle is returned to the optimizer.
 - Explicit model selection is accepted only when that candidate passes the
@@ -87,6 +91,6 @@ pytest -q tests/test_prediction_engine.py tests/test_forecast_service.py
 
 The tests cover deterministic bundle digests, UTC-aligned histories and target
 grids, duplicate signal rejection, unknown model mappings, invalid candidate
-outputs, explicit model eligibility, persistence baseline behavior and empirical
-error-band metadata. The OPSD CLI can evaluate this canonical engine separately
+outputs, explicit model eligibility, persistence baseline behavior, fold-level
+signed bias and empirical error-band metadata. The OPSD CLI can evaluate this canonical engine separately
 from the legacy Phase 2 Ridge comparison.
