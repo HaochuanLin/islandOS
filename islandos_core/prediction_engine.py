@@ -140,6 +140,16 @@ class LinearTrendCandidate:
 
 
 @dataclass(frozen=True)
+class CandidateFoldMetrics:
+    fold_index: int
+    train_samples: int
+    samples: int
+    mae: float
+    rmse: float
+    bias_predicted_minus_actual: float
+
+
+@dataclass(frozen=True)
 class CandidateMetrics:
     model_id: str
     model_version: str
@@ -148,6 +158,8 @@ class CandidateMetrics:
     mae: float
     rmse: float
     wape_percent: float | None
+    bias_predicted_minus_actual: float = 0.0
+    fold_metrics: tuple[CandidateFoldMetrics, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -193,15 +205,16 @@ def _validate_predictions(values: Sequence[float], horizon: int, *, non_negative
     return clean
 
 
-def _metrics(actual: Sequence[float], predicted: Sequence[float]) -> tuple[float, float, float | None]:
+def _metrics(actual: Sequence[float], predicted: Sequence[float]) -> tuple[float, float, float, float | None]:
     if not actual or len(actual) != len(predicted):
         raise ValueError("actual and predicted must have equal non-empty lengths")
     errors = [float(guess) - float(truth) for truth, guess in zip(actual, predicted)]
     mae = sum(abs(error) for error in errors) / len(errors)
     rmse = math.sqrt(sum(error * error for error in errors) / len(errors))
     denominator = sum(abs(float(value)) for value in actual)
+    bias = sum(errors) / len(errors)
     wape = None if denominator == 0 else sum(abs(error) for error in errors) / denominator * 100.0
-    return mae, rmse, wape
+    return mae, rmse, bias, wape
 
 
 def _history_digest(request: ForecastRequest) -> str:
@@ -286,19 +299,40 @@ class PredictionEngine:
         predicted_all: list[float] = []
         cutoff = initial_history
         folds = 0
+        fold_metrics = []
         while cutoff < len(values):
             fold_horizon = min(horizon, len(values) - cutoff)
+            train = values[:cutoff]
             predicted = self._predict(
-                model_id, values[:cutoff], fold_horizon,
+                model_id, train, fold_horizon,
                 season_length=season_length, non_negative=non_negative,
             )
             actual = [float(value) for value in values[cutoff:cutoff + fold_horizon]]
+            fold_mae, fold_rmse, fold_bias, _ = _metrics(actual, predicted)
+            fold_metrics.append(CandidateFoldMetrics(
+                fold_index=folds + 1,
+                train_samples=len(train),
+                samples=len(actual),
+                mae=fold_mae,
+                rmse=fold_rmse,
+                bias_predicted_minus_actual=fold_bias,
+            ))
             actual_all.extend(actual)
             predicted_all.extend(predicted)
             cutoff += fold_horizon
             folds += 1
-        mae, rmse, wape = _metrics(actual_all, predicted_all)
-        return CandidateMetrics(model_id, version, folds, len(actual_all), mae, rmse, wape), [
+        mae, rmse, bias, wape = _metrics(actual_all, predicted_all)
+        return CandidateMetrics(
+            model_id=model_id,
+            model_version=version,
+            folds=folds,
+            samples=len(actual_all),
+            mae=mae,
+            rmse=rmse,
+            wape_percent=wape,
+            bias_predicted_minus_actual=bias,
+            fold_metrics=tuple(fold_metrics),
+        ), [
             abs(guess - truth) for truth, guess in zip(actual_all, predicted_all)
         ]
 
