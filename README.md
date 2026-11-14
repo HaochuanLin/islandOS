@@ -23,7 +23,7 @@ Here, AI refers primarily to forecasting, uncertainty analysis, and optimization
   <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS five-step workflow: INPUT validates data and assets, FORECAST estimates future conditions, COORDINATE generates resource schedules, COMPARE evaluates trade-offs, and DECIDE supports human review." width="100%">
 </p>
 
-*The core offline path from validated inputs through forecasting and constrained schedule comparison to human-reviewed decision outputs is implemented. The diagram does not imply live equipment control, production deployment, or site validation.*
+*The five steps define the product workflow; selected offline paths are implemented while other capabilities remain experimental or planned. The diagram does not imply that every step is fully integrated, nor does it imply live equipment control, production deployment, or site validation.*
 
 1. **INPUT** — organize energy supply, demand, assets, resources, operating constraints, data quality, and provenance.
 2. **FORECAST** — estimate future signals using documented statistical or experimental model candidates. Chronological replay and model provenance are available; site-specific accuracy is not established.
@@ -121,6 +121,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | Start with | What it covers |
 |---|---|
 | [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Five-step product workflow, internal architecture mapping, current implementation, and maturity boundaries |
+| [AI architecture](docs/AI_ARCHITECTURE.md) | Forecasting, coordination, comparison, maturity labels and technical guardrails |
 | [Repository map](docs/REPOSITORY_MAP.md) | Where code, experiments, tests, and documentation live |
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
