@@ -7,7 +7,7 @@ class DeviceTaskSchedulingTests(unittest.TestCase):
         pump = DeviceTask("pump","Pump","fully_flexible",4,8,0,4)
         result = schedule_device_tasks([pump,critical],[.3,.1,.2,.05],[7,9,4,4])
         self.assertEqual(result.critical_power_kw,(5,5,0,0))
-        self.assertEqual(result.schedules[1].power_kw,(0,0,0,4))
+        self.assertEqual(result.schedules[1].power_kw,(0,4,0,4))
         self.assertLessEqual(max(result.total_power_kw),9)
     def test_fully_flexible_uses_cheapest_slots(self):
         task=DeviceTask("cold","Cold room","fully_flexible",2,4,0,4)
