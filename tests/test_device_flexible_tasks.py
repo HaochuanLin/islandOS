@@ -45,6 +45,18 @@ class DeviceTaskSchedulingTests(unittest.TestCase):
         task=DeviceTask("pump","Pump","fully_flexible",2,2,3,2)
         with self.assertRaisesRegex(ValueError,"operating window"):
             schedule_device_tasks([task],[.1]*4,[2]*4)
+    def test_contiguous_task_respects_availability_at_every_step(self):
+        task=DeviceTask("pump","Pump","semi_flexible",2,4,0,3,interruptible=False,availability=(True,False,True))
+        with self.assertRaisesRegex(ValueError,"infeasible"):
+            schedule_device_tasks([task],[.1,.2,.3],[2,2,2])
+    def test_critical_profile_must_stay_inside_its_window(self):
+        task=DeviceTask("clinic","Clinic","critical",5,10,0,1,critical_power_profile_kw=(5,5))
+        with self.assertRaisesRegex(ValueError,"outside its operating window"):
+            schedule_device_tasks([task],[.1,.2],[5,5])
+    def test_interruptible_task_does_not_silently_ignore_minimum_run(self):
+        task=DeviceTask("pump","Pump","fully_flexible",2,4,0,3,minimum_run_steps=2,interruptible=True)
+        with self.assertRaisesRegex(ValueError,"minimum_run_steps=1"):
+            schedule_device_tasks([task],[.1,.2,.3],[2,2,2])
     def test_energy_and_power_accounting(self):
         task=DeviceTask("pump","Pump","fully_flexible",2,4,0,3)
         result=schedule_device_tasks([task],[.1,.2,.3],[2,2,2],dt_hours=.5)
