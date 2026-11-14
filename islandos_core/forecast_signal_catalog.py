@@ -15,6 +15,7 @@ import re
 from typing import Mapping, Sequence
 
 from .forecast_service import ForecastBundleRequest, ForecastService
+from .canonical_runtime import PlanningForecast, to_planning_forecast
 from .prediction_engine import (
     ForecastRequest,
     PredictionEngine,
@@ -62,6 +63,7 @@ class SiteForecastBundle:
     history_start_utc: datetime
     history_end_utc: datetime
     results: Mapping[str, PredictionResult]
+    planning: PlanningForecast
 
 
 def get_forecast_signal_spec(signal_id: str) -> ForecastSignalSpec | None:
@@ -172,6 +174,12 @@ def forecast_site_signals(
         confidence_level=confidence_level,
     )
     results = dict(bundle.forecasts)
+    # Enforce the canonical planner contract on the same forecast bundle used by
+    # the application path. This keeps signal IDs, units, horizons, uncertainty
+    # bounds and provenance aligned before any downstream dispatch adapter runs.
+    planning = to_planning_forecast(
+        bundle, required_units={signal_id: units[signal_id] for signal_id in history}
+    )
     digest_payload = {
         signal_id: results[signal_id].input_history_sha256
         for signal_id in sorted(results)
@@ -184,4 +192,5 @@ def forecast_site_signals(
         history_start_utc=stamps[0],
         history_end_utc=stamps[-1],
         results=results,
+        planning=planning,
     )
