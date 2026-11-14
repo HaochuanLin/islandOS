@@ -44,8 +44,8 @@ def evaluate_realized_forecast(
         raise ValueError("unit is required")
     if not forecast_points:
         raise ValueError("forecast_points must not be empty")
-    if not isinstance(actuals, Mapping) or not actuals:
-        raise ValueError("actuals must be a non-empty timestamp mapping")
+    if not isinstance(actuals, Mapping):
+        raise ValueError("actuals must be a timestamp mapping")
 
     normalized_actuals: dict[datetime, float] = {}
     for stamp, value in actuals.items():
