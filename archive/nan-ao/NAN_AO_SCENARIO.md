@@ -1,3 +1,5 @@
+> ARCHIVED HISTORICAL SCENARIO DOCUMENT — retained for traceability only. Not the generic IslandOS product definition and not evidence of a validated site deployment.
+
 # IslandOS Nan'ao hybrid simulation
 
 This is a single-scenario simulation: `IslandOS_hybrid_clean_energy`.

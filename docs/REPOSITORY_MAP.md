@@ -1,6 +1,6 @@
 # Repository Map
 
-This page explains where to find the main parts of IslandOS. The repository contains both the user-facing prototype and a substantial research/engineering workspace; not every experiment is part of the hosted app.
+This page explains where to find the main parts of IslandOS. The repository contains the user-facing prototype, a substantial research/engineering workspace, and a small historical archive; not every experiment is part of the hosted app.
 
 ## Start here
 
@@ -38,7 +38,8 @@ islandOS/
 ├── docs/                   # Architecture, assumptions, runbooks and evidence
 ├── pages/                  # Additional Streamlit pages
 ├── assets/                 # Screenshots and static assets
-├── outputs/                # Selected generated example outputs
+├── outputs/                # Selected generated example outputs; verify provenance before reuse
+├── archive/                # Historical scenario artifacts retained for traceability
 ├── packaging/              # Packaging and local launch helpers
 └── .github/workflows/      # CI, regression and deployment checks
 ```
@@ -55,3 +56,8 @@ A number of root-level Python files are retained as compatibility entry points f
 - The repository does not claim autonomous control of physical equipment.
 
 For the current feature and maturity status, use the main [README](../README.md) and the relevant design/acceptance documents rather than inferring maturity from a filename.
+
+
+## Historical artifacts and Nan'ao
+
+The Nan'ao emergency desalination work is a bounded historical pilot scenario, not the generic IslandOS product definition. Historical seed-20261021 percentile and summary outputs are retained under `archive/nan-ao/` for traceability only; they are superseded and must not be presented as current model outputs, measured site data, forecasts, or customer economics. The active `islandos_nanao_hybrid.py`, its regression test, and its CI workflow remain in their existing locations because they are still used for reproducibility and automated regression. Their continued presence does not make Nan'ao the default product scenario.

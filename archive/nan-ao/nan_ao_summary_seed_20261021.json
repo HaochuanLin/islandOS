@@ -35,5 +35,7 @@
     "No water demand, reservoir constraints, water-quality approval or plant ramp/flush model",
     "No CAPEX/OPEX, savings, ROI, emissions or avoided-outage claims",
     "No claim that the modeled events actually occurred on Nan'ao"
-  ]
+  ],
+  "archive_status": "historical_superseded",
+  "archive_note": "Seed 20261021 legacy scenario output. Retained for traceability only; not current IslandOS results, measured site data, a forecast, or customer economics."
 }
