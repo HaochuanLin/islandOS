@@ -1594,6 +1594,8 @@ elif page == "Data onboarding & workspace":
     from islandos_core.onboarding import ALLOWED_SOURCE_TYPES, evaluate_task_readiness, inspect_csv_bytes, inspect_excel_bytes, inspect_excel_sheets
     from islandos_core.workspace_store import create_project, initialize_workspace, list_projects, record_import_artifact, verify_audit_chain
     from islandos_core.site_workspace import retain_source_file
+    from islandos_core.customer_dashboard import parse_customer_history_csv
+    from islandos_core.session_dataset import store_session_dataset
 
     st.warning("Do not upload confidential or personally identifiable information to the public hosted demo. It has no customer authentication. SQLite persistence is disabled unless ISLANDOS_ENABLE_LOCAL_WORKSPACE=1 is set in a trusted local deployment.")
     uploaded = st.file_uploader("Upload a site dataset", type=["csv", "xlsx"], key="onboarding_upload")
@@ -1645,6 +1647,40 @@ elif page == "Data onboarding & workspace":
                 st.json(report["preview"])
             st.download_button("Download inspection report", data=json.dumps(report, ensure_ascii=False, indent=2, default=str),
                 file_name="islandos_import_inspection.json", mime="application/json")
+
+            if uploaded.name.lower().endswith(".csv"):
+                try:
+                    parse_customer_history_csv(raw_bytes, source_name=uploaded.name)
+                except ValueError as compatibility_error:
+                    st.caption(
+                        "This file can still be inspected here, but it is not compatible with "
+                        "the current hourly forecast/decision pages: "
+                        + str(compatibility_error)
+                    )
+                else:
+                    st.success(
+                        "This CSV also matches the current hourly forecast input contract "
+                        "(72+ contiguous hourly UTC rows with explicit canonical units)."
+                    )
+                    if st.button(
+                        "Use this inspected CSV in Forecast and Decision pages",
+                        type="primary",
+                        key="handoff_inspected_site_csv",
+                    ):
+                        stored = store_session_dataset(
+                            st.session_state,
+                            file_name=uploaded.name,
+                            payload=raw_bytes,
+                            source_type=source_type,
+                        )
+                        st.success(
+                            "Dataset is ready for other pages in this browser session. "
+                            f"SHA-256: {stored['sha256'][:16]}…"
+                        )
+                        st.caption(
+                            "Session-only handoff: the file is not saved to a persistent workspace "
+                            "and will be unavailable after this session ends."
+                        )
             if os.getenv("ISLANDOS_ENABLE_LOCAL_WORKSPACE", "").strip() == "1":
                 st.divider()
                 st.subheader("Local workspace metadata registration")
