@@ -142,147 +142,133 @@ if page == "Overview":
     st.markdown(
         """
         <div class="hero">
-          <h1>From energy data to intelligent decisions.</h1>
-          <p>Organize system inputs, examine future conditions, compare feasible alternatives,
-          and review explainable recommendations.</p>
+          <h1>IslandOS</h1>
+          <p>Turn energy data into forecasts, coordinated operating options, and auditable decisions.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.info(
-        "This public research prototype currently exposes an energy–water screening module. "
-        "The broader IslandOS product workflow is INPUT → PREDICT → OPTIMIZE → DECIDE; "
-        "the hosted app does not yet implement that complete end-to-end workflow. "
-        "The built-in demo is synthetic, not measured site data."
-    )
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Strategy policies", "5", help="Baseline plus four RO operating policies")
-    c2.metric("Input format", "Hourly CSV", help="Timestamped, aligned site time series")
-    c3.metric("Output", "CSV + charts", help="Summary metrics and timestep-level audit")
-    st.subheader("Current module: energy–water strategy screening")
-    existing_col, future_col = st.columns(2)
-    with existing_col:
-        st.markdown(
-            "**Existing — heuristic fixed dispatch strategies**\n\n"
-            "Implemented: five transparent if-else policies (no_ro_baseline, surplus_only, "
-            "off_peak_only, hybrid_surplus_then_off_peak, emergency_backup), with "
-            "water/energy metrics, hourly audit and CSV export."
-        )
-    with future_col:
-        st.markdown(
-            "**Experimental optimizer — NSGA-II Pareto search**\n\n"
-            "The optimizer searches candidate hourly RO schedules and retains non-dominated "
-            "feasible solutions. It is a model-based search, not machine learning trained on field data."
-        )
-    st.subheader("What the current module helps you compare")
-    left, right = st.columns(2)
-    with left:
-        st.markdown(
-            """
-            **Energy-side questions**
-            - How much renewable surplus is available?
-            - How much surplus could be used by the RO load?
-            - What direct diesel-displacement potential must be preserved?
-            - What would off-peak grid operation cost under the supplied tariff?
-            """
-        )
-    with right:
-        st.markdown(
-            """
-            **Water-side questions**
-            - How much water is produced and served?
-            - How much demand remains unmet?
-            - Does the tank spill or finish with stored water?
-            - How do minimum run-time and rated power affect operation?
-            """
-        )
-    st.subheader("Example decision support: read-only RO screening")
-    st.caption(
-        "Manual/virtual inputs only. This isolated heuristic preview does not read plant instruments, "
-        "change the strategy simulator, or send equipment commands."
-    )
-    with st.expander("Try an explainable screening recommendation", expanded=False):
-        p1, p2, p3 = st.columns(3)
-        with p1:
-            preview_demand = st.number_input(
-                "Daily water demand (m³/day)", min_value=0.1, value=30.0, step=1.0,
-                key="preview_demand",
-            )
-            preview_ro_capacity = st.number_input(
-                "RO capacity (m³/day)", min_value=0.1, value=60.0, step=1.0,
-                key="preview_ro_capacity",
-            )
-        with p2:
-            preview_sec = st.number_input(
-                "RO specific energy (kWh/m³)", min_value=0.1, value=4.0, step=0.1,
-                key="preview_sec",
-            )
-            preview_tank = st.number_input(
-                "Storage capacity (m³)", min_value=0.1, value=50.0, step=1.0,
-                key="preview_tank",
-            )
-        with p3:
-            preview_inventory = st.number_input(
-                "Current water inventory (m³)", min_value=0.0, value=10.0, step=1.0,
-                key="preview_inventory",
-            )
-            preview_surplus = st.number_input(
-                "Renewable surplus (kW)", min_value=0.0, value=12.0, step=0.5,
-                key="preview_surplus",
-            )
-        preview_price = st.number_input(
-            "Energy price (currency/kWh; recorded as an assumption)",
-            min_value=0.0, value=0.20, step=0.01, key="preview_price",
-        )
-        if preview_inventory > preview_tank:
-            st.error("Current water inventory cannot exceed storage capacity.")
-        else:
-            preview_config = SiteConfiguration(
-                site_id="manual-screening-preview",
-                water_demand_m3_per_day=preview_demand,
-                ro_capacity_m3_per_day=preview_ro_capacity,
-                energy_price_per_kwh=preview_price,
-                ro_specific_energy_kwh_per_m3=preview_sec,
-                storage_capacity_m3=preview_tank,
-                initial_storage_m3=min(preview_inventory, preview_tank),
-            )
-            preview = recommend_ro_screening(
-                preview_config,
-                renewable_surplus=make_virtual_reading(
-                    "renewable_surplus_kw", preview_surplus, "kW",
-                    source="manual-demo-input",
-                ),
-                water_inventory=make_virtual_reading(
-                    "water_inventory_m3", preview_inventory, "m3",
-                    source="manual-demo-input",
-                ),
-            )
-            st.markdown(f"**Screening outcome:** `{preview.action}`")
-            st.write(preview.reason)
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Estimated full-load power", f"{preview.estimated_full_load_power_kw:.2f} kW")
-            m2.metric("Inventory screening target", f"{preview.target_inventory_m3:.2f} m³")
-            m3.metric("Input renewable surplus", f"{preview.renewable_surplus_kw:.2f} kW")
-            with st.expander("Assumptions and limits"):
-                for assumption in preview.assumptions:
-                    st.write(f"- {assumption}")
-                st.write(
-                    "The energy-price field is captured as a site assumption but is not used by this "
-                    "surplus-only heuristic. The recommendation is not an optimizer or operating instruction."
-                )
 
-    st.subheader("Try the current screening module")
-    st.markdown(
-        "1. Open **Strategy simulator** and run the labelled synthetic demo, or upload a site CSV.\n"
-        "2. Set RO power, specific energy consumption, tank capacity, and run-time assumptions.\n"
-        "3. Compare all five policies, inspect the hourly audit, and download results.\n"
-        "4. Replace demo inputs with validated local measurements before making decisions."
+    st.info(
+        "Public demonstration · Synthetic inputs by default · Offline planning only. "
+        "Uploaded files are customer-supplied and are not independently verified. "
+        "IslandOS does not send commands to physical equipment."
     )
-    st.markdown(
-        '<div class="note"><b>Important:</b> available renewable energy is not automatically '
-        'surplus. The uploaded series must already account for essential demand, reserves, '
-        'and any other priority loads. This tool does not dispatch the real grid or equipment.</div>',
-        unsafe_allow_html=True,
+
+    st.subheader("Start with a decision")
+    st.caption(
+        "The fastest way to understand IslandOS is to run one complete planning example, "
+        "then inspect how device-level flexibility changes the energy balance."
+    )
+    start_col, device_col, compare_col = st.columns(3)
+    with start_col:
+        st.markdown("#### 1 · Forecast and coordinate")
+        st.write(
+            "Use hourly site history or the built-in synthetic example to forecast "
+            "PV, wind, load and tariff signals, then compare battery and diesel schedules."
+        )
+        st.page_link(
+            "pages/06_Forecast_Led_Joint_Resource_Optimizer.py",
+            label="Open joint resource optimizer",
+            icon="⚡",
+            use_container_width=True,
+        )
+    with device_col:
+        st.markdown("#### 2 · Schedule equipment")
+        st.write(
+            "Protect critical circuits first, then schedule semi-flexible and "
+            "fully-flexible devices within their declared operating windows."
+        )
+        st.page_link(
+            "pages/09_Device_Flexibility_Planner.py",
+            label="Open device flexibility planner",
+            icon="🔌",
+            use_container_width=True,
+        )
+    with compare_col:
+        st.markdown("#### 3 · Review economics")
+        st.write(
+            "Explore forecast-led operating alternatives and inspect modeled "
+            "cost, reliability and investment assumptions."
+        )
+        st.page_link(
+            "pages/05_Customer_Decision_Dashboard.py",
+            label="Open decision dashboard",
+            icon="📊",
+            use_container_width=True,
+        )
+
+    st.divider()
+    st.subheader("IslandOS decision workflow")
+    st.caption(
+        "The workflow is being integrated incrementally. The status below describes "
+        "the current prototype honestly; it does not imply every step is production-ready."
+    )
+    workflow = [
+        {
+            "step": "01 · INPUT",
+            "status": "Available with limits",
+            "detail": "CSV/XLSX inspection, canonical signal mapping and data-quality checks are available in selected paths. Persistent site workspaces require a trusted local deployment.",
+        },
+        {
+            "step": "02 · FORECAST",
+            "status": "Experimental",
+            "detail": "Supported signals can be forecast with statistical candidates and chronological backtests. Accuracy is specific to the supplied history.",
+        },
+        {
+            "step": "03 · COORDINATE",
+            "status": "Experimental",
+            "detail": "Selected battery, diesel, grid and flexible-load scheduling paths are available under modeled constraints; this is not a universal optimizer.",
+        },
+        {
+            "step": "04 · COMPARE",
+            "status": "Available in selected modules",
+            "detail": "Compare modeled cost, grid import, unmet demand and selected reliability indicators using declared scenario assumptions.",
+        },
+        {
+            "step": "05 · DECIDE",
+            "status": "Human-reviewed planning",
+            "detail": "Review recommendations and export audit evidence. No autonomous operation or equipment write commands are enabled.",
+        },
+    ]
+    for item in workflow:
+        with st.container(border=True):
+            left, right = st.columns([1, 3])
+            with left:
+                st.markdown(f"**{item['step']}**")
+                st.caption(item["status"])
+            with right:
+                st.write(item["detail"])
+
+    st.divider()
+    st.subheader("What the current demo can demonstrate")
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Forecast horizon", "24 h", help="The forecast-led joint resource page uses a 24-hour planning horizon.")
+    metric_cols[1].metric("Load classes", "3", help="Critical, semi-flexible and fully-flexible device tasks.")
+    metric_cols[2].metric("Planning mode", "Offline", help="No live telemetry or equipment actuation.")
+    metric_cols[3].metric("Data provenance", "Visible", help="Synthetic and user-uploaded inputs are labelled.")
+
+    st.subheader("Choose the right data")
+    synthetic_col, site_col = st.columns(2)
+    with synthetic_col:
+        st.markdown(
+            "**Explore first**\n\n"
+            "Use built-in synthetic examples to understand the workflow. "
+            "They are reproducible demonstrations, not measured site conditions."
+        )
+    with site_col:
+        st.markdown(
+            "**Evaluate a real site**\n\n"
+            "Use an authorized, redacted hourly export with timestamps, units, "
+            "generation, load and tariff fields. Check the import report before "
+            "interpreting any forecast or schedule."
+        )
+
+    st.warning(
+        "Do not upload confidential telemetry or personal information to the public demo. "
+        "Do not treat modeled cost reduction as measured customer savings. "
+        "Validate equipment ratings, operating constraints and tariff rules with the site owner "
+        "before using results outside this demonstration."
     )
 
 elif page == "Flexible-load cost optimizer":
