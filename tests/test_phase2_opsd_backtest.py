@@ -69,6 +69,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     assert set(report["signals"]) == {"load", "solar", "wind", "price"}
     for signal in report["signals"].values():
         assert signal["selected_model"]
+        assert signal["selection_backtest"]["fold_metrics"]
         assert len(signal["forecast_points"]) == 6
         assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
         for horizon_result in signal["rolling_origin_candidate_evaluations"].values():
