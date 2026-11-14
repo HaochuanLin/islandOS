@@ -1676,20 +1676,24 @@ elif page == "Data onboarding & workspace":
                         type="primary",
                         key="handoff_inspected_site_csv",
                     ):
-                        stored = store_session_dataset(
-                            st.session_state,
-                            file_name=uploaded.name,
-                            payload=raw_bytes,
-                            source_type=source_type,
-                        )
-                        st.success(
-                            "Dataset is ready for other pages in this browser session. "
-                            f"SHA-256: {stored['sha256'][:16]}…"
-                        )
-                        st.caption(
-                            "Session-only handoff: the file is not saved to a persistent workspace "
-                            "and will be unavailable after this session ends."
-                        )
+                        try:
+                            stored = store_session_dataset(
+                                st.session_state,
+                                file_name=uploaded.name,
+                                payload=raw_bytes,
+                                source_type=source_type,
+                            )
+                        except ValueError as handoff_error:
+                            st.error(f"Could not prepare session dataset: {handoff_error}")
+                        else:
+                            st.success(
+                                "Dataset is ready for other pages in this browser session. "
+                                f"SHA-256: {stored['sha256'][:16]}…"
+                            )
+                            st.caption(
+                                "Session-only handoff: the file is not saved to a persistent workspace "
+                                "and will be unavailable after this session ends."
+                            )
             if os.getenv("ISLANDOS_ENABLE_LOCAL_WORKSPACE", "").strip() == "1":
                 st.divider()
                 st.subheader("Local workspace metadata registration")
