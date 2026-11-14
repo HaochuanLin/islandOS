@@ -22,6 +22,8 @@ cross-signal causal relationships or multivariate dynamics.
   recent-mean and linear-trend models. Candidate evaluation reports aggregate
   MAE, RMSE, signed bias (prediction minus actual), WAPE where defined, and
   per-fold MAE/RMSE/bias with training and validation sample counts.
+- Each horizon score uses only complete chronological validation blocks;
+  an incomplete trailing block is excluded rather than mixed into a shorter horizon.
 - Forecasting is fail-closed: if one signal cannot be forecast, no partial
   bundle is returned to the optimizer.
 - Explicit model selection is accepted only when that candidate passes the
