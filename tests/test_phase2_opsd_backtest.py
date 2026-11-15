@@ -113,6 +113,10 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
 
     assert window == {
         "initial_history_samples": 48,
+        "initial_history_start_utc": _dataset(count=125).timestamps[0].isoformat(),
+        "initial_history_end_utc": _dataset(count=125).timestamps[47].isoformat(),
+        "first_validation_start_utc": _dataset(count=125).timestamps[48].isoformat(),
+        "last_scored_validation_end_utc": _dataset(count=125).timestamps[119].isoformat(),
         "validation_horizon_hours": 24,
         "complete_folds": 3,
         "scored_samples": 72,
