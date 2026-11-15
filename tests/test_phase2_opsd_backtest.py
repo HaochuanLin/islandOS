@@ -87,6 +87,19 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
                     for fold in model["fold_metrics"]
                 )
 
+    timestamps = _dataset().timestamps
+    horizon_24 = report["signals"]["load"]["rolling_origin_candidate_evaluations"]["24"]
+    window = horizon_24["evaluation_window"]
+    assert window["initial_history_start_utc"] == timestamps[0].isoformat()
+    assert window["initial_history_end_utc"] == timestamps[47].isoformat()
+    assert window["first_validation_start_utc"] == timestamps[48].isoformat()
+    assert window["last_scored_validation_end_utc"] == timestamps[119].isoformat()
+    first_fold = horizon_24["models"][0]["fold_metrics"][0]
+    assert first_fold["train_start_utc"] == timestamps[0].isoformat()
+    assert first_fold["train_end_utc"] == timestamps[47].isoformat()
+    assert first_fold["validation_start_utc"] == timestamps[48].isoformat()
+    assert first_fold["validation_end_utc"] == timestamps[71].isoformat()
+
  
 def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
     report = _canonical_prediction_report(
