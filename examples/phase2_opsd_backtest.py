@@ -97,6 +97,12 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
             candidate_evaluations[str(validation_horizon)] = {
                 "evaluation_window": {
                     "initial_history_samples": initial_history,
+                    "initial_history_start_utc": dataset.timestamps[0].isoformat(),
+                    "initial_history_end_utc": dataset.timestamps[initial_history - 1].isoformat(),
+                    "first_validation_start_utc": dataset.timestamps[initial_history].isoformat(),
+                    "last_scored_validation_end_utc": dataset.timestamps[
+                        initial_history + scored_samples - 1
+                    ].isoformat(),
                     "validation_horizon_hours": validation_horizon,
                     "complete_folds": ranking[0].folds,
                     "scored_samples": scored_samples,
@@ -116,6 +122,16 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                         "fold_metrics": [
                             {
                                 "fold_index": fold.fold_index,
+                                "train_start_utc": dataset.timestamps[0].isoformat(),
+                                "train_end_utc": dataset.timestamps[
+                                    initial_history + (fold.fold_index - 1) * validation_horizon - 1
+                                ].isoformat(),
+                                "validation_start_utc": dataset.timestamps[
+                                    initial_history + (fold.fold_index - 1) * validation_horizon
+                                ].isoformat(),
+                                "validation_end_utc": dataset.timestamps[
+                                    initial_history + fold.fold_index * validation_horizon - 1
+                                ].isoformat(),
                                 "train_samples": fold.train_samples,
                                 "samples": fold.samples,
                                 "mae": fold.mae,
