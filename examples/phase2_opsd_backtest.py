@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+import math
+from datetime import datetime, timezone
 from typing import Sequence
 
 from islandos_core.forecast_engine import evaluate_signal_rolling, forecast_signals
@@ -63,20 +64,75 @@ def _canonicalize_opsd_history(dataset):
     return canonical_history, canonical_units, source_mapping
 
 
+def _score_holdout(actual, predicted):
+    """Score one untouched chronological holdout in the signal's canonical unit."""
+    actual_values = tuple(float(value) for value in actual)
+    predicted_values = tuple(float(value) for value in predicted)
+    if not actual_values or len(actual_values) != len(predicted_values):
+        raise ValueError("holdout actual and predicted values must have equal non-empty lengths")
+    if any(not math.isfinite(value) for value in actual_values + predicted_values):
+        raise ValueError("holdout actual and predicted values must be finite")
+    errors = tuple(guess - truth for truth, guess in zip(actual_values, predicted_values))
+    denominator = sum(abs(value) for value in actual_values)
+    return {
+        "samples": len(actual_values),
+        "mae": sum(abs(error) for error in errors) / len(errors),
+        "rmse": math.sqrt(sum(error * error for error in errors) / len(errors)),
+        "bias_predicted_minus_actual": sum(errors) / len(errors),
+        "wape_percent": (
+            None
+            if denominator == 0
+            else sum(abs(error) for error in errors) / denominator * 100.0
+        ),
+    }
+
+
 def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizons=()):
-    """Evaluate the current canonical PredictionEngine on OPSD public history."""
+    """Evaluate model selection on history and score it on an untouched final block."""
+    if (
+        isinstance(forecast_horizon, bool)
+        or not isinstance(forecast_horizon, int)
+        or not 1 <= forecast_horizon <= 168
+    ):
+        raise ValueError("forecast_horizon must be an integer from 1 to 168 hours")
+
+    timestamps = tuple(dataset.timestamps)
+    minimum_training_samples = 72
+    if len(timestamps) < minimum_training_samples + forecast_horizon:
+        required = minimum_training_samples + forecast_horizon
+        raise ValueError(
+            f"OPSD history requires at least {required} contiguous hourly observations: "
+            f"{minimum_training_samples} for canonical training and {forecast_horizon} "
+            "for the untouched final chronological holdout"
+        )
+
     canonical_history, canonical_units, source_mapping = _canonicalize_opsd_history(dataset)
+    training_timestamps = tuple(
+        stamp.astimezone(timezone.utc) for stamp in timestamps[:-forecast_horizon]
+    )
+    holdout_timestamps = tuple(
+        stamp.astimezone(timezone.utc) for stamp in timestamps[-forecast_horizon:]
+    )
+    training_history = {
+        signal_id: tuple(values[:-forecast_horizon])
+        for signal_id, values in canonical_history.items()
+    }
+    holdout_history = {
+        signal_id: tuple(values[-forecast_horizon:])
+        for signal_id, values in canonical_history.items()
+    }
+
     engine = PredictionEngine()
     bundle = forecast_site_signals(
-        dataset.timestamps,
-        canonical_history,
+        training_timestamps,
+        training_history,
         canonical_units,
         forecast_horizon,
         engine=engine,
         backtest_horizon=24,
         season_length=24,
     )
-    initial_history = min(48, len(dataset.timestamps) - 1)
+    initial_history = min(48, len(training_timestamps) - 1)
     signals = {}
     for source_signal, mapping in source_mapping.items():
         signal_id = mapping["canonical_signal_id"]
@@ -84,7 +140,7 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         candidate_evaluations = {}
         for validation_horizon in rolling_horizons:
             ranking = engine.evaluate_candidates(
-                canonical_history[signal_id],
+                training_history[signal_id],
                 initial_history=initial_history,
                 horizon=validation_horizon,
                 season_length=24,
@@ -92,15 +148,15 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
             )
             scored_samples = ranking[0].samples
             excluded_trailing_samples = (
-                len(canonical_history[signal_id]) - initial_history - scored_samples
+                len(training_history[signal_id]) - initial_history - scored_samples
             )
             candidate_evaluations[str(validation_horizon)] = {
                 "evaluation_window": {
                     "initial_history_samples": initial_history,
-                    "initial_history_start_utc": dataset.timestamps[0].isoformat(),
-                    "initial_history_end_utc": dataset.timestamps[initial_history - 1].isoformat(),
-                    "first_validation_start_utc": dataset.timestamps[initial_history].isoformat(),
-                    "last_scored_validation_end_utc": dataset.timestamps[
+                    "initial_history_start_utc": training_timestamps[0].isoformat(),
+                    "initial_history_end_utc": training_timestamps[initial_history - 1].isoformat(),
+                    "first_validation_start_utc": training_timestamps[initial_history].isoformat(),
+                    "last_scored_validation_end_utc": training_timestamps[
                         initial_history + scored_samples - 1
                     ].isoformat(),
                     "validation_horizon_hours": validation_horizon,
@@ -122,14 +178,14 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                         "fold_metrics": [
                             {
                                 "fold_index": fold.fold_index,
-                                "train_start_utc": dataset.timestamps[0].isoformat(),
-                                "train_end_utc": dataset.timestamps[
+                                "train_start_utc": training_timestamps[0].isoformat(),
+                                "train_end_utc": training_timestamps[
                                     initial_history + (fold.fold_index - 1) * validation_horizon - 1
                                 ].isoformat(),
-                                "validation_start_utc": dataset.timestamps[
+                                "validation_start_utc": training_timestamps[
                                     initial_history + (fold.fold_index - 1) * validation_horizon
                                 ].isoformat(),
-                                "validation_end_utc": dataset.timestamps[
+                                "validation_end_utc": training_timestamps[
                                     initial_history + fold.fold_index * validation_horizon - 1
                                 ].isoformat(),
                                 "train_samples": fold.train_samples,
@@ -144,7 +200,11 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                     for item in ranking
                 ],
             }
+
         result = bundle.results[signal_id]
+        predicted_holdout = tuple(point.predicted_value for point in result.points)
+        if tuple(point.timestamp for point in result.points) != holdout_timestamps:
+            raise RuntimeError("canonical forecast targets do not match the final chronological holdout")
         signals[source_signal] = {
             "canonical_signal_id": signal_id,
             "input_history_sha256": result.input_history_sha256,
@@ -170,6 +230,10 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                     for fold in result.backtest.fold_metrics
                 ],
             },
+            "holdout_metrics": _score_holdout(
+                holdout_history[signal_id],
+                predicted_holdout,
+            ),
             "rolling_origin_candidate_evaluations": candidate_evaluations,
             "forecast_points": [
                 {
@@ -189,21 +253,39 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         "source_data_sha256": dataset.data_sha256,
         "canonical_bundle_history_sha256": bundle.input_history_sha256,
         "source_to_canonical_mapping": source_mapping,
-        "candidate_selection": "lowest aggregate MAE among registered candidates on chronological rolling-origin replay; not a deployment promotion gate",
+        "holdout_window": {
+            "method": "single_final_chronological_holdout",
+            "training_samples": len(training_timestamps),
+            "training_start_utc": training_timestamps[0].isoformat(),
+            "training_end_utc": training_timestamps[-1].isoformat(),
+            "holdout_samples": forecast_horizon,
+            "holdout_start_utc": holdout_timestamps[0].isoformat(),
+            "holdout_end_utc": holdout_timestamps[-1].isoformat(),
+            "excluded_from_candidate_selection": True,
+            "excluded_from_rolling_origin_evaluation": True,
+            "excluded_from_interval_calibration": True,
+        },
+        "candidate_selection": (
+            "lowest aggregate MAE among registered candidates on pre-holdout chronological "
+            "rolling-origin replay; not a deployment promotion gate"
+        ),
         "rolling_evaluation_scope": (
-            "Each requested horizon is replayed in chronological expanding-window blocks using only observations "
-            "available before that block. Only complete blocks are scored; incomplete trailing observations are "
-            "excluded rather than shortened into a different horizon."
+            "Rolling-origin candidate evaluations use only the pre-holdout training history. "
+            "Each requested horizon is replayed in chronological expanding-window blocks using "
+            "only observations available before that block. Only complete blocks are scored; "
+            "incomplete trailing observations are excluded rather than shortened into a different horizon."
         ),
         "signals": signals,
         "limitations": [
             "OPSD observations are geographically aggregated public history, not facility telemetry.",
             "Unit scaling is explicit and does not convert country-level values into site-level values.",
-            "Candidate selection and empirical error-band estimation reuse rolling-origin history; intervals are descriptive and not independently calibrated.",
+            "Candidate selection and empirical error-band estimation reuse pre-holdout rolling-origin history; "
+            "intervals are descriptive and not independently calibrated.",
+            "The final chronological holdout is one historical test block, not repeated independent "
+            "validation across sites, seasons, or operating regimes.",
             "No site accuracy, operational feasibility, or customer savings are established.",
         ],
     }
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -216,7 +298,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--start-utc", type=_utc_bound, help="Inclusive ISO-8601 UTC start")
     parser.add_argument("--end-utc", type=_utc_bound, help="Exclusive ISO-8601 UTC end")
-    parser.add_argument("--horizon", type=int, default=24, help="Forecast horizon in hours (1–168)")
+    parser.add_argument("--horizon", type=int, default=24, help="Final chronological holdout / forecast horizon in hours (1–168)")
     parser.add_argument(
         "--rolling-validation", action="store_true",
         help="Also evaluate legacy persistence, seasonal-naive, and ridge candidates on expanding windows",
