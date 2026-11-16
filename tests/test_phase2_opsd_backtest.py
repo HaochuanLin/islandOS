@@ -7,6 +7,7 @@ import pytest
 from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
     _canonicalize_opsd_history,
+    _score_holdout,
 )
 
 
@@ -57,6 +58,16 @@ def test_opsd_canonicalization_rejects_unknown_source_signal():
         _canonicalize_opsd_history(dataset)
 
 
+def test_holdout_metrics_handle_zero_denominator_without_inventing_wape():
+    metrics = _score_holdout((0.0, 0.0), (1.0, -1.0))
+
+    assert metrics["samples"] == 2
+    assert metrics["mae"] == pytest.approx(1.0)
+    assert metrics["rmse"] == pytest.approx(1.0)
+    assert metrics["bias_predicted_minus_actual"] == pytest.approx(0.0)
+    assert metrics["wape_percent"] is None
+
+
 def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     report = _canonical_prediction_report(
         _dataset(),
@@ -67,11 +78,25 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
     assert report["source_data_sha256"] == "a" * 64
     assert len(report["canonical_bundle_history_sha256"]) == 64
+    assert report["holdout_window"] == {
+        "method": "single_final_chronological_holdout",
+        "training_samples": 114,
+        "training_start_utc": _dataset().timestamps[0].isoformat(),
+        "training_end_utc": _dataset().timestamps[113].isoformat(),
+        "holdout_samples": 6,
+        "holdout_start_utc": _dataset().timestamps[114].isoformat(),
+        "holdout_end_utc": _dataset().timestamps[119].isoformat(),
+        "excluded_from_candidate_selection": True,
+        "excluded_from_rolling_origin_evaluation": True,
+        "excluded_from_interval_calibration": True,
+    }
     assert set(report["signals"]) == {"load", "solar", "wind", "price"}
     for signal in report["signals"].values():
         assert signal["selected_model"]
         assert len(signal["input_history_sha256"]) == 64
         assert signal["selection_backtest"]["fold_metrics"]
+        assert signal["holdout_metrics"]["samples"] == 6
+        assert signal["holdout_metrics"]["mae"] >= 0
         assert len(signal["forecast_points"]) == 6
         assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
         for horizon_result in signal["rolling_origin_candidate_evaluations"].values():
@@ -93,17 +118,49 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     assert window["initial_history_start_utc"] == timestamps[0].isoformat()
     assert window["initial_history_end_utc"] == timestamps[47].isoformat()
     assert window["first_validation_start_utc"] == timestamps[48].isoformat()
-    assert window["last_scored_validation_end_utc"] == timestamps[119].isoformat()
+    assert window["last_scored_validation_end_utc"] == timestamps[95].isoformat()
+    assert window["complete_folds"] == 2
+    assert window["scored_samples"] == 48
+    assert window["excluded_trailing_samples"] == 18
     first_fold = horizon_24["models"][0]["fold_metrics"][0]
     assert first_fold["train_start_utc"] == timestamps[0].isoformat()
     assert first_fold["train_end_utc"] == timestamps[47].isoformat()
     assert first_fold["validation_start_utc"] == timestamps[48].isoformat()
     assert first_fold["validation_end_utc"] == timestamps[71].isoformat()
 
- 
+
+def test_final_holdout_values_cannot_change_model_selection_or_forecast():
+    original = _dataset()
+    changed = _dataset()
+    changed.history["load"] = (
+        changed.history["load"][:-6]
+        + tuple(value + 100.0 for value in changed.history["load"][-6:])
+    )
+
+    original_report = _canonical_prediction_report(original, 6, rolling_horizons=(1, 24))
+    changed_report = _canonical_prediction_report(changed, 6, rolling_horizons=(1, 24))
+    original_load = original_report["signals"]["load"]
+    changed_load = changed_report["signals"]["load"]
+
+    assert changed_load["selected_model"] == original_load["selected_model"]
+    assert changed_load["selection_backtest"] == original_load["selection_backtest"]
+    assert (
+        changed_load["rolling_origin_candidate_evaluations"]
+        == original_load["rolling_origin_candidate_evaluations"]
+    )
+    assert changed_load["forecast_points"] == original_load["forecast_points"]
+    assert changed_load["holdout_metrics"] != original_load["holdout_metrics"]
+
+
+def test_canonical_report_requires_minimum_training_history_before_holdout():
+    with pytest.raises(ValueError, match="at least 78 contiguous hourly observations"):
+        _canonical_prediction_report(_dataset(count=77), forecast_horizon=6)
+
+
 def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
+    dataset = _dataset(count=125)
     report = _canonical_prediction_report(
-        _dataset(count=125),
+        dataset,
         forecast_horizon=6,
         rolling_horizons=(24,),
     )
@@ -113,17 +170,14 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
 
     assert window == {
         "initial_history_samples": 48,
-        "initial_history_start_utc": _dataset(count=125).timestamps[0].isoformat(),
-        "initial_history_end_utc": _dataset(count=125).timestamps[47].isoformat(),
-        "first_validation_start_utc": _dataset(count=125).timestamps[48].isoformat(),
-        "last_scored_validation_end_utc": _dataset(count=125).timestamps[119].isoformat(),
+        "initial_history_start_utc": dataset.timestamps[0].isoformat(),
+        "initial_history_end_utc": dataset.timestamps[47].isoformat(),
+        "first_validation_start_utc": dataset.timestamps[48].isoformat(),
+        "last_scored_validation_end_utc": dataset.timestamps[95].isoformat(),
         "validation_horizon_hours": 24,
-        "complete_folds": 3,
-        "scored_samples": 72,
-        "excluded_trailing_samples": 5,
+        "complete_folds": 2,
+        "scored_samples": 48,
+        "excluded_trailing_samples": 23,
     }
-    assert all(
-        len(model["fold_metrics"]) == 3
-        for model in evaluation["models"]
-    )
+    assert all(len(model["fold_metrics"]) == 2 for model in evaluation["models"])
     assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"]
