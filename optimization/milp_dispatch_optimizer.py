@@ -326,6 +326,7 @@ def optimize_dispatch_milp(
         diesel_available=inputs.diesel_available,
         diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
         battery_power_setpoint_kw=battery_setpoints,
+        grid_import_power_setpoint_kw=[float(solution[grid[t]]) for t in range(n)],
         diesel_commitment_schedule=commitments,
         diesel_power_setpoint_kw=diesel_outputs,
     )
@@ -336,12 +337,16 @@ def optimize_dispatch_milp(
     if dispatch["summary"]["unmet_load_kwh"] > 1e-6:
         raise OptimizationError("MILP schedule replay did not serve the full load")
     replay_diesel = [float(row.get("diesel_generation_kw", 0.0)) for row in dispatch["rows"]]
+    replay_grid = [float(row.get("grid_import_kw", 0.0)) for row in dispatch["rows"]]
+    model_grid = [float(solution[grid[t]]) for t in range(n)]
     replay_battery = [
         float(row.get("battery_discharge_kw", 0.0)) - float(row.get("battery_charge_kw", 0.0))
         for row in dispatch["rows"]
     ]
     if any(abs(a - b) > 1e-4 for a, b in zip(replay_diesel, diesel_outputs)):
         raise OptimizationError("MILP diesel set-points differ from physical replay")
+    if any(abs(a - b) > 1e-4 for a, b in zip(replay_grid, model_grid)):
+        raise OptimizationError("MILP grid-import set-points differ from physical replay")
     if any(abs(a - b) > 1e-4 for a, b in zip(replay_battery, battery_setpoints)):
         raise OptimizationError("MILP battery set-points differ from physical replay")
 
