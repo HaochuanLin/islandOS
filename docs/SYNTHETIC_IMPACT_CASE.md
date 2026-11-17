@@ -28,7 +28,7 @@ The example contains 24 hourly steps for:
 
 The synthetic asset configuration includes:
 - a battery with 60 kWh nominal capacity, 18 kW charge/discharge limits, declared initial/minimum/maximum SOC and efficiencies;
-- a diesel generator with 30 kW rating, 5 kW minimum stable output, constant fuel use of 0.28 L/kWh, 70 L initial fuel, 80 L tank capacity and USD 1.30/L fuel price;
+- a diesel generator with 40 kW rating, 5 kW minimum stable output, constant fuel use of 0.28 L/kWh, 100 L initial fuel, 120 L tank capacity and USD 1.30/L fuel price;
 - a 50 kW grid import limit and a USD 7/kW demand-charge assumption for this scenario horizon.
 
 These are test assumptions selected to exercise the accounting paths. They are not vendor specifications, site measurements, tariff quotations or recommended equipment sizes.
