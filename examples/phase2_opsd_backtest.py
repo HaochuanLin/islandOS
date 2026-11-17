@@ -14,7 +14,7 @@ from typing import Sequence
 from islandos_core.forecast_engine import evaluate_signal_rolling, forecast_signals
 from islandos_core.forecast_signal_catalog import FORECAST_SIGNAL_SPECS, forecast_site_signals
 from islandos_core.opsd_adapter import load_opsd_singleindex_csv
-from islandos_core.prediction_engine import PredictionEngine
+from islandos_core.prediction_engine import ForecastRequest, PredictionEngine, SignalObservation
 
 
 def _utc_bound(raw: str | None) -> datetime | None:
@@ -205,6 +205,61 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         predicted_holdout = tuple(point.predicted_value for point in result.points)
         if tuple(point.timestamp for point in result.points) != holdout_timestamps:
             raise RuntimeError("canonical forecast targets do not match the final chronological holdout")
+
+        # Generate every candidate forecast from the same pre-holdout history.
+        # Actual holdout values are passed only to the scoring function below.
+        holdout_request = ForecastRequest(
+            signal_id=signal_id,
+            unit=canonical_units[signal_id],
+            history=tuple(
+                SignalObservation(timestamp=stamp, value=value)
+                for stamp, value in zip(training_timestamps, training_history[signal_id])
+            ),
+            target_timestamps=holdout_timestamps,
+            non_negative=spec.non_negative,
+        )
+        holdout_candidate_models = []
+        holdout_candidate_exclusions = {}
+        selected_holdout_metrics = None
+        for candidate_id, candidate_version in engine.available_candidates():
+            try:
+                candidate_predictions = engine.predict_candidate(
+                    holdout_request,
+                    candidate_id,
+                    season_length=24,
+                )
+            except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
+                holdout_candidate_exclusions[candidate_id] = f"{type(exc).__name__}: {exc}"
+                continue
+
+            candidate_metrics = _score_holdout(
+                holdout_history[signal_id],
+                candidate_predictions,
+            )
+            if candidate_id == result.model_id:
+                if candidate_predictions != predicted_holdout:
+                    raise RuntimeError(
+                        "selected candidate forecast differs from canonical prediction service output"
+                    )
+                selected_holdout_metrics = candidate_metrics
+
+            holdout_candidate_models.append({
+                "model_id": candidate_id,
+                "model_version": candidate_version,
+                "selected_for_forecast": candidate_id == result.model_id,
+                "metrics": candidate_metrics,
+                "forecast_points": [
+                    {
+                        "timestamp_utc": stamp.isoformat(),
+                        "predicted_value": prediction,
+                    }
+                    for stamp, prediction in zip(holdout_timestamps, candidate_predictions)
+                ],
+            })
+
+        if selected_holdout_metrics is None:
+            raise RuntimeError("selected canonical model did not produce a valid holdout forecast")
+
         signals[source_signal] = {
             "canonical_signal_id": signal_id,
             "input_history_sha256": result.input_history_sha256,
@@ -230,10 +285,15 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                     for fold in result.backtest.fold_metrics
                 ],
             },
-            "holdout_metrics": _score_holdout(
-                holdout_history[signal_id],
-                predicted_holdout,
-            ),
+            "holdout_metrics": selected_holdout_metrics,
+            "holdout_candidate_evaluations": {
+                "method": (
+                    "all registered candidates forecast from the same pre-holdout history; "
+                    "actual holdout values are used only for scoring"
+                ),
+                "models": holdout_candidate_models,
+                "excluded_candidates": holdout_candidate_exclusions,
+            },
             "rolling_origin_candidate_evaluations": candidate_evaluations,
             "forecast_points": [
                 {
@@ -301,7 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--horizon", type=int, default=24, help="Final chronological holdout / forecast horizon in hours (1–168)")
     parser.add_argument(
         "--rolling-validation", action="store_true",
-        help="Also evaluate legacy persistence, seasonal-naive, and ridge candidates on expanding windows",
+        help="Also evaluate legacy and canonical forecast candidates on expanding windows",
     )
     parser.add_argument(
         "--rolling-horizons", nargs="+", type=int, default=(1, 6, 24, 168),

@@ -57,6 +57,23 @@ class TestPredictionEngine(unittest.TestCase):
             [3.0, 3.0, 3.0, 3.0],
         )
 
+    def test_predict_candidate_returns_only_history_based_target_forecast(self):
+        request = make_request([1.0, 2.0, 3.0, 4.0])
+        predictions = PredictionEngine().predict_candidate(request, "persistence")
+
+        self.assertEqual(predictions, (4.0, 4.0, 4.0, 4.0))
+        self.assertIsInstance(predictions, tuple)
+
+    def test_predict_candidate_rejects_unknown_model_and_invalid_season_length(self):
+        engine = PredictionEngine()
+        request = make_request([1.0, 2.0, 3.0])
+
+        with self.assertRaisesRegex(KeyError, "unknown forecast candidate"):
+            engine.predict_candidate(request, "missing")
+
+        with self.assertRaisesRegex(ValueError, "season_length must be a positive integer"):
+            engine.predict_candidate(request, "persistence", season_length=True)
+
     def test_rolling_metrics_include_fold_level_signed_bias(self):
         engine = PredictionEngine(include_builtin_candidates=False)
         engine.register(PersistenceCandidate())

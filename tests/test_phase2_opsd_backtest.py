@@ -98,6 +98,22 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
         assert signal["holdout_metrics"]["samples"] == 6
         assert signal["holdout_metrics"]["mae"] >= 0
         assert len(signal["forecast_points"]) == 6
+
+        holdout_comparison = signal["holdout_candidate_evaluations"]
+        assert "actual holdout values are used only for scoring" in holdout_comparison["method"]
+        candidate_models = {
+            item["model_id"]: item for item in holdout_comparison["models"]
+        }
+        assert set(candidate_models) == {
+            "persistence", "seasonal_naive", "recent_mean", "linear_trend"
+        }
+        selected = candidate_models[signal["selected_model"]]
+        assert selected["selected_for_forecast"] is True
+        assert selected["metrics"] == signal["holdout_metrics"]
+        assert all(
+            len(item["forecast_points"]) == 6
+            for item in candidate_models.values()
+        )
         assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
         for horizon_result in signal["rolling_origin_candidate_evaluations"].values():
             assert horizon_result["models"]
@@ -150,6 +166,24 @@ def test_final_holdout_values_cannot_change_model_selection_or_forecast():
     )
     assert changed_load["forecast_points"] == original_load["forecast_points"]
     assert changed_load["holdout_metrics"] != original_load["holdout_metrics"]
+
+    original_candidates = {
+        item["model_id"]: item
+        for item in original_load["holdout_candidate_evaluations"]["models"]
+    }
+    changed_candidates = {
+        item["model_id"]: item
+        for item in changed_load["holdout_candidate_evaluations"]["models"]
+    }
+    assert set(original_candidates) == set(changed_candidates)
+    for model_id in original_candidates:
+        # Changing only holdout actuals cannot change any candidate forecast.
+        assert (
+            original_candidates[model_id]["forecast_points"]
+            == changed_candidates[model_id]["forecast_points"]
+        )
+        # The same unchanged forecasts are rescored against the changed actuals.
+        assert original_candidates[model_id]["metrics"] != changed_candidates[model_id]["metrics"]
 
 
 def test_canonical_report_requires_minimum_training_history_before_holdout():

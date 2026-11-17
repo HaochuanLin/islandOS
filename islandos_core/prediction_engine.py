@@ -257,6 +257,39 @@ class PredictionEngine:
     def available_candidates(self) -> tuple[tuple[str, str], ...]:
         return tuple(sorted((key, value[1]) for key, value in self._candidates.items()))
 
+    def predict_candidate(
+        self,
+        request: ForecastRequest,
+        model_id: str,
+        *,
+        season_length: int = 24,
+    ) -> tuple[float, ...]:
+        """Forecast one registered candidate from history only, without scoring targets.
+
+        The request contains historical observations and target timestamps, but no
+        target actuals. Callers can score the returned values separately once the
+        target observations become available, keeping forecast generation isolated
+        from holdout evaluation.
+        """
+        if not isinstance(request, ForecastRequest):
+            raise TypeError("request must be a ForecastRequest")
+        if not isinstance(model_id, str) or model_id not in self._candidates:
+            raise KeyError(f"unknown forecast candidate: {model_id}")
+        if (
+            isinstance(season_length, bool)
+            or not isinstance(season_length, int)
+            or season_length < 1
+        ):
+            raise ValueError("season_length must be a positive integer")
+        values = tuple(float(item.value) for item in request.history)
+        return tuple(self._predict(
+            model_id,
+            values,
+            len(request.target_timestamps),
+            season_length=season_length,
+            non_negative=request.non_negative,
+        ))
+
     def _predict(
         self,
         model_id: str,
