@@ -8,6 +8,7 @@ from islandos_core.energy_system import (
     EnergySystemInputs,
 )
 from optimization.energy_system_optimizer import OptimizationError
+from islandos_core.water_resource_adapter import WaterServiceSpec
 from optimization.milp_dispatch_optimizer import (
     _validate_diesel_schedule,
     optimize_dispatch_milp,
@@ -145,3 +146,63 @@ def test_milp_fails_closed_when_cycle_fade_is_configured_but_not_modelled():
 
     with pytest.raises(OptimizationError, match="does not yet model cycle-driven battery capacity fade"):
         optimize_dispatch_milp(inputs, config)
+
+
+
+def test_milp_jointly_optimizes_water_inventory_ro_power_and_energy_balance():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=2.0,
+        tank_capacity_m3=4.0,
+        initial_inventory_m3=1.0,
+        reserve_m3=0.5,
+    )
+
+    result = optimize_dispatch_milp(
+        inputs, config,
+        water_service=water,
+        water_demand_m3_per_hour=[1.0, 1.0, 1.0, 1.0],
+    )
+
+    service = result["water_service"]
+    assert service["service_feasible"] is True
+    assert service["production_policy"] == "joint_milp_water_energy"
+    assert sum(service["production_m3_per_hour"]) == pytest.approx(3.5)
+    assert all(0.5 - 1e-7 <= value <= 4.0 + 1e-7 for value in service["inventory_end_m3"])
+    assert all(value <= 2.0 + 1e-7 for value in service["production_m3_per_hour"])
+    assert result["physical_audit"]["passed"] is True
+    assert result["dispatch"]["summary"]["unmet_load_kwh"] == pytest.approx(0.0)
+    assert result["dispatch"]["rows"][0]["load_kw"] == pytest.approx(
+        inputs.load_kw[0] + service["ro_power_kw"][0]
+    )
+    assert result["model_scope"]["device_write_authorized"] is False
+
+
+def test_milp_joint_water_energy_fails_closed_when_ro_capacity_cannot_serve_demand():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=0.2,
+        tank_capacity_m3=2.0,
+        initial_inventory_m3=0.5,
+        reserve_m3=0.5,
+    )
+    with pytest.raises(OptimizationError, match="did not produce a feasible schedule"):
+        optimize_dispatch_milp(
+            inputs, config,
+            water_service=water,
+            water_demand_m3_per_hour=[1.0, 1.0, 1.0, 1.0],
+        )
+
+
+def test_milp_requires_water_spec_and_demand_together():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=1.0,
+        tank_capacity_m3=2.0,
+        initial_inventory_m3=1.0,
+    )
+    with pytest.raises(OptimizationError, match="must be supplied together"):
+        optimize_dispatch_milp(inputs, config, water_service=water)
