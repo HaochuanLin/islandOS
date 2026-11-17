@@ -18,13 +18,10 @@ The repository already contains:
 Important current limitations:
 
 - The evolutionary search is stochastic and does not guarantee a global optimum.
-- The existing evolutionary joint optimizer still rejects diesel ramp-down and minimum up/down-time configurations; the new deterministic MILP path handles these constraints in its own bounded formulation.
-- The MILP reference path supports one battery, one diesel unit, one grid connection and a single-bus balance. It rejects grid export, nonlinear diesel fuel curves, critical/flexible-load decomposition and unsupported network constraints.
-- The MILP assumes the diesel unit is initially OFF, prohibits unserved load, and permits battery charging only from contemporaneous renewable surplus.
-- Constant-rate diesel fuel inventory is modeled when configured; nonlinear fuel curves remain unsupported by the MILP reference solver.
+- The joint optimizer explicitly rejects diesel ramp-down and minimum up/down-time configurations because it does not yet generate commitment schedules satisfying those constraints.
 - Water production policies are selected from separate heuristics before the energy schedule search; water and energy are not yet jointly optimized as one decision problem.
 - Forecast stress envelopes are deterministic scenarios, not calibrated joint probability distributions.
-- All optimization paths remain offline advisory workflows; none writes to equipment.
+- The optimizer is an offline advisory workflow; it does not write to equipment.
 
 ## Delivery stages and acceptance gates
 
@@ -42,29 +39,24 @@ Important current limitations:
 
 ### Stage 2 — Equipment-constraint completeness
 
-**Status: first bounded implementation added in this PR; not yet complete across all optimizer paths.**
+- Extend candidate generation so diesel schedules can satisfy configured ramp-up and ramp-down limits, minimum stable output, minimum up-time and minimum down-time.
+- Include fuel inventory / delivery limits where configured.
+- Preserve battery SOC, charge/discharge power, efficiency and degradation constraints.
+- Reject unsupported or incomplete site configurations explicitly; never silently clip an infeasible request and label it feasible.
+- Add boundary and adversarial tests for every equipment constraint.
 
-- Added an independent diesel schedule validator for availability, rated/minimum-stable output, ramp-up, ramp-down and completed minimum up/down runs.
-- The MILP path encodes diesel commitment, minimum stable output, ramp limits, minimum up/down times, battery SOC and charge/discharge limits.
-- Constant-rate fuel inventory and per-step deliveries are modeled when configured; nonlinear fuel curves are rejected explicitly.
-- Added a grid-import set-point to the shared simulator so a mathematical schedule can be replayed without silently changing the optimizer's grid/diesel split.
-- The existing evolutionary joint optimizer still rejects ramp-down/minimum-time configurations. Do not treat this stage as complete until that search path is either extended or clearly segregated from the constrained MILP path.
-- Battery capacity fade and network constraints are not decision variables in this MILP formulation; battery throughput cost is represented.
-
-**Acceptance gate:** every MILP candidate passes the shared physical replay audit and independent diesel validator; infeasible configurations fail closed. CI must pass the new boundary tests.
+**Acceptance gate:** every returned candidate passes the shared physical audit and an independent constraint validator; infeasible configurations fail closed with actionable diagnostics.
 
 ### Stage 3 — Deterministic optimization benchmark
 
-**Status: first SciPy/HiGHS MILP reference solver added in this PR; benchmark coverage remains limited.**
+- Add a deterministic mathematical-programming reference solver using the already pinned SciPy MILP capability, subject to a formulation review.
+- Start with a clearly bounded model (battery, grid, diesel and essential load); add binary commitment variables only where required.
+- Keep the evolutionary optimizer as a comparison method, not silently replace it.
+- Replay both methods through the same physical simulator and compare objective values, feasibility, runtime and repeatability on identical inputs.
+- Add small instances with independently checkable optima and tests for solver timeout / infeasibility.
 
-- Added a deterministic mathematical-programming reference solver using the pinned SciPy MILP capability.
-- The initial formulation covers a single-bus energy balance with one battery, one grid connection, one diesel unit and renewable curtailment.
-- The solver reports its termination status and only reports an optimality proof for the declared MILP when HiGHS returns an optimal status.
-- MILP schedules are replayed through the shared physical simulator using explicit battery, grid-import and diesel set-points.
-- Battery-first and grid-first policies are evaluated on the same inputs. The evolutionary joint optimizer is also run as a comparator only when its current equipment-constraint scope is compatible; otherwise the output explains why it is not comparable.
-- Added a small constrained test instance and infeasibility / constraint-validation tests. Broader benchmark grids, independent hand-solvable optimality fixtures, timeout behavior and runtime scaling remain future work.
+**Acceptance gate:** deterministic solutions reproduce within numerical tolerance, pass the same physical audit, and outperform or explain trade-offs against transparent baselines on declared benchmark cases. No general global-optimum claim beyond the exact mathematical model and solver status.
 
-**Acceptance gate:** deterministic solutions reproduce within numerical tolerance, pass the same physical audit, and have fair service-equivalent baseline comparisons. An optimality claim is limited to the exact MILP formulation and a solver optimal status; it is not a claim of global optimality for the real site or full IslandOS system.
 
 ### Stage 4 — Forecast uncertainty and robustness
 
