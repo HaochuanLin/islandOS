@@ -167,6 +167,7 @@ def test_milp_jointly_optimizes_water_inventory_ro_power_and_energy_balance():
 
     service = result["water_service"]
     assert service["service_feasible"] is True
+    assert service["audit"]["passed"] is True
     assert service["production_policy"] == "joint_milp_water_energy"
     assert sum(service["production_m3_per_hour"]) == pytest.approx(3.5)
     assert all(0.5 - 1e-7 <= value <= 4.0 + 1e-7 for value in service["inventory_end_m3"])
@@ -231,3 +232,20 @@ def test_milp_is_repeatable_and_compares_baselines_on_equivalent_water_service()
         baseline = first["baseline_comparison"][policy]
         assert "same just-in-time RO production profile" in baseline["comparison_note"]
         assert baseline["water_service"]["total_demand_m3"] == pytest.approx(2.0)
+
+
+
+def test_milp_rejects_invalid_ro_operating_cost():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=1.0,
+        tank_capacity_m3=2.0,
+        initial_inventory_m3=1.0,
+    )
+    with pytest.raises(OptimizationError, match="ro_variable_cost_per_m3"):
+        optimize_dispatch_milp(
+            inputs, config, water_service=water,
+            water_demand_m3_per_hour=[0.5] * 4,
+            ro_variable_cost_per_m3=-1.0,
+        )
