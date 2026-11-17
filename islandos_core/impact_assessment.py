@@ -50,6 +50,10 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
     dt = _finite_number(dispatch.get("dt_hours"), f"{label}.dt_hours", minimum=1e-12)
     tolerance = 1e-6
     previous_diesel_kw = 0.0
+    previous_fuel_remaining = (
+        config.diesel.initial_fuel_liters
+        if config.diesel is not None else None
+    )
     required_row_fields = (
         "energy_balance_residual_kw",
         "grid_import_kw",
@@ -86,6 +90,8 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
 
         if values["grid_import_kw"] > config.grid_import_limit_kw + tolerance:
             violations.append(f"row {index}: grid import exceeds configured limit")
+        if row.get("grid_available") is False and values["grid_import_kw"] > tolerance:
+            violations.append(f"row {index}: grid import occurs while grid is unavailable")
         if config.battery is None:
             if values["battery_charge_kw"] > tolerance or values["battery_discharge_kw"] > tolerance:
                 violations.append(f"row {index}: battery dispatch exists without a configured battery")
@@ -108,6 +114,10 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
             diesel = config.diesel
             if diesel_kw > diesel.rated_power_kw + tolerance:
                 violations.append(f"row {index}: diesel output exceeds rated power")
+            if row.get("diesel_available") is False and diesel_kw > tolerance:
+                violations.append(f"row {index}: diesel output occurs while diesel is unavailable")
+            if row.get("diesel_committed") is False and diesel_kw > tolerance:
+                violations.append(f"row {index}: diesel output occurs while unit is not committed")
             if tolerance < diesel_kw < diesel.min_stable_power_kw - tolerance:
                 violations.append(f"row {index}: diesel output is below minimum stable power")
             if index > 0:
@@ -122,6 +132,34 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
                     and previous_diesel_kw > diesel_kw + diesel.ramp_down_kw_per_hour * dt + tolerance
                 ):
                     violations.append(f"row {index}: diesel ramp-down limit exceeded")
+            if diesel.initial_fuel_liters is not None:
+                try:
+                    remaining_fuel = _finite_number(
+                        row.get("diesel_fuel_remaining_liters"),
+                        f"{label}.rows[{index}].diesel_fuel_remaining_liters",
+                        minimum=0.0,
+                    )
+                    fuel_used = _finite_number(
+                        row.get("diesel_fuel_used_liters"),
+                        f"{label}.rows[{index}].diesel_fuel_used_liters",
+                        minimum=0.0,
+                    )
+                    fuel_delivered = _finite_number(
+                        row.get("diesel_fuel_delivered_liters"),
+                        f"{label}.rows[{index}].diesel_fuel_delivered_liters",
+                        minimum=0.0,
+                    )
+                    if diesel.fuel_tank_capacity_liters is not None and remaining_fuel > diesel.fuel_tank_capacity_liters + tolerance:
+                        violations.append(f"row {index}: diesel fuel inventory exceeds tank capacity")
+                    expected_remaining = (
+                        (diesel.initial_fuel_liters if index == 0 else previous_fuel_remaining)
+                        + fuel_delivered - fuel_used
+                    )
+                    if abs(remaining_fuel - expected_remaining) > tolerance:
+                        violations.append(f"row {index}: diesel fuel inventory balance failed")
+                    previous_fuel_remaining = remaining_fuel
+                except ImpactAssessmentError as exc:
+                    violations.append(str(exc))
         previous_diesel_kw = diesel_kw
 
     if not violations:
