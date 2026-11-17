@@ -208,7 +208,7 @@ def calculate_net_customer_value(
     if not isinstance(evaluation_period, str) or not evaluation_period.strip():
         raise ImpactAssessmentError("evaluation_period must be a non-empty label")
     if commercial_costs.get("currency") != currency:
-        raise ImpactAssessmentError("commercial costs must use the dispatch comparison currency")
+        raise ImpactAssessmentError("commercial costs must use the same currency as the dispatch comparison")
     if commercial_costs.get("evaluation_period") != evaluation_period:
         raise ImpactAssessmentError("commercial costs must use the same evaluation period as gross benefit")
 
