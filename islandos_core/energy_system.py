@@ -235,6 +235,8 @@ class EnergySystemInputs:
     battery_power_setpoint_kw: Sequence[float] | None = None
     diesel_commitment_schedule: Sequence[bool] | None = None
     diesel_power_setpoint_kw: Sequence[float] | None = None
+    # Optional per-step grid-import cap used by offline optimizers for exact replay.
+    grid_import_power_setpoint_kw: Sequence[float] | None = None
     # Optional per-step cap; the physical balance still determines actual export.
     grid_export_power_setpoint_kw: Sequence[float] | None = None
     # Optional additional shiftable demand; shed before critical/base demand in a shortfall.
@@ -346,6 +348,10 @@ def dispatch_energy_system(
         _series("diesel_power_setpoint_kw", inputs.diesel_power_setpoint_kw)
         if inputs.diesel_power_setpoint_kw is not None else None
     )
+    import_setpoints = (
+        _series("grid_import_power_setpoint_kw", inputs.grid_import_power_setpoint_kw)
+        if inputs.grid_import_power_setpoint_kw is not None else None
+    )
     export_setpoints = (
         _series("grid_export_power_setpoint_kw", inputs.grid_export_power_setpoint_kw)
         if inputs.grid_export_power_setpoint_kw is not None else None
@@ -393,6 +399,11 @@ def dispatch_energy_system(
             raise EnergyModelError(f"diesel_power_setpoint_kw must contain exactly {n} values")
         if any(value > config.diesel.rated_power_kw + 1e-9 for value in diesel_setpoints):
             raise EnergyModelError("diesel_power_setpoint_kw exceeds configured rated power")
+    if import_setpoints is not None:
+        if len(import_setpoints) != n:
+            raise EnergyModelError(f"grid_import_power_setpoint_kw must contain exactly {n} values")
+        if any(value < 0 or value > config.grid_import_limit_kw + 1e-9 for value in import_setpoints):
+            raise EnergyModelError("grid_import_power_setpoint_kw must be within [0, grid_import_limit_kw]")
     if export_setpoints is not None:
         if len(export_setpoints) != n:
             raise EnergyModelError(f"grid_export_power_setpoint_kw must contain exactly {n} values")
@@ -537,7 +548,14 @@ def dispatch_energy_system(
             return delivered
 
         def import_grid(remaining_kw: float) -> float:
-            return min(remaining_kw, config.grid_import_limit_kw) if grid_ok[t] else 0.0
+            if not grid_ok[t]:
+                return 0.0
+            limit = (
+                import_setpoints[t]
+                if import_setpoints is not None
+                else config.grid_import_limit_kw
+            )
+            return min(remaining_kw, limit)
 
         def run_diesel(remaining_kw: float) -> float:
             nonlocal diesel_started, diesel_stopped
