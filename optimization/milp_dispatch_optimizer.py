@@ -21,7 +21,7 @@ from islandos_core.energy_system import (
     EnergySystemInputs,
     dispatch_energy_system,
 )
-from .energy_system_optimizer import OptimizationError, _audit
+from islandos_core.water_resource_adapter import WaterServiceSpec\nfrom .energy_system_optimizer import OptimizationError, _audit
 
 
 def _validate_diesel_schedule(
@@ -208,7 +208,7 @@ def optimize_dispatch_milp(
     objective = np.zeros(total_vars)
 
     for t in range(n):
-        upper[charge[t]] = min(battery.max_charge_kw, max(0.0, pv[t] + wind[t] - load[t]))
+        upper[charge[t]] = min(battery.max_charge_kw, max(0.0, pv[t] + wind[t] - load[t]))\n        if water_service is not None:\n            upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
         upper[discharge[t]] = battery.max_discharge_kw
         upper[diesel_power[t]] = diesel.rated_power_kw if diesel_ok[t] else 0.0
         upper[diesel_on[t]] = 1.0 if diesel_ok[t] else 0.0
