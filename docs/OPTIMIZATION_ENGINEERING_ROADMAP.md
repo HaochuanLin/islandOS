@@ -89,7 +89,7 @@ Important current limitations:
 
 ### Stage 6 — Operator-facing workflow and shadow evaluation
 
-**Status: operator decision-record primitive implemented in `islandos_core/operator_decision.py`; existing read-only Shadow Mode and hash-chain evidence ledger remain separate components. UI integration and authorized-site retrospective evaluation are not yet delivered.**
+**Status: operator decision-record primitive plus a runnable synthetic MILP-to-human-review example and regression test implemented in `islandos_core/operator_decision.py` and `examples/operator_decision_record_demo.py`. Existing read-only Shadow Mode and hash-chain evidence ledger remain separate components. UI integration and authorized-site retrospective evaluation are not yet delivered.**
 
 - Expose optimization as a clearly labelled experimental/advisory workflow in the product interface.
 - Show input provenance, selected objective weights, constraints, candidate schedules, baseline comparisons, infeasibility reasons and model limitations.
@@ -112,5 +112,5 @@ Important current limitations:
 
 - Stage 4 currently scores marginal interval coverage, width and under/over-coverage on aligned held-out observations, and builds central / renewable-low-demand-high / cost-high / combined deterministic stress cases from caller-supplied intervals. The cases carry no probabilities and are not yet passed through the optimizer for schedule-sensitivity comparison.
 - Stage 5 currently jointly chooses hourly RO production and electrical dispatch in one bounded MILP, with water tank balance, reserve and RO capacity constraints. Independent water replay is required. Flexible-load timing is not yet part of this MILP.
-- Stage 6 currently packages a human-review decision record and verifies its digest. Existing Shadow Mode comparison and SQLite hash-chain evidence are available, but the operator UI and site-specific retrospective evaluation are not complete.
+- Stage 6 currently packages a MILP result into a synthetic human-review decision record, verifies its digest in an end-to-end example, and explicitly keeps approval pending with device writes and command generation disabled. Existing Shadow Mode comparison and SQLite hash-chain evidence are available, but the operator UI and site-specific retrospective evaluation are not complete.
 - No stage authorizes equipment control. All recommendations remain offline and human-reviewed.
