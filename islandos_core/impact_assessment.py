@@ -130,9 +130,11 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
             "load_energy_kwh", "critical_load_energy_kwh", "flexible_load_energy_kwh",
             "critical_unmet_load_kwh", "flexible_load_shed_kwh",
             "grid_import_kwh", "diesel_generation_kwh", "renewable_curtailed_kwh",
-            "pv_energy_kwh", "wind_energy_kwh", "estimated_energy_cost",
+            "pv_energy_kwh", "wind_energy_kwh",
         ):
             _finite_number(summary.get(key), f"{label}.summary.{key}", minimum=0.0)
+        # Net energy cost may be negative when export revenue exceeds modeled costs.
+        _finite_number(summary.get("estimated_energy_cost"), f"{label}.summary.estimated_energy_cost")
     return {
         "passed": not violations,
         "violation_count": len(violations),
