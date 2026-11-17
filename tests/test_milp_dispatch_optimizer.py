@@ -1,4 +1,5 @@
 import pytest
+from dataclasses import replace
 
 from islandos_core.energy_system import (
     BatterySpec,
@@ -69,6 +70,14 @@ def test_milp_dispatch_solves_and_passes_independent_and_physical_audits():
 
 def test_independent_diesel_validator_detects_ramp_and_minimum_time_violations():
     _, config = _case()
+    config = EnergySystemConfig(
+        pv_rated_kw=config.pv_rated_kw,
+        wind_rated_kw=config.wind_rated_kw,
+        grid_import_limit_kw=config.grid_import_limit_kw,
+        dt_hours=config.dt_hours,
+        battery=config.battery,
+        diesel=replace(config.diesel, ramp_down_kw_per_hour=3.0),
+    )
     errors = _validate_diesel_schedule(
         [0.0, 8.0, 0.0, 0.0],
         [False, True, False, False],
