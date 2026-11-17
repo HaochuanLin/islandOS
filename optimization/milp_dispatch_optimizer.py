@@ -21,7 +21,9 @@ from islandos_core.energy_system import (
     EnergySystemInputs,
     dispatch_energy_system,
 )
-from islandos_core.water_resource_adapter import WaterServiceSpec\nfrom .energy_system_optimizer import OptimizationError, _audit
+from islandos_core.water_resource_adapter import WaterServiceSpec
+from islandos_core.water_resource_adapter import WaterServiceSpec
+from .energy_system_optimizer import OptimizationError, _audit
 
 
 def _validate_diesel_schedule(
@@ -94,6 +96,8 @@ def optimize_dispatch_milp(
     terminal_battery_soc_min: float | None = None,
     time_limit_seconds: float = 30.0,
     mip_relative_gap: float = 0.0,
+    water_service: WaterServiceSpec | None = None,
+    water_demand_m3_per_hour: Sequence[float] | None = None,
 ) -> dict:
     """Solve a deterministic, bounded MILP and physically replay its schedule.
 
@@ -159,6 +163,10 @@ def optimize_dispatch_milp(
         raise OptimizationError("PV, wind and load values must be non-negative")
     if any(x > config.pv_rated_kw + 1e-8 for x in pv) or any(x > config.wind_rated_kw + 1e-8 for x in wind):
         raise OptimizationError("forecast renewable generation exceeds configured rated power")
+    if (water_service is None) != (water_demand_m3_per_hour is None):
+        raise OptimizationError("water_service and water_demand_m3_per_hour must be supplied together")
+    if water_service is not None and not isinstance(water_service, WaterServiceSpec):
+        raise OptimizationError("water_service must be a WaterServiceSpec")
     if inputs.flexible_load_kw is not None or inputs.critical_load_kw is not None:
         raise OptimizationError("MILP reference solver currently accepts total load only; flexible/critical load modelling is a later extension")
     if inputs.grid_export_available is not None or inputs.grid_export_price_per_kwh is not None:
@@ -172,6 +180,12 @@ def optimize_dispatch_milp(
     fuel_model = diesel.fuel_consumption_l_per_kwh is not None
     if fuel_model and diesel.initial_fuel_liters is None:
         raise OptimizationError("fuel inventory requires initial fuel")
+    water_demand = (
+        series("water_demand_m3_per_hour", water_demand_m3_per_hour)
+        if water_demand_m3_per_hour is not None else None
+    )
+    if water_demand is not None and any(value < 0 for value in water_demand):
+        raise OptimizationError("water demand must be non-negative")
     deliveries = (
         series("diesel_fuel_delivery_liters", inputs.diesel_fuel_delivery_liters)
         if inputs.diesel_fuel_delivery_liters is not None else [0.0] * n
@@ -199,6 +213,8 @@ def optimize_dispatch_milp(
     curtail = block("curtail", n)
     charge_mode = block("charge_mode", n)
     fuel = block("fuel", n + 1) if fuel_model else None
+    water_production = block("water_production", n) if water_service is not None else None
+    water_inventory = block("water_inventory", n + 1) if water_service is not None else None
     peak = block("peak", 1)[0]
     total_vars = cursor
 
@@ -208,7 +224,11 @@ def optimize_dispatch_milp(
     objective = np.zeros(total_vars)
 
     for t in range(n):
-        upper[charge[t]] = min(battery.max_charge_kw, max(0.0, pv[t] + wind[t] - load[t]))\n        if water_service is not None:\n            upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
+        upper[charge[t]] = min(battery.max_charge_kw, max(0.0, pv[t] + wind[t] - load[t]))
+        if water_service is not None:
+            upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
+        if water_service is not None:
+            upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
         upper[discharge[t]] = battery.max_discharge_kw
         upper[diesel_power[t]] = diesel.rated_power_kw if diesel_ok[t] else 0.0
         upper[diesel_on[t]] = 1.0 if diesel_ok[t] else 0.0
@@ -238,6 +258,10 @@ def optimize_dispatch_milp(
     lower[soc[0]] = upper[soc[0]] = effective_capacity * battery.initial_soc
     if terminal_battery_soc_min is not None:
         lower[soc[-1]] = effective_capacity * float(terminal_battery_soc_min)
+    if water_service is not None:
+        lower[water_inventory] = water_service.reserve_m3
+        upper[water_inventory] = water_service.tank_capacity_m3
+        lower[water_inventory[0]] = upper[water_inventory[0]] = water_service.initial_inventory_m3
     if fuel_model:
         max_fuel = diesel.fuel_tank_capacity_liters
         if max_fuel is None:
@@ -260,6 +284,8 @@ def optimize_dispatch_milp(
             int(grid[t]): 1.0, int(diesel_power[t]): 1.0,
             int(discharge[t]): 1.0, int(curtail[t]): -1.0,
             int(charge[t]): -1.0,
+            **({int(water_production[t]): -water_service.specific_energy_kwh_per_m3}
+               if water_service is not None else {}),
         }, load[t] - renewable, load[t] - renewable)
         constraint({int(charge[t]): 1.0, int(charge_mode[t]): -battery.max_charge_kw}, -np.inf, 0.0)
         constraint({int(discharge[t]): 1.0, int(charge_mode[t]): battery.max_discharge_kw}, -np.inf, battery.max_discharge_kw)
@@ -284,6 +310,11 @@ def optimize_dispatch_milp(
         if diesel.ramp_down_kw_per_hour is not None and t > 0:
             constraint({int(diesel_power[t - 1]): 1.0, int(diesel_power[t]): -1.0},
                        -np.inf, diesel.ramp_down_kw_per_hour * dt)
+        if water_service is not None:
+            constraint({int(water_inventory[t + 1]): 1.0,
+                        int(water_inventory[t]): -1.0,
+                        int(water_production[t]): -dt},
+                       -water_demand[t] * dt, -water_demand[t] * dt)
         if fuel_model:
             constraint({int(fuel[t + 1]): 1.0, int(fuel[t]): -1.0,
                         int(diesel_power[t]): diesel.fuel_consumption_l_per_kwh * dt},
@@ -325,10 +356,18 @@ def optimize_dispatch_milp(
     if diesel_errors:
         raise OptimizationError("MILP diesel schedule failed independent validation: " + "; ".join(diesel_errors))
 
+    water_production_rates = (
+        [float(solution[water_production[t]]) for t in range(n)]
+        if water_service is not None else None
+    )
+    ro_power_kw = (
+        [rate * water_service.specific_energy_kwh_per_m3 for rate in water_production_rates]
+        if water_service is not None else [0.0] * n
+    )
     replay_inputs = EnergySystemInputs(
         pv_generation_kw=inputs.pv_generation_kw,
         wind_generation_kw=inputs.wind_generation_kw,
-        load_kw=inputs.load_kw,
+        load_kw=[float(base) + ro for base, ro in zip(load, ro_power_kw)],
         grid_price_per_kwh=inputs.grid_price_per_kwh,
         grid_available=inputs.grid_available,
         diesel_available=inputs.diesel_available,
@@ -381,6 +420,16 @@ def optimize_dispatch_milp(
         "battery_soc_kwh": [float(solution[soc[t]]) for t in range(n + 1)],
         "diesel_commitment_schedule": commitments,
         "diesel_power_setpoint_kw": diesel_outputs,
+        "water_service": ({
+            "production_m3_per_hour": water_production_rates,
+            "inventory_end_m3": [float(solution[water_inventory[t + 1]]) for t in range(n)],
+            "ro_power_kw": ro_power_kw,
+            "total_production_m3": sum(water_production_rates) * dt,
+            "total_demand_m3": sum(water_demand) * dt,
+            "service_feasible": True,
+            "production_policy": "joint_milp_water_energy",
+            "device_write_authorized": False,
+        } if water_service is not None else None),
         "grid_import_model_kw": [float(solution[grid[t]]) for t in range(n)],
         "renewable_curtailment_model_kw": [float(solution[curtail[t]]) for t in range(n)],
         "dispatch": dispatch,
@@ -393,6 +442,7 @@ def optimize_dispatch_milp(
             "unserved_load": "not_permitted",
             "grid_export": "unsupported",
             "fuel_curve": "constant_l_per_kwh_only",
+            "water_energy": "jointly_optimized_when_water_service_and_demand_are_supplied",
             "scope": "single-bus energy balance; one battery and one diesel unit",
         },
         "model_scope": {
