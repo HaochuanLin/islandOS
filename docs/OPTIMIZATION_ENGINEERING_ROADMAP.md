@@ -52,14 +52,14 @@ Important current limitations:
 
 ### Stage 3 — Deterministic optimization benchmark
 
-**Status: bounded MILP reference solver, shared-physics replay, deterministic regression and equivalent-service rule baselines implemented. Formal performance benchmark reporting and timeout-specific regression remain follow-up work.**
+**Status: bounded MILP reference solver, shared-physics replay, independent diesel validation, equivalent-service rule baselines and objective-to-replay cost reconciliation implemented. Deterministic regression tests cover repeatability and infeasibility. Formal multi-case performance reporting, timeout-specific regression and a direct evolutionary-optimizer head-to-head remain follow-up work.**
 
 - Add a deterministic mathematical-programming reference solver using the already pinned SciPy MILP capability, subject to a formulation review.
 - Start with a clearly bounded model (battery, grid, diesel and essential load); add binary commitment variables only where required.
 - Keep the evolutionary optimizer as a comparison method, not silently replace it.
 - Replay both methods through the same physical simulator and compare objective values, feasibility, runtime and repeatability on identical inputs.
 - Add small instances with independently checkable optima and tests for solver timeout / infeasibility.
-- Current implementation solves a bounded single-bus model with SciPy/HiGHS, reports solver status, optimality scope and solve time, then replays the result through the shared simulator and independent diesel validator.
+- Current implementation solves a bounded single-bus model with SciPy/HiGHS, reports solver status, optimality scope and solve time, then replays the result through the shared simulator and independent diesel validator. It now reconciles the MILP objective against replayed grid, diesel, fuel, battery, demand-charge, RO and curtailment tie-break components, failing closed on a material mismatch.
 
 **Acceptance gate:** deterministic solutions reproduce within numerical tolerance, pass the same physical audit, and outperform or explain trade-offs against transparent baselines on declared benchmark cases. No general global-optimum claim beyond the exact mathematical model and solver status.
 
