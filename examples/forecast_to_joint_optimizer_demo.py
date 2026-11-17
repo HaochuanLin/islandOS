@@ -9,6 +9,7 @@ validated savings, or a globally optimal schedule.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timedelta, timezone
 
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
@@ -22,7 +23,7 @@ def build_synthetic_history():
     timestamps = tuple(start + timedelta(hours=i) for i in range(96))
     history = {
         "pv_power_kw": [
-            max(0.0, 8.0 * __import__("math").sin((i % 24 - 6) * __import__("math").pi / 12))
+            max(0.0, 8.0 * math.sin((i % 24 - 6) * math.pi / 12))
             for i in range(96)
         ],
         "wind_power_kw": [3.0 + 1.2 * ((i % 8) / 7) for i in range(96)],
