@@ -94,3 +94,42 @@ Important current limitations:
 - A stochastic heuristic is not a global optimizer.
 - A module, experiment or branch is not part of the hosted product until integrated, tested and explicitly promoted.
 - No optimization result authorizes live device control.
+
+
+---
+
+## Customer Value & Commercial Evidence Track — Stage 8 Implementation Record
+
+Stage 7 customer discovery documentation is proposed separately in Draft PR #256 and is not part of main until merged. Stage 8 is being developed as a parallel, bounded evidence layer; it does not replace or renumber Engineering Stages 1–6.
+
+### Stage 8 — Synthetic Impact & Economic Evidence
+
+**Status: PARTIAL — first paired energy-policy case implemented; not customer-validated.**
+
+**Implemented on this Stage 8 branch:**
+- `islandos_core/impact_assessment.py` calls the existing `compare_energy_policies()` API. It does not implement another dispatch optimizer.
+- `examples/synthetic_customer_impact_demo.py` supplies one fixed 24-hour synthetic scenario and compares `grid_first` (baseline) with `battery_first` (candidate) using the same inputs and equipment configuration.
+- The reporting layer checks time coverage, service equivalence, per-step energy balance, configured grid/battery/diesel limits and selected diesel ramp constraints. Gross operating benefit is withheld if service equivalence or these checks fail.
+- Supported outputs include estimated energy cost, grid imports, diesel generation and fuel where configured, renewable generation/utilisation/curtailment, critical-load reliability and flexible-load service.
+- Water service and emissions are explicitly omitted because this selected dispatch interface does not contain the required water-state or emissions-factor inputs.
+- Commercial cost arithmetic requires software, integration, maintenance and training values in the same currency and evaluation period as gross benefit. The synthetic example supplies none; net customer value remains null rather than assuming zero cost.
+- Existing `islandos_core/investment_economics.py`, `ro_costing.py` and `experiments/economic_sensitivity.py` remain the canonical lifecycle, RO and fixed-candidate sensitivity tools. No parallel NPV, payback or RO-cost engine is introduced.
+
+**Remaining tasks:**
+- Run and review the new demo and tests in CI; fix all failures before considering merge.
+- Add additional cases for export revenue, absent diesel fuel model, zero critical load and equipment-boundary behavior.
+- After Engineering Stages 1–5 provide a stable optimizer output contract, add a separately labelled optimizer-vs-baseline comparison without changing this rule-policy benchmark's meaning.
+- Only add water-service metrics when a paired water/energy interface can provide water production, demand, inventory and service-equivalence evidence.
+- Obtain authorized customer/site data and independently reviewed commercial cost inputs before any customer-value claim.
+
+**Dependencies:** existing deterministic dispatch interface and its physical accounting; Stage 7 problem hypotheses; Engineering Stages 1–5 for any future optimizer-based comparison.
+
+**Acceptance criteria:** same inputs and equipment configuration; repeatable output; service-equivalence and physical checks pass; all metrics have explicit units and provenance; unknown metrics/costs are withheld; no annualization from a 24-hour run; no modeled result is called verified customer savings.
+
+**Tests required:** deterministic example execution; same-horizon comparison; service-equivalence blocking; energy-balance and equipment-limit corruption; invalid units/values; commercial cost arithmetic; currency/period mismatch; JSON serialization without NaN/Infinity; no unsupported water or emissions metrics.
+
+**Known limitations:** the first candidate is a rule-based battery-first policy, not an optimizer; the 24-hour scenario is synthetic and not annualized; no water-service, emissions or customer commercial-cost evidence is present; the reporting audit is not a complete site engineering validation.
+
+### Stage 8 evidence gate
+
+Do not promote this stage to complete until CI passes on the exact PR head, the example and tests are reviewed, and all known limitations remain visible in the generated report and documentation. External customer value remains NOT VALIDATED until supported by authorized site evidence and customer/buyer review.
