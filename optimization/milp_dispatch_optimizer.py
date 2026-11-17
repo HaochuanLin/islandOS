@@ -21,8 +21,11 @@ from islandos_core.energy_system import (
     EnergySystemInputs,
     dispatch_energy_system,
 )
-from islandos_core.water_resource_adapter import WaterServiceSpec
-from islandos_core.water_resource_adapter import WaterServiceSpec
+from islandos_core.water_resource_adapter import (
+    WaterServiceSpec,
+    build_ro_energy_load,
+    build_price_aware_ro_schedule,
+)
 from .energy_system_optimizer import OptimizationError, _audit
 
 
@@ -87,6 +90,47 @@ def _validate_diesel_schedule(
                     )
             run_start = t
     return errors
+
+
+
+
+def _audit_water_schedule(
+    production_m3_per_hour: Sequence[float],
+    demand_m3_per_hour: Sequence[float],
+    inventory_end_m3: Sequence[float],
+    spec: WaterServiceSpec,
+    *,
+    dt_hours: float,
+    tolerance: float = 1e-6,
+) -> dict:
+    """Independently replay RO production and tank inventory against service bounds."""
+    errors: list[str] = []
+    n = len(demand_m3_per_hour)
+    if len(production_m3_per_hour) != n or len(inventory_end_m3) != n:
+        return {"passed": False, "errors": ["water schedule lengths do not match"]}
+    inventory = spec.initial_inventory_m3
+    for t, (production, demand, reported_inventory) in enumerate(
+        zip(production_m3_per_hour, demand_m3_per_hour, inventory_end_m3)
+    ):
+        if not all(math.isfinite(float(value)) for value in (production, demand, reported_inventory)):
+            errors.append(f"non_finite_water_value_at_{t}")
+            continue
+        if production < -tolerance or production > spec.ro_capacity_m3_per_hour + tolerance:
+            errors.append(f"ro_capacity_violated_at_{t}")
+        inventory = inventory + float(production) * dt_hours - float(demand) * dt_hours
+        if inventory < spec.reserve_m3 - tolerance:
+            errors.append(f"water_reserve_violated_at_{t}")
+        if inventory > spec.tank_capacity_m3 + tolerance:
+            errors.append(f"water_tank_capacity_violated_at_{t}")
+        if abs(inventory - float(reported_inventory)) > tolerance:
+            errors.append(f"water_inventory_replay_mismatch_at_{t}")
+    return {
+        "passed": not errors,
+        "errors": errors,
+        "ending_inventory_m3": inventory,
+        "total_production_m3": sum(float(value) for value in production_m3_per_hour) * dt_hours,
+        "total_demand_m3": sum(float(value) for value in demand_m3_per_hour) * dt_hours,
+    }
 
 
 def optimize_dispatch_milp(
@@ -227,8 +271,6 @@ def optimize_dispatch_milp(
         upper[charge[t]] = min(battery.max_charge_kw, max(0.0, pv[t] + wind[t] - load[t]))
         if water_service is not None:
             upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
-        if water_service is not None:
-            upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
         upper[discharge[t]] = battery.max_discharge_kw
         upper[diesel_power[t]] = diesel.rated_power_kw if diesel_ok[t] else 0.0
         upper[diesel_on[t]] = 1.0 if diesel_ok[t] else 0.0
@@ -364,6 +406,22 @@ def optimize_dispatch_milp(
         [rate * water_service.specific_energy_kwh_per_m3 for rate in water_production_rates]
         if water_service is not None else [0.0] * n
     )
+    water_inventory_trace = (
+        [float(solution[water_inventory[t + 1]]) for t in range(n)]
+        if water_service is not None else None
+    )
+    water_audit = (
+        _audit_water_schedule(
+            water_production_rates, water_demand, water_inventory_trace,
+            water_service, dt_hours=dt,
+        )
+        if water_service is not None else None
+    )
+    if water_audit is not None and not water_audit["passed"]:
+        raise OptimizationError(
+            "MILP water schedule failed independent validation: "
+            + "; ".join(water_audit["errors"])
+        )
     replay_inputs = EnergySystemInputs(
         pv_generation_kw=inputs.pv_generation_kw,
         wind_generation_kw=inputs.wind_generation_kw,
@@ -422,11 +480,12 @@ def optimize_dispatch_milp(
         "diesel_power_setpoint_kw": diesel_outputs,
         "water_service": ({
             "production_m3_per_hour": water_production_rates,
-            "inventory_end_m3": [float(solution[water_inventory[t + 1]]) for t in range(n)],
+            "inventory_end_m3": water_inventory_trace,
             "ro_power_kw": ro_power_kw,
             "total_production_m3": sum(water_production_rates) * dt,
             "total_demand_m3": sum(water_demand) * dt,
             "service_feasible": True,
+            "audit": water_audit,
             "production_policy": "joint_milp_water_energy",
             "device_write_authorized": False,
         } if water_service is not None else None),
