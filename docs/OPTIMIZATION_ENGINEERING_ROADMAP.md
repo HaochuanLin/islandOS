@@ -27,7 +27,7 @@ Important current limitations:
 
 ### Stage 1 — Reproducible end-to-end optimization demonstration
 
-**Status: implemented in PR #255; CI passing on the current PR revision.**
+**Status: implemented in the Stage 1 baseline. The last successful full CI run is on commit `cb6e572`; subsequent Stage 2–6 commits require a fresh full CI run before acceptance.**
 
 - Provide one command-line example using synthetic, clearly labelled input data.
 - Connect canonical multi-signal forecasting to the existing forecast-to-resource optimizer.
@@ -39,7 +39,7 @@ Important current limitations:
 
 ### Stage 2 — Equipment-constraint completeness
 
-**Status: implemented for the deterministic MILP reference path in PR #255; the evolutionary optimizer remains unchanged and continues to reject its unsupported diesel commitment constraints.**
+**Status: bounded implementation delivered in the deterministic MILP reference path. The evolutionary optimizer remains unchanged and continues to reject its unsupported diesel commitment constraints. The newest independent water audit and regression additions still require CI confirmation.**
 
 - Extend candidate generation so diesel schedules can satisfy configured ramp-up and ramp-down limits, minimum stable output, minimum up-time and minimum down-time.
 - Include fuel inventory / delivery limits where configured.
@@ -52,7 +52,7 @@ Important current limitations:
 
 ### Stage 3 — Deterministic optimization benchmark
 
-**Status: bounded MILP reference solver and shared-physics replay implemented in PR #255; broader evolutionary-method benchmarking and timeout/infeasibility coverage remain follow-up work.**
+**Status: bounded MILP reference solver, shared-physics replay, deterministic regression and equivalent-service rule baselines implemented. Formal performance benchmark reporting and timeout-specific regression remain follow-up work.**
 
 - Add a deterministic mathematical-programming reference solver using the already pinned SciPy MILP capability, subject to a formulation review.
 - Start with a clearly bounded model (battery, grid, diesel and essential load); add binary commitment variables only where required.
@@ -65,6 +65,8 @@ Important current limitations:
 
 ### Stage 4 — Forecast uncertainty and robustness
 
+**Status: first validation primitive implemented in `islandos_core/forecast_uncertainty.py`; this does not yet establish calibrated site uncertainty or joint scenario probabilities.**
+
 - Validate forecast intervals chronologically and measure empirical coverage before treating bounds as uncertainty inputs.
 - Distinguish central forecasts, marginal stress envelopes and genuinely joint scenarios.
 - Add explicit scenario construction and optional probabilities only when supported by evidence.
@@ -75,18 +77,23 @@ Important current limitations:
 
 ### Stage 5 — Joint water-energy-flexible-load optimization
 
+**Status: bounded joint water-energy MILP path implemented in `optimization/milp_dispatch_optimizer.py`; flexible-load co-optimization and expanded operating constraints remain open. The current implementation adds RO production and tank inventory as MILP variables, and replays RO electrical demand through the shared energy simulator.**
+
 - Replace preselected RO heuristics with decision variables for RO production, tank inventory and flexible-load timing.
 - Enforce water balance, tank bounds, RO capacity, service reserve, equipment operating windows and water-demand satisfaction.
 - Co-optimize water and energy costs while preserving critical-service priorities.
 - Compare against just-in-time and tariff-look-ahead RO baselines under identical service assumptions.
+- Current MILP baseline comparison replays battery-first/grid-first energy policies with the same just-in-time RO production profile; it does not yet benchmark the tariff-look-ahead policy.
 
 **Acceptance gate:** the same schedule simultaneously passes electrical and water-service audits; any water shortfall is explicit; cost comparisons are made only at equivalent service.
 
 ### Stage 6 — Operator-facing workflow and shadow evaluation
 
+**Status: operator decision-record primitive implemented in `islandos_core/operator_decision.py`; existing read-only Shadow Mode and hash-chain evidence ledger remain separate components. UI integration and authorized-site retrospective evaluation are not yet delivered.**
+
 - Expose optimization as a clearly labelled experimental/advisory workflow in the product interface.
 - Show input provenance, selected objective weights, constraints, candidate schedules, baseline comparisons, infeasibility reasons and model limitations.
-- Require human review and retain a reproducible decision record.
+- Require human review and retain a reproducible decision record. A hash-addressed decision-record primitive now captures input references, data provenance, objective weights, operating constraints, schedule, outcomes, baseline comparisons and physical audit; approval remains pending and device writes are prohibited.
 - Validate retrospectively on authorized site data before any read-only shadow trial; no actuation is in scope.
 
 **Acceptance gate:** an operator can reproduce and explain a recommendation from a saved configuration; site performance claims require independent, site-specific evidence.
@@ -99,3 +106,11 @@ Important current limitations:
 - A stochastic heuristic is not a global optimizer.
 - A module, experiment or branch is not part of the hosted product until integrated, tested and explicitly promoted.
 - No optimization result authorizes live device control.
+
+
+## Current implementation boundary after Stage 4–6 kickoff
+
+- Stage 4 currently scores marginal interval coverage, width and under/over-coverage on aligned held-out observations. It deliberately does not generate joint scenarios or assign probabilities.
+- Stage 5 currently jointly chooses hourly RO production and electrical dispatch in one bounded MILP, with water tank balance, reserve and RO capacity constraints. Independent water replay is required. Flexible-load timing is not yet part of this MILP.
+- Stage 6 currently packages a human-review decision record and verifies its digest. Existing Shadow Mode comparison and SQLite hash-chain evidence are available, but the operator UI and site-specific retrospective evaluation are not complete.
+- No stage authorizes equipment control. All recommendations remain offline and human-reviewed.
