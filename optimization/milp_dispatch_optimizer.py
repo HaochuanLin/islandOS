@@ -230,6 +230,9 @@ def optimize_dispatch_milp(
     fuel_model = diesel.fuel_consumption_l_per_kwh is not None
     if fuel_model and diesel.initial_fuel_liters is None:
         raise OptimizationError("fuel inventory requires initial fuel")
+    if (fuel_model and diesel.fuel_tank_capacity_liters is not None
+            and float(diesel.initial_fuel_liters) > diesel.fuel_tank_capacity_liters + 1e-9):
+        raise OptimizationError("initial diesel fuel exceeds configured tank capacity")
     water_demand = (
         series("water_demand_m3_per_hour", water_demand_m3_per_hour)
         if water_demand_m3_per_hour is not None else None
