@@ -142,6 +142,7 @@ def optimize_dispatch_milp(
     mip_relative_gap: float = 0.0,
     water_service: WaterServiceSpec | None = None,
     water_demand_m3_per_hour: Sequence[float] | None = None,
+    ro_variable_cost_per_m3: float = 0.0,
 ) -> dict:
     """Solve a deterministic, bounded MILP and physically replay its schedule.
 
@@ -180,6 +181,11 @@ def optimize_dispatch_milp(
     if (isinstance(mip_relative_gap, bool) or not isinstance(mip_relative_gap, (int, float))
             or not math.isfinite(float(mip_relative_gap)) or mip_relative_gap < 0):
         raise OptimizationError("mip_relative_gap must be finite and >= 0")
+    if (isinstance(ro_variable_cost_per_m3, bool)
+            or not isinstance(ro_variable_cost_per_m3, (int, float))
+            or not math.isfinite(float(ro_variable_cost_per_m3))
+            or ro_variable_cost_per_m3 < 0):
+        raise OptimizationError("ro_variable_cost_per_m3 must be finite and >= 0")
 
     def series(name: str, values: Sequence[float]) -> list[float]:
         try:
@@ -271,6 +277,7 @@ def optimize_dispatch_milp(
         upper[charge[t]] = min(battery.max_charge_kw, max(0.0, pv[t] + wind[t] - load[t]))
         if water_service is not None:
             upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
+            objective[water_production[t]] = float(ro_variable_cost_per_m3) * dt
         upper[discharge[t]] = battery.max_discharge_kw
         upper[diesel_power[t]] = diesel.rated_power_kw if diesel_ok[t] else 0.0
         upper[diesel_on[t]] = 1.0 if diesel_ok[t] else 0.0
@@ -530,6 +537,8 @@ def optimize_dispatch_milp(
             "grid_export": "unsupported",
             "fuel_curve": "constant_l_per_kwh_only",
             "water_energy": "jointly_optimized_when_water_service_and_demand_are_supplied",
+            "ro_variable_cost_per_m3": float(ro_variable_cost_per_m3),
+            "flexible_load_jointly_optimized": False,
             "scope": "single-bus energy balance; one battery and one diesel unit",
         },
         "model_scope": {
