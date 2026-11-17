@@ -27,7 +27,7 @@ Important current limitations:
 
 ### Stage 1 — Reproducible end-to-end optimization demonstration
 
-**Status: in progress in PR #255.**
+**Status: implemented in PR #255; CI passing on the current PR revision.**
 
 - Provide one command-line example using synthetic, clearly labelled input data.
 - Connect canonical multi-signal forecasting to the existing forecast-to-resource optimizer.
@@ -39,21 +39,27 @@ Important current limitations:
 
 ### Stage 2 — Equipment-constraint completeness
 
+**Status: implemented for the deterministic MILP reference path in PR #255; the evolutionary optimizer remains unchanged and continues to reject its unsupported diesel commitment constraints.**
+
 - Extend candidate generation so diesel schedules can satisfy configured ramp-up and ramp-down limits, minimum stable output, minimum up-time and minimum down-time.
 - Include fuel inventory / delivery limits where configured.
 - Preserve battery SOC, charge/discharge power, efficiency and degradation constraints.
 - Reject unsupported or incomplete site configurations explicitly; never silently clip an infeasible request and label it feasible.
 - Add boundary and adversarial tests for every equipment constraint.
+- Current MILP scope includes diesel availability, stable output, ramp limits, commitment, minimum up/down time, constant-rate fuel inventory/deliveries, battery SOC and charge/discharge limits. Cycle-driven battery capacity fade is explicitly rejected until modeled.
 
 **Acceptance gate:** every returned candidate passes the shared physical audit and an independent constraint validator; infeasible configurations fail closed with actionable diagnostics.
 
 ### Stage 3 — Deterministic optimization benchmark
+
+**Status: bounded MILP reference solver and shared-physics replay implemented in PR #255; broader evolutionary-method benchmarking and timeout/infeasibility coverage remain follow-up work.**
 
 - Add a deterministic mathematical-programming reference solver using the already pinned SciPy MILP capability, subject to a formulation review.
 - Start with a clearly bounded model (battery, grid, diesel and essential load); add binary commitment variables only where required.
 - Keep the evolutionary optimizer as a comparison method, not silently replace it.
 - Replay both methods through the same physical simulator and compare objective values, feasibility, runtime and repeatability on identical inputs.
 - Add small instances with independently checkable optima and tests for solver timeout / infeasibility.
+- Current implementation solves a bounded single-bus model with SciPy/HiGHS, reports solver status, optimality scope and solve time, then replays the result through the shared simulator and independent diesel validator.
 
 **Acceptance gate:** deterministic solutions reproduce within numerical tolerance, pass the same physical audit, and outperform or explain trade-offs against transparent baselines on declared benchmark cases. No general global-optimum claim beyond the exact mathematical model and solver status.
 
