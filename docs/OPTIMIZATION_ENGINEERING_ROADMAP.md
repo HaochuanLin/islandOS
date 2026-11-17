@@ -65,7 +65,7 @@ Important current limitations:
 
 ### Stage 4 — Forecast uncertainty and robustness
 
-**Status: first validation primitive implemented in `islandos_core/forecast_uncertainty.py`; this does not yet establish calibrated site uncertainty or joint scenario probabilities.**
+**Status: interval scoring plus a deterministic directional stress-scenario builder implemented in `islandos_core/forecast_uncertainty.py` and `islandos_core/forecast_stress_scenarios.py`. Unit tests cover interval direction, horizon alignment, invalid bounds and explicit absence of joint probabilities. The stress cases are not yet connected to the optimizer's objective loop; site calibration remains unproven.**
 
 - Validate forecast intervals chronologically and measure empirical coverage before treating bounds as uncertainty inputs.
 - Distinguish central forecasts, marginal stress envelopes and genuinely joint scenarios.
@@ -110,7 +110,7 @@ Important current limitations:
 
 ## Current implementation boundary after Stage 4–6 kickoff
 
-- Stage 4 currently scores marginal interval coverage, width and under/over-coverage on aligned held-out observations. It deliberately does not generate joint scenarios or assign probabilities.
+- Stage 4 currently scores marginal interval coverage, width and under/over-coverage on aligned held-out observations, and builds central / renewable-low-demand-high / cost-high / combined deterministic stress cases from caller-supplied intervals. The cases carry no probabilities and are not yet passed through the optimizer for schedule-sensitivity comparison.
 - Stage 5 currently jointly chooses hourly RO production and electrical dispatch in one bounded MILP, with water tank balance, reserve and RO capacity constraints. Independent water replay is required. Flexible-load timing is not yet part of this MILP.
 - Stage 6 currently packages a human-review decision record and verifies its digest. Existing Shadow Mode comparison and SQLite hash-chain evidence are available, but the operator UI and site-specific retrospective evaluation are not complete.
 - No stage authorizes equipment control. All recommendations remain offline and human-reviewed.
