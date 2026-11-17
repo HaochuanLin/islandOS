@@ -249,3 +249,16 @@ def test_milp_rejects_invalid_ro_operating_cost():
             water_demand_m3_per_hour=[0.5] * 4,
             ro_variable_cost_per_m3=-1.0,
         )
+
+def test_milp_rejects_initial_fuel_above_tank_capacity():
+    inputs, config = _case()
+    diesel = replace(
+        config.diesel,
+        fuel_consumption_l_per_kwh=0.25,
+        initial_fuel_liters=6.0,
+        fuel_tank_capacity_liters=5.0,
+    )
+    config = replace(config, diesel=diesel)
+
+    with pytest.raises(OptimizationError, match="initial diesel fuel exceeds configured tank capacity"):
+        optimize_dispatch_milp(inputs, config)
