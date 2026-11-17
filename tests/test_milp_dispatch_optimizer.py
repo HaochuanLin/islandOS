@@ -59,6 +59,7 @@ def test_milp_dispatch_solves_and_passes_independent_and_physical_audits():
 
     assert result["algorithm"] == "scipy_highs_mixed_integer_linear_program"
     assert result["solver_status"] == 0
+    assert result["solve_time_seconds"] >= 0.0
     assert result["optimality_proven_for_declared_milp"] is True
     assert result["physical_audit"]["passed"] is True
     assert result["diesel_constraint_audit"]["passed"] is True
@@ -115,3 +116,32 @@ def test_milp_rejects_unsupported_grid_export_and_nonlinear_fuel_curve():
     )
     with pytest.raises(OptimizationError, match="does not support grid export"):
         optimize_dispatch_milp(inputs, export_config)
+
+
+
+def test_milp_models_constant_rate_fuel_inventory_and_deliveries():
+    inputs, config = _case()
+    diesel = replace(
+        config.diesel,
+        fuel_consumption_l_per_kwh=0.25,
+        initial_fuel_liters=1.0,
+        fuel_tank_capacity_liters=5.0,
+        fuel_price_per_liter=1.0,
+    )
+    config = replace(config, diesel=diesel)
+    inputs = replace(inputs, diesel_fuel_delivery_liters=[4.0, 0.0, 0.0, 0.0])
+
+    result = optimize_dispatch_milp(inputs, config)
+
+    assert result["physical_audit"]["passed"] is True
+    assert result["dispatch"]["summary"]["diesel_fuel_used_liters"] > 0.0
+    assert 0.0 <= result["dispatch"]["summary"]["ending_diesel_fuel_liters"] <= 5.0
+
+
+def test_milp_fails_closed_when_cycle_fade_is_configured_but_not_modelled():
+    inputs, config = _case()
+    aged_battery = replace(config.battery, cycle_life_efc=100.0)
+    config = replace(config, battery=aged_battery)
+
+    with pytest.raises(OptimizationError, match="does not yet model cycle-driven battery capacity fade"):
+        optimize_dispatch_milp(inputs, config)
