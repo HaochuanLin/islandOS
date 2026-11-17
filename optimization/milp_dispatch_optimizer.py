@@ -465,6 +465,29 @@ def optimize_dispatch_milp(
     if any(abs(a - b) > 1e-4 for a, b in zip(replay_battery, battery_setpoints)):
         raise OptimizationError("MILP battery set-points differ from physical replay")
 
+    replay_summary = dispatch["summary"]
+    ro_operating_cost = (
+        sum(water_production_rates) * dt * float(ro_variable_cost_per_m3)
+        if water_production_rates is not None else 0.0
+    )
+    objective_components = {
+        "grid_energy_cost": float(replay_summary["grid_energy_cost"]),
+        "diesel_variable_energy_cost": float(replay_summary["diesel_energy_cost"]),
+        "diesel_fuel_cost": float(replay_summary["diesel_fuel_cost"]),
+        "diesel_start_cost": float(replay_summary["diesel_start_cost"]),
+        "diesel_stop_cost": float(replay_summary["diesel_stop_cost"]),
+        "battery_throughput_cost": float(replay_summary["battery_degradation_cost"]),
+        "grid_demand_charge": float(replay_summary["grid_demand_charge"]),
+        "ro_variable_operating_cost": float(ro_operating_cost),
+        "curtailment_tie_breaker": float(sum(float(solution[curtail[t]]) for t in range(n)) * 1e-8 * dt),
+    }
+    reconstructed_objective = sum(objective_components.values())
+    if abs(reconstructed_objective - float(result.fun)) > 1e-4 * max(1.0, abs(float(result.fun))):
+        raise OptimizationError(
+            "MILP objective does not reconcile with replayed cost components: "
+            f"model={float(result.fun):.8g}, replay={reconstructed_objective:.8g}"
+        )
+
     baseline_inputs = inputs
     baseline_water_service = None
     if water_service is not None:
@@ -512,6 +535,12 @@ def optimize_dispatch_milp(
         "optimality_proven_for_declared_milp": bool(result.status == 0),
         "mip_gap": float(getattr(result, "mip_gap", np.nan)),
         "objective_value": float(result.fun),
+        "objective_components": objective_components,
+        "objective_reconciliation": {
+            "reconstructed_from_physical_replay": float(reconstructed_objective),
+            "absolute_difference": abs(reconstructed_objective - float(result.fun)),
+            "passed": True,
+        },
         "battery_power_setpoint_kw": battery_setpoints,
         "battery_soc_kwh": [float(solution[soc[t]]) for t in range(n + 1)],
         "diesel_commitment_schedule": commitments,
