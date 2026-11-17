@@ -175,3 +175,15 @@ def test_report_is_json_serializable_without_nan_or_infinity():
     report = assess()
     encoded = json.dumps(report, allow_nan=False)
     assert '"net_customer_value": null' in encoded
+
+
+def test_equipment_audit_detects_diesel_fuel_inventory_mismatch():
+    inputs, config = build_synthetic_case()
+    paired = compare_energy_policies(inputs, config)
+    broken = dict(paired["battery_first"])
+    broken_rows = [dict(row) for row in broken["rows"]]
+    broken_rows[0]["diesel_fuel_remaining_liters"] += 1.0
+    broken["rows"] = broken_rows
+    result = _audit_dispatch(broken, config, "tampered_fuel")
+    assert result["passed"] is False
+    assert any("fuel inventory balance" in item for item in result["violations"])
