@@ -206,3 +206,28 @@ def test_milp_requires_water_spec_and_demand_together():
     )
     with pytest.raises(OptimizationError, match="must be supplied together"):
         optimize_dispatch_milp(inputs, config, water_service=water)
+
+
+
+def test_milp_is_repeatable_and_compares_baselines_on_equivalent_water_service():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=1.0,
+        ro_capacity_m3_per_hour=2.0,
+        tank_capacity_m3=4.0,
+        initial_inventory_m3=1.0,
+        reserve_m3=0.5,
+    )
+    kwargs = {
+        "water_service": water,
+        "water_demand_m3_per_hour": [0.5, 0.5, 0.5, 0.5],
+    }
+    first = optimize_dispatch_milp(inputs, config, **kwargs)
+    second = optimize_dispatch_milp(inputs, config, **kwargs)
+
+    assert first["objective_value"] == pytest.approx(second["objective_value"], abs=1e-7)
+    assert first["diesel_power_setpoint_kw"] == pytest.approx(second["diesel_power_setpoint_kw"], abs=1e-7)
+    for policy in ("battery_first", "grid_first"):
+        baseline = first["baseline_comparison"][policy]
+        assert "same just-in-time RO production profile" in baseline["comparison_note"]
+        assert baseline["water_service"]["total_demand_m3"] == pytest.approx(2.0)
