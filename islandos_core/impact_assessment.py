@@ -48,6 +48,8 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
 
     violations: list[str] = []
     dt = _finite_number(dispatch.get("dt_hours"), f"{label}.dt_hours", minimum=1e-12)
+    if not math.isclose(dt, config.dt_hours, rel_tol=0.0, abs_tol=1e-12):
+        raise ImpactAssessmentError(f"{label} dispatch timestep does not match the equipment configuration")
     tolerance = 1e-6
     previous_diesel_kw = 0.0
     previous_fuel_remaining = (
@@ -56,6 +58,8 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
     )
     required_row_fields = (
         "energy_balance_residual_kw",
+        "pv_generation_kw",
+        "wind_generation_kw",
         "grid_import_kw",
         "diesel_generation_kw",
         "renewable_curtailed_kw",
@@ -88,6 +92,10 @@ def _audit_dispatch(dispatch: Mapping, config: EnergySystemConfig, label: str) -
             if values[field] < -tolerance:
                 violations.append(f"row {index}: {field} is negative")
 
+        if values["pv_generation_kw"] > config.pv_rated_kw + tolerance:
+            violations.append(f"row {index}: PV output exceeds configured rating")
+        if values["wind_generation_kw"] > config.wind_rated_kw + tolerance:
+            violations.append(f"row {index}: wind output exceeds configured rating")
         if values["grid_import_kw"] > config.grid_import_limit_kw + tolerance:
             violations.append(f"row {index}: grid import exceeds configured limit")
         if row.get("grid_available") is False and values["grid_import_kw"] > tolerance:
