@@ -39,7 +39,7 @@ Important current limitations:
 
 ### Stage 2 — Equipment-constraint completeness
 
-**Status: bounded implementation delivered in the deterministic MILP reference path. The evolutionary optimizer remains unchanged and continues to reject its unsupported diesel commitment constraints. The newest independent water audit and regression additions still require CI confirmation.**
+**Status: bounded implementation delivered in the deterministic MILP reference path. The evolutionary optimizer remains unchanged and continues to reject its unsupported diesel commitment constraints. Initial fuel above tank capacity now fails closed with a regression test. The latest boundary-test additions still require a fresh full CI run.**
 
 - Extend candidate generation so diesel schedules can satisfy configured ramp-up and ramp-down limits, minimum stable output, minimum up-time and minimum down-time.
 - Include fuel inventory / delivery limits where configured.
