@@ -9,6 +9,7 @@ diesel fuel curves, or battery capacity fade.
 from __future__ import annotations
 
 import math
+from time import perf_counter
 from typing import Sequence
 
 import numpy as np
@@ -105,6 +106,11 @@ def optimize_dispatch_milp(
         raise OptimizationError("MILP dispatch requires configured battery and diesel assets")
     if config.grid_export_limit_kw > 0:
         raise OptimizationError("MILP reference solver currently does not support grid export")
+    if config.battery.cycle_life_efc is not None:
+        raise OptimizationError(
+            "MILP reference solver does not yet model cycle-driven battery capacity fade; "
+            "use a battery configuration without cycle_life_efc"
+        )
     if config.diesel.fuel_curve_liters_per_hour is not None:
         raise OptimizationError("MILP reference solver does not support nonlinear diesel fuel curves")
     if inputs.grid_available is None or inputs.diesel_available is None:
@@ -298,6 +304,7 @@ def optimize_dispatch_milp(
     for i, coefficients in enumerate(rows):
         for j, value in coefficients.items():
             matrix[i, j] = value
+    solve_started = perf_counter()
     result = milp(
         c=objective,
         integrality=integrality,
@@ -305,6 +312,7 @@ def optimize_dispatch_milp(
         constraints=LinearConstraint(matrix.tocsr(), np.asarray(row_l), np.asarray(row_u)),
         options={"time_limit": float(time_limit_seconds), "mip_rel_gap": float(mip_relative_gap)},
     )
+    solve_time_seconds = perf_counter() - solve_started
     if result.x is None:
         raise OptimizationError(f"MILP did not produce a feasible schedule: {result.message}")
     solution = result.x
@@ -365,6 +373,7 @@ def optimize_dispatch_milp(
         "algorithm": "scipy_highs_mixed_integer_linear_program",
         "solver_status": int(result.status),
         "solver_message": str(result.message),
+        "solve_time_seconds": float(solve_time_seconds),
         "optimality_proven_for_declared_milp": bool(result.status == 0),
         "mip_gap": float(getattr(result, "mip_gap", np.nan)),
         "objective_value": float(result.fun),
