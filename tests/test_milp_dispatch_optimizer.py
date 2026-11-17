@@ -64,6 +64,11 @@ def test_milp_dispatch_solves_and_passes_independent_and_physical_audits():
     assert result["optimality_proven_for_declared_milp"] is True
     assert result["physical_audit"]["passed"] is True
     assert result["diesel_constraint_audit"]["passed"] is True
+    assert result["objective_reconciliation"]["passed"] is True
+    assert result["objective_reconciliation"]["absolute_difference"] <= 1e-4
+    assert sum(result["objective_components"].values()) == pytest.approx(
+        result["objective_value"], abs=1e-4
+    )
     assert result["dispatch"]["summary"]["unmet_load_kwh"] == pytest.approx(0.0)
     assert result["diesel_commitment_schedule"][1:3] == [True, True]
     assert result["model_scope"]["site_validation"] is False
