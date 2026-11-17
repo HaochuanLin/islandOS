@@ -8,13 +8,13 @@ from islandos_core.forecast_uncertainty import evaluate_prediction_interval
 def test_interval_reports_empirical_coverage_and_width_without_probability_claim():
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     result = evaluate_prediction_interval(
-        [1, 2, 3, 4], [0, 1, 2, 3], [2, 3, 3.5, 5],
+        [1, 2, 3, 6], [0, 1, 2, 3], [2, 3, 3.5, 5],
         nominal_coverage=0.9,
         timestamps=[start + timedelta(hours=i) for i in range(4)],
         minimum_samples=4,
     )
     assert result["empirical_coverage"] == pytest.approx(0.75)
-    assert result["mean_interval_width"] == pytest.approx(1.625)
+    assert result["mean_interval_width"] == pytest.approx(1.875)
     assert result["calibration_evidence"] == "sufficient_sample_screen"
     assert result["joint_scenario_probabilities_available"] is False
     assert result["calibrated_uncertainty_claim_authorized"] is False
