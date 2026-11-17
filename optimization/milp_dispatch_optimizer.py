@@ -455,14 +455,42 @@ def optimize_dispatch_milp(
     if any(abs(a - b) > 1e-4 for a, b in zip(replay_battery, battery_setpoints)):
         raise OptimizationError("MILP battery set-points differ from physical replay")
 
+    baseline_inputs = inputs
+    baseline_water_service = None
+    if water_service is not None:
+        baseline_water = build_ro_energy_load(
+            water_demand, spec=water_service, dt_hours=dt,
+        )
+        baseline_water_service = {
+            "production_m3": list(baseline_water.production_m3),
+            "ro_power_kw": list(baseline_water.ro_power_kw),
+            "total_production_m3": baseline_water.total_production_m3,
+            "total_demand_m3": baseline_water.total_demand_m3,
+            "policy": "just_in_time",
+        }
+        baseline_inputs = EnergySystemInputs(
+            pv_generation_kw=inputs.pv_generation_kw,
+            wind_generation_kw=inputs.wind_generation_kw,
+            load_kw=[base + ro for base, ro in zip(load, baseline_water.ro_power_kw)],
+            grid_price_per_kwh=inputs.grid_price_per_kwh,
+            grid_available=inputs.grid_available,
+            diesel_available=inputs.diesel_available,
+            diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
+        )
     baseline = {}
     for policy in ("battery_first", "grid_first"):
         try:
-            candidate = dispatch_energy_system(inputs, config, policy=policy)
+            candidate = dispatch_energy_system(baseline_inputs, config, policy=policy)
+            baseline_audit = _audit(candidate)
             baseline[policy] = {
                 "summary": candidate["summary"],
-                "audit": _audit(candidate),
-                "feasible": _audit(candidate)["passed"] and candidate["summary"]["unmet_load_kwh"] <= 1e-6,
+                "audit": baseline_audit,
+                "feasible": baseline_audit["passed"] and candidate["summary"]["unmet_load_kwh"] <= 1e-6,
+                "water_service": baseline_water_service,
+                "comparison_note": (
+                    "same just-in-time RO production profile and water demand"
+                    if water_service is not None else "energy-only baseline"
+                ),
             }
         except (ValueError, RuntimeError) as exc:
             baseline[policy] = {"feasible": False, "error": str(exc)}
