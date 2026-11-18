@@ -187,3 +187,103 @@ def test_equipment_audit_detects_diesel_fuel_inventory_mismatch():
     result = _audit_dispatch(broken, config, "tampered_fuel")
     assert result["passed"] is False
     assert any("fuel inventory balance" in item for item in result["violations"])
+
+
+def test_export_revenue_is_allowed_to_make_modeled_energy_cost_negative():
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[20.0, 20.0],
+        wind_generation_kw=[0.0, 0.0],
+        load_kw=[0.0, 0.0],
+        grid_price_per_kwh=[0.10, 0.10],
+        grid_available=[True, True],
+        grid_export_price_per_kwh=[0.50, 0.50],
+        grid_export_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=20.0,
+        wind_rated_kw=0.0,
+        grid_import_limit_kw=0.0,
+        grid_export_limit_kw=20.0,
+    )
+    report = assess_energy_policy_impact(
+        inputs, config, currency="USD", evaluation_period="2-hour export test",
+        data_provenance="synthetic_test_fixture",
+    )
+    assert report["equipment_constraint_audit"]["passed"] is True
+    assert report["baseline_metrics"]["estimated_energy_cost"] < 0
+    assert report["candidate_metrics"]["estimated_energy_cost"] < 0
+    assert report["gross_operating_benefit"]["value"] == 0.0
+
+
+def test_diesel_without_fuel_model_omits_fuel_litres():
+    from islandos_core.energy_system import DieselSpec
+
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0.0, 0.0],
+        wind_generation_kw=[0.0, 0.0],
+        load_kw=[5.0, 5.0],
+        grid_price_per_kwh=[0.10, 0.10],
+        grid_available=[False, False],
+        diesel_available=[True, True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0.0,
+        wind_rated_kw=0.0,
+        grid_import_limit_kw=0.0,
+        diesel=DieselSpec(rated_power_kw=10.0, variable_cost_per_kwh=0.2),
+    )
+    report = assess_energy_policy_impact(
+        inputs, config, currency="USD", evaluation_period="2-hour diesel test",
+        data_provenance="synthetic_test_fixture",
+    )
+    assert report["equipment_constraint_audit"]["passed"] is True
+    assert report["baseline_metrics"]["diesel_generation_kwh"] > 0
+    assert report["baseline_metrics"]["diesel_fuel_used_liters"] is None
+    assert report["candidate_metrics"]["diesel_fuel_used_liters"] is None
+
+
+def test_zero_critical_load_reports_reliability_as_not_applicable():
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0.0, 0.0],
+        wind_generation_kw=[0.0, 0.0],
+        load_kw=[0.0, 0.0],
+        grid_price_per_kwh=[0.10, 0.10],
+        grid_available=[True, True],
+        critical_load_kw=[0.0, 0.0],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0.0,
+        wind_rated_kw=0.0,
+        grid_import_limit_kw=0.0,
+    )
+    report = assess_energy_policy_impact(
+        inputs, config, currency="USD", evaluation_period="2-hour zero-critical test",
+        data_provenance="synthetic_test_fixture",
+    )
+    assert report["equipment_constraint_audit"]["passed"] is True
+    assert report["baseline_metrics"]["critical_load_energy_kwh"] == 0.0
+    assert report["baseline_metrics"]["critical_service_reliability_fraction"] is None
+    assert report["candidate_metrics"]["critical_service_reliability_fraction"] is None
+
+
+def test_equipment_audit_detects_grid_import_above_configured_boundary():
+    inputs = EnergySystemInputs(
+        pv_generation_kw=[0.0],
+        wind_generation_kw=[0.0],
+        load_kw=[5.0],
+        grid_price_per_kwh=[0.10],
+        grid_available=[True],
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=0.0,
+        wind_rated_kw=0.0,
+        grid_import_limit_kw=5.0,
+    )
+    paired = compare_energy_policies(inputs, config)
+    broken = dict(paired["grid_first"])
+    broken_rows = [dict(row) for row in broken["rows"]]
+    broken_rows[0]["grid_import_kw"] = 5.1
+    broken["rows"] = broken_rows
+    result = _audit_dispatch(broken, config, "tampered_grid")
+    assert result["passed"] is False
+    assert any("grid import exceeds configured limit" in item for item in result["violations"])
