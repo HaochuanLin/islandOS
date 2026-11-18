@@ -1,5 +1,6 @@
 """Tests for strict Open Power System Data ingestion."""
 import csv
+import hashlib
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -18,11 +19,11 @@ class TestOPSDAdapter(unittest.TestCase):
             "AT_price_day_ahead",
         ]
 
-    def write_csv(self, rows):
+    def write_csv(self, rows, extra_columns=()):
         temp = tempfile.NamedTemporaryFile(mode="w", newline="", encoding="utf-8",
                                            suffix=".csv", delete=False)
         self.addCleanup(lambda: Path(temp.name).unlink(missing_ok=True))
-        writer = csv.DictWriter(temp, fieldnames=self.columns)
+        writer = csv.DictWriter(temp, fieldnames=self.columns + list(extra_columns))
         writer.writeheader()
         writer.writerows(rows)
         temp.close()
@@ -52,6 +53,27 @@ class TestOPSDAdapter(unittest.TestCase):
         self.assertEqual(result.source_version, "2020-10-06")
         self.assertEqual(len(result.data_sha256), 64)
         self.assertLess(result.history["price"][0], 0.0)
+
+    def test_records_exact_source_file_hash_and_normalized_history_hash(self):
+        path = self.write_csv(self.make_rows(12))
+        expected_file_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+        result = load_opsd_singleindex_csv(path, "AT")
+
+        self.assertEqual(result.source_file_sha256, expected_file_hash)
+        self.assertEqual(result.selected_history_sha256, result.data_sha256)
+        self.assertNotEqual(result.source_file_sha256, result.selected_history_sha256)
+
+    def test_irrelevant_source_columns_change_only_the_raw_file_hash(self):
+        rows = self.make_rows(12)
+        original_path = self.write_csv(rows)
+        extended_path = self.write_csv(rows, extra_columns=("UNUSED_METADATA",))
+
+        original = load_opsd_singleindex_csv(original_path, "AT")
+        extended = load_opsd_singleindex_csv(extended_path, "AT")
+
+        self.assertNotEqual(original.source_file_sha256, extended.source_file_sha256)
+        self.assertEqual(original.selected_history_sha256, extended.selected_history_sha256)
 
     def test_supports_selected_signal_subset_and_utc_window(self):
         path = self.write_csv(self.make_rows())
