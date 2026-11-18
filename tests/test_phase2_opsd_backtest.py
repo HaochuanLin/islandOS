@@ -22,6 +22,7 @@ def _dataset(count=120):
             "price": tuple(-10.0 if index % 24 < 3 else 40.0 for index in range(count)),
         },
         units={"load": "MW", "solar": "MW", "wind": "MW", "price": "EUR/MWh"},
+        source_file_sha256="b" * 64,
         data_sha256="a" * 64,
     )
 
@@ -76,7 +77,8 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     )
 
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
-    assert report["source_data_sha256"] == "a" * 64
+    assert report["source_file_sha256"] == "b" * 64
+    assert report["selected_history_sha256"] == "a" * 64
     assert len(report["canonical_bundle_history_sha256"]) == 64
     assert report["holdout_window"] == {
         "method": "single_final_chronological_holdout",
