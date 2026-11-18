@@ -23,6 +23,7 @@ def _dataset(count=120):
         },
         units={"load": "MW", "solar": "MW", "wind": "MW", "price": "EUR/MWh"},
         source_file_sha256="b" * 64,
+        selected_history_sha256="a" * 64,
         data_sha256="a" * 64,
     )
 
