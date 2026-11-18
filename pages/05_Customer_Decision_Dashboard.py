@@ -18,6 +18,7 @@ from islandos_core.session_dataset import clear_session_dataset, get_session_dat
 from islandos_core.forecast_engine import forecast_signals
 from islandos_core.investment_economics import evaluate_investment_economics
 from islandos_core.impact_assessment import assess_energy_policy_impact
+from islandos_core.operator_decision import build_operator_decision_record
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
     build_service_equivalent_economics,
@@ -372,6 +373,58 @@ try:
         cashflow_frame = pd.DataFrame(investment.annual_cashflows)
         st.dataframe(cashflow_frame, use_container_width=True, hide_index=True)
     investment_report = investment.to_dict()
+    selected_candidate = candidates[recommended]
+    operator_result = dict(result)
+    operator_result.update({
+        "algorithm": "bounded_two_policy_pareto_screening",
+        "dispatch": selected_candidate["dispatch"],
+        "physical_audit": selected_candidate["audit"],
+        "baseline_comparison": {
+            policy: item["summary"] for policy, item in candidates.items()
+        },
+        "customer_impact_assessment": paired_impact,
+        "grid_import_model_kw": [
+            float(row["grid_import_kw"])
+            for row in selected_candidate["dispatch"]["rows"]
+        ],
+        "diesel_commitment_schedule": [
+            bool(row.get("diesel_committed", False))
+            for row in selected_candidate["dispatch"]["rows"]
+        ],
+        "diesel_power_setpoint_kw": [
+            float(row["diesel_generation_kw"])
+            for row in selected_candidate["dispatch"]["rows"]
+        ],
+    })
+    operator_record = build_operator_decision_record(
+        operator_result,
+        site_ref="unregistered-dashboard-session",
+        recommendation_id=(
+            f"dashboard-{bundle.input_history_sha256[:12]}-{recommended}"
+        ),
+        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        data_provenance=source_label,
+        input_refs=[
+            f"history-sha256:{bundle.input_history_sha256}",
+            *([f"source-file-sha256:{source_sha256}"] if source_sha256 else []),
+        ],
+        objective_weights={
+            "cost": float(weights.cost),
+            "reliability": float(weights.reliability),
+            "curtailment": float(weights.curtailment),
+            "battery_wear": float(weights.battery_wear),
+        },
+        operating_constraints={
+            "pv_rated_kw": float(config.pv_rated_kw),
+            "wind_rated_kw": float(config.wind_rated_kw),
+            "grid_import_limit_kw": float(config.grid_import_limit_kw),
+            "battery_configured": config.battery is not None,
+            "battery_capacity_kwh": (
+                float(config.battery.capacity_kwh) if config.battery is not None else None
+            ),
+            "device_write_authorized": False,
+        },
+    )
     investment_report["assumptions"] = {
         "baseline_annual_energy_cost": baseline_annual_bill,
         "proposed_annual_energy_cost": proposed_annual_bill,
@@ -414,9 +467,20 @@ try:
         "reference_summary": baseline,
         "forecast_stress_scenarios": stress_rows,
         "paired_customer_impact": paired_impact,
+        "operator_decision_record": operator_record,
         "investment_economics": investment_report,
         "scope": "offline screening; not measured savings or equipment control",
     }
+    st.download_button(
+        "Download human-review decision record (JSON)",
+        data=json.dumps(operator_record, indent=2, default=str).encode("utf-8"),
+        file_name="islandos_operator_decision_record.json",
+        mime="application/json",
+    )
+    st.caption(
+        "The decision record preserves the selected offline dispatch, supported physical audit, "
+        "paired customer-impact evidence and input hashes. It is advisory-only and requires human review."
+    )
     st.download_button(
         "Download decision report (JSON)",
         data=json.dumps(report, indent=2, default=str).encode("utf-8"),
