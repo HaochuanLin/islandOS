@@ -66,6 +66,8 @@ def test_manifest_bound_forecast_dispatch_produces_auditable_run_result():
     assert result["project_id"] == "project-integration"
     assert result["run_id"] == "run-integration-001"
     assert result["manifest_sha256"] == manifest.manifest_sha256
+    assert set(result["forecast_results"]) == set(units)
+    assert set(result["forecast"]["selected_models"]) == set(result["forecast_results"])
     assert len(result["forecast"]["bundle_sha256"]) == 64
     assert set(result["forecast"]["selected_models"]) == set(units)
     assert result["optimization"]["generic_prediction_handoff"]["device_write_authorized"] is False
