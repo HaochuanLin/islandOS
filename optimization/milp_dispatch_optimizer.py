@@ -333,7 +333,6 @@ def optimize_dispatch_milp(
         diesel_available=inputs.diesel_available,
         diesel_fuel_delivery_liters=inputs.diesel_fuel_delivery_liters,
         battery_power_setpoint_kw=battery_setpoints,
-        grid_import_power_setpoint_kw=[float(solution[grid[t]]) for t in range(n)],
         diesel_commitment_schedule=commitments,
         diesel_power_setpoint_kw=diesel_outputs,
     )
