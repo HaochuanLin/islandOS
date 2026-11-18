@@ -9,7 +9,6 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 import hashlib
 import json
-import math
 from typing import Any
 
 from .canonical_run import CanonicalRunManifest, verify_run_manifest
@@ -83,6 +82,14 @@ def run_forecast_dispatch(
         raise ValueError("manifest forecast horizon is invalid")
     if len(grid_available) != horizon or len(diesel_available) != horizon:
         raise ValueError("grid and diesel availability arrays must match the manifest forecast horizon")
+    optimizer_id = manifest_value["optimizer"]["id"]
+    if optimizer_id != "prediction_resource_dispatch":
+        raise ValueError("manifest optimizer.id must be 'prediction_resource_dispatch'")
+    scenario = manifest_value["scenario_assumptions"]
+    if scenario.get("grid_available") != list(grid_available):
+        raise ValueError("grid availability must exactly match the manifest scenario_assumptions")
+    if scenario.get("diesel_available") != list(diesel_available):
+        raise ValueError("diesel availability must exactly match the manifest scenario_assumptions")
     price_unit = required_signals.get("tariff_per_kwh")
     if not isinstance(price_unit, str) or not price_unit.strip():
         raise ValueError("the current resource dispatch workflow requires tariff_per_kwh with an explicit unit")
@@ -146,6 +153,8 @@ def run_forecast_dispatch(
         "manifest_sha256": manifest_value["manifest_sha256"],
         "forecast_bundle_sha256": bundle.input_history_sha256,
         "selected_models": selected_models,
+        "grid_available": list(grid_available),
+        "diesel_available": list(diesel_available),
         "forecast_history_digests": {
             key: value.input_history_sha256 for key, value in sorted(bundle.results.items())
         },
@@ -173,6 +182,8 @@ def run_forecast_dispatch(
             "horizon_hours": horizon,
             "selected_models": selected_models,
             "history_digests": evidence["forecast_history_digests"],
+            "grid_available": list(grid_available),
+            "diesel_available": list(diesel_available),
             "limitations": list(bundle.limitations),
             "backtest_horizon": backtest_horizon,
             "season_length": season_length,
