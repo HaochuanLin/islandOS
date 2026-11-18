@@ -179,6 +179,7 @@ try:
     )
     result = planning_run["optimization"]
     handoff = result["generic_prediction_handoff"]
+    st.caption(f"Canonical run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
     st.subheader("Prediction engine")
     model_rows = []
     for canonical_id, forecast in predictions.items():
@@ -247,6 +248,9 @@ try:
     with st.expander("Decision trace, model provenance and limitations"):
         st.write({
             "source_file_sha256": source_hash,
+            "canonical_run_manifest": planning_run["manifest"],
+            "canonical_run_forecast_evidence": planning_run["forecast"],
+            "evidence_sha256": planning_run["evidence_sha256"],
             "forecast_handoff": handoff,
             "forecast_scenario_scope": result.get("forecast_scenario_scope"),
             "decision_scope": result.get("decision_scope"),
