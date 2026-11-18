@@ -52,10 +52,22 @@ jobs:
       - name: Audit dependency file and emit CycloneDX SBOM
         run: |
           mkdir -p build/sbom
-          pip-audit --requirement "${{ matrix.requirements }}" \
-            --timeout 60 \
-            --format cyclonedx-json \
-            --output "build/sbom/${{ matrix.requirements }}.cdx.json"
+          # PyPI occasionally stalls while serving advisory metadata. Retry
+          # transient network failures, but preserve a hard failure after 3 attempts.
+          for attempt in 1 2 3; do
+            if pip-audit --requirement "${{ matrix.requirements }}" \
+              --timeout 120 \
+              --format cyclonedx-json \
+              --output "build/sbom/${{ matrix.requirements }}.cdx.json"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "pip-audit attempt $attempt failed; retrying in 15 seconds"
+              sleep 15
+            fi
+          done
+          echo "pip-audit failed after 3 attempts"
+          exit 1
       - name: Upload Python dependency SBOM and audit report
         if: always()
         uses: actions/upload-artifact@v4
