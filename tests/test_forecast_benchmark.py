@@ -14,7 +14,8 @@ def _fixture():
         for i in range(3)
     ]
     actuals = {start + timedelta(hours=i): 9.0 + i for i in range(3)}
-    baseline = {start + timedelta(hours=i): 8.0 + i for i in range(3)}
+    # Candidate MAE is 1.0; baseline MAE is 2.0, so expected skill is 50%.
+    baseline = {start + timedelta(hours=i): 7.0 + i for i in range(3)}
     return points, actuals, baseline
 
 
