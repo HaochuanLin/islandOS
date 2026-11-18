@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -117,7 +117,7 @@ def create_run_manifest(
     for name, value in identifiers.items():
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{name} must be a non-empty string")
-    if source_type not in _ALLOWED_SOURCE_TYPES:
+    if not isinstance(source_type, str) or source_type not in _ALLOWED_SOURCE_TYPES:
         raise ValueError("source_type is not a supported provenance category")
     if isinstance(forecast_horizon_hours, bool) or not isinstance(forecast_horizon_hours, int) or forecast_horizon_hours < 1:
         raise ValueError("forecast_horizon_hours must be a positive integer")
@@ -130,6 +130,12 @@ def create_run_manifest(
         if not isinstance(unit, str) or not unit.strip():
             raise ValueError(f"required signal {signal_id!r} must have an explicit unit")
         signals[signal_id] = unit
+    if not isinstance(optimizer_settings, Mapping):
+        raise ValueError("optimizer_settings must be a mapping")
+    if not isinstance(scenario_assumptions, Mapping):
+        raise ValueError("scenario_assumptions must be a mapping")
+    if forecast_model_ids is not None and not isinstance(forecast_model_ids, Mapping):
+        raise ValueError("forecast_model_ids must be a mapping when provided")
     models = dict(forecast_model_ids or {})
     if any(key not in signals for key in models):
         raise ValueError("forecast_model_ids may only reference required signals")
@@ -169,10 +175,6 @@ def create_run_manifest(
             "command_generated": False,
         },
     }
-    if not isinstance(optimizer_settings, Mapping):
-        raise ValueError("optimizer_settings must be a mapping")
-    if not isinstance(scenario_assumptions, Mapping):
-        raise ValueError("scenario_assumptions must be a mapping")
     canonical = _canonical_json(payload)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return CanonicalRunManifest(canonical_payload=canonical, manifest_sha256=digest)
