@@ -47,6 +47,7 @@ def _inputs():
         optimizer_version="current",
         optimizer_settings={"population_size": 4, "generations": 1, "seed": 31},
         scenario_assumptions={"grid_available": [True] * 6, "diesel_available": [True] * 6},
+        forecast_settings={"backtest_horizon": 6, "season_length": 24, "confidence_level": 0.90},
     )
     return timestamps, history, units, config, manifest
 
@@ -61,8 +62,6 @@ def test_manifest_bound_forecast_dispatch_produces_auditable_run_result():
         energy_system_config=config,
         grid_available=[True] * 6,
         diesel_available=[True] * 6,
-        backtest_horizon=6,
-        season_length=24,
     )
     assert result["project_id"] == "project-integration"
     assert result["run_id"] == "run-integration-001"
