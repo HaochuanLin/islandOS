@@ -18,7 +18,10 @@ from islandos_core.session_dataset import clear_session_dataset, get_session_dat
 from islandos_core.forecast_engine import forecast_signals
 from islandos_core.investment_economics import evaluate_investment_economics
 from islandos_core.impact_assessment import assess_energy_policy_impact
-from islandos_core.operator_decision import build_operator_decision_record
+from islandos_core.operator_decision import (
+    build_operator_decision_record,
+    verify_operator_decision_record,
+)
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
     build_service_equivalent_economics,
@@ -424,6 +427,18 @@ try:
             ),
             "device_write_authorized": False,
         },
+    )
+    operator_record_verification = verify_operator_decision_record(operator_record)
+    if not operator_record_verification["valid"]:
+        st.error(
+            "Operator decision record integrity check failed: "
+            + "; ".join(operator_record_verification["errors"])
+        )
+        st.stop()
+    st.subheader("Operator decision record")
+    st.caption(
+        f"Integrity verified · SHA-256 {operator_record['record_sha256']} · "
+        "human approval pending · device writes disabled"
     )
     investment_report["assumptions"] = {
         "baseline_annual_energy_cost": baseline_annual_bill,
