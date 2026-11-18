@@ -272,3 +272,14 @@ This dated amendment supersedes the earlier Stage 8 and Stage 9 status labels ab
 - Stage 8 implementation remains in Draft PR #260.
 - Stage 9 foundation documents are in the separate Draft branch `commercial/stage-9-market-sizing`, based on the Stage 7 documentation branch. It is not merged into main and does not imply Stage 7 interviews have occurred.
 - No commercial track change is promoted to the hosted Streamlit application or mainline capability by these draft branches.
+
+
+## Verification refresh — 2026-11-18 (latest Stage 8 head)
+
+The latest Stage 8 PR head `a580720c93503fa251c54331c4b7f4b816a01d21` has now completed GitHub Actions:
+- Python unit tests: **1,043 passed, 2 skipped, 1 failed, 574 subtests passed**.
+- The sole failure remains `tests/test_milp_dispatch_optimizer.py::test_milp_dispatch_solves_and_passes_independent_and_physical_audits`, caused by `optimization/milp_dispatch_optimizer.py` passing unsupported `grid_import_power_setpoint_kw` to `EnergySystemInputs`.
+- Dependency audit, container web smoke test, RO simulation tests, Nan'ao hybrid scenario validation and Windows telemetry gateway build all passed on this head.
+- The four new Stage 8 edge-case tests are included in this run; the full suite still has the one unrelated Engineering Stage 3 failure.
+
+**Revised Stage 8 status:** all checks other than the existing MILP integration failure pass on the latest head; Stage 8 implementation tests are included in the 1,043 passing tests. The repository-wide acceptance gate remains BLOCKED until the Engineering Stage 3 defect is fixed and the complete suite passes. Stage 8 remains Draft and unmerged.
