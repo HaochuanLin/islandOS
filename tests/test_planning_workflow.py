@@ -46,7 +46,7 @@ def _inputs():
         optimizer_id="prediction_resource_dispatch",
         optimizer_version="current",
         optimizer_settings={"population_size": 4, "generations": 1, "seed": 31},
-        scenario_assumptions={"grid_available": True, "diesel_available": True},
+        scenario_assumptions={"grid_available": [True] * 6, "diesel_available": [True] * 6},
     )
     return timestamps, history, units, config, manifest
 
