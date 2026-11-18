@@ -63,7 +63,7 @@ bundle = forecast_signals(
     horizon=24,
     non_negative_signals=("load", "solar", "wind"),
 )
-print(dataset.source_version, dataset.data_sha256)
+print(dataset.source_version, dataset.source_file_sha256, dataset.selected_history_sha256)
 ```
 
 ## Reproducible command-line evaluation
