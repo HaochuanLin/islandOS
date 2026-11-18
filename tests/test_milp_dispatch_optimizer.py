@@ -8,6 +8,7 @@ from islandos_core.energy_system import (
     EnergySystemInputs,
 )
 from optimization.energy_system_optimizer import OptimizationError
+from islandos_core.water_resource_adapter import WaterServiceSpec
 from optimization.milp_dispatch_optimizer import (
     _validate_diesel_schedule,
     optimize_dispatch_milp,
@@ -59,15 +60,16 @@ def test_milp_dispatch_solves_and_passes_independent_and_physical_audits():
 
     assert result["algorithm"] == "scipy_highs_mixed_integer_linear_program"
     assert result["solver_status"] == 0
+    assert result["solve_time_seconds"] >= 0.0
     assert result["optimality_proven_for_declared_milp"] is True
     assert result["physical_audit"]["passed"] is True
     assert result["diesel_constraint_audit"]["passed"] is True
-    assert result["dispatch"]["summary"]["unmet_load_kwh"] == pytest.approx(0.0)
-    assert result["evolutionary_comparison"]["status"] == "not_comparable"
-    assert result["baseline_comparison"]["grid_first"]["cost_comparison_valid"] is True
-    assert result["grid_import_model_kw"] == pytest.approx(
-        [row["grid_import_kw"] for row in result["dispatch"]["rows"]]
+    assert result["objective_reconciliation"]["passed"] is True
+    assert result["objective_reconciliation"]["absolute_difference"] <= 1e-4
+    assert sum(result["objective_components"].values()) == pytest.approx(
+        result["objective_value"], abs=1e-4
     )
+    assert result["dispatch"]["summary"]["unmet_load_kwh"] == pytest.approx(0.0)
     assert result["diesel_commitment_schedule"][1:3] == [True, True]
     assert result["model_scope"]["site_validation"] is False
     assert result["model_scope"]["device_write_authorized"] is False
@@ -120,3 +122,145 @@ def test_milp_rejects_unsupported_grid_export_and_nonlinear_fuel_curve():
     )
     with pytest.raises(OptimizationError, match="does not support grid export"):
         optimize_dispatch_milp(inputs, export_config)
+
+
+
+def test_milp_models_constant_rate_fuel_inventory_and_deliveries():
+    inputs, config = _case()
+    diesel = replace(
+        config.diesel,
+        fuel_consumption_l_per_kwh=0.25,
+        initial_fuel_liters=1.0,
+        fuel_tank_capacity_liters=5.0,
+        fuel_price_per_liter=1.0,
+    )
+    config = replace(config, diesel=diesel)
+    inputs = replace(inputs, diesel_fuel_delivery_liters=[4.0, 0.0, 0.0, 0.0])
+
+    result = optimize_dispatch_milp(inputs, config)
+
+    assert result["physical_audit"]["passed"] is True
+    assert result["dispatch"]["summary"]["diesel_fuel_used_liters"] > 0.0
+    assert 0.0 <= result["dispatch"]["summary"]["ending_diesel_fuel_liters"] <= 5.0
+
+
+def test_milp_fails_closed_when_cycle_fade_is_configured_but_not_modelled():
+    inputs, config = _case()
+    aged_battery = replace(config.battery, cycle_life_efc=100.0)
+    config = replace(config, battery=aged_battery)
+
+    with pytest.raises(OptimizationError, match="does not yet model cycle-driven battery capacity fade"):
+        optimize_dispatch_milp(inputs, config)
+
+
+
+def test_milp_jointly_optimizes_water_inventory_ro_power_and_energy_balance():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=2.0,
+        tank_capacity_m3=4.0,
+        initial_inventory_m3=1.0,
+        reserve_m3=0.5,
+    )
+
+    result = optimize_dispatch_milp(
+        inputs, config,
+        water_service=water,
+        water_demand_m3_per_hour=[1.0, 1.0, 1.0, 1.0],
+    )
+
+    service = result["water_service"]
+    assert service["service_feasible"] is True
+    assert service["audit"]["passed"] is True
+    assert service["production_policy"] == "joint_milp_water_energy"
+    assert sum(service["production_m3_per_hour"]) == pytest.approx(3.5)
+    assert all(0.5 - 1e-7 <= value <= 4.0 + 1e-7 for value in service["inventory_end_m3"])
+    assert all(value <= 2.0 + 1e-7 for value in service["production_m3_per_hour"])
+    assert result["physical_audit"]["passed"] is True
+    assert result["dispatch"]["summary"]["unmet_load_kwh"] == pytest.approx(0.0)
+    assert result["dispatch"]["rows"][0]["load_kw"] == pytest.approx(
+        inputs.load_kw[0] + service["ro_power_kw"][0]
+    )
+    assert result["model_scope"]["device_write_authorized"] is False
+
+
+def test_milp_joint_water_energy_fails_closed_when_ro_capacity_cannot_serve_demand():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=0.2,
+        tank_capacity_m3=2.0,
+        initial_inventory_m3=0.5,
+        reserve_m3=0.5,
+    )
+    with pytest.raises(OptimizationError, match="did not produce a feasible schedule"):
+        optimize_dispatch_milp(
+            inputs, config,
+            water_service=water,
+            water_demand_m3_per_hour=[1.0, 1.0, 1.0, 1.0],
+        )
+
+
+def test_milp_requires_water_spec_and_demand_together():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=1.0,
+        tank_capacity_m3=2.0,
+        initial_inventory_m3=1.0,
+    )
+    with pytest.raises(OptimizationError, match="must be supplied together"):
+        optimize_dispatch_milp(inputs, config, water_service=water)
+
+
+
+def test_milp_is_repeatable_and_compares_baselines_on_equivalent_water_service():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=1.0,
+        ro_capacity_m3_per_hour=2.0,
+        tank_capacity_m3=4.0,
+        initial_inventory_m3=1.0,
+        reserve_m3=0.5,
+    )
+    kwargs = {
+        "water_service": water,
+        "water_demand_m3_per_hour": [0.5, 0.5, 0.5, 0.5],
+    }
+    first = optimize_dispatch_milp(inputs, config, **kwargs)
+    second = optimize_dispatch_milp(inputs, config, **kwargs)
+
+    assert first["objective_value"] == pytest.approx(second["objective_value"], abs=1e-7)
+    assert first["diesel_power_setpoint_kw"] == pytest.approx(second["diesel_power_setpoint_kw"], abs=1e-7)
+    for policy in ("battery_first", "grid_first"):
+        baseline = first["baseline_comparison"][policy]
+        assert "same just-in-time RO production profile" in baseline["comparison_note"]
+        assert baseline["water_service"]["total_demand_m3"] == pytest.approx(2.0)
+
+
+
+def test_milp_rejects_invalid_ro_operating_cost():
+    inputs, config = _case()
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=2.0,
+        ro_capacity_m3_per_hour=1.0,
+        tank_capacity_m3=2.0,
+        initial_inventory_m3=1.0,
+    )
+    with pytest.raises(OptimizationError, match="ro_variable_cost_per_m3"):
+        optimize_dispatch_milp(
+            inputs, config, water_service=water,
+            water_demand_m3_per_hour=[0.5] * 4,
+            ro_variable_cost_per_m3=-1.0,
+        )
+
+def test_diesel_spec_rejects_initial_fuel_above_tank_capacity():
+    _, config = _case()
+    with pytest.raises(ValueError, match="cannot exceed fuel_tank_capacity_liters"):
+        replace(
+            config.diesel,
+            fuel_consumption_l_per_kwh=0.25,
+            initial_fuel_liters=6.0,
+            fuel_tank_capacity_liters=5.0,
+        )
