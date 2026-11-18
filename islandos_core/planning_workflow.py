@@ -48,9 +48,6 @@ def run_forecast_dispatch(
     water_service=None,
     water_schedule_mode: str = "just_in_time",
     water_lookahead_hours: int = 6,
-    backtest_horizon: int = 24,
-    season_length: int = 24,
-    confidence_level: float = 0.90,
 ) -> dict[str, Any]:
     """Run one manifest-bound forecast and offline resource dispatch.
 
@@ -103,14 +100,15 @@ def run_forecast_dispatch(
     if "water_lookahead_hours" in optimizer_settings and optimizer_settings["water_lookahead_hours"] != water_lookahead_hours:
         raise ValueError("water_lookahead_hours must match the manifest optimizer settings")
 
+    forecast_settings = dict(forecast_spec["settings"])
     bundle = forecast_site_signals(
         timestamps,
         history,
         units,
         horizon=horizon,
-        backtest_horizon=backtest_horizon,
-        season_length=season_length,
-        confidence_level=confidence_level,
+        backtest_horizon=forecast_settings["backtest_horizon"],
+        season_length=forecast_settings["season_length"],
+        confidence_level=forecast_settings["confidence_level"],
     )
     selected_models = {
         signal_id: result.model_id
@@ -185,9 +183,7 @@ def run_forecast_dispatch(
             "grid_available": list(grid_available),
             "diesel_available": list(diesel_available),
             "limitations": list(bundle.limitations),
-            "backtest_horizon": backtest_horizon,
-            "season_length": season_length,
-            "confidence_level": confidence_level,
+            "settings": forecast_settings,
         },
         "optimization": dispatch_result,
         "evidence_sha256": evidence_sha256,
