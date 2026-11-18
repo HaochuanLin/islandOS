@@ -26,6 +26,16 @@ OPSD_ATTRIBUTION = (
     "(Primary data from various sources; see OPSD source documentation.)"
 )
 
+
+def _sha256_file(path: Path) -> str:
+    """Hash the exact source-file bytes with bounded memory usage."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 _SIGNAL_COLUMNS = {
     "load": ("_load_actual_entsoe_transparency", "MW", True),
     "solar": ("_solar_generation_actual", "MW", True),
@@ -46,7 +56,13 @@ class PublicTimeSeriesDataset:
     source_version: str
     source_url: str
     attribution: str
+    source_file_sha256: str
     data_sha256: str
+
+    @property
+    def selected_history_sha256(self) -> str:
+        """SHA-256 of normalized selected rows; data_sha256 is kept as an alias."""
+        return self.data_sha256
 
 
 def _parse_utc_timestamp(raw: str, line_number: int) -> datetime:
@@ -134,6 +150,7 @@ def load_opsd_singleindex_csv(
         raise ValueError("start_utc must be earlier than end_utc")
 
     csv_path = Path(path)
+    source_file_sha256 = _sha256_file(csv_path)
     timestamps: list[datetime] = []
     values: dict[str, list[float]] = {signal: [] for signal in signals}
     source_columns: dict[str, str] = {}
@@ -213,5 +230,6 @@ def load_opsd_singleindex_csv(
         source_version=OPSD_VERSION,
         source_url=OPSD_SOURCE_URL,
         attribution=OPSD_ATTRIBUTION,
+        source_file_sha256=source_file_sha256,
         data_sha256=digest,
     )
