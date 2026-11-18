@@ -103,6 +103,7 @@ def create_run_manifest(
     optimizer_settings: Mapping[str, Any],
     scenario_assumptions: Mapping[str, Any],
     forecast_model_ids: Mapping[str, str] | None = None,
+    forecast_settings: Mapping[str, Any] | None = None,
 ) -> CanonicalRunManifest:
     """Create a deterministic manifest or fail closed on incomplete provenance."""
     identifiers = {
@@ -136,7 +137,25 @@ def create_run_manifest(
         raise ValueError("scenario_assumptions must be a mapping")
     if forecast_model_ids is not None and not isinstance(forecast_model_ids, Mapping):
         raise ValueError("forecast_model_ids must be a mapping when provided")
+    if forecast_settings is not None and not isinstance(forecast_settings, Mapping):
+        raise ValueError("forecast_settings must be a mapping when provided")
     models = dict(forecast_model_ids or {})
+    selected_forecast_settings = dict(forecast_settings or {
+        "backtest_horizon": 24, "season_length": 24, "confidence_level": 0.90,
+    })
+    unknown_forecast_settings = set(selected_forecast_settings) - {
+        "backtest_horizon", "season_length", "confidence_level",
+    }
+    if unknown_forecast_settings:
+        raise ValueError("unsupported forecast settings: " + ", ".join(sorted(unknown_forecast_settings)))
+    for key in ("backtest_horizon", "season_length"):
+        value = selected_forecast_settings.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"forecast_settings.{key} must be a positive integer")
+    confidence = selected_forecast_settings.get("confidence_level")
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 < float(confidence) < 1:
+        raise ValueError("forecast_settings.confidence_level must be between 0 and 1")
+    selected_forecast_settings["confidence_level"] = float(confidence)
     if any(key not in signals for key in models):
         raise ValueError("forecast_model_ids may only reference required signals")
     if any(not isinstance(value, str) or not value.strip() for value in models.values()):
@@ -162,6 +181,7 @@ def create_run_manifest(
             "horizon_hours": forecast_horizon_hours,
             "required_signals": {key: signals[key] for key in sorted(signals)},
             "model_ids": {key: models[key] for key in sorted(models)},
+            "settings": _json_value(selected_forecast_settings, "forecast_settings"),
         },
         "optimizer": {
             "id": optimizer_id.strip(),
