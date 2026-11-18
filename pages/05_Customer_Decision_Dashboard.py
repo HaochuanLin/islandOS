@@ -382,6 +382,9 @@ try:
         "algorithm": "bounded_two_policy_pareto_screening",
         "dispatch": selected_candidate["dispatch"],
         "physical_audit": selected_candidate["audit"],
+        "dispatch_rows": [
+            dict(row) for row in selected_candidate["dispatch"]["rows"]
+        ],
         "baseline_comparison": {
             policy: item["summary"] for policy, item in candidates.items()
         },
