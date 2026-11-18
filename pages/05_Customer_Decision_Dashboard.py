@@ -14,6 +14,7 @@ import streamlit as st
 
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
 from islandos_core.customer_dashboard import parse_customer_history_csv
+from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.forecast_engine import forecast_signals
 from islandos_core.investment_economics import evaluate_investment_economics
 from islandos_core.forecast_optimizer_adapter import (
@@ -56,8 +57,14 @@ with st.sidebar:
     wind_capacity = st.number_input("Installed wind capacity (kW)", min_value=0.0, value=20.0, step=1.0)
     grid_limit = st.number_input("Grid import limit (kW)", min_value=0.0, value=100.0, step=5.0)
     site_csv = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
+    shared_dataset = get_session_dataset(st.session_state)
+    if shared_dataset is not None:
+        st.caption(f"Session dataset available: {shared_dataset['file_name']} · SHA-256 {shared_dataset['sha256'][:12]}…")
+        if st.button("Clear session dataset", key="clear_shared_dataset_dashboard"):
+            clear_session_dataset(st.session_state)
+            st.rerun()
     if site_csv is not None:
-        st.caption("Demo load/tariff scaling sliders are ignored when a site CSV is uploaded.")
+        st.caption("The page-specific upload takes priority over the shared session dataset.")
     st.divider()
     st.subheader("Investment assumptions")
     st.caption("Enter customer-confirmed annual bills and supplier quotes. Do not annualize the 24-hour simulation.")
@@ -78,13 +85,22 @@ now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
 source_sha256 = None
 source_label = "Synthetic demonstration data"
+shared_payload = None
+shared_name = "session-shared CSV"
 if site_csv is not None:
+    shared_payload = site_csv.getvalue()
+    shared_name = site_csv.name
+elif shared_dataset is not None:
+    shared_payload = shared_dataset["payload"]
+    shared_name = shared_dataset["file_name"]
+if shared_payload is not None:
     try:
-        uploaded = parse_customer_history_csv(site_csv.getvalue(), source_name=site_csv.name)
+        uploaded = parse_customer_history_csv(shared_payload, source_name=shared_name)
         history_stamps = list(uploaded.timestamps_utc)
         history = {name: list(values) for name, values in uploaded.signals.items()}
         source_sha256 = uploaded.source_sha256
-        source_label = f"User-uploaded: {uploaded.source_name} (not independently verified)"
+        prefix = "User-uploaded" if site_csv is not None else "Session-shared"
+        source_label = f"{prefix}: {uploaded.source_name} (not independently verified)"
     except ValueError as exc:
         st.error(f"Site history CSV rejected: {exc}")
         st.stop()

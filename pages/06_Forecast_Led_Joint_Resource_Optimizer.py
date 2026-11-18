@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
+from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
 from islandos_core.prediction_dispatch_adapter import optimize_prediction_resource_schedule
 from islandos_core.forecast_signal_catalog import forecast_site_signals
@@ -31,6 +32,12 @@ with st.sidebar:
     st.subheader("Site and asset assumptions")
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
+    shared_dataset = get_session_dataset(st.session_state)
+    if shared_dataset is not None:
+        st.caption(f"Session dataset available: {shared_dataset['file_name']} · SHA-256 {shared_dataset['sha256'][:12]}…")
+        if st.button("Clear session dataset", key="clear_shared_dataset_joint_optimizer"):
+            clear_session_dataset(st.session_state)
+            st.rerun()
     pv_capacity = st.number_input("PV rated power (kW)", min_value=0.0, value=40.0, step=1.0)
     wind_capacity = st.number_input("Wind rated power (kW)", min_value=0.0, value=20.0, step=1.0)
     grid_limit = st.number_input("Grid import limit (kW)", min_value=0.0, value=100.0, step=5.0)
@@ -44,15 +51,24 @@ with st.sidebar:
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 source = "Synthetic demonstration data"
+shared_payload = None
+shared_name = "session-shared CSV"
 if upload is not None:
+    shared_payload = upload.getvalue()
+    shared_name = upload.name
+elif shared_dataset is not None:
+    shared_payload = shared_dataset["payload"]
+    shared_name = shared_dataset["file_name"]
+if shared_payload is not None:
     try:
-        site = parse_customer_history_csv(upload.getvalue(), source_name=upload.name)
+        site = parse_customer_history_csv(shared_payload, source_name=shared_name)
     except ValueError as exc:
         st.error(f"CSV rejected: {exc}")
         st.stop()
     timestamps = list(site.timestamps_utc)
     values = {name: list(series) for name, series in site.signals.items()}
-    source = f"Customer-uploaded CSV: {site.source_name} (not independently verified)"
+    prefix = "Customer-uploaded" if upload is not None else "Session-shared"
+    source = f"{prefix} CSV: {site.source_name} (not independently verified)"
     source_hash = site.source_sha256
 else:
     timestamps = [now - timedelta(hours=167 - i) for i in range(168)]
