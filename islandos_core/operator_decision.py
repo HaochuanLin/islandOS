@@ -69,6 +69,30 @@ def build_operator_decision_record(
     if not isinstance(operating_constraints, Mapping):
         raise ValueError("operating_constraints must be a mapping")
 
+    customer_impact = optimization_result.get("customer_impact_assessment")
+    if customer_impact is not None:
+        if not isinstance(customer_impact, Mapping):
+            raise ValueError("customer_impact_assessment must be a mapping")
+        gross = customer_impact.get("gross_operating_benefit")
+        service = customer_impact.get("service_equivalence")
+        equipment = customer_impact.get("equipment_constraint_audit")
+        if not all(isinstance(item, Mapping) for item in (gross, service, equipment)):
+            raise ValueError("customer impact evidence must include gross benefit, service and equipment audit objects")
+        gates_passed = service.get("passed") is True and equipment.get("passed") is True
+        gross_value = gross.get("value")
+        qualified = gross.get("status") == "qualified"
+        if gross_value is not None and (
+            isinstance(gross_value, bool) or not isinstance(gross_value, Real)
+            or not math.isfinite(float(gross_value))
+        ):
+            raise ValueError("customer impact gross benefit must be finite or withheld")
+        if (gross_value is not None or qualified) and not gates_passed:
+            raise ValueError("customer impact benefit cannot be qualified when service or equipment audit fails")
+        if qualified and gross_value is None:
+            raise ValueError("qualified customer impact benefit must include a numeric value")
+        if gross_value is not None and not qualified:
+            raise ValueError("numeric customer impact benefit must have qualified status")
+
     physical_audit = optimization_result.get("physical_audit")
     audit_passed = isinstance(physical_audit, Mapping) and physical_audit.get("passed") is True
     scope = optimization_result.get("model_scope", {})
@@ -99,6 +123,7 @@ def build_operator_decision_record(
         },
         "objectives_and_outcomes": dict(summary) if isinstance(summary, Mapping) else {},
         "baseline_comparison": optimization_result.get("baseline_comparison", {}),
+        "customer_impact_assessment": dict(customer_impact) if isinstance(customer_impact, Mapping) else None,
         "physical_audit": dict(physical_audit) if isinstance(physical_audit, Mapping) else None,
         "status": "ready_for_human_review" if audit_passed else "blocked_pending_audit",
         "human_review_required": True,

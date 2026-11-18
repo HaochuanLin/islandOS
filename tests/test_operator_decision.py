@@ -81,3 +81,67 @@ def test_record_rejects_missing_provenance_and_naive_timestamp():
             created_at_utc="2026-11-17T10:00:00", data_provenance="synthetic",
             input_refs=["synthetic://x"], objective_weights={"cost": 1.0}, operating_constraints={},
         )
+
+def _qualified_impact():
+    return {
+        "gross_operating_benefit": {"value": 12.5, "status": "qualified", "currency": "USD", "evaluation_period": "24-hour scenario"},
+        "service_equivalence": {"passed": True},
+        "equipment_constraint_audit": {"passed": True},
+    }
+
+
+def test_operator_record_preserves_qualified_customer_impact_evidence():
+    result = _result()
+    result["customer_impact_assessment"] = _qualified_impact()
+    record = build_operator_decision_record(
+        result, site_ref="demo-site", recommendation_id="rec-impact-001",
+        created_at_utc="2026-11-17T10:00:00Z", data_provenance="synthetic demo data",
+        input_refs=["synthetic://demo/history.csv"], objective_weights={"cost": 1.0},
+        operating_constraints={},
+    )
+    assert record["customer_impact_assessment"] == _qualified_impact()
+    assert verify_operator_decision_record(record)["valid"] is True
+
+
+@pytest.mark.parametrize(
+    "service_passed,audit_passed",
+    [(False, True), (True, False), (False, False)],
+)
+def test_operator_record_rejects_impact_benefit_when_evidence_gate_fails(service_passed, audit_passed):
+    result = _result()
+    impact = _qualified_impact()
+    impact["service_equivalence"]["passed"] = service_passed
+    impact["equipment_constraint_audit"]["passed"] = audit_passed
+    result["customer_impact_assessment"] = impact
+    with pytest.raises(ValueError, match="cannot be qualified"):
+        build_operator_decision_record(
+            result, site_ref="demo-site", recommendation_id="rec-impact-blocked",
+            created_at_utc="2026-11-17T10:00:00Z", data_provenance="synthetic demo data",
+            input_refs=["synthetic://demo/history.csv"], objective_weights={"cost": 1.0},
+            operating_constraints={},
+        )
+
+
+def test_operator_record_rejects_malformed_customer_impact_evidence():
+    result = _result()
+    result["customer_impact_assessment"] = {"gross_operating_benefit": {"value": 10}}
+    with pytest.raises(ValueError, match="must include"):
+        build_operator_decision_record(
+            result, site_ref="demo-site", recommendation_id="rec-impact-malformed",
+            created_at_utc="2026-11-17T10:00:00Z", data_provenance="synthetic demo data",
+            input_refs=["synthetic://demo/history.csv"], objective_weights={"cost": 1.0},
+            operating_constraints={},
+        )
+
+
+def test_operator_record_hash_covers_customer_impact_evidence():
+    result = _result()
+    result["customer_impact_assessment"] = _qualified_impact()
+    record = build_operator_decision_record(
+        result, site_ref="demo-site", recommendation_id="rec-impact-tamper",
+        created_at_utc="2026-11-17T10:00:00Z", data_provenance="synthetic demo data",
+        input_refs=["synthetic://demo/history.csv"], objective_weights={"cost": 1.0},
+        operating_constraints={},
+    )
+    record["customer_impact_assessment"]["gross_operating_benefit"]["value"] = 999.0
+    assert verify_operator_decision_record(record)["valid"] is False
