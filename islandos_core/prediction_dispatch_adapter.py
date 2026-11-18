@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+import math
+from datetime import datetime, timedelta, timezone
+from numbers import Real
 from types import MappingProxyType
 from typing import Mapping
 
@@ -51,27 +53,49 @@ def build_dispatch_forecast_bundle(
         digest = result.input_history_sha256
         if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
             raise ValueError(f"{signal_name} has an invalid input history SHA-256")
-        targets = tuple(point.timestamp.astimezone(timezone.utc) for point in result.points)
-        if not targets:
+        try:
+            raw_points = tuple(result.points)
+        except TypeError as exc:
+            raise ValueError(f"{signal_name} forecast points must be a sequence") from exc
+        if not raw_points:
             raise ValueError(f"{signal_name} forecast horizon is empty")
+
+        normalized_points = []
+        for index, point in enumerate(raw_points):
+            stamp = getattr(point, "timestamp", None)
+            if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
+                raise ValueError(f"{signal_name} forecast point {index} timestamp must be timezone-aware")
+            stamp_utc = stamp.astimezone(timezone.utc)
+            if normalized_points and stamp_utc - normalized_points[-1].timestamp != timedelta(hours=1):
+                raise ValueError(f"{signal_name} forecast timestamps must be contiguous hourly UTC instants")
+
+            numeric = {}
+            for field_name in ("predicted_value", "lower_bound", "upper_bound"):
+                value = getattr(point, field_name, None)
+                if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
+                    raise ValueError(f"{signal_name} forecast point {index} {field_name} must be finite numeric data")
+                numeric[field_name] = float(value)
+            if not numeric["lower_bound"] <= numeric["predicted_value"] <= numeric["upper_bound"]:
+                raise ValueError(f"{signal_name} forecast point {index} bounds must contain its prediction")
+
+            normalized_points.append(DispatchForecastPoint(
+                timestamp=stamp_utc,
+                predicted=numeric["predicted_value"],
+                lower_bound=numeric["lower_bound"],
+                upper_bound=numeric["upper_bound"],
+            ))
+
+        targets = tuple(point.timestamp for point in normalized_points)
         if common_targets is None:
             common_targets = targets
         elif targets != common_targets:
             raise ValueError("all resource forecasts must share identical target timestamps")
-        points = tuple(
-            DispatchForecastPoint(
-                timestamp=point.timestamp,
-                predicted=point.predicted_value,
-                lower_bound=point.lower_bound,
-                upper_bound=point.upper_bound,
-            )
-            for point in result.points
-        )
+        points = tuple(normalized_points)
         metrics = ForecastMetrics(
             samples=result.backtest.samples,
             mae=result.backtest.mae,
             rmse=result.backtest.rmse,
-            bias_predicted_minus_actual=None,
+            bias_predicted_minus_actual=result.backtest.bias_predicted_minus_actual,
         )
         forecasts[signal_name] = SignalForecast(
             signal_name=signal_name,
@@ -89,6 +113,9 @@ def build_dispatch_forecast_bundle(
             ),
         )
         digests[signal_name] = digest
+
+    if common_targets[0] - end != timedelta(hours=1):
+        raise ValueError("first forecast timestamp must follow history_end_utc by one hour")
 
     canonical = json.dumps(digests, sort_keys=True, separators=(",", ":"))
     aggregate_digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()

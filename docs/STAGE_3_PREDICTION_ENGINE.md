@@ -18,13 +18,21 @@ cross-signal causal relationships or multivariate dynamics.
   target timestamps across all included signals.
 - Every signal retains its own unit, model ID/version, input-history SHA-256,
   rolling-origin backtest metrics and uncertainty bands.
+- Default transparent candidates include persistence, seasonal-naive,
+  recent-mean and linear-trend models. Candidate evaluation reports aggregate
+  MAE, RMSE, signed bias (prediction minus actual), WAPE where defined, and
+  per-fold MAE/RMSE/bias with training and validation sample counts.
+- Each horizon score uses only complete chronological validation blocks;
+  an incomplete trailing block is excluded rather than mixed into a shorter horizon.
 - Forecasting is fail-closed: if one signal cannot be forecast, no partial
   bundle is returned to the optimizer.
 - Explicit model selection is accepted only when that candidate passes the
   signal's backtest and output contract.
-- Uncertainty bands use a finite-sample conformal-style rank over chronological
-  rolling-origin absolute errors. These are empirical bands, not guaranteed
-  statistical coverage.
+- Uncertainty bands use an empirical absolute-error quantile over chronological
+  rolling-origin replay residuals. Candidate selection and error-band estimation
+  currently reuse the same replay history, so the bands are descriptive rather
+  than independently calibrated; they do not guarantee nominal statistical
+  coverage.
 - The bundle has a deterministic SHA-256 digest over its aligned timestamps,
   signal units, model identities, input digests and forecast points.
 
@@ -85,4 +93,6 @@ pytest -q tests/test_prediction_engine.py tests/test_forecast_service.py
 
 The tests cover deterministic bundle digests, UTC-aligned histories and target
 grids, duplicate signal rejection, unknown model mappings, invalid candidate
-outputs, explicit model eligibility and finite-sample uncertainty ranking.
+outputs, explicit model eligibility, persistence baseline behavior, fold-level
+signed bias and empirical error-band metadata. The OPSD CLI can evaluate this canonical engine separately
+from the legacy Phase 2 Ridge comparison.
