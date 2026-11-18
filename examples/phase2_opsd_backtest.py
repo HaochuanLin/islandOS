@@ -310,7 +310,8 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         }
     return {
         "engine": "canonical PredictionEngine via forecast_site_signals",
-        "source_data_sha256": dataset.data_sha256,
+        "source_file_sha256": dataset.source_file_sha256,
+        "selected_history_sha256": dataset.selected_history_sha256,
         "canonical_bundle_history_sha256": bundle.input_history_sha256,
         "source_to_canonical_mapping": source_mapping,
         "holdout_window": {
@@ -394,7 +395,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "attribution": dataset.attribution,
             "region_code": dataset.region_code,
             "source_columns": dict(dataset.source_columns),
-            "history_sha256": dataset.data_sha256,
+            "source_file_sha256": dataset.source_file_sha256,
+            "selected_history_sha256": dataset.selected_history_sha256,
             "observations": len(dataset.timestamps),
             "history_start_utc": dataset.timestamps[0].isoformat(),
             "history_end_utc": dataset.timestamps[-1].isoformat(),
