@@ -237,3 +237,49 @@ Stage 7 can proceed immediately because interviews and hypothesis design do not 
 - Preserve requirements locks, automated tests, Docker and Streamlit behavior. Do not connect experimental modules to the hosted app without a separate integration review.
 - Do not merge while required CI is failing, absent or associated with a different commit. Draft PRs remain Draft until explicitly reviewed.
 - Synthetic, inferred, externally reported and independently verified evidence must remain distinguishable.
+
+
+---
+
+# Commercial Track Progress Amendment — 2026-11-18
+
+This dated amendment supersedes the earlier Stage 8 and Stage 9 status labels above where they conflict. Engineering Stages 1–6 retain their original numbering and acceptance gates.
+
+## Stage 8 — Synthetic Impact & Economic Evidence
+
+**Status: IMPLEMENTED IN DRAFT PR #260; ENGINEERING GATE BLOCKED BY ONE EXISTING MAINLINE TEST FAILURE; NOT CUSTOMER-VALIDATED.**
+
+- PR #260 adds a deterministic 24-hour synthetic paired comparison using the existing `compare_energy_policies()` API: `grid_first` baseline versus `battery_first` rule-based candidate, identical inputs and equipment configuration.
+- The new impact layer checks service equivalence, per-step energy balance and selected equipment limits before exposing gross operating benefit.
+- It reuses existing lifecycle economics and RO costing modules; unknown commercial costs remain unknown and net customer value remains null.
+- It deliberately omits water and emissions metrics not supported by this dispatch interface and does not annualize the 24-hour result.
+- Exact PR head `74afe9132306bf183fc7e1f10769b13b6a1ca884` CI: dependency audit, container smoke test, RO simulation, Nan'ao validation and Windows gateway build passed. Python suite reported **1,039 passed, 2 skipped, 1 failed**. The failure is the existing MILP replay constructor passing unsupported `grid_import_power_setpoint_kw` to `EnergySystemInputs` in `tests/test_milp_dispatch_optimizer.py`; this remains an Engineering Stage 3 blocker. Do not misclassify it as a Stage 8 test failure, but do not call the full Stage 8 gate green.
+- Remaining Stage 8 work: resolve the full-suite blocker in its proper engineering track; add paired edge cases for export revenue, absent diesel fuel model, zero critical load and equipment boundaries; review exact-head CI and code; retain external customer value as NOT VALIDATED.
+
+## Stage 9 — Market Sizing & Market Entry
+
+**Status: FOUNDATION DOCUMENTS ADDED IN DRAFT BRANCH `commercial/stage-9-market-sizing`; QUANTIFICATION NOT STARTED.**
+
+- `docs/BEACHHEAD_SEGMENT_HYPOTHESIS.md` defines a provisional, falsifiable beachhead hypothesis: owner-operated, energy-constrained facilities with hybrid distributed energy systems, multiple schedulable resources and an accountable operator.
+- `docs/MARKET_SIZING_METHOD.md` defines facility-count TAM/SAM/SOM, strict eligibility filters, source hierarchy, uncertainty treatment, market-entry factors and independent audit requirements.
+- `docs/MARKET_DATA_REGISTER.md` provides empty source, facility, filter-count and evidence-quality registers.
+- No geography has been selected from customer evidence; no facility inventory, source-backed market count, pricing evidence, TAM/SAM/SOM, revenue opportunity or market share is claimed. Market sizing remains NOT ESTIMABLE.
+- Stage 9 next gate: use Stage 7 discovery evidence to select or reject one segment and one initial geography; then populate the register from traceable facility-level sources, deduplicate, apply filters and obtain independent recalculation.
+
+## Current branch boundaries
+
+- Stage 7 discovery documentation remains in Draft PR #256.
+- Stage 8 implementation remains in Draft PR #260.
+- Stage 9 foundation documents are in the separate Draft branch `commercial/stage-9-market-sizing`, based on the Stage 7 documentation branch. It is not merged into main and does not imply Stage 7 interviews have occurred.
+- No commercial track change is promoted to the hosted Streamlit application or mainline capability by these draft branches.
+
+
+## Verification refresh — 2026-11-18 (latest Stage 8 head)
+
+The latest Stage 8 PR head `a580720c93503fa251c54331c4b7f4b816a01d21` has now completed GitHub Actions:
+- Python unit tests: **1,043 passed, 2 skipped, 1 failed, 574 subtests passed**.
+- The sole failure remains `tests/test_milp_dispatch_optimizer.py::test_milp_dispatch_solves_and_passes_independent_and_physical_audits`, caused by `optimization/milp_dispatch_optimizer.py` passing unsupported `grid_import_power_setpoint_kw` to `EnergySystemInputs`.
+- Dependency audit, container web smoke test, RO simulation tests, Nan'ao hybrid scenario validation and Windows telemetry gateway build all passed on this head.
+- The four new Stage 8 edge-case tests are included in this run; the full suite still has the one unrelated Engineering Stage 3 failure.
+
+**Revised Stage 8 status:** all checks other than the existing MILP integration failure pass on the latest head; Stage 8 implementation tests are included in the 1,043 passing tests. The repository-wide acceptance gate remains BLOCKED until the Engineering Stage 3 defect is fixed and the complete suite passes. Stage 8 remains Draft and unmerged.
