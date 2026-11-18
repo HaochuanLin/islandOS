@@ -5,8 +5,11 @@ verified. Outputs are offline schedule-search estimates, never device commands.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import uuid
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -15,8 +18,8 @@ import streamlit as st
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
-from islandos_core.prediction_dispatch_adapter import optimize_prediction_resource_schedule
-from islandos_core.forecast_signal_catalog import forecast_site_signals
+from islandos_core.canonical_run import create_run_manifest
+from islandos_core.planning_workflow import run_forecast_dispatch
 
 
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
@@ -99,21 +102,6 @@ signal_units = {
 }
 predictions = {}
 try:
-    # The UI now uses the same canonical signal catalog as customer onboarding.
-    forecast_bundle = forecast_site_signals(
-        timestamps,
-        signal_history,
-        signal_units,
-        horizon=24,
-        backtest_horizon=24,
-        season_length=24,
-        confidence_level=0.90,
-    )
-    predictions = dict(forecast_bundle.results)
-    target_timestamps = tuple(
-        point.timestamp for point in predictions["pv_power_kw"].points
-    )
-
     config = EnergySystemConfig(
         pv_rated_kw=float(pv_capacity),
         wind_rated_kw=float(wind_capacity),
@@ -132,21 +120,66 @@ try:
             ramp_up_kw_per_hour=float(diesel_capacity),
         ),
     )
-    with st.spinner("Running the joint battery/diesel schedule search…"):
-        result = optimize_prediction_resource_schedule(
-            predictions,
-            config,
-            history_start_utc=timestamps[0],
-            history_end_utc=timestamps[-1],
-            grid_available=[True] * 24,
-            diesel_available=[True] * 24,
-            price_unit=f"{currency}/kWh",
-            population_size=int(population),
-            generations=int(generations),
-            seed=int(seed),
+    grid_available = [True] * 24
+    diesel_available = [True] * 24
+    dataset_payload = {
+        "timestamps_utc": [stamp.isoformat() for stamp in timestamps],
+        "signals": signal_history,
+        "units": signal_units,
+    }
+    dataset_digest = source_hash or hashlib.sha256(
+        json.dumps(dataset_payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    site_configuration_digest = hashlib.sha256(
+        json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    created_at = datetime.now(timezone.utc)
+    run_manifest = create_run_manifest(
+        project_id="streamlit-joint-resource-workspace",
+        run_id=f"run-{uuid.uuid4().hex}",
+        site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
+        created_at_utc=created_at.isoformat(),
+        dataset_sha256=dataset_digest,
+        dataset_schema_version="canonical-hourly-signals-v1",
+        source_type="customer_provided" if shared_payload is not None else "synthetic",
+        site_configuration_version="1",
+        site_configuration_sha256=site_configuration_digest,
+        required_signals=signal_units,
+        forecast_horizon_hours=24,
+        optimizer_id="prediction_resource_dispatch",
+        optimizer_version="1",
+        optimizer_settings={
+            "population_size": int(population),
+            "generations": int(generations),
+            "seed": int(seed),
+        },
+        scenario_assumptions={
+            "grid_available": grid_available,
+            "diesel_available": diesel_available,
+        },
+        forecast_settings={
+            "backtest_horizon": 24,
+            "season_length": 24,
+            "confidence_level": 0.90,
+        },
+    )
+    with st.spinner("Validating run manifest, forecasting and searching the joint resource schedule…"):
+        planning_run = run_forecast_dispatch(
+            run_manifest,
+            timestamps=timestamps,
+            history=signal_history,
+            units=signal_units,
+            energy_system_config=config,
+            grid_available=grid_available,
+            diesel_available=diesel_available,
         )
-
+    predictions = planning_run["forecast_results"]
+    target_timestamps = tuple(
+        point.timestamp for point in predictions["pv_power_kw"].points
+    )
+    result = planning_run["optimization"]
     handoff = result["generic_prediction_handoff"]
+    st.caption(f"Canonical run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
     st.subheader("Prediction engine")
     model_rows = []
     for canonical_id, forecast in predictions.items():
@@ -215,6 +248,9 @@ try:
     with st.expander("Decision trace, model provenance and limitations"):
         st.write({
             "source_file_sha256": source_hash,
+            "canonical_run_manifest": planning_run["manifest"],
+            "canonical_run_forecast_evidence": planning_run["forecast"],
+            "evidence_sha256": planning_run["evidence_sha256"],
             "forecast_handoff": handoff,
             "forecast_scenario_scope": result.get("forecast_scenario_scope"),
             "decision_scope": result.get("decision_scope"),
@@ -225,6 +261,18 @@ try:
         st.caption("Stress envelopes are deterministic and are not probabilistic joint confidence intervals.")
 
     report = {
+        "canonical_run": {
+            "project_id": planning_run["project_id"],
+            "run_id": planning_run["run_id"],
+            "manifest": planning_run["manifest"],
+            "manifest_sha256": planning_run["manifest_sha256"],
+            "forecast": planning_run["forecast"],
+            "evidence_sha256": planning_run["evidence_sha256"],
+            "human_review_required": planning_run["human_review_required"],
+            "operator_approval": planning_run["operator_approval"],
+            "device_write_authorized": planning_run["device_write_authorized"],
+            "command_generated": planning_run["command_generated"],
+        },
         "input_provenance": source,
         "source_file_sha256": source_hash,
         "forecast_models": {

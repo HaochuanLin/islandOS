@@ -186,6 +186,8 @@ def run_forecast_dispatch(
             "settings": forecast_settings,
         },
         "optimization": dispatch_result,
+        # Keep typed forecasts for UI diagnostics; do not run a second forecast pipeline.
+        "forecast_results": dict(bundle.results),
         "evidence_sha256": evidence_sha256,
         "human_review_required": True,
         "operator_approval": "pending",
