@@ -182,7 +182,7 @@ def run_forecast_dispatch(
             "history_digests": evidence["forecast_history_digests"],
             "grid_available": list(grid_available),
             "diesel_available": list(diesel_available),
-            "limitations": list(bundle.limitations),
+            "limitations": list(bundle.planning.limitations),
             "settings": forecast_settings,
         },
         "optimization": dispatch_result,
