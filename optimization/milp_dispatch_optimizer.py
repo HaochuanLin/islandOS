@@ -24,7 +24,6 @@ from islandos_core.energy_system import (
 from islandos_core.water_resource_adapter import (
     WaterServiceSpec,
     build_ro_energy_load,
-    build_price_aware_ro_schedule,
 )
 from .energy_system_optimizer import OptimizationError, _audit
 
