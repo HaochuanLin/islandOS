@@ -17,6 +17,7 @@ from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.forecast_engine import forecast_signals
 from islandos_core.investment_economics import evaluate_investment_economics
+from islandos_core.impact_assessment import assess_energy_policy_impact
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
     build_service_equivalent_economics,
@@ -168,6 +169,13 @@ try:
     result = optimize_energy_system(coordinated.inputs, config, weights=weights)
     economics = build_service_equivalent_economics(result)
     stress = evaluate_forecast_stress_scenarios(coordinated, config)
+    paired_impact = assess_energy_policy_impact(
+        coordinated.inputs,
+        config,
+        currency=currency,
+        evaluation_period="24-hour dispatch scenario",
+        data_provenance=source_label,
+    )
 
     recommended = result["recommendation"]["policy"]
     candidates = {row["policy"]: row for row in result["candidates"]}
@@ -257,6 +265,50 @@ try:
         "The optimizer compares two explicit dispatch priorities using the shared "
         "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
     )
+
+    st.subheader("Paired customer-impact evidence")
+    impact_baseline = paired_impact["baseline_metrics"]
+    impact_candidate = paired_impact["candidate_metrics"]
+    impact_benefit = paired_impact["gross_operating_benefit"]
+    impact_audit = paired_impact["equipment_constraint_audit"]
+    impact_service = paired_impact["service_equivalence"]
+    impact_cols = st.columns(4)
+    impact_cols[0].metric(
+        "Paired-policy gross difference",
+        (
+            f"{impact_benefit['value']:,.2f} {currency}"
+            if impact_benefit["value"] is not None else "Withheld"
+        ),
+    )
+    impact_cols[1].metric(
+        "Service equivalence",
+        "Passed" if impact_service["passed"] else "Failed",
+    )
+    impact_cols[2].metric(
+        "Independent dispatch audit",
+        "Passed" if impact_audit["passed"] else "Failed",
+    )
+    impact_cols[3].metric("Net customer value", "Not calculated")
+    st.dataframe(
+        pd.DataFrame([
+            {"Measure": "Estimated energy cost", "Grid-first baseline": impact_baseline["estimated_energy_cost"], "Battery-first candidate": impact_candidate["estimated_energy_cost"]},
+            {"Measure": "Grid import (kWh)", "Grid-first baseline": impact_baseline["grid_import_kwh"], "Battery-first candidate": impact_candidate["grid_import_kwh"]},
+            {"Measure": "Diesel generation (kWh)", "Grid-first baseline": impact_baseline["diesel_generation_kwh"], "Battery-first candidate": impact_candidate["diesel_generation_kwh"]},
+            {"Measure": "Renewable curtailment (kWh)", "Grid-first baseline": impact_baseline["renewable_curtailed_kwh"], "Battery-first candidate": impact_candidate["renewable_curtailed_kwh"]},
+            {"Measure": "Critical unmet load (kWh)", "Grid-first baseline": impact_baseline["critical_unmet_load_kwh"], "Battery-first candidate": impact_candidate["critical_unmet_load_kwh"]},
+            {"Measure": "Flexible load shed (kWh)", "Grid-first baseline": impact_baseline["flexible_load_shed_kwh"], "Battery-first candidate": impact_candidate["flexible_load_shed_kwh"]},
+        ]),
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption(
+        "This is a separate, same-input 24-hour grid-first vs battery-first evidence comparison. "
+        "It is not the optimizer's recommended policy, not annual savings, and not a water-service assessment. "
+        "Net customer value is withheld because software, integration, maintenance and training costs "
+        "have not been supplied on this same 24-hour basis."
+    )
+    with st.expander("Paired impact audit details"):
+        st.json(paired_impact)
 
     st.subheader("Reliability and stress review")
     stress_rows = []
@@ -361,6 +413,7 @@ try:
         "recommended_summary": selected,
         "reference_summary": baseline,
         "forecast_stress_scenarios": stress_rows,
+        "paired_customer_impact": paired_impact,
         "investment_economics": investment_report,
         "scope": "offline screening; not measured savings or equipment control",
     }

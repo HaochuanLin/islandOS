@@ -53,6 +53,7 @@ jobs:
         run: |
           mkdir -p build/sbom
           pip-audit --requirement "${{ matrix.requirements }}" \
+            --timeout 60 \
             --format cyclonedx-json \
             --output "build/sbom/${{ matrix.requirements }}.cdx.json"
       - name: Upload Python dependency SBOM and audit report
