@@ -113,3 +113,19 @@ def test_custom_signal_requires_explicit_unit_but_remains_supported():
         _timestamps(), {"process_heat": _series()}, {"process_heat": "kW_th"}, 2
     )
     assert "process_heat" in result.results
+
+
+def test_site_forecast_exposes_canonical_planning_contract_to_downstream_services():
+    result = forecast_site_signals(
+        _timestamps(),
+        {"pv_power_kw": _series(offset=10), "load_kw": _series(offset=40)},
+        {"pv_power_kw": "kW", "load_kw": "kW"},
+        6,
+    )
+    assert result.planning.timestamps == tuple(
+        point.timestamp.astimezone(timezone.utc)
+        for point in result.results["pv_power_kw"].points
+    )
+    assert set(result.planning.values) == {"pv_power_kw", "load_kw"}
+    assert result.planning.units["load_kw"] == "kW"
+    assert len(result.planning.bundle_sha256) == 64
