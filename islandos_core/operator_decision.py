@@ -118,6 +118,7 @@ def build_operator_decision_record(
             for key in (
                 "battery_power_setpoint_kw", "diesel_commitment_schedule",
                 "diesel_power_setpoint_kw", "grid_import_model_kw", "water_service",
+                "dispatch_rows",
             )
             if key in optimization_result
         },

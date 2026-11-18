@@ -18,6 +18,10 @@ def _result():
         "diesel_power_setpoint_kw": [0.0, 2.0],
         "grid_import_model_kw": [1.0, 0.0],
         "dispatch": {"summary": {"estimated_energy_cost": 12.5, "unmet_load_kwh": 0.0}},
+        "dispatch_rows": [
+            {"timestep": 0, "battery_charge_kw": 1.0, "grid_import_kw": 0.0},
+            {"timestep": 1, "battery_discharge_kw": 0.5, "grid_import_kw": 0.5},
+        ],
         "physical_audit": {"passed": True, "errors": []},
         "baseline_comparison": {"grid_first": {"feasible": True}},
         "model_scope": {"site_validation": False},
@@ -34,6 +38,7 @@ def test_operator_decision_record_is_hash_verifiable_and_advisory_only():
         operating_constraints={"unmet_load_kwh_max": 0.0},
     )
     assert record["status"] == "ready_for_human_review"
+    assert record["recommended_schedule"]["dispatch_rows"] == _result()["dispatch_rows"]
     assert record["human_review_required"] is True
     assert record["operator_approval"] == "pending"
     assert record["device_write_authorized"] is False
@@ -145,3 +150,16 @@ def test_operator_record_hash_covers_customer_impact_evidence():
     )
     record["customer_impact_assessment"]["gross_operating_benefit"]["value"] = 999.0
     assert verify_operator_decision_record(record)["valid"] is False
+
+
+def test_operator_record_hash_covers_complete_dispatch_rows():
+    record = build_operator_decision_record(
+        _result(), site_ref="demo-site", recommendation_id="rec-dispatch-rows",
+        created_at_utc="2026-11-17T10:00:00Z", data_provenance="synthetic demo data",
+        input_refs=["synthetic://demo/history.csv"], objective_weights={"cost": 1.0},
+        operating_constraints={},
+    )
+    assert len(record["recommended_schedule"]["dispatch_rows"]) == 2
+    tampered = deepcopy(record)
+    tampered["recommended_schedule"]["dispatch_rows"][1]["battery_discharge_kw"] = 99.0
+    assert verify_operator_decision_record(tampered)["valid"] is False
