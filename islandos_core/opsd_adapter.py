@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import math
 import re
@@ -27,13 +28,18 @@ OPSD_ATTRIBUTION = (
 )
 
 
+def _sha256_stream(handle) -> str:
+    """Hash a binary stream from its current position with bounded memory."""
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _sha256_file(path: Path) -> str:
     """Hash the exact source-file bytes with bounded memory usage."""
-    digest = hashlib.sha256()
     with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return _sha256_stream(handle)
 
 
 _SIGNAL_COLUMNS = {
@@ -150,13 +156,18 @@ def load_opsd_singleindex_csv(
         raise ValueError("start_utc must be earlier than end_utc")
 
     csv_path = Path(path)
-    source_file_sha256 = _sha256_file(csv_path)
     timestamps: list[datetime] = []
     values: dict[str, list[float]] = {signal: [] for signal in signals}
     source_columns: dict[str, str] = {}
     units: dict[str, str] = {}
 
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+    # Hash and parse the same opened file descriptor. Re-hashing after parsing
+    # detects in-place changes during ingestion, so the reported source digest
+    # cannot silently describe different bytes from those used for the rows.
+    with csv_path.open("rb") as raw_handle:
+        source_file_sha256 = _sha256_stream(raw_handle)
+        raw_handle.seek(0)
+        handle = io.TextIOWrapper(raw_handle, encoding="utf-8-sig", newline="")
         reader = csv.DictReader(handle)
         if not reader.fieldnames or "utc_timestamp" not in reader.fieldnames:
             raise ValueError("OPSD CSV must contain a utc_timestamp column")
@@ -204,6 +215,14 @@ def load_opsd_singleindex_csv(
             timestamps.append(stamp)
             for signal, number in parsed_values.items():
                 values[signal].append(number)
+
+        handle.detach()
+        raw_handle.seek(0)
+        if _sha256_stream(raw_handle) != source_file_sha256:
+            raise ValueError(
+                "OPSD source CSV changed while it was being read; "
+                "refusing inconsistent data provenance"
+            )
 
     if not timestamps:
         raise ValueError("no OPSD observations found for the requested region and time range")
