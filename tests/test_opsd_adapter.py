@@ -66,6 +66,23 @@ class TestOPSDAdapter(unittest.TestCase):
         self.assertEqual(result.selected_history_sha256, result.data_sha256)
         self.assertNotEqual(result.source_file_sha256, result.selected_history_sha256)
 
+    def test_dataset_collections_are_immutable_snapshots(self):
+        result = load_opsd_singleindex_csv(
+            self.write_csv(self.make_rows(12)), "AT"
+        )
+        selected_digest = result.selected_history_sha256
+        original_load = result.history["load"]
+
+        with self.assertRaises(TypeError):
+            result.history["load"] = (999.0,)
+        with self.assertRaises(TypeError):
+            result.units["load"] = "kW"
+        with self.assertRaises(TypeError):
+            result.source_columns["load"] = "tampered_column"
+
+        self.assertEqual(result.history["load"], original_load)
+        self.assertEqual(result.selected_history_sha256, selected_digest)
+
     def test_irrelevant_source_columns_change_only_the_raw_file_hash(self):
         rows = self.make_rows(12)
         original_path = self.write_csv(rows)
