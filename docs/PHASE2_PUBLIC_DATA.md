@@ -42,6 +42,7 @@ Use a region code such as `AT` or `DE` only when the corresponding columns exist
 - Does not impute, interpolate, resample, or silently drop incomplete rows.
 - Preserves negative day-ahead prices.
 - Returns source version, exact source-column mapping and attribution, plus both `source_file_sha256` (the exact CSV bytes) and `selected_history_sha256` (the normalized selected observations used by the run).
+- Returns immutable timestamp/history/unit/source-column collections so callers cannot mutate selected observations after their digest has been computed.
 
 A caller should choose a complete contiguous time range before passing the returned history to `forecast_signals`. The forecast engine independently enforces its own minimum-history requirement.
 
