@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
+import islandos_core.opsd_adapter as opsd_adapter
 from islandos_core.opsd_adapter import load_opsd_singleindex_csv
 
 
@@ -74,6 +76,30 @@ class TestOPSDAdapter(unittest.TestCase):
 
         self.assertNotEqual(original.source_file_sha256, extended.source_file_sha256)
         self.assertEqual(original.selected_history_sha256, extended.selected_history_sha256)
+
+    def test_rejects_source_file_mutated_during_ingestion(self):
+        path = self.write_csv(self.make_rows(12))
+        original_parser = opsd_adapter._parse_utc_timestamp
+        mutated = False
+
+        def mutate_source_once(raw, line_number):
+            nonlocal mutated
+            if not mutated:
+                # The CSV header has already been read when the first data
+                # timestamp is parsed. Change the opened file in place so the
+                # post-ingestion digest must detect the inconsistent snapshot.
+                with open(path, "r+b") as handle:
+                    handle.seek(0)
+                    handle.write(b"#")
+                mutated = True
+            return original_parser(raw, line_number)
+
+        with patch(
+            "islandos_core.opsd_adapter._parse_utc_timestamp",
+            side_effect=mutate_source_once,
+        ):
+            with self.assertRaisesRegex(ValueError, "changed while it was being read"):
+                load_opsd_singleindex_csv(path, "AT")
 
     def test_supports_selected_signal_subset_and_utc_window(self):
         path = self.write_csv(self.make_rows())
