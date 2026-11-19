@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Mapping, Sequence
 
 
@@ -64,6 +65,17 @@ class PublicTimeSeriesDataset:
     attribution: str
     source_file_sha256: str
     data_sha256: str
+
+    def __post_init__(self) -> None:
+        """Freeze nested collection fields so provenance cannot go stale by mutation."""
+        object.__setattr__(self, "timestamps", tuple(self.timestamps))
+        object.__setattr__(
+            self,
+            "history",
+            MappingProxyType({key: tuple(values) for key, values in self.history.items()}),
+        )
+        object.__setattr__(self, "units", MappingProxyType(dict(self.units)))
+        object.__setattr__(self, "source_columns", MappingProxyType(dict(self.source_columns)))
 
     @property
     def selected_history_sha256(self) -> str:
