@@ -34,6 +34,7 @@ Use a region code such as `AT` or `DE` only when the corresponding columns exist
 ## Data-quality contract
 
 - Reads only the selected columns and timestamp from the local CSV.
+- Hashes and parses the same opened file descriptor, then re-checks the byte-level digest after ingestion; if the source changes during the read, ingestion fails rather than returning mismatched provenance.
 - Normalizes timestamps to timezone-aware UTC.
 - Supports the compact timestamp format documented by OPSD and ISO-8601 UTC variants.
 - Supports an optional half-open UTC time window: `[start_utc, end_utc)`.
