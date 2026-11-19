@@ -1,0 +1,85 @@
+name: GSC synthetic impact evidence
+
+on:
+  push:
+    branches:
+      - draft/gsc-impact-evidence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.lock
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-ci.lock
+      - name: Run 168-hour synthetic forecast-to-dispatch case
+        run: |
+          python tools/run_forecast_dispatch_demo.py \
+            --hours 168 \
+            --seed 20261024 \
+            --output-dir build/gsc-impact-case
+      - name: Validate outputs and write evidence index
+        run: |
+          python - <<'PY'
+          import csv, hashlib, json
+          from pathlib import Path
+
+          out = Path("build/gsc-impact-case")
+          report_path = out / "run_report.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          assert report.get("status") == "illustrative_forecast_dispatch_screening_only"
+          assert report.get("dataset_type") == "synthetic"
+          assert report.get("is_measured_site_data") is False
+          assert report.get("time_alignment", {}).get("forecast_rows_compared") == 144
+          with (out / "strategy_comparison.csv").open(newline="", encoding="utf-8") as f:
+              rows = list(csv.DictReader(f))
+          assert len(rows) == 10, f"Expected 10 strategy rows, got {len(rows)}"
+          with (out / "forecast_audit.csv").open(newline="", encoding="utf-8") as f:
+              forecast_rows = list(csv.DictReader(f))
+          assert len(forecast_rows) == 144, f"Expected 144 forecast rows, got {len(forecast_rows)}"
+          artifacts = {}
+          for path in sorted(out.glob("*")):
+              if path.is_file():
+                  artifacts[path.name] = {
+                      "bytes": path.stat().st_size,
+                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest()
+                  }
+          index = {
+              "case_id": "islandos-gsc-synthetic-168h-seed-20261024",
+              "dataset_type": "synthetic",
+              "is_measured_site_data": False,
+              "status": report["status"],
+              "hours": 168,
+              "warmup_hours": 24,
+              "forecast_rows": len(forecast_rows),
+              "strategy_summary_rows": len(rows),
+              "strategy_names": sorted({r.get("strategy", "") for r in rows}),
+              "demand_bases": sorted({r.get("demand_basis", "") for r in rows}),
+              "source_commit": __import__("os").environ.get("GITHUB_SHA"),
+              "artifacts": artifacts,
+              "interpretation_limit": "Software screening evidence only; not measured site data, field validation, guaranteed savings, or safety approval."
+          }
+          (out / "evidence_index.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(index, indent=2))
+          PY
+      - name: Upload reproducible evidence bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: islandos-gsc-synthetic-impact-case
+          path: build/gsc-impact-case/
+          if-no-files-found: error
+          retention-days: 30
