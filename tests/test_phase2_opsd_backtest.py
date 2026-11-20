@@ -194,6 +194,39 @@ def test_canonical_report_requires_minimum_training_history_before_holdout():
         _canonical_prediction_report(_dataset(count=77), forecast_horizon=6)
 
 
+def test_canonical_report_rejects_invalid_rolling_fold_limit():
+    with pytest.raises(ValueError, match="max_rolling_folds must be an integer from 2 to 1000"):
+        _canonical_prediction_report(_dataset(), forecast_horizon=6, max_rolling_folds=1)
+
+
+def test_canonical_rolling_report_bounds_hourly_folds_and_reports_skips():
+    dataset = _dataset(count=120)
+    report = _canonical_prediction_report(
+        dataset,
+        forecast_horizon=6,
+        rolling_horizons=(1,),
+        max_rolling_folds=4,
+    )
+
+    evaluation = report["signals"]["load"]["rolling_origin_candidate_evaluations"]["1"]
+    window = evaluation["evaluation_window"]
+
+    assert window["complete_folds"] == 66
+    assert window["evaluated_folds"] == 4
+    assert window["skipped_complete_folds"] == 62
+    assert window["fold_sampling"] == "evenly_spaced_complete_blocks_including_first_and_last"
+    assert window["max_rolling_folds"] == 4
+    assert window["fold_indices"] == [1, 23, 44, 66]
+    assert window["scored_samples"] == 4
+    assert window["skipped_validation_samples"] == 62
+    assert window["excluded_trailing_samples"] == 0
+    assert window["last_scored_validation_end_utc"] == dataset.timestamps[113].isoformat()
+    assert all(
+        [fold["fold_index"] for fold in model["fold_metrics"]] == [1, 23, 44, 66]
+        for model in evaluation["models"]
+    )
+
+
 def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
     dataset = _dataset(count=125)
     report = _canonical_prediction_report(
