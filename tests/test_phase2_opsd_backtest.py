@@ -246,8 +246,14 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
         "last_scored_validation_end_utc": dataset.timestamps[95].isoformat(),
         "validation_horizon_hours": 24,
         "complete_folds": 2,
+        "evaluated_folds": 2,
+        "skipped_complete_folds": 0,
+        "fold_sampling": "evenly_spaced_complete_blocks_including_first_and_last",
+        "max_rolling_folds": 24,
+        "fold_indices": [1, 2],
         "scored_samples": 48,
+        "skipped_validation_samples": 0,
         "excluded_trailing_samples": 23,
     }
     assert all(len(model["fold_metrics"]) == 2 for model in evaluation["models"])
-    assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"]
+    assert "incomplete trailing observations are reported separately" in report["rolling_evaluation_scope"]
