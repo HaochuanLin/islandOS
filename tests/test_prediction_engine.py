@@ -231,6 +231,37 @@ class TestPredictionEngine(unittest.TestCase):
             [3.0, 3.0, 3.0],
         )
 
+    def test_rolling_evaluation_samples_evenly_spaced_complete_folds(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        score = engine.evaluate_candidates(
+            [float(index) for index in range(21)],
+            initial_history=4,
+            horizon=2,
+            max_folds=3,
+        )[0]
+
+        self.assertEqual(score.folds, 3)
+        self.assertEqual(score.samples, 6)
+        self.assertEqual([fold.fold_index for fold in score.fold_metrics], [1, 5, 8])
+        self.assertEqual([fold.train_samples for fold in score.fold_metrics], [4, 12, 18])
+
+    def test_rolling_evaluation_rejects_invalid_fold_limit(self):
+        engine = PredictionEngine()
+        history = [float(index) for index in range(96)]
+        for invalid in (True, 1, 2.0, "2"):
+            with self.subTest(max_folds=invalid):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "max_folds must be None or an integer of at least 2",
+                ):
+                    engine.evaluate_candidates(
+                        history,
+                        initial_history=48,
+                        horizon=24,
+                        max_folds=invalid,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
