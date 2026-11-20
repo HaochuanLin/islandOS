@@ -1,0 +1,54 @@
+{
+  "status": "imported",
+  "dataset": "Mafate Roche Plate experimental stand-alone microgrid",
+  "source_url": "https://zenodo.org/records/8186303",
+  "doi": "10.5281/zenodo.8186303",
+  "citation": "Calogine, D., Francou, J., Abbezzot, C., & Tovondahiniriko, F. (2023). Data in experimental stand-alone microgrid: solar production, domestic loads, battery storage and meteorological series. Data in Brief, 51, 109643. https://doi.org/10.1016/j.dib.2023.109643",
+  "license": "Creative Commons Attribution 4.0 International (CC BY 4.0); attribute the authors and dataset.",
+  "site": "Roche Plate, Mafate, Reunion Island",
+  "measurement_period_as_published": "2020-05-01 through 2021-05-01",
+  "raw_sampling_as_published": {
+    "meteorology": "20 seconds",
+    "solar_plant_and_house_loads": "1 minute"
+  },
+  "timezone_status": "preserved as provided; original timezone metadata should be confirmed before operational use",
+  "hourly_aggregation": "arithmetic mean of available readings within each hour; no interpolation or gap filling",
+  "source_row_counts": {
+    "meteo": 0,
+    "solar": 0,
+    "house_1": 510644,
+    "house_2": 0,
+    "house_3": 0
+  },
+  "source_file_sha256": {
+    "house_1": "92cb3d1d2296059c714763b264152338aa8138f0acf58f496ac0f5c87d1b0305"
+  },
+  "missing_files_left_blank": [
+    "Meteo_dataset.csv",
+    "Solar_plant_dataset.csv",
+    "Demand_house_2_dataset.csv",
+    "Demand_house_3_dataset.csv"
+  ],
+  "hourly_bin_counts": {
+    "meteo_hours_with_samples": 0,
+    "solar_plant_hours_with_samples": 0,
+    "house_1_hours_with_samples": 8621,
+    "house_2_hours_with_samples": 0,
+    "house_3_hours_with_samples": 0,
+    "continuous_hourly_rows_in_output": 8784
+  },
+  "row_counts": {
+    "meteo_hourly.csv": 8784,
+    "solar_plant_hourly.csv": 8784,
+    "house_loads_hourly.csv": 26352,
+    "microgrid_hourly.csv": 8784
+  },
+  "data_limitations": [
+    "This is a real field dataset from three homes and one experimental microgrid, not a representative sample of all islands.",
+    "No freshwater demand, desalination output, or reservoir-level measurements are included.",
+    "Household channel meanings differ by house; aggregate total load is selected from Input4, Input5, and Input1 for houses 1, 2, and 3 respectively, per the dataset README.",
+    "Hourly values are means of high-frequency readings, not reconstructed hourly energy totals.",
+    "Missing readings remain blank; sample counts indicate the number of source rows per hour, not completeness guarantees.",
+    "Timezone metadata is not stated in the dataset README and must be checked before operational scheduling."
+  ]
+}

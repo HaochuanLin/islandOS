@@ -64,3 +64,7 @@ train the water side of islandOS.
 Training this small model locally is normally free; it uses CPU and does not
 require a paid AI API or GPU. The optional dependency set is
 `requirements-ml.txt`.
+
+## Result on house 1 (November 2026)
+
+We ran this experiment on the real `Demand_house_1_dataset.csv` file only, using the importer's `--allow-missing` option. Over the test period (12 January to 1 May 2021, 2,534 hours) the gradient-boosting model had a mean absolute error of 0.046 kW, against 0.053 kW for the best baseline (same as the previous hour): 12% lower. RMSE was 0.071 kW against 0.084 kW, 15% lower. The house used 0.14 kW on average, so the typical error is still about a third of the average load. Full numbers are in `results/mafate_house1/`.

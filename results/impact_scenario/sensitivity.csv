@@ -1,0 +1,11 @@
+case,mean_adjusted_diesel_change_pct,min_adjusted_diesel_change_pct,max_adjusted_diesel_change_pct,weeks_with_less_diesel,lowest_water_service_pct_coordinated
+default,0.71,-0.85,6.27,3/30,100.0
+baseline shift 06-18,-0.24,-2.52,3.21,17/30,100.0
+baseline shift 08-20,0.88,-0.81,4.02,2/30,100.0
+baseline shift 09-17,13.73,7.53,18.81,0/30,100.0
+battery 60 kWh,0.31,-0.84,1.38,5/30,100.0
+battery 240 kWh,0.89,0.04,11.02,0/30,100.0
+solar 30 kW,0.21,0.06,0.28,0/30,100.0
+solar 90 kW,2.15,-2.1,9.92,6/30,100.0
+water demand 60 m3/day,20.49,14.11,31.26,0/30,100.0
+tank 40 m3,-0.16,-2.0,1.36,13/30,100.0

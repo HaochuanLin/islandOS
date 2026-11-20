@@ -32,6 +32,9 @@ not committed to this repository.
 
 ## Run the importer
 
+If you only have some of the five files (for example just one house), add `--allow-missing`. Files that are not found are skipped and their columns stay blank. The importer also skips the contact line that the published files have above their header.
+
+
 From the repository root:
 
 ```bash

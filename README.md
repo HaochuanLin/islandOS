@@ -126,6 +126,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | [Repository convergence audit](docs/REPOSITORY_CONVERGENCE_AUDIT_2026-11-14.md) | Branch/PR reconciliation, application call paths, overlapping modules, and staged consolidation plan |
 | [Experiments and workflows](docs/EXPERIMENTS_AND_WORKFLOWS.md) | Runnable research commands and benchmark procedures |
 | [Integrated microgrid model](docs/INTEGRATED_MICROGRID_MODEL.md) | Physical accounting assumptions and model scope |
+| [Synthetic impact scenario](docs/IMPACT_SCENARIO.md) | Fixed-timetable vs coordinated RO on a synthetic off-grid island, judged fairly on diesel, CO2, water service and brine; finds no clear benefit on this island |
 | [Forecasting baseline](docs/SCENARIO_FORECASTING_BASELINE.md) | Current transparent forecast baseline and evaluation boundary |
 | [Price-aware flexible-load scheduling](docs/PRICE_AWARE_FLEXIBLE_LOAD_SCHEDULING.md) | Experimental hourly tariff baseline, tariff-to-optimizer workflow, continuous-load LP, and limitations |
 | [SIC reference migration assessment](docs/SIC_REFERENCE_MIGRATION_ASSESSMENT.md) | What was learned from the SIC repositories, what was adopted, and what is deliberately deferred |
