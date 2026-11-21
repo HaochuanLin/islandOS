@@ -11,6 +11,8 @@ on:
       - "islandos_core/prediction_engine.py"
       - "islandos_core/forecast_engine.py"
       - "islandos_core/forecast_signal_catalog.py"
+      - "islandos_core/forecast_validation.py"
+      - "tests/test_forecast_validation.py"
   workflow_dispatch:
     inputs:
       region:
@@ -175,7 +177,7 @@ jobs:
             --horizon 24 \
             --rolling-validation \
             --rolling-horizons 1 6 24 168 \
-            --max-rolling-folds 24 \
+            --max-rolling-folds 168 \
             > build/opsd/report.json
 
       - name: Validate report provenance and evaluation coverage
@@ -212,6 +214,18 @@ jobs:
               for metric in ("holdout_mae", "holdout_rmse", "holdout_bias"):
                   assert math.isfinite(legacy[metric]), (signal, metric, legacy[metric])
               assert set(legacy_rolling[signal]) == {"1", "6", "24", "168"}
+              for horizon in ("1", "6", "24", "168"):
+                  legacy_window = legacy_rolling[signal][horizon]["evaluation_window"]
+                  assert legacy_window["evaluated_folds"] >= 2
+                  assert legacy_window["fold_indices"][0] == 1
+                  assert legacy_window["fold_indices"][-1] == legacy_window["available_complete_folds"]
+                  for model in legacy_rolling[signal][horizon]["models"].values():
+                      assert len(model["folds"]) == legacy_window["evaluated_folds"]
+                      assert all(
+                          fold["train_samples"] < window["selected_observations"]
+                          and fold["validation_start_utc"] <= fold["validation_end_utc"]
+                          for fold in model["folds"]
+                      )
               canonical_signal = canonical["signals"][signal]
               assert canonical_signal["holdout_metrics"]["samples"] == 24
               for metric in ("mae", "rmse", "bias_predicted_minus_actual"):

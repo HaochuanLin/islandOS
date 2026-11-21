@@ -15,7 +15,11 @@ class TestForecastValidation(unittest.TestCase):
         folds = expanding_window_slices(240, min_train_size=72, validation_size=24, folds=4)
         self.assertEqual(len(folds), 4)
         train_lengths = [train.stop for train, _ in folds]
-        self.assertEqual(train_lengths, sorted(train_lengths))
+        self.assertEqual(train_lengths, [72, 120, 168, 216])
+        self.assertEqual(
+            [(train.stop, validation.start, validation.stop) for train, validation in folds],
+            [(72, 72, 96), (120, 120, 144), (168, 168, 192), (216, 216, 240)],
+        )
         for train, validation in folds:
             self.assertEqual(train.stop, validation.start)
             self.assertEqual(validation.stop - validation.start, 24)
@@ -53,6 +57,14 @@ class TestForecastValidation(unittest.TestCase):
             min_train_size=72, validation_size=24, folds=4,
         )
         self.assertEqual(len(result["persistence"].folds), 4)
+        persistence_folds = result["persistence"].folds
+        self.assertEqual([fold.fold_index for fold in persistence_folds], [1, 3, 5, 7])
+        self.assertEqual([fold.train_samples for fold in persistence_folds], [72, 120, 168, 216])
+        self.assertEqual(persistence_folds[0].train_start_utc, stamps[0])
+        self.assertEqual(persistence_folds[0].train_end_utc, stamps[71])
+        self.assertEqual(persistence_folds[0].validation_start_utc, stamps[72])
+        self.assertEqual(persistence_folds[0].validation_end_utc, stamps[95])
+        self.assertEqual(persistence_folds[-1].validation_end_utc, stamps[-1])
         self.assertLess(result["step"].mean_mae, result["persistence"].mean_mae)
 
     def test_horizon_evaluation_keeps_metrics_separate(self):

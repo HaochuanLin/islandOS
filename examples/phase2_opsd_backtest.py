@@ -92,7 +92,7 @@ def _canonical_prediction_report(
     forecast_horizon: int,
     rolling_horizons=(),
     *,
-    max_rolling_folds: int = 24,
+    max_rolling_folds: int = 168,
 ):
     """Evaluate candidates on bounded rolling windows and an untouched final block."""
     if (
@@ -386,7 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--start-utc", type=_utc_bound, help="Inclusive ISO-8601 UTC start")
     parser.add_argument("--end-utc", type=_utc_bound, help="Exclusive ISO-8601 UTC end")
-    parser.add_argument("--horizon", type=int, default=24, help="Final chronological holdout / forecast horizon in hours (1–168)")
+    parser.add_argument("--horizon", type=int, default=168, help="Final chronological holdout / forecast horizon in hours (1–168)")
     parser.add_argument(
         "--rolling-validation", action="store_true",
         help="Also evaluate legacy and canonical forecast candidates on expanding windows",
@@ -397,7 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-rolling-folds", type=int, default=24,
-        help="Maximum evenly spaced complete folds per canonical signal/horizon (2–1000; default: 24)",
+        help="Maximum evenly spaced complete folds per canonical signal/horizon (2–1000; default: 168)",
     )
     return parser
 
@@ -474,23 +474,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.rolling_validation:
         report["rolling_validation"] = {
             "method": "expanding_window",
-            "folds": 4,
             "minimum_training_observations": 72,
             "horizons_hours": list(args.rolling_horizons),
-            "max_canonical_folds_per_signal_horizon": args.max_rolling_folds,
+            "max_folds_per_signal_horizon": args.max_rolling_folds,
             "signals": {},
         }
         for name, values in dataset.history.items():
-            horizon_results = evaluate_signal_rolling(
-                dataset.timestamps,
-                values,
-                horizons=tuple(args.rolling_horizons),
-                non_negative=name != "price",
-                min_train_size=72,
-                folds=4,
-            )
             signal_report = {}
-            for horizon, models in horizon_results.items():
+            for horizon in args.rolling_horizons:
+                available_complete_folds = (len(values) - 72) // horizon
+                if available_complete_folds < 2:
+                    raise ValueError(
+                        f"{name} has only {available_complete_folds} complete folds "
+                        f"for the {horizon}-hour rolling horizon; at least two are required"
+                    )
+                evaluated_folds = min(args.max_rolling_folds, available_complete_folds)
+                models = evaluate_signal_rolling(
+                    dataset.timestamps,
+                    values,
+                    horizons=(horizon,),
+                    non_negative=name != "price",
+                    min_train_size=72,
+                    folds=evaluated_folds,
+                )[horizon]
                 baseline_ids = ("persistence", "seasonal_naive_24h")
                 ridge = models["ridge_autoregressive"]
                 fold_win_count = sum(
@@ -499,6 +505,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                     for index in range(len(ridge.folds))
                 )
                 signal_report[str(horizon)] = {
+                    "evaluation_window": {
+                        "minimum_training_samples": 72,
+                        "available_complete_folds": available_complete_folds,
+                        "evaluated_folds": len(ridge.folds),
+                        "skipped_complete_folds": available_complete_folds - len(ridge.folds),
+                        "fold_sampling": "evenly_spaced_complete_blocks_including_first_and_last",
+                        "fold_indices": [fold.fold_index for fold in ridge.folds],
+                        "scored_samples": sum(fold.samples for fold in ridge.folds),
+                        "skipped_validation_samples": (available_complete_folds - len(ridge.folds)) * horizon,
+                        "excluded_trailing_samples": (len(values) - 72) % horizon,
+                        "initial_history_start_utc": dataset.timestamps[0].isoformat(),
+                        "initial_history_end_utc": dataset.timestamps[71].isoformat(),
+                        "first_validation_start_utc": ridge.folds[0].validation_start_utc.isoformat(),
+                        "last_scored_validation_end_utc": ridge.folds[-1].validation_end_utc.isoformat(),
+                    },
                     "best_by_mean_mae": min(models, key=lambda model_id: models[model_id].mean_mae),
                     "ridge_fold_win_rate_vs_best_baseline": fold_win_count / len(ridge.folds),
                     "models": {
@@ -508,6 +529,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                             "mean_bias_predicted_minus_actual": score.mean_bias,
                             "folds": [
                                 {
+                                    "fold_index": fold.fold_index,
+                                    "train_samples": fold.train_samples,
+                                    "train_start_utc": fold.train_start_utc.isoformat(),
+                                    "train_end_utc": fold.train_end_utc.isoformat(),
+                                    "validation_start_utc": fold.validation_start_utc.isoformat(),
+                                    "validation_end_utc": fold.validation_end_utc.isoformat(),
                                     "samples": fold.samples,
                                     "mae": fold.mae,
                                     "rmse": fold.rmse,
