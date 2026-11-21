@@ -77,7 +77,7 @@ jobs:
           source = Path("build/opsd/time_series_60min_singleindex.csv")
           region = os.environ["OPSD_REGION"].strip().upper()
           signals = ("load", "solar", "wind", "price")
-          minimum_observations = 72 + 4 * 168
+          minimum_observations = 168 + 72 + 4 * 168
 
           best_count = 0
           best_start = None
