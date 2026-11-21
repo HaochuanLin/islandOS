@@ -1,0 +1,310 @@
+name: OPSD public energy forecast backtest
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/opsd-public-data-backtest.yml"
+      - "examples/phase2_opsd_backtest.py"
+      - "islandos_core/opsd_adapter.py"
+      - "islandos_core/prediction_engine.py"
+      - "islandos_core/forecast_engine.py"
+      - "islandos_core/forecast_signal_catalog.py"
+  workflow_dispatch:
+    inputs:
+      region:
+        description: OPSD country/control-area code
+        required: true
+        default: AT
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-opsd-backtest-\${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  opsd-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OPSD_REGION: \${{ github.event_name == 'workflow_dispatch' && inputs.region || 'AT' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.lock
+
+      - name: Install locked project and test dependencies
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-ci.lock
+
+      - name: Download the official OPSD historical CSV
+        run: |
+          mkdir -p build/opsd
+          curl --fail --location \
+            --retry 4 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 900 \
+            "https://data.open-power-system-data.org/time_series/2020-10-06/time_series_60min_singleindex.csv" \
+            --output build/opsd/time_series_60min_singleindex.csv
+          sha256sum build/opsd/time_series_60min_singleindex.csv | tee build/opsd/source.sha256
+          du -h build/opsd/time_series_60min_singleindex.csv
+
+      - name: Find the longest complete contiguous hourly window
+        id: window
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          import math
+          import os
+          from datetime import timedelta
+          from pathlib import Path
+
+          from islandos_core.opsd_adapter import _parse_utc_timestamp, _resolve_columns
+
+          source = Path("build/opsd/time_series_60min_singleindex.csv")
+          region = os.environ["OPSD_REGION"].strip().upper()
+          signals = ("load", "solar", "wind", "price")
+          minimum_observations = 72 + 4 * 168
+
+          best_count = 0
+          best_start = None
+          best_end = None
+          current_count = 0
+          current_start = None
+          previous_stamp = None
+          scanned_rows = 0
+          valid_complete_rows = 0
+          source_columns = {}
+
+          def retain_current_run():
+              global best_count, best_start, best_end
+              if current_count > best_count:
+                  best_count = current_count
+                  best_start = current_start
+                  best_end = previous_stamp + timedelta(hours=1)
+
+          with source.open("r", encoding="utf-8-sig", newline="") as handle:
+              reader = csv.DictReader(handle)
+              if not reader.fieldnames or len(reader.fieldnames) != len(set(reader.fieldnames)):
+                  raise SystemExit("OPSD CSV has missing or duplicate headers.")
+              resolved = _resolve_columns(reader.fieldnames, region, signals)
+              source_columns = {name: spec[0] for name, spec in resolved.items()}
+
+              for line_number, row in enumerate(reader, start=2):
+                  scanned_rows += 1
+                  try:
+                      stamp = _parse_utc_timestamp(row.get("utc_timestamp") or "", line_number)
+                      for signal, (column, _unit, non_negative) in resolved.items():
+                          raw = (row.get(column) or "").strip()
+                          if not raw:
+                              raise ValueError("missing value")
+                          value = float(raw)
+                          if not math.isfinite(value) or (non_negative and value < 0):
+                              raise ValueError("invalid physical value")
+                  except (TypeError, ValueError):
+                      retain_current_run()
+                      current_count = 0
+                      current_start = None
+                      previous_stamp = None
+                      continue
+
+                  valid_complete_rows += 1
+                  if previous_stamp is None or stamp - previous_stamp != timedelta(hours=1):
+                      retain_current_run()
+                      current_count = 0
+                      current_start = stamp
+                  current_count += 1
+                  previous_stamp = stamp
+                  retain_current_run()
+
+          if best_count < minimum_observations:
+              raise SystemExit(
+                  f"No complete contiguous {region} window meets the {minimum_observations}-hour "
+                  f"minimum; longest complete window has {best_count} hours. "
+                  "Do not impute or silently bridge missing observations."
+              )
+
+          payload = {
+              "source_type": "public_historical",
+              "measurement_scope": "country_control_area_or_bidding_zone_aggregate",
+              "region_code": region,
+              "signals": list(signals),
+              "source_columns": source_columns,
+              "rows_scanned": scanned_rows,
+              "valid_complete_rows": valid_complete_rows,
+              "selected_observations": best_count,
+              "minimum_observations_required": minimum_observations,
+              "excluded_rows_outside_selected_window": scanned_rows - best_count,
+              "selection_method": "longest_contiguous_hourly_window_with_all_requested_signals_present_and_finite",
+              "start_utc": best_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "end_utc_exclusive": best_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "site_telemetry": False,
+              "synthetic": False,
+          }
+          Path("build/opsd/window.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\\n",
+              encoding="utf-8",
+          )
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"start_utc={payload['start_utc']}\\n")
+              output.write(f"end_utc={payload['end_utc_exclusive']}\\n")
+          print(json.dumps(payload, indent=2, sort_keys=True))
+          PY
+
+      - name: Run legacy and canonical rolling-origin evaluations
+        run: |
+          python examples/phase2_opsd_backtest.py \
+            --csv build/opsd/time_series_60min_singleindex.csv \
+            --region "$OPSD_REGION" \
+            --signals load solar wind price \
+            --start-utc "\${{ steps.window.outputs.start_utc }}" \
+            --end-utc "\${{ steps.window.outputs.end_utc }}" \
+            --horizon 24 \
+            --rolling-validation \
+            --rolling-horizons 1 6 24 168 \
+            --max-rolling-folds 24 \
+            > build/opsd/report.json
+
+      - name: Validate report provenance and evaluation coverage
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import math
+          from pathlib import Path
+
+          root = Path("build/opsd")
+          report = json.loads((root / "report.json").read_text(encoding="utf-8"))
+          window = json.loads((root / "window.json").read_text(encoding="utf-8"))
+          source_sha256 = hashlib.sha256(
+              (root / "time_series_60min_singleindex.csv").read_bytes()
+          ).hexdigest()
+          provenance = report["data_provenance"]
+          assert provenance["source_file_sha256"] == source_sha256
+          assert len(provenance["selected_history_sha256"]) == 64
+          assert provenance["region_code"] == window["region_code"]
+          assert provenance["observations"] == window["selected_observations"]
+          assert set(report["signals"]) == {"load", "solar", "wind", "price"}
+
+          canonical = report["canonical_prediction_service"]
+          assert canonical["source_file_sha256"] == source_sha256
+          assert canonical["selected_history_sha256"] == provenance["selected_history_sha256"]
+          assert canonical["holdout_window"]["holdout_samples"] == 24
+          assert canonical["holdout_window"]["excluded_from_candidate_selection"] is True
+          assert canonical["holdout_window"]["excluded_from_rolling_origin_evaluation"] is True
+
+          legacy_rolling = report["rolling_validation"]["signals"]
+          assert set(legacy_rolling) == {"load", "solar", "wind", "price"}
+          for signal in ("load", "solar", "wind", "price"):
+              legacy = report["signals"][signal]
+              for metric in ("holdout_mae", "holdout_rmse", "holdout_bias"):
+                  assert math.isfinite(legacy[metric]), (signal, metric, legacy[metric])
+              assert set(legacy_rolling[signal]) == {"1", "6", "24", "168"}
+              canonical_signal = canonical["signals"][signal]
+              assert canonical_signal["holdout_metrics"]["samples"] == 24
+              for metric in ("mae", "rmse", "bias_predicted_minus_actual"):
+                  assert math.isfinite(canonical_signal["holdout_metrics"][metric])
+              candidates = canonical_signal["holdout_candidate_evaluations"]["models"]
+              assert len(candidates) >= 2
+              for horizon in ("1", "6", "24", "168"):
+                  legacy_models = legacy_rolling[signal][horizon]["models"]
+                  assert {"persistence", "seasonal_naive_24h", "ridge_autoregressive"} <= set(legacy_models)
+                  canonical_eval = canonical_signal["rolling_origin_candidate_evaluations"][horizon]
+                  assert canonical_eval["models"]
+                  assert canonical_eval["evaluation_window"]["evaluated_folds"] >= 1
+                  for model in canonical_eval["models"]:
+                      assert all(
+                          math.isfinite(model[key])
+                          for key in ("mae", "rmse", "bias_predicted_minus_actual")
+                      )
+
+          print(json.dumps({
+              "status": "public_historical_OPSD_backtest_completed",
+              "region": window["region_code"],
+              "selected_observations": window["selected_observations"],
+              "window_start_utc": window["start_utc"],
+              "window_end_utc_exclusive": window["end_utc_exclusive"],
+              "source_file_sha256": source_sha256,
+              "selected_history_sha256": provenance["selected_history_sha256"],
+              "signals": sorted(report["signals"]),
+              "rolling_horizons_hours": [1, 6, 24, 168],
+              "site_telemetry": False,
+              "synthetic": False,
+              "customer_savings_claimed": False,
+          }, indent=2))
+          PY
+
+      - name: Build evidence summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("build/opsd")
+          report = json.loads((root / "report.json").read_text(encoding="utf-8"))
+          window = json.loads((root / "window.json").read_text(encoding="utf-8"))
+          canonical = report["canonical_prediction_service"]["signals"]
+          lines = [
+              "# OPSD public historical energy forecast backtest",
+              "",
+              "- Evidence class: public historical regional aggregate data.",
+              "- This is not customer-site telemetry or measured facility performance.",
+              "- Synthetic data was not used for the reported backtest.",
+              "- No customer savings, deployment accuracy, or operational reliability claim is made.",
+              f"- Region: {window['region_code']}",
+              f"- Selected complete observations: {window['selected_observations']}",
+              f"- UTC window: [{window['start_utc']}, {window['end_utc_exclusive']})",
+              f"- Raw CSV SHA-256: {report['data_provenance']['source_file_sha256']}",
+              f"- Selected-history SHA-256: {report['data_provenance']['selected_history_sha256']}",
+              "",
+              "| Signal | Unit | Selected model | Final-holdout MAE | RMSE | Bias (predicted − actual) |",
+              "|---|---|---|---:|---:|---:|",
+          ]
+          for signal in ("load", "solar", "wind", "price"):
+              item = canonical[signal]
+              metrics = item["holdout_metrics"]
+              lines.append(
+                  f"| {signal} | {item['unit']} | {item['selected_model']} | "
+                  f"{metrics['mae']:.6g} | {metrics['rmse']:.6g} | "
+                  f"{metrics['bias_predicted_minus_actual']:.6g} |"
+              )
+          lines.extend([
+              "",
+              "## Rolling-origin model comparisons",
+              "",
+              "The report contains legacy Persistence / 24-hour Seasonal Naive / Ridge autoregression "
+              "and canonical Persistence / Seasonal Naive / Recent Mean / Linear Trend comparisons "
+              "for 1, 6, 24 and 168-hour horizons. Canonical rolling origins are evenly sampled "
+              "with the first and last complete blocks included; exact fold indices and UTC "
+              "boundaries are in report.json.",
+              "",
+              "Metrics are historical forecast errors only. Country/control-area values are not "
+              "scaled into a customer facility, and unit conversion does not establish site-level accuracy.",
+              "",
+          ])
+          (root / "summary.md").write_text("\\n".join(lines), encoding="utf-8")
+          print((root / "summary.md").read_text(encoding="utf-8"))
+          PY
+
+      - name: Upload reproducible OPSD backtest evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsd-public-backtest-\${{ env.OPSD_REGION }}-\${{ github.sha }}
+          path: |
+            build/opsd/report.json
+            build/opsd/window.json
+            build/opsd/source.sha256
+            build/opsd/summary.md
+          if-no-files-found: error
+          retention-days: 30
