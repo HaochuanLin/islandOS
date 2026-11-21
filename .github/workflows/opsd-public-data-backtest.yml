@@ -163,6 +163,8 @@ jobs:
           PY
 
       - name: Run legacy and canonical rolling-origin evaluations
+        env:
+          PYTHONPATH: .
         run: |
           python examples/phase2_opsd_backtest.py \
             --csv build/opsd/time_series_60min_singleindex.csv \
