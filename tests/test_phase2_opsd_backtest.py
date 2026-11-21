@@ -8,6 +8,7 @@ from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
     _canonicalize_opsd_history,
     _score_holdout,
+    build_opsd_evidence_summary,
     build_parser,
 )
 
@@ -269,3 +270,81 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
     }
     assert all(len(model["fold_metrics"]) == 2 for model in evaluation["models"])
     assert "incomplete trailing observations are reported separately" in report["rolling_evaluation_scope"]
+
+
+def test_opsd_evidence_summary_reports_row_accounting_and_candidate_scores():
+    dataset = _dataset(count=120)
+    canonical = _canonical_prediction_report(
+        dataset,
+        forecast_horizon=6,
+        rolling_horizons=(1, 6, 24),
+    )
+    report = {
+        "data_provenance": {
+            "evidence_class": "public_historical_regional_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
+            "source": "Open Power System Data",
+            "version": "2020-10-06",
+            "region_code": "AT",
+            "observations": 120,
+            "source_file_sha256": "b" * 64,
+            "selected_history_sha256": "a" * 64,
+        },
+        "canonical_prediction_service": canonical,
+    }
+    window = {
+        "region_code": "AT",
+        "rows_scanned": 150,
+        "valid_complete_rows": 130,
+        "selected_observations": 120,
+        "incomplete_rows": 20,
+        "complete_rows_outside_selected_window": 10,
+        "excluded_rows_outside_selected_window": 30,
+        "start_utc": dataset.timestamps[0].isoformat(),
+        "end_utc_exclusive": (dataset.timestamps[-1] + timedelta(hours=1)).isoformat(),
+    }
+
+    summary = build_opsd_evidence_summary(report, window)
+
+    assert "public historical regional aggregate" in summary
+    assert "Source rows scanned: 150" in summary
+    assert "Complete rows outside the selected contiguous window: 10" in summary
+    assert "Incomplete or invalid rows: 20" in summary
+    assert "Selected contiguous observations: 120" in summary
+    assert "Final chronological holdout" in summary
+    assert "Canonical rolling-origin candidate comparisons" in summary
+    assert "| load | 1 |" in summary
+    assert "| price | 24 |" in summary
+    assert "No customer savings" in summary
+
+
+def test_opsd_evidence_summary_rejects_inconsistent_row_accounting():
+    dataset = _dataset(count=120)
+    canonical = _canonical_prediction_report(dataset, forecast_horizon=6)
+    report = {
+        "data_provenance": {
+            "evidence_class": "public_historical_regional_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
+            "region_code": "AT",
+            "observations": 120,
+            "source_file_sha256": "b" * 64,
+            "selected_history_sha256": "a" * 64,
+        },
+        "canonical_prediction_service": canonical,
+    }
+    window = {
+        "region_code": "AT",
+        "rows_scanned": 150,
+        "valid_complete_rows": 130,
+        "selected_observations": 120,
+        "excluded_rows_outside_selected_window": 29,
+        "start_utc": dataset.timestamps[0].isoformat(),
+        "end_utc_exclusive": (dataset.timestamps[-1] + timedelta(hours=1)).isoformat(),
+    }
+
+    with pytest.raises(ValueError, match="excluded-row count does not reconcile"):
+        build_opsd_evidence_summary(report, window)
+
+

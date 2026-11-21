@@ -9,7 +9,7 @@ import argparse
 import json
 import math
 from datetime import datetime, timezone
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from islandos_core.forecast_engine import evaluate_signal_rolling, forecast_signals
 from islandos_core.forecast_signal_catalog import FORECAST_SIGNAL_SPECS, forecast_site_signals
@@ -378,6 +378,199 @@ def _canonical_prediction_report(
             "No site accuracy, operational feasibility, or customer savings are established.",
         ],
     }
+
+
+
+def _format_summary_metric(value: object) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, bool):
+        raise ValueError("evidence metrics must be numeric or null")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("evidence metrics must be numeric or null") from exc
+    if not math.isfinite(number):
+        raise ValueError("evidence metrics must be finite")
+    return f"{number:.6g}"
+
+
+def build_opsd_evidence_summary(
+    report: Mapping[str, object],
+    window: Mapping[str, object],
+) -> str:
+    """Render a compact, auditable Markdown summary from a completed OPSD report."""
+    if not isinstance(report, Mapping) or not isinstance(window, Mapping):
+        raise TypeError("report and window must be mappings")
+    provenance = report.get("data_provenance")
+    canonical = report.get("canonical_prediction_service")
+    if not isinstance(provenance, Mapping) or not isinstance(canonical, Mapping):
+        raise ValueError("report is missing data provenance or canonical prediction results")
+    signals = canonical.get("signals")
+    if not isinstance(signals, Mapping) or set(signals) != {"load", "solar", "wind", "price"}:
+        raise ValueError("canonical report must contain load, solar, wind, and price")
+    if provenance.get("evidence_class") != "public_historical_regional_aggregate":
+        raise ValueError("summary only accepts public historical regional aggregate evidence")
+    if provenance.get("site_telemetry") is not False or provenance.get("synthetic") is not False:
+        raise ValueError("OPSD evidence must be explicitly marked as non-site, non-synthetic data")
+
+    source_digest = provenance.get("source_file_sha256")
+    selected_digest = provenance.get("selected_history_sha256")
+    for digest in (source_digest, selected_digest):
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            raise ValueError("report must contain valid lowercase SHA-256 digests")
+    if canonical.get("source_file_sha256") != source_digest:
+        raise ValueError("canonical and source-file digests do not match")
+    if canonical.get("selected_history_sha256") != selected_digest:
+        raise ValueError("canonical and selected-history digests do not match")
+    if provenance.get("region_code") != window.get("region_code"):
+        raise ValueError("window and report region codes do not match")
+    if provenance.get("observations") != window.get("selected_observations"):
+        raise ValueError("window and report observation counts do not match")
+
+    try:
+        rows_scanned = int(window["rows_scanned"])
+        complete_rows = int(window["valid_complete_rows"])
+        selected_rows = int(window["selected_observations"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("window must report scanned, complete, and selected row counts") from exc
+    if min(rows_scanned, complete_rows, selected_rows) < 0 or not (
+        selected_rows <= complete_rows <= rows_scanned
+    ):
+        raise ValueError("window row counts are inconsistent")
+    incomplete_rows = rows_scanned - complete_rows
+    complete_outside = complete_rows - selected_rows
+    excluded_rows = rows_scanned - selected_rows
+    if window.get("excluded_rows_outside_selected_window", excluded_rows) != excluded_rows:
+        raise ValueError("excluded-row count does not reconcile with source rows")
+    if window.get("incomplete_rows", incomplete_rows) != incomplete_rows:
+        raise ValueError("incomplete-row count does not reconcile with source rows")
+    if window.get("complete_rows_outside_selected_window", complete_outside) != complete_outside:
+        raise ValueError("complete rows outside selected window do not reconcile")
+
+    holdout = canonical.get("holdout_window")
+    if not isinstance(holdout, Mapping):
+        raise ValueError("canonical report is missing its final holdout window")
+    lines = [
+        "# OPSD public historical energy forecast backtest",
+        "",
+        "- Evidence class: public historical regional aggregate.",
+        "- This is not customer-site telemetry or measured facility performance.",
+        "- Synthetic data was not used for this backtest.",
+        "- No customer savings, deployment accuracy, or operational reliability claim is made.",
+        f"- Region: {window['region_code']}",
+        f"- Source package: {provenance.get('source')} version {provenance.get('version')}",
+        f"- UTC selection: [{window['start_utc']}, {window['end_utc_exclusive']})",
+        f"- Source rows scanned: {rows_scanned}",
+        f"- Complete rows across all requested signals: {complete_rows}",
+        f"- Complete rows outside the selected contiguous window: {complete_outside}",
+        f"- Incomplete or invalid rows: {incomplete_rows}",
+        f"- Selected contiguous observations: {selected_rows}",
+        f"- Raw CSV SHA-256: {source_digest}",
+        f"- Selected-history SHA-256: {selected_digest}",
+        "",
+        "The selected window is the longest contiguous hourly interval with all four signals present and physically valid. "
+        "Rows outside it are not imputed, interpolated, or silently bridged.",
+        "",
+        "## Final chronological holdout",
+        "",
+        f"- Holdout: {holdout.get('holdout_samples')} hours, "
+        f"[{holdout.get('holdout_start_utc')}, {holdout.get('holdout_end_utc')}] inclusive.",
+        "- The holdout is excluded from candidate selection, rolling-origin evaluation, and interval calibration.",
+        "",
+        "| Signal | Unit | Selected model | Samples | MAE | RMSE | Bias (prediction − actual) | WAPE |",
+        "|---|---|---|---:|---:|---:|---:|---:|",
+    ]
+    for signal in ("load", "solar", "wind", "price"):
+        item = signals[signal]
+        metrics = item["holdout_metrics"]
+        lines.append(
+            f"| {signal} | {item['unit']} | {item['selected_model']} | {metrics['samples']} | "
+            f"{_format_summary_metric(metrics['mae'])} | {_format_summary_metric(metrics['rmse'])} | "
+            f"{_format_summary_metric(metrics['bias_predicted_minus_actual'])} | "
+            f"{_format_summary_metric(metrics['wape_percent'])}% |"
+        )
+
+    lines.extend([
+        "",
+        "## Canonical rolling-origin candidate comparisons",
+        "",
+        "All candidates at a given signal and horizon use the same sampled validation blocks. "
+        "Candidate selection uses only the pre-holdout training prefix; the final holdout above is scored separately.",
+        "",
+        "| Signal | Horizon (h) | Candidate | Best by MAE | Folds | Scored samples | MAE | RMSE | Bias | WAPE |",
+        "|---|---:|---|:---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for signal in ("load", "solar", "wind", "price"):
+        item = signals[signal]
+        rolling = item.get("rolling_origin_candidate_evaluations")
+        if not isinstance(rolling, Mapping):
+            raise ValueError(f"{signal} is missing rolling-origin candidate evaluations")
+        for horizon in sorted(rolling, key=lambda value: int(value)):
+            evaluation = rolling[horizon]
+            window_info = evaluation["evaluation_window"]
+            best = evaluation["best_by_mae"]
+            for model in evaluation["models"]:
+                lines.append(
+                    f"| {signal} | {horizon} | {model['model_id']} | "
+                    f"{'yes' if model['model_id'] == best else ''} | {model['folds']} | {model['samples']} | "
+                    f"{_format_summary_metric(model['mae'])} | {_format_summary_metric(model['rmse'])} | "
+                    f"{_format_summary_metric(model['bias_predicted_minus_actual'])} | "
+                    f"{_format_summary_metric(model['wape_percent'])}% |"
+                )
+            lines.append(
+                f"<!-- {signal} {horizon}h: {window_info['evaluated_folds']} of "
+                f"{window_info['complete_folds']} complete folds evaluated; "
+                f"{window_info['scored_samples']} observations scored. -->"
+            )
+
+    legacy = report.get("rolling_validation")
+    if isinstance(legacy, Mapping) and isinstance(legacy.get("signals"), Mapping):
+        lines.extend([
+            "",
+            "## Legacy Phase 2 baseline and Ridge comparison",
+            "",
+            "These scores come from the separate legacy evaluator and must not be conflated with canonical-engine metrics above.",
+            "",
+            "| Signal | Horizon (h) | Model | Folds | Mean MAE | Mean RMSE | Mean bias |",
+            "|---|---:|---|---:|---:|---:|---:|",
+        ])
+        for signal in ("load", "solar", "wind", "price"):
+            for horizon in sorted(legacy["signals"][signal], key=lambda value: int(value)):
+                block = legacy["signals"][signal][horizon]
+                for model_id, metrics in sorted(block["models"].items()):
+                    lines.append(
+                        f"| {signal} | {horizon} | {model_id} | {len(metrics['folds'])} | "
+                        f"{_format_summary_metric(metrics['mean_mae'])} | "
+                        f"{_format_summary_metric(metrics['mean_rmse'])} | "
+                        f"{_format_summary_metric(metrics['mean_bias_predicted_minus_actual'])} |"
+                    )
+
+    exclusions = [
+        (signal, model_id, reason)
+        for signal in ("load", "solar", "wind", "price")
+        for model_id, reason in signals[signal]["holdout_candidate_evaluations"]["excluded_candidates"].items()
+    ]
+    if exclusions:
+        lines.extend(["", "## Candidate exclusions", ""])
+        lines.extend(f"- {signal} / {model_id}: {reason}" for signal, model_id, reason in exclusions)
+
+    lines.extend([
+        "",
+        "## Evidence limitations",
+        "",
+        "- OPSD values are geographically aggregated; MW-to-kW and EUR/MWh-to-EUR/kWh conversions do not scale country data into a customer facility.",
+        "- This run covers one selected contiguous historical interval in one region and one final holdout block; it is not multi-region or repeated multi-season qualification.",
+        "- The rolling-origin sample is deterministic and evenly spaced, not exhaustive for horizons with more available folds than the configured cap.",
+        "- Historical forecast errors do not establish site accuracy, dispatch feasibility, service reliability, or customer savings.",
+        "",
+    ])
+    return "\n".join(lines)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -145,6 +145,8 @@ jobs:
               "source_columns": source_columns,
               "rows_scanned": scanned_rows,
               "valid_complete_rows": valid_complete_rows,
+              "incomplete_rows": scanned_rows - valid_complete_rows,
+              "complete_rows_outside_selected_window": valid_complete_rows - best_count,
               "selected_observations": best_count,
               "minimum_observations_required": minimum_observations,
               "excluded_rows_outside_selected_window": scanned_rows - best_count,
@@ -198,6 +200,13 @@ jobs:
           assert len(provenance["selected_history_sha256"]) == 64
           assert provenance["region_code"] == window["region_code"]
           assert provenance["observations"] == window["selected_observations"]
+          assert window["rows_scanned"] == window["valid_complete_rows"] + window["incomplete_rows"]
+          assert window["valid_complete_rows"] == (
+              window["selected_observations"] + window["complete_rows_outside_selected_window"]
+          )
+          assert window["excluded_rows_outside_selected_window"] == (
+              window["incomplete_rows"] + window["complete_rows_outside_selected_window"]
+          )
           assert set(report["signals"]) == {"load", "solar", "wind", "price"}
 
           canonical = report["canonical_prediction_service"]
@@ -236,6 +245,13 @@ jobs:
                   assert math.isfinite(canonical_signal["holdout_metrics"][metric])
               candidates = canonical_signal["holdout_candidate_evaluations"]["models"]
               assert len(candidates) >= 2
+              selected_candidates = [
+                  candidate for candidate in candidates
+                  if candidate["model_id"] == canonical_signal["selected_model"]
+              ]
+              assert len(selected_candidates) == 1
+              assert selected_candidates[0]["selected_for_forecast"] is True
+              assert selected_candidates[0]["metrics"] == canonical_signal["holdout_metrics"]
               assert canonical_signal["selected_model"] == (
                   canonical_signal["rolling_origin_candidate_evaluations"]["168"]["best_by_mae"]
               )
@@ -268,55 +284,21 @@ jobs:
           PY
 
       - name: Build evidence summary
+        env:
+          PYTHONPATH: .
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
+          from examples.phase2_opsd_backtest import build_opsd_evidence_summary
+
           root = Path("build/opsd")
           report = json.loads((root / "report.json").read_text(encoding="utf-8"))
           window = json.loads((root / "window.json").read_text(encoding="utf-8"))
-          canonical = report["canonical_prediction_service"]["signals"]
-          lines = [
-              "# OPSD public historical energy forecast backtest",
-              "",
-              "- Evidence class: public historical regional aggregate data.",
-              "- This is not customer-site telemetry or measured facility performance.",
-              "- Synthetic data was not used for the reported backtest.",
-              "- No customer savings, deployment accuracy, or operational reliability claim is made.",
-              f"- Region: {window['region_code']}",
-              f"- Selected complete observations: {window['selected_observations']}",
-              f"- UTC window: [{window['start_utc']}, {window['end_utc_exclusive']})",
-              f"- Raw CSV SHA-256: {report['data_provenance']['source_file_sha256']}",
-              f"- Selected-history SHA-256: {report['data_provenance']['selected_history_sha256']}",
-              "",
-              "| Signal | Unit | Selected model | Final-holdout MAE | RMSE | Bias (predicted − actual) |",
-              "|---|---|---|---:|---:|---:|",
-          ]
-          for signal in ("load", "solar", "wind", "price"):
-              item = canonical[signal]
-              metrics = item["holdout_metrics"]
-              lines.append(
-                  f"| {signal} | {item['unit']} | {item['selected_model']} | "
-                  f"{metrics['mae']:.6g} | {metrics['rmse']:.6g} | "
-                  f"{metrics['bias_predicted_minus_actual']:.6g} |"
-              )
-          lines.extend([
-              "",
-              "## Rolling-origin model comparisons",
-              "",
-              "The report contains legacy Persistence / 24-hour Seasonal Naive / Ridge autoregression "
-              "and canonical Persistence / Seasonal Naive / Recent Mean / Linear Trend comparisons "
-              "for 1, 6, 24 and 168-hour horizons, with a separate 168-hour final chronological holdout. Canonical rolling origins are evenly sampled "
-              "with the first and last complete blocks included; exact fold indices and UTC "
-              "boundaries are in report.json.",
-              "",
-              "Metrics are historical forecast errors only. Country/control-area values are not "
-              "scaled into a customer facility, and unit conversion does not establish site-level accuracy.",
-              "",
-          ])
-          (root / "summary.md").write_text("\n".join(lines), encoding="utf-8")
-          print((root / "summary.md").read_text(encoding="utf-8"))
+          summary = build_opsd_evidence_summary(report, window)
+          (root / "summary.md").write_text(summary, encoding="utf-8")
+          print(summary)
           PY
 
       - name: Upload reproducible OPSD backtest evidence
