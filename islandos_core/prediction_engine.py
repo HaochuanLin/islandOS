@@ -40,6 +40,17 @@ class ForecastRequest:
     non_negative: bool = True
 
     def __post_init__(self) -> None:
+        """Freeze caller-provided sequences before validating the request snapshot."""
+        try:
+            history = tuple(self.history)
+            target_timestamps = tuple(self.target_timestamps)
+        except TypeError as exc:
+            raise ValueError(
+                "history and target_timestamps must be iterable sequences"
+            ) from exc
+        object.__setattr__(self, "history", history)
+        object.__setattr__(self, "target_timestamps", target_timestamps)
+
         if not isinstance(self.signal_id, str) or not self.signal_id.strip():
             raise ValueError("signal_id is required")
         if not isinstance(self.unit, str) or not self.unit.strip():

@@ -246,6 +246,31 @@ class TestPredictionEngine(unittest.TestCase):
         self.assertEqual([fold.fold_index for fold in score.fold_metrics], [1, 5, 8])
         self.assertEqual([fold.train_samples for fold in score.fold_metrics], [4, 12, 18])
 
+    def test_forecast_request_freezes_mutable_input_sequences(self):
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        history = [
+            SignalObservation(start + timedelta(hours=index), float(index + 1))
+            for index in range(3)
+        ]
+        targets = [start + timedelta(hours=3)]
+
+        request = ForecastRequest("site_load", "kW", history, targets)
+
+        history.append(SignalObservation(start + timedelta(hours=3), 4.0))
+        targets.append(start + timedelta(hours=4))
+
+        self.assertIsInstance(request.history, tuple)
+        self.assertIsInstance(request.target_timestamps, tuple)
+        self.assertEqual(len(request.history), 3)
+        self.assertEqual(
+            request.target_timestamps,
+            (start + timedelta(hours=3),),
+        )
+        with self.assertRaises(AttributeError):
+            request.history.append(SignalObservation(start + timedelta(hours=3), 4.0))
+        with self.assertRaises(AttributeError):
+            request.target_timestamps.append(start + timedelta(hours=4))
+
     def test_rolling_evaluation_rejects_invalid_fold_limit(self):
         engine = PredictionEngine()
         history = [float(index) for index in range(96)]

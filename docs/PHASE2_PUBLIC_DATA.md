@@ -46,6 +46,8 @@ Use a region code such as `AT` or `DE` only when the corresponding columns exist
 
 A caller should choose a complete contiguous time range before passing the returned history to `forecast_signals`. The forecast engine independently enforces its own minimum-history requirement.
 
+The generic `ForecastRequest` is an immutable point-in-time input snapshot. It copies caller-provided history and target-timestamp iterables into tuples before validating them, so later mutation of an input list cannot silently change the observations or forecast horizon after validation. The request contains historical observations and future timestamps only; holdout actuals belong in a separate scoring step and must never be passed into forecast generation. Downstream dispatch code should consume the typed forecast result and its declared unit/time axis, not mutate or reconstruct the request history.
+
 ## Example
 
 ```python
