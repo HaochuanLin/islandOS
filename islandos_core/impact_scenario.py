@@ -64,6 +64,18 @@ class StrategyRules:
     # Coordinated: run RO on renewable surplus whenever there is tank headroom,
     # and fall back to firm RO only when the tank drops below this reserve.
     coordinated_reserve_fraction: float = 0.25
+    # Once RO starts it stays on for at least this many hours (while the tank
+    # has room), because real membranes do not like frequent stop/starts.
+    # 1 means no minimum run time.
+    ro_min_run_hours: int = 1
+    # Forecast-based coordinated rule: look this many hours ahead at forecast
+    # renewable surplus and water demand. Run RO firm now only if the tank is
+    # projected to fall below the reserve before surplus arrives.
+    forecast_lookahead_hours: int = 12
+    # Relative error of the renewable forecast used by that rule (0 = perfect
+    # foresight). Errors are seeded and reproducible.
+    forecast_error_fraction: float = 0.0
+    forecast_error_seed: int = 7
 
 
 @dataclass
@@ -142,7 +154,42 @@ def _microgrid_config(site: IslandSiteConfig, soc_kwh: float, tank_m3: float) ->
     )
 
 
-def _decide(strategy: str, hour: int, tank_m3: float, site: IslandSiteConfig, rules: StrategyRules) -> str:
+STRATEGIES = ("baseline", "coordinated", "forecast_coordinated")
+
+
+def renewable_forecast(inputs: SyntheticInputs, rules: StrategyRules) -> np.ndarray:
+    """Forecast of hourly renewable power used by the forecast-based rule.
+
+    The forecast is the actual synthetic renewable series with a seeded,
+    multiplicative error, so the effect of forecast quality can be tested.
+    """
+    actual = inputs.pv_kw + inputs.wind_kw
+    if rules.forecast_error_fraction <= 0:
+        return actual.copy()
+    rng = np.random.default_rng(rules.forecast_error_seed)
+    return np.clip(actual * (1.0 + rng.normal(0.0, rules.forecast_error_fraction, actual.shape)), 0, None)
+
+
+def _forecast_needs_firm(t: int, tank_m3: float, inputs: SyntheticInputs, site: IslandSiteConfig,
+                         rules: StrategyRules, forecast_kw: np.ndarray) -> bool:
+    """True when the tank is projected to drop below the reserve within the
+    look-ahead window even after using the forecast renewable surplus."""
+    reserve = rules.coordinated_reserve_fraction * site.tank_capacity_m3
+    projected = tank_m3
+    for k in range(t, min(inputs.hours, t + rules.forecast_lookahead_hours)):
+        leftover = max(0.0, float(forecast_kw[k]) - float(inputs.essential_kw[k]))
+        ro_kw = min(leftover, site.ro_rated_power_kw)
+        if ro_kw < site.ro_min_power_kw:
+            ro_kw = 0.0
+        projected = min(site.tank_capacity_m3, projected + ro_kw / site.ro_specific_energy_kwh_per_m3)
+        projected -= float(inputs.water_demand_m3[k])
+        if projected < reserve:
+            return True
+    return False
+
+
+def _decide(strategy: str, hour: int, tank_m3: float, site: IslandSiteConfig, rules: StrategyRules,
+            inputs: SyntheticInputs | None = None, forecast_kw: np.ndarray | None = None) -> str:
     """Return 'firm', 'surplus' or 'off' for RO in this hour."""
     if strategy == "baseline":
         in_shift = rules.baseline_shift_start_hour <= hour % 24 < rules.baseline_shift_end_hour
@@ -152,6 +199,14 @@ def _decide(strategy: str, hour: int, tank_m3: float, site: IslandSiteConfig, ru
         if tank_m3 < rules.coordinated_reserve_fraction * site.tank_capacity_m3:
             return "firm"
         return "surplus" if tank_m3 < site.tank_capacity_m3 else "off"
+    if strategy == "forecast_coordinated":
+        if inputs is None or forecast_kw is None:
+            raise ValueError("forecast_coordinated needs the inputs and a renewable forecast")
+        if tank_m3 >= site.tank_capacity_m3:
+            return "off"
+        if _forecast_needs_firm(hour, tank_m3, inputs, site, rules, forecast_kw):
+            return "firm"
+        return "surplus"
     raise ValueError(f"unknown strategy: {strategy}")
 
 
@@ -163,6 +218,11 @@ def run_strategy(
 ) -> StrategyResult:
     """Simulate one strategy hour by hour and return hourly series plus a summary."""
     rules = rules or StrategyRules()
+    if strategy not in STRATEGIES:
+        raise ValueError(f"unknown strategy: {strategy}")
+    if rules.ro_min_run_hours < 1 or rules.forecast_lookahead_hours < 1:
+        raise ValueError("ro_min_run_hours and forecast_lookahead_hours must be at least 1")
+    forecast_kw = renewable_forecast(inputs, rules) if strategy == "forecast_coordinated" else None
     n = inputs.hours
     keys = (
         "ro_mode_firm", "ro_power_kw", "water_produced_m3", "water_served_m3",
@@ -173,10 +233,14 @@ def run_strategy(
     soc = site.battery_initial_soc_kwh
     tank = site.tank_initial_m3
     ro_was_on = False
+    run_hours = 0
     sec = site.ro_specific_energy_kwh_per_m3
 
     for t in range(n):
-        mode = _decide(strategy, t, tank, site, rules)
+        mode = _decide(strategy, t, tank, site, rules, inputs, forecast_kw)
+        if ro_was_on and run_hours < rules.ro_min_run_hours and tank < site.tank_capacity_m3:
+            # Minimum run time: a plant that started recently keeps running firm.
+            mode = "firm"
         headroom_kw = max(0.0, site.tank_capacity_m3 - tank) * sec
         firm_kw = min(site.ro_rated_power_kw, headroom_kw) if mode == "firm" else 0.0
         surplus_request = site.ro_rated_power_kw if mode == "surplus" else 0.0
@@ -220,6 +284,7 @@ def run_strategy(
         h["curtailed_kw"][t] = float(step.renewable_curtailed_kw[0])
         h["unserved_essential_kw"][t] = max(0.0, unserved - firm_kw)
         h["ro_start"][t] = 1.0 if ro_kw > 1e-6 and not ro_was_on else 0.0
+        run_hours = run_hours + 1 if ro_kw > 1e-6 else 0
         ro_was_on = ro_kw > 1e-6
 
         # Clamp tiny floating-point drift so the next step's config stays valid.
@@ -280,3 +345,318 @@ def compare(inputs: SyntheticInputs, site: IslandSiteConfig, rules: StrategyRule
 
 def assumptions_record(site: IslandSiteConfig, rules: StrategyRules) -> str:
     return json.dumps({"site": asdict(site), "rules": asdict(rules)}, indent=2, sort_keys=True)
+
+
+TOU_PRICES = {"off_peak": 0.12, "shoulder": 0.20, "peak": 0.38}
+
+
+CASES = ("island", "grid_tou", "hybrid_tou")
+HYBRID_DIESEL_START_COST = 5.0
+HYBRID_GRID_LIMIT_KW = 30.0
+# Tank level (m3) the reserve variant of the joint MILP may not go below: a
+# quarter of the tank, the same reserve the surplus rule falls back on.
+MILP_WATER_RESERVE_M3 = 20.0
+
+
+def tou_tariff(hours: int) -> list[float]:
+    """Illustrative time-of-use tariff (USD/kWh): cheap at night, peak 17:00 to 21:00."""
+    prices = []
+    for t in range(hours):
+        h = t % 24
+        if h < 7 or h >= 23:
+            prices.append(TOU_PRICES["off_peak"])
+        elif 17 <= h < 21:
+            prices.append(TOU_PRICES["peak"])
+        else:
+            prices.append(TOU_PRICES["shoulder"])
+    return prices
+
+
+def energy_system_setup(site: IslandSiteConfig, case: str = "island"):
+    """Translate the synthetic island into the shared energy-system and water specs.
+
+    ``case="island"``: off-grid, diesel backup. ``case="grid_tou"``: the same
+    site connected to a weak grid (80 kW) with a time-of-use tariff and no diesel.
+    ``case="hybrid_tou"``: a very weak TOU grid (30 kW) plus the diesel unit, which then
+    pays a start cost (illustrative, 5 USD per start), so the optimizer has to
+    decide when diesel is worth starting instead of buying peak power.
+    """
+    if case not in CASES:
+        raise ValueError(f"case must be one of {CASES}")
+    from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
+    from islandos_core.water_resource_adapter import WaterServiceSpec
+
+    config = EnergySystemConfig(
+        pv_rated_kw=site.pv_rated_kw,
+        wind_rated_kw=site.wind_rated_kw,
+        grid_import_limit_kw={"island": 0.0, "grid_tou": 80.0, "hybrid_tou": HYBRID_GRID_LIMIT_KW}[case],
+        battery=BatterySpec(
+            capacity_kwh=site.battery_capacity_kwh,
+            max_charge_kw=site.battery_max_charge_kw,
+            max_discharge_kw=site.battery_max_discharge_kw,
+            initial_soc=site.battery_initial_soc_kwh / site.battery_capacity_kwh,
+            min_soc=site.battery_min_soc_kwh / site.battery_capacity_kwh,
+            max_soc=1.0,
+            charge_efficiency=site.battery_efficiency,
+            discharge_efficiency=site.battery_efficiency,
+        ),
+        diesel=DieselSpec(
+            rated_power_kw=site.diesel_capacity_kw,
+            variable_cost_per_kwh=site.diesel_cost_per_kwh,
+            start_cost_per_start=HYBRID_DIESEL_START_COST if case == "hybrid_tou" else 0.0,
+        ),
+    )
+    water = WaterServiceSpec(
+        specific_energy_kwh_per_m3=site.ro_specific_energy_kwh_per_m3,
+        ro_capacity_m3_per_hour=site.ro_rated_power_kw / site.ro_specific_energy_kwh_per_m3,
+        tank_capacity_m3=site.tank_capacity_m3,
+        initial_inventory_m3=site.tank_initial_m3,
+        reserve_m3=0.0,
+    )
+    return config, water
+
+
+def _energy_inputs(inputs: SyntheticInputs, case: str, extra_load_kw=None):
+    from islandos_core.energy_system import EnergySystemInputs
+
+    n = inputs.hours
+    extra = extra_load_kw if extra_load_kw is not None else [0.0] * n
+    return EnergySystemInputs(
+        pv_generation_kw=[float(x) for x in inputs.pv_kw],
+        wind_generation_kw=[float(x) for x in inputs.wind_kw],
+        load_kw=[float(e) + float(r) for e, r in zip(inputs.essential_kw, extra)],
+        grid_price_per_kwh=[0.0] * n if case == "island" else tou_tariff(n),
+        grid_available=[case != "island"] * n,
+        diesel_available=[case != "grid_tou"] * n,
+    )
+
+
+def _replay(inputs: SyntheticInputs, site: IslandSiteConfig, ro_power_kw, config, case: str = "island") -> dict:
+    from islandos_core.energy_system import dispatch_energy_system
+
+    result = dispatch_energy_system(_energy_inputs(inputs, case, ro_power_kw), config, policy="battery_first")
+    return result["summary"]
+
+
+def _strategy_row(name: str, summary: dict, ending_tank: float, water_unmet_m3: float,
+                  site: IslandSiteConfig, case: str, extra: dict | None = None) -> dict:
+    """One comparable row. Each strategy is charged (or credited) for refilling
+    its tank to the starting level: at the diesel rate on the island, and at the
+    average tariff on the grid."""
+    refill_kwh = (site.tank_initial_m3 - ending_tank) * site.ro_specific_energy_kwh_per_m3
+    diesel_kwh = float(summary["diesel_generation_kwh"])
+    litres = diesel_kwh * site.diesel_litres_per_kwh
+    row = {
+        "strategy": name,
+        "case": case,
+        "diesel_kwh": diesel_kwh,
+        "grid_kwh": float(summary.get("grid_import_kwh", 0.0)),
+        "energy_cost": float(summary["estimated_energy_cost"]),
+        "ending_tank_m3": ending_tank,
+        "unmet_electric_kwh": float(summary["unmet_load_kwh"]),
+        "unmet_water_m3": water_unmet_m3,
+    }
+    if case == "island":
+        adjusted = litres + refill_kwh * site.diesel_litres_per_kwh
+        row.update({
+            "diesel_litres": litres,
+            "diesel_litres_tank_adjusted": adjusted,
+            "co2_kg_tank_adjusted": adjusted * site.co2_kg_per_litre_diesel,
+            "headline_tank_adjusted": adjusted,
+        })
+    else:
+        mean_price = sum(TOU_PRICES[k] * w for k, w in (("off_peak", 8), ("shoulder", 12), ("peak", 4))) / 24
+        adjusted_cost = row["energy_cost"] + refill_kwh * mean_price
+        row.update({"energy_cost_tank_adjusted": adjusted_cost, "headline_tank_adjusted": adjusted_cost})
+    row.update(extra or {})
+    return row
+
+
+def compare_with_optimizer(
+    inputs: SyntheticInputs,
+    site: IslandSiteConfig,
+    rules: StrategyRules | None = None,
+    *,
+    case: str = "island",
+    time_limit_seconds: float = 120.0,
+    mip_relative_gap: float = 0.0,
+) -> dict:
+    """Compare rule strategies with the joint water-energy MILP on identical inputs.
+
+    Every strategy's electricity is replayed through ``dispatch_energy_system``
+    (battery first), so all share the same physics. The MILP must end with at
+    least the starting tank volume and respects the RO minimum power. On the
+    island the headline metric is tank-adjusted diesel litres; on the grid case
+    it is tank-adjusted energy cost, and the tariff-look-ahead RO rule is added.
+    """
+    from islandos_core.water_resource_adapter import build_ro_energy_load
+    from islandos_core.water_dispatch import build_price_aware_ro_schedule
+    from optimization.milp_dispatch_optimizer import optimize_dispatch_milp
+
+    rules = rules or StrategyRules()
+    config, water = energy_system_setup(site, case)
+    demand = [float(x) for x in inputs.water_demand_m3]
+    rows = []
+
+    for name in ("baseline", "coordinated"):
+        sim = run_strategy(name, inputs, site, rules)
+        summary = _replay(inputs, site, sim.hourly["ro_power_kw"], config, case)
+        rows.append(_strategy_row(
+            "fixed_timetable" if name == "baseline" else "surplus_rule",
+            summary, float(sim.hourly["tank_m3"][-1]), float(sim.summary["unmet_water_m3"]), site, case,
+        ))
+
+    from dataclasses import replace as _replace
+
+    for label, variant_rules, note in (
+        ("forecast_rule", rules, "forecast-based rule, perfect renewable forecast"),
+        ("forecast_rule_realistic",
+         _replace(rules, forecast_error_fraction=0.2, ro_min_run_hours=3),
+         "forecast-based rule, 20% renewable forecast error, RO minimum run 3 h"),
+    ):
+        sim = run_strategy("forecast_coordinated", inputs, site, variant_rules)
+        rows.append(_strategy_row(
+            label, _replay(inputs, site, sim.hourly["ro_power_kw"], config, case),
+            float(sim.hourly["tank_m3"][-1]), float(sim.summary["unmet_water_m3"]), site, case,
+            {"note": note, "ro_starts": float(sim.summary["ro_starts"])},
+        ))
+
+    jit = build_ro_energy_load(demand, spec=water, dt_hours=1.0)
+    rows.append(_strategy_row(
+        "just_in_time", _replay(inputs, site, jit.ro_power_kw, config, case),
+        float(jit.inventory_after_demand_m3[-1]), 0.0, site, case,
+        {"note": "no RO minimum power; produces only what each hour needs"},
+    ))
+
+    if case != "island":
+        aware = build_price_aware_ro_schedule(demand, tou_tariff(inputs.hours), spec=water, lookahead_hours=12)
+        rows.append(_strategy_row(
+            "tariff_lookahead", _replay(inputs, site, aware["ro_power_kw"], config, case),
+            float(aware["inventory_end_m3"][-1]), 0.0, site, case,
+            {"note": "existing price-aware RO heuristic, 12-hour look-ahead; no RO minimum power"},
+        ))
+
+    # Control: optimise the battery and diesel/grid only, with RO kept on the
+    # fixed timetable. The gap between this and the joint MILP is what RO
+    # timing adds; the gap to the fixed timetable is what battery scheduling adds.
+    fixed_sim = run_strategy("baseline", inputs, site, rules)
+    battery_only = optimize_dispatch_milp(
+        _energy_inputs(inputs, case, fixed_sim.hourly["ro_power_kw"]),
+        config,
+        time_limit_seconds=time_limit_seconds,
+        mip_relative_gap=mip_relative_gap,
+    )
+    rows.append(_strategy_row(
+        "milp_battery_only_fixed_ro", battery_only["dispatch"]["summary"],
+        float(fixed_sim.hourly["tank_m3"][-1]), 0.0, site, case,
+        {"solver_status": battery_only["solver_status"],
+         "optimality_proven": battery_only["optimality_proven_for_declared_milp"]},
+    ))
+
+    milp = optimize_dispatch_milp(
+        _energy_inputs(inputs, case),
+        config,
+        water_service=water,
+        water_demand_m3_per_hour=demand,
+        terminal_water_inventory_min_m3=site.tank_initial_m3,
+        ro_min_production_m3_per_hour=site.ro_min_power_kw / site.ro_specific_energy_kwh_per_m3,
+        time_limit_seconds=time_limit_seconds,
+        mip_relative_gap=mip_relative_gap,
+    )
+    rows.append(_strategy_row(
+        "joint_milp", milp["dispatch"]["summary"], float(milp["water_service"]["ending_inventory_m3"]),
+        0.0, site, case,
+        {"solver_status": milp["solver_status"], "mip_gap": milp["mip_gap"],
+         "solve_time_seconds": milp["solve_time_seconds"],
+         "optimality_proven": milp["optimality_proven_for_declared_milp"]},
+    ))
+    # Same optimisation, but the tank may not drop below a reserve. This is
+    # the price of keeping a buffer for demand the forecast did not expect.
+    reserved = optimize_dispatch_milp(
+        _energy_inputs(inputs, case),
+        config,
+        water_service=_replace(water, reserve_m3=MILP_WATER_RESERVE_M3),
+        water_demand_m3_per_hour=demand,
+        terminal_water_inventory_min_m3=site.tank_initial_m3,
+        ro_min_production_m3_per_hour=site.ro_min_power_kw / site.ro_specific_energy_kwh_per_m3,
+        time_limit_seconds=time_limit_seconds,
+        mip_relative_gap=mip_relative_gap,
+    )
+    rows.append(_strategy_row(
+        "joint_milp_with_reserve", reserved["dispatch"]["summary"],
+        float(reserved["water_service"]["ending_inventory_m3"]), 0.0, site, case,
+        {"solver_status": reserved["solver_status"], "reserve_m3": MILP_WATER_RESERVE_M3,
+         "optimality_proven": reserved["optimality_proven_for_declared_milp"]},
+    ))
+    return {"seed": inputs.seed, "case": case, "input_sha256": inputs.sha256(), "strategies": rows}
+
+
+def flexible_load_study(
+    inputs: SyntheticInputs,
+    site: IslandSiteConfig,
+    *,
+    case: str = "island",
+    energy_kwh_per_day: float = 40.0,
+    max_power_kw: float = 10.0,
+    window: tuple[int, int] = (6, 22),
+    time_limit_seconds: float = 60.0,
+) -> dict:
+    """What does letting the optimizer time one flexible load add?
+
+    The flexible load stands for something like ice making or pumping: a fixed
+    amount of energy that must be delivered inside a daily window, at any power
+    up to ``max_power_kw``. RO stays on the fixed timetable in all three rows,
+    so the only differences are battery scheduling and flexible-load timing.
+
+    Rows: rule dispatch with the load run as early as allowed; the MILP with
+    the load still run early (battery scheduling only); the MILP choosing the
+    timing as well. Use one-day inputs: the energy budget covers the whole horizon.
+    """
+    from islandos_core.energy_system import dispatch_energy_system
+    from optimization.milp_dispatch_optimizer import optimize_dispatch_milp
+
+    config, _ = energy_system_setup(site, case)
+    n = inputs.hours
+    total_kwh = energy_kwh_per_day * n / 24.0
+    available = [window[0] <= t % 24 < window[1] for t in range(n)]
+    ro_kw = run_strategy("baseline", inputs, site).hourly["ro_power_kw"]
+
+    early, remaining = [0.0] * n, total_kwh
+    for t in range(n):
+        if available[t] and remaining > 1e-12:
+            early[t] = min(max_power_kw, remaining)
+            remaining -= early[t]
+    fixed_load = [float(a) + b for a, b in zip(ro_kw, early)]
+
+    rule = dispatch_energy_system(_energy_inputs(inputs, case, fixed_load), config, policy="battery_first")["summary"]
+    battery_only = optimize_dispatch_milp(
+        _energy_inputs(inputs, case, fixed_load), config, time_limit_seconds=time_limit_seconds)
+    joint = optimize_dispatch_milp(
+        _energy_inputs(inputs, case, ro_kw), config, time_limit_seconds=time_limit_seconds,
+        flexible_load_energy_kwh=total_kwh, flexible_load_available_steps=available,
+        flexible_load_max_power_kw=max_power_kw,
+    )
+
+    def row(name: str, summary: dict, extra: dict | None = None) -> dict:
+        out = {
+            "strategy": name,
+            "energy_cost": float(summary["estimated_energy_cost"]),
+            "diesel_litres": float(summary["diesel_generation_kwh"]) * site.diesel_litres_per_kwh,
+            "curtailed_kwh": float(summary["renewable_curtailed_kwh"]),
+            "unmet_electric_kwh": float(summary["unmet_load_kwh"]),
+        }
+        out.update(extra or {})
+        return out
+
+    return {
+        "seed": inputs.seed, "case": case, "flexible_energy_kwh": total_kwh,
+        "window_hours": list(window), "max_power_kw": max_power_kw,
+        "strategies": [
+            row("rule_dispatch_early_flexible_load", rule),
+            row("milp_battery_only_early_flexible_load", battery_only["dispatch"]["summary"],
+                {"optimality_proven": battery_only["optimality_proven_for_declared_milp"]}),
+            row("milp_joint_flexible_load", joint["dispatch"]["summary"],
+                {"optimality_proven": joint["optimality_proven_for_declared_milp"],
+                 "flexible_power_kw": joint["flexible_load"]["power_kw"]}),
+        ],
+    }

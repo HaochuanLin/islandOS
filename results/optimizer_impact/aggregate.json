@@ -1,0 +1,289 @@
+{
+  "island": {
+    "fixed_timetable": {
+      "mean": 318.4768267472915,
+      "mean_change_vs_fixed_pct": 0.0,
+      "min_change_vs_fixed_pct": 0.0,
+      "max_change_vs_fixed_pct": 0.0,
+      "weeks_better_than_fixed": 0,
+      "unmet_water_m3_total": 0.0
+    },
+    "surplus_rule": {
+      "mean": 320.3159823295591,
+      "mean_change_vs_fixed_pct": 0.7123512963524505,
+      "min_change_vs_fixed_pct": -0.8464220282936572,
+      "max_change_vs_fixed_pct": 6.266539360212369,
+      "weeks_better_than_fixed": 3,
+      "unmet_water_m3_total": 0.0
+    },
+    "forecast_rule": {
+      "mean": 320.6555971164591,
+      "mean_change_vs_fixed_pct": 0.8376197791798805,
+      "min_change_vs_fixed_pct": -0.8861342623288273,
+      "max_change_vs_fixed_pct": 5.113420114375288,
+      "weeks_better_than_fixed": 3,
+      "unmet_water_m3_total": 0.0
+    },
+    "forecast_rule_realistic": {
+      "mean": 320.81527615912205,
+      "mean_change_vs_fixed_pct": 0.898173047626726,
+      "min_change_vs_fixed_pct": -0.811208155880635,
+      "max_change_vs_fixed_pct": 5.507532736487973,
+      "weeks_better_than_fixed": 2,
+      "unmet_water_m3_total": 0.0
+    },
+    "just_in_time": {
+      "mean": 391.9310303621999,
+      "mean_change_vs_fixed_pct": 26.467862971901226,
+      "min_change_vs_fixed_pct": 3.6620963612463107,
+      "max_change_vs_fixed_pct": 72.76075580859697,
+      "weeks_better_than_fixed": 0,
+      "unmet_water_m3_total": 0.0
+    },
+    "milp_battery_only_fixed_ro": {
+      "mean": 318.4768267472915,
+      "mean_change_vs_fixed_pct": 0.0,
+      "min_change_vs_fixed_pct": 0.0,
+      "max_change_vs_fixed_pct": 0.0,
+      "weeks_better_than_fixed": 0,
+      "unmet_water_m3_total": 0.0
+    },
+    "joint_milp": {
+      "mean": 316.6567271765,
+      "mean_change_vs_fixed_pct": -0.7456473491595921,
+      "min_change_vs_fixed_pct": -7.596699281965186,
+      "max_change_vs_fixed_pct": 4.125393404304513e-10,
+      "weeks_better_than_fixed": 23,
+      "unmet_water_m3_total": 0.0
+    },
+    "joint_milp_with_reserve": {
+      "mean": 316.66705875780036,
+      "mean_change_vs_fixed_pct": -0.7406629807001548,
+      "min_change_vs_fixed_pct": -7.4471682288465875,
+      "max_change_vs_fixed_pct": 4.125393404304513e-10,
+      "weeks_better_than_fixed": 23,
+      "unmet_water_m3_total": 0.0
+    },
+    "_joint_milp_all_optimal": true
+  },
+  "grid_tou": {
+    "fixed_timetable": {
+      "mean": 239.50761504067205,
+      "mean_change_vs_fixed_pct": 0.0,
+      "min_change_vs_fixed_pct": 0.0,
+      "max_change_vs_fixed_pct": 0.0,
+      "weeks_better_than_fixed": 0,
+      "unmet_water_m3_total": 0.0
+    },
+    "surplus_rule": {
+      "mean": 202.35408375808672,
+      "mean_change_vs_fixed_pct": -15.521914146797492,
+      "min_change_vs_fixed_pct": -23.056715034868294,
+      "max_change_vs_fixed_pct": -9.692135439582827,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "forecast_rule": {
+      "mean": 245.15024902170447,
+      "mean_change_vs_fixed_pct": 2.663986995104239,
+      "min_change_vs_fixed_pct": -1.9233573076093287,
+      "max_change_vs_fixed_pct": 10.198188266319452,
+      "weeks_better_than_fixed": 6,
+      "unmet_water_m3_total": 0.0
+    },
+    "forecast_rule_realistic": {
+      "mean": 241.47478942452165,
+      "mean_change_vs_fixed_pct": 0.7702466636523488,
+      "min_change_vs_fixed_pct": -5.386907806063812,
+      "max_change_vs_fixed_pct": 10.9222392677257,
+      "weeks_better_than_fixed": 12,
+      "unmet_water_m3_total": 0.0
+    },
+    "just_in_time": {
+      "mean": 233.61892342866665,
+      "mean_change_vs_fixed_pct": 0.7276257773542043,
+      "min_change_vs_fixed_pct": -18.08515050744121,
+      "max_change_vs_fixed_pct": 37.60513254020139,
+      "weeks_better_than_fixed": 16,
+      "unmet_water_m3_total": 0.0
+    },
+    "tariff_lookahead": {
+      "mean": 205.02978843400004,
+      "mean_change_vs_fixed_pct": -10.144482376948835,
+      "min_change_vs_fixed_pct": -35.034943899594225,
+      "max_change_vs_fixed_pct": 32.9982820636384,
+      "weeks_better_than_fixed": 24,
+      "unmet_water_m3_total": 0.0
+    },
+    "milp_battery_only_fixed_ro": {
+      "mean": 224.9542488603387,
+      "mean_change_vs_fixed_pct": -6.354983618275203,
+      "min_change_vs_fixed_pct": -12.680055350644912,
+      "max_change_vs_fixed_pct": -3.2644052712025284,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "joint_milp": {
+      "mean": 134.5064248090011,
+      "mean_change_vs_fixed_pct": -43.64008947241439,
+      "min_change_vs_fixed_pct": -48.80333191753699,
+      "max_change_vs_fixed_pct": -36.9321405126906,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "joint_milp_with_reserve": {
+      "mean": 134.58693891066724,
+      "mean_change_vs_fixed_pct": -43.61627116397395,
+      "min_change_vs_fixed_pct": -48.704638183473584,
+      "max_change_vs_fixed_pct": -36.9321405126906,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "_joint_milp_all_optimal": true
+  },
+  "hybrid_tou": {
+    "fixed_timetable": {
+      "mean": 249.9627039070054,
+      "mean_change_vs_fixed_pct": 0.0,
+      "min_change_vs_fixed_pct": 0.0,
+      "max_change_vs_fixed_pct": 0.0,
+      "weeks_better_than_fixed": 0,
+      "unmet_water_m3_total": 0.0
+    },
+    "surplus_rule": {
+      "mean": 208.5773908667534,
+      "mean_change_vs_fixed_pct": -16.651415174864646,
+      "min_change_vs_fixed_pct": -25.700933790838107,
+      "max_change_vs_fixed_pct": -10.162675980035933,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "forecast_rule": {
+      "mean": 264.6156519517045,
+      "mean_change_vs_fixed_pct": 6.336486380580944,
+      "min_change_vs_fixed_pct": -3.727499818539574,
+      "max_change_vs_fixed_pct": 19.24288468696926,
+      "weeks_better_than_fixed": 1,
+      "unmet_water_m3_total": 0.0
+    },
+    "forecast_rule_realistic": {
+      "mean": 258.8910216485217,
+      "mean_change_vs_fixed_pct": 3.663396781110437,
+      "min_change_vs_fixed_pct": -5.2055095680752475,
+      "max_change_vs_fixed_pct": 16.65235579519708,
+      "weeks_better_than_fixed": 5,
+      "unmet_water_m3_total": 0.0
+    },
+    "just_in_time": {
+      "mean": 236.07730886133334,
+      "mean_change_vs_fixed_pct": -2.366652402775474,
+      "min_change_vs_fixed_pct": -21.156247202704705,
+      "max_change_vs_fixed_pct": 32.46072545187072,
+      "weeks_better_than_fixed": 19,
+      "unmet_water_m3_total": 0.0
+    },
+    "tariff_lookahead": {
+      "mean": 209.39874058333334,
+      "mean_change_vs_fixed_pct": -11.968295075794735,
+      "min_change_vs_fixed_pct": -38.42186081887808,
+      "max_change_vs_fixed_pct": 28.026103393020176,
+      "weeks_better_than_fixed": 24,
+      "unmet_water_m3_total": 0.0
+    },
+    "milp_battery_only_fixed_ro": {
+      "mean": 224.95963390000537,
+      "mean_change_vs_fixed_pct": -10.118772312604259,
+      "min_change_vs_fixed_pct": -15.944536361740537,
+      "max_change_vs_fixed_pct": -5.83341346137937,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "joint_milp": {
+      "mean": 134.52298396066672,
+      "mean_change_vs_fixed_pct": -45.87917933248687,
+      "min_change_vs_fixed_pct": -51.853419597280435,
+      "max_change_vs_fixed_pct": -36.932140512690594,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "joint_milp_with_reserve": {
+      "mean": 134.5964955462049,
+      "mean_change_vs_fixed_pct": -45.860561281405005,
+      "min_change_vs_fixed_pct": -51.887244635376206,
+      "max_change_vs_fixed_pct": -36.93214051269059,
+      "weeks_better_than_fixed": 30,
+      "unmet_water_m3_total": 0.0
+    },
+    "_joint_milp_all_optimal": true
+  },
+  "flexible_load": {
+    "island/daytime_06_22": {
+      "rule_dispatch_early_flexible_load": {
+        "mean_energy_cost": 63.638806069000005,
+        "change_in_mean_cost_vs_rule_pct": 0.0,
+        "days_better_than_rule": 0
+      },
+      "milp_battery_only_early_flexible_load": {
+        "mean_energy_cost": 63.638806069000005,
+        "change_in_mean_cost_vs_rule_pct": 0.0,
+        "days_better_than_rule": 0
+      },
+      "milp_joint_flexible_load": {
+        "mean_energy_cost": 60.867057358666685,
+        "change_in_mean_cost_vs_rule_pct": -4.355437949807022,
+        "days_better_than_rule": 27
+      }
+    },
+    "island/any_hour": {
+      "rule_dispatch_early_flexible_load": {
+        "mean_energy_cost": 64.283811928,
+        "change_in_mean_cost_vs_rule_pct": 0.0,
+        "days_better_than_rule": 0
+      },
+      "milp_battery_only_early_flexible_load": {
+        "mean_energy_cost": 64.283811928,
+        "change_in_mean_cost_vs_rule_pct": 0.0,
+        "days_better_than_rule": 0
+      },
+      "milp_joint_flexible_load": {
+        "mean_energy_cost": 60.83070235966669,
+        "change_in_mean_cost_vs_rule_pct": -5.371662732447968,
+        "days_better_than_rule": 27
+      }
+    },
+    "grid_tou/daytime_06_22": {
+      "rule_dispatch_early_flexible_load": {
+        "mean_energy_cost": 40.56164806766666,
+        "change_in_mean_cost_vs_rule_pct": 0.0,
+        "days_better_than_rule": 0
+      },
+      "milp_battery_only_early_flexible_load": {
+        "mean_energy_cost": 33.52067923233333,
+        "change_in_mean_cost_vs_rule_pct": -17.358685287114785,
+        "days_better_than_rule": 30
+      },
+      "milp_joint_flexible_load": {
+        "mean_energy_cost": 32.50033349499999,
+        "change_in_mean_cost_vs_rule_pct": -19.874228382481995,
+        "days_better_than_rule": 30
+      }
+    },
+    "grid_tou/any_hour": {
+      "rule_dispatch_early_flexible_load": {
+        "mean_energy_cost": 38.560132632999995,
+        "change_in_mean_cost_vs_rule_pct": 0.0,
+        "days_better_than_rule": 0
+      },
+      "milp_battery_only_early_flexible_load": {
+        "mean_energy_cost": 31.83088210433333,
+        "change_in_mean_cost_vs_rule_pct": -17.45131582588938,
+        "days_better_than_rule": 30
+      },
+      "milp_joint_flexible_load": {
+        "mean_energy_cost": 30.820150523666666,
+        "change_in_mean_cost_vs_rule_pct": -20.072498668506668,
+        "days_better_than_rule": 30
+      }
+    }
+  }
+}

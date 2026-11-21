@@ -4,6 +4,8 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- Simulation and optimization work package (all results synthetic): the joint MILP gains a terminal tank level, an RO minimum production rate, one aggregate flexible load, a tariff-look-ahead rule baseline, grid-before-diesel ordering and an exact "curtail only when the battery cannot take more" rule so that every solution replays through the shared simulator. The evolutionary search now accepts diesel ramp-down and minimum up/down times through candidate repair and has an optional warm start. Added `islandos_core/stress_dispatch.py` (forecast stress scenarios and water-shortage events connected to the optimizer), a forecast-based RO rule and RO minimum run time in the impact scenario, and three experiment runners (`run_optimizer_impact.py`, `run_optimizer_benchmark.py`, `run_stress_tests.py`) with results under `results/`. See `docs/SIMULATION_OPTIMIZATION_RESULTS.md`.
+
 - Added an integrated deterministic microgrid energy–water model covering PV, wind, essential demand, battery SOC, grid imports, diesel backup, renewable-only scheduled RO consumption, curtailment, water production, tank inventory, and explicit unmet-service metrics. Added regression tests for energy/water conservation and operating limits.
 - Added a seeded synthetic benchmark CLI that compares no-RO and renewable-only RO policies on paired inputs and exports provenance-labelled JSON and hourly CSV evidence.
 - Added a generic product/system blueprint mapping the four-step INPUT/PREDICT/OPTIMIZE/DECIDE workflow to current modules, distinguishing implemented foundations from planned integration, and defining evidence-based V1–V5 exit gates.
