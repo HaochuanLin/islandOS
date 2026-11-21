@@ -82,7 +82,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     report = _canonical_prediction_report(
         _dataset(),
         forecast_horizon=6,
-        rolling_horizons=(1, 24),
+        rolling_horizons=(1, 6, 24),
     )
 
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
@@ -107,6 +107,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     assert set(report["signals"]) == {"load", "solar", "wind", "price"}
     for signal in report["signals"].values():
         assert signal["selected_model"]
+        assert signal["selected_model"] == signal["rolling_origin_candidate_evaluations"]["6"]["best_by_mae"]
         assert len(signal["input_history_sha256"]) == 64
         assert signal["selection_backtest"]["fold_metrics"]
         assert signal["holdout_metrics"]["samples"] == 6
@@ -128,7 +129,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
             len(item["forecast_points"]) == 6
             for item in candidate_models.values()
         )
-        assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
+        assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "6", "24"}
         for horizon_result in signal["rolling_origin_candidate_evaluations"].values():
             assert horizon_result["models"]
             assert horizon_result["best_by_mae"] in {

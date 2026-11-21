@@ -236,6 +236,9 @@ jobs:
                   assert math.isfinite(canonical_signal["holdout_metrics"][metric])
               candidates = canonical_signal["holdout_candidate_evaluations"]["models"]
               assert len(candidates) >= 2
+              assert canonical_signal["selected_model"] == (
+                  canonical_signal["rolling_origin_candidate_evaluations"]["168"]["best_by_mae"]
+              )
               for horizon in ("1", "6", "24", "168"):
                   legacy_models = legacy_rolling[signal][horizon]["models"]
                   assert {"persistence", "seasonal_naive_24h", "ridge_autoregressive"} <= set(legacy_models)

@@ -141,7 +141,7 @@ def _canonical_prediction_report(
         canonical_units,
         forecast_horizon,
         engine=engine,
-        backtest_horizon=24,
+        backtest_horizon=forecast_horizon,
         season_length=24,
     )
     initial_history = min(48, len(training_timestamps) - 1)
