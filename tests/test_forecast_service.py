@@ -105,3 +105,25 @@ def test_forecast_bundle_fails_closed_when_one_signal_cannot_be_forecast():
             model_ids={"battery_soc": "unsafe_negative"},
             initial_history=48,
         )
+
+
+
+def test_forecast_service_propagates_fold_cap_to_every_signal():
+    values = [float(index % 24) for index in range(120)]
+    request = ForecastBundleRequest((
+        make_signal("site_load", "kW", values),
+        make_signal("pv_generation", "kW", values),
+    ))
+
+    result = ForecastService().forecast_bundle(
+        request,
+        initial_history=48,
+        backtest_horizon=1,
+        max_folds=5,
+    )
+
+    assert all(forecast.backtest.folds == 5 for forecast in result.forecasts.values())
+    assert all(
+        forecast.interval_calibration_samples == 5
+        for forecast in result.forecasts.values()
+    )

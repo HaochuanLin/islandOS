@@ -8,6 +8,8 @@ from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
     _canonicalize_opsd_history,
     _score_holdout,
+    build_opsd_evidence_summary,
+    build_parser,
 )
 
 
@@ -22,8 +24,17 @@ def _dataset(count=120):
             "price": tuple(-10.0 if index % 24 < 3 else 40.0 for index in range(count)),
         },
         units={"load": "MW", "solar": "MW", "wind": "MW", "price": "EUR/MWh"},
+        source_file_sha256="b" * 64,
+        selected_history_sha256="a" * 64,
         data_sha256="a" * 64,
     )
+
+
+def test_cli_defaults_keep_24_hour_holdout_and_168_rolling_folds():
+    args = build_parser().parse_args(["--csv", "unused.csv"])
+
+    assert args.horizon == 24
+    assert args.max_rolling_folds == 168
 
 
 def test_opsd_units_are_explicitly_converted_to_canonical_site_units():
@@ -72,11 +83,15 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     report = _canonical_prediction_report(
         _dataset(),
         forecast_horizon=6,
-        rolling_horizons=(1, 24),
+        rolling_horizons=(1, 6, 24),
     )
 
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
-    assert report["source_data_sha256"] == "a" * 64
+    assert report["evidence_class"] == "public_historical_regional_aggregate"
+    assert report["site_telemetry"] is False
+    assert report["synthetic"] is False
+    assert report["source_file_sha256"] == "b" * 64
+    assert report["selected_history_sha256"] == "a" * 64
     assert len(report["canonical_bundle_history_sha256"]) == 64
     assert report["holdout_window"] == {
         "method": "single_final_chronological_holdout",
@@ -93,6 +108,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     assert set(report["signals"]) == {"load", "solar", "wind", "price"}
     for signal in report["signals"].values():
         assert signal["selected_model"]
+        assert signal["selected_model"] == signal["rolling_origin_candidate_evaluations"]["6"]["best_by_mae"]
         assert len(signal["input_history_sha256"]) == 64
         assert signal["selection_backtest"]["fold_metrics"]
         assert signal["holdout_metrics"]["samples"] == 6
@@ -114,7 +130,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
             len(item["forecast_points"]) == 6
             for item in candidate_models.values()
         )
-        assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
+        assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "6", "24"}
         for horizon_result in signal["rolling_origin_candidate_evaluations"].values():
             assert horizon_result["models"]
             assert horizon_result["best_by_mae"] in {
@@ -191,6 +207,39 @@ def test_canonical_report_requires_minimum_training_history_before_holdout():
         _canonical_prediction_report(_dataset(count=77), forecast_horizon=6)
 
 
+def test_canonical_report_rejects_invalid_rolling_fold_limit():
+    with pytest.raises(ValueError, match="max_rolling_folds must be an integer from 2 to 1000"):
+        _canonical_prediction_report(_dataset(), forecast_horizon=6, max_rolling_folds=1)
+
+
+def test_canonical_rolling_report_bounds_hourly_folds_and_reports_skips():
+    dataset = _dataset(count=120)
+    report = _canonical_prediction_report(
+        dataset,
+        forecast_horizon=6,
+        rolling_horizons=(1,),
+        max_rolling_folds=4,
+    )
+
+    evaluation = report["signals"]["load"]["rolling_origin_candidate_evaluations"]["1"]
+    window = evaluation["evaluation_window"]
+
+    assert window["complete_folds"] == 66
+    assert window["evaluated_folds"] == 4
+    assert window["skipped_complete_folds"] == 62
+    assert window["fold_sampling"] == "evenly_spaced_complete_blocks_including_first_and_last"
+    assert window["max_rolling_folds"] == 4
+    assert window["fold_indices"] == [1, 23, 44, 66]
+    assert window["scored_samples"] == 4
+    assert window["skipped_validation_samples"] == 62
+    assert window["excluded_trailing_samples"] == 0
+    assert window["last_scored_validation_end_utc"] == dataset.timestamps[113].isoformat()
+    assert all(
+        [fold["fold_index"] for fold in model["fold_metrics"]] == [1, 23, 44, 66]
+        for model in evaluation["models"]
+    )
+
+
 def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
     dataset = _dataset(count=125)
     report = _canonical_prediction_report(
@@ -210,8 +259,92 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
         "last_scored_validation_end_utc": dataset.timestamps[95].isoformat(),
         "validation_horizon_hours": 24,
         "complete_folds": 2,
+        "evaluated_folds": 2,
+        "skipped_complete_folds": 0,
+        "fold_sampling": "evenly_spaced_complete_blocks_including_first_and_last",
+        "max_rolling_folds": 168,
+        "fold_indices": [1, 2],
         "scored_samples": 48,
+        "skipped_validation_samples": 0,
         "excluded_trailing_samples": 23,
     }
     assert all(len(model["fold_metrics"]) == 2 for model in evaluation["models"])
-    assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"]
+    assert "incomplete trailing observations are reported separately" in report["rolling_evaluation_scope"]
+
+
+def test_opsd_evidence_summary_reports_row_accounting_and_candidate_scores():
+    dataset = _dataset(count=120)
+    canonical = _canonical_prediction_report(
+        dataset,
+        forecast_horizon=6,
+        rolling_horizons=(1, 6, 24),
+    )
+    report = {
+        "data_provenance": {
+            "evidence_class": "public_historical_regional_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
+            "source": "Open Power System Data",
+            "version": "2020-10-06",
+            "region_code": "AT",
+            "observations": 120,
+            "source_file_sha256": "b" * 64,
+            "selected_history_sha256": "a" * 64,
+        },
+        "canonical_prediction_service": canonical,
+    }
+    window = {
+        "region_code": "AT",
+        "rows_scanned": 150,
+        "valid_complete_rows": 130,
+        "selected_observations": 120,
+        "incomplete_rows": 20,
+        "complete_rows_outside_selected_window": 10,
+        "excluded_rows_outside_selected_window": 30,
+        "start_utc": dataset.timestamps[0].isoformat(),
+        "end_utc_exclusive": (dataset.timestamps[-1] + timedelta(hours=1)).isoformat(),
+    }
+
+    summary = build_opsd_evidence_summary(report, window)
+
+    assert "public historical regional aggregate" in summary
+    assert "Source rows scanned: 150" in summary
+    assert "Complete rows outside the selected contiguous window: 10" in summary
+    assert "Incomplete or invalid rows: 20" in summary
+    assert "Selected contiguous observations: 120" in summary
+    assert "Final chronological holdout" in summary
+    assert "Canonical rolling-origin candidate comparisons" in summary
+    assert "| load | 1 |" in summary
+    assert "| price | 24 |" in summary
+    assert "No customer savings" in summary
+
+
+def test_opsd_evidence_summary_rejects_inconsistent_row_accounting():
+    dataset = _dataset(count=120)
+    canonical = _canonical_prediction_report(dataset, forecast_horizon=6)
+    report = {
+        "data_provenance": {
+            "evidence_class": "public_historical_regional_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
+            "region_code": "AT",
+            "observations": 120,
+            "source_file_sha256": "b" * 64,
+            "selected_history_sha256": "a" * 64,
+        },
+        "canonical_prediction_service": canonical,
+    }
+    window = {
+        "region_code": "AT",
+        "rows_scanned": 150,
+        "valid_complete_rows": 130,
+        "selected_observations": 120,
+        "excluded_rows_outside_selected_window": 29,
+        "start_utc": dataset.timestamps[0].isoformat(),
+        "end_utc_exclusive": (dataset.timestamps[-1] + timedelta(hours=1)).isoformat(),
+    }
+
+    with pytest.raises(ValueError, match="excluded-row count does not reconcile"):
+        build_opsd_evidence_summary(report, window)
+
+

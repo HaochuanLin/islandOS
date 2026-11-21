@@ -216,6 +216,18 @@ class TestPredictionEngine(unittest.TestCase):
                 backtest_horizon=1, season_length=2,
             )
 
+    def test_forecast_uses_the_same_fold_cap_for_selection_and_error_band(self):
+        request = make_request([float(index % 24) for index in range(120)])
+        result = PredictionEngine().forecast(
+            request,
+            initial_history=48,
+            backtest_horizon=1,
+            max_folds=5,
+        )
+
+        self.assertEqual(result.backtest.folds, 5)
+        self.assertEqual(result.interval_calibration_samples, 5)
+
     def test_candidate_identity_cannot_change_after_registration(self):
         engine = PredictionEngine()
         engine.register(MutatingCandidate())
@@ -230,6 +242,62 @@ class TestPredictionEngine(unittest.TestCase):
             RecentMeanCandidate().predict([1.0, 3.0, 5.0], 3, season_length=3),
             [3.0, 3.0, 3.0],
         )
+
+    def test_rolling_evaluation_samples_evenly_spaced_complete_folds(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        score = engine.evaluate_candidates(
+            [float(index) for index in range(21)],
+            initial_history=4,
+            horizon=2,
+            max_folds=3,
+        )[0]
+
+        self.assertEqual(score.folds, 3)
+        self.assertEqual(score.samples, 6)
+        self.assertEqual([fold.fold_index for fold in score.fold_metrics], [1, 5, 8])
+        self.assertEqual([fold.train_samples for fold in score.fold_metrics], [4, 12, 18])
+
+    def test_forecast_request_freezes_mutable_input_sequences(self):
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        history = [
+            SignalObservation(start + timedelta(hours=index), float(index + 1))
+            for index in range(3)
+        ]
+        targets = [start + timedelta(hours=3)]
+
+        request = ForecastRequest("site_load", "kW", history, targets)
+
+        history.append(SignalObservation(start + timedelta(hours=3), 4.0))
+        targets.append(start + timedelta(hours=4))
+
+        self.assertIsInstance(request.history, tuple)
+        self.assertIsInstance(request.target_timestamps, tuple)
+        self.assertEqual(len(request.history), 3)
+        self.assertEqual(
+            request.target_timestamps,
+            (start + timedelta(hours=3),),
+        )
+        with self.assertRaises(AttributeError):
+            request.history.append(SignalObservation(start + timedelta(hours=3), 4.0))
+        with self.assertRaises(AttributeError):
+            request.target_timestamps.append(start + timedelta(hours=4))
+
+    def test_rolling_evaluation_rejects_invalid_fold_limit(self):
+        engine = PredictionEngine()
+        history = [float(index) for index in range(96)]
+        for invalid in (True, 1, 2.0, "2"):
+            with self.subTest(max_folds=invalid):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "max_folds must be None or an integer of at least 2",
+                ):
+                    engine.evaluate_candidates(
+                        history,
+                        initial_history=48,
+                        horizon=24,
+                        max_folds=invalid,
+                    )
 
 
 if __name__ == "__main__":

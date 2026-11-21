@@ -40,6 +40,17 @@ class ForecastRequest:
     non_negative: bool = True
 
     def __post_init__(self) -> None:
+        """Freeze caller-provided sequences before validating the request snapshot."""
+        try:
+            history = tuple(self.history)
+            target_timestamps = tuple(self.target_timestamps)
+        except TypeError as exc:
+            raise ValueError(
+                "history and target_timestamps must be iterable sequences"
+            ) from exc
+        object.__setattr__(self, "history", history)
+        object.__setattr__(self, "target_timestamps", target_timestamps)
+
         if not isinstance(self.signal_id, str) or not self.signal_id.strip():
             raise ValueError("signal_id is required")
         if not isinstance(self.unit, str) or not self.unit.strip():
@@ -326,26 +337,37 @@ class PredictionEngine:
         horizon: int,
         season_length: int,
         non_negative: bool,
+        max_folds: int | None = None,
     ) -> tuple[CandidateMetrics, list[float]]:
         candidate, version = self._candidates[model_id]
         actual_all: list[float] = []
         predicted_all: list[float] = []
-        cutoff = initial_history
+        available_folds = (len(values) - initial_history) // horizon
+        if max_folds is None or available_folds <= max_folds:
+            fold_indices = tuple(range(available_folds))
+        else:
+            # Deterministically sample across the entire history, including the
+            # first and last complete blocks, instead of evaluating every hour.
+            denominator = max_folds - 1
+            fold_indices = tuple(
+                (index * (available_folds - 1) + denominator // 2) // denominator
+                for index in range(max_folds)
+            )
         folds = 0
         fold_metrics = []
-        while cutoff + horizon <= len(values):
-            # Score only complete blocks so a requested 168-hour evaluation
-            # never silently includes a shorter final block.
-            fold_horizon = horizon
+        for fold_number in fold_indices:
+            # Each sampled fold still uses only observations available before
+            # its validation block; skipped blocks never enter its training set.
+            cutoff = initial_history + fold_number * horizon
             train = values[:cutoff]
             predicted = self._predict(
-                model_id, train, fold_horizon,
+                model_id, train, horizon,
                 season_length=season_length, non_negative=non_negative,
             )
-            actual = [float(value) for value in values[cutoff:cutoff + fold_horizon]]
+            actual = [float(value) for value in values[cutoff:cutoff + horizon]]
             fold_mae, fold_rmse, fold_bias, _ = _metrics(actual, predicted)
             fold_metrics.append(CandidateFoldMetrics(
-                fold_index=folds + 1,
+                fold_index=fold_number + 1,
                 train_samples=len(train),
                 samples=len(actual),
                 mae=fold_mae,
@@ -354,7 +376,6 @@ class PredictionEngine:
             ))
             actual_all.extend(actual)
             predicted_all.extend(predicted)
-            cutoff += fold_horizon
             folds += 1
         mae, rmse, bias, wape = _metrics(actual_all, predicted_all)
         return CandidateMetrics(
@@ -379,7 +400,14 @@ class PredictionEngine:
         horizon: int = 24,
         season_length: int = 24,
         non_negative: bool = True,
+        max_folds: int | None = None,
     ) -> tuple[CandidateMetrics, ...]:
+        """Evaluate candidates on complete chronological expanding-window blocks.
+
+        When max_folds is supplied, evenly spaced complete blocks are evaluated
+        across the available history, including the first and last. The default
+        None preserves exhaustive evaluation for existing callers.
+        """
         values = list(history)
         if (
             len(values) < 3
@@ -396,6 +424,12 @@ class PredictionEngine:
                 f"history must contain at least one complete {horizon}-hour validation block "
                 "after initial_history"
             )
+        if max_folds is not None and (
+            isinstance(max_folds, bool)
+            or not isinstance(max_folds, int)
+            or max_folds < 2
+        ):
+            raise ValueError("max_folds must be None or an integer of at least 2")
         if isinstance(season_length, bool) or not isinstance(season_length, int) or season_length < 1:
             raise ValueError("season_length must be a positive integer")
         if not isinstance(non_negative, bool):
@@ -413,6 +447,7 @@ class PredictionEngine:
                 metrics, _ = self._replay(
                     model_id, values, initial_history=initial_history, horizon=horizon,
                     season_length=season_length, non_negative=non_negative,
+                    max_folds=max_folds,
                 )
                 results.append(metrics)
             except (TypeError, ValueError, ArithmeticError):
@@ -431,6 +466,7 @@ class PredictionEngine:
         backtest_horizon: int = 24,
         season_length: int = 24,
         confidence_level: float = 0.90,
+        max_folds: int | None = None,
     ) -> PredictionResult:
         if not isinstance(request, ForecastRequest):
             raise TypeError("request must be a ForecastRequest")
@@ -441,6 +477,7 @@ class PredictionEngine:
         ranking = self.evaluate_candidates(
             values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            max_folds=max_folds,
         )
         selected_id = model_id or ranking[0].model_id
         if selected_id not in self._candidates:
@@ -452,6 +489,7 @@ class PredictionEngine:
         selected_metrics, absolute_errors = self._replay(
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            max_folds=max_folds,
         )
         _, registered_version = self._candidates[selected_id]
         predictions = self._predict(

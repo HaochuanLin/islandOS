@@ -16,10 +16,16 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 @dataclass(frozen=True)
 class FoldMetrics:
+    fold_index: int
+    train_samples: int
     samples: int
     mae: float
     rmse: float
     bias_predicted_minus_actual: float
+    train_start_utc: datetime
+    train_end_utc: datetime
+    validation_start_utc: datetime
+    validation_end_utc: datetime
 
 
 @dataclass(frozen=True)
@@ -67,29 +73,55 @@ def expanding_window_slices(
     validation_size: int = 24,
     folds: int = 4,
 ) -> tuple[tuple[slice, slice], ...]:
-    """Create chronological expanding folds with fixed contiguous test blocks."""
+    """Sample complete expanding folds evenly across the available chronology.
+
+    The first fold starts at min_train_size and the last fold always ends at
+    the final complete validation block. Intermediate folds are selected
+    deterministically across the full history instead of clustering at the end.
+    """
     for name, value in (("observation_count", observation_count),
                         ("min_train_size", min_train_size),
                         ("validation_size", validation_size),
                         ("folds", folds)):
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError(f"{name} must be a positive integer")
-    required = min_train_size + validation_size * folds
-    if observation_count < required:
+    available_folds = (observation_count - min_train_size) // validation_size
+    if available_folds < folds:
+        required = min_train_size + validation_size * folds
         raise ValueError(
             f"need at least {required} observations for {folds} folds "
             f"(min_train_size={min_train_size}, validation_size={validation_size})"
         )
-    first_train_end = observation_count - validation_size * folds
+    if folds == 1:
+        fold_indices = (available_folds - 1,)
+    else:
+        denominator = folds - 1
+        fold_indices = tuple(
+            (index * (available_folds - 1) + denominator // 2) // denominator
+            for index in range(folds)
+        )
     return tuple(
-        (slice(0, first_train_end + i * validation_size),
-         slice(first_train_end + i * validation_size,
-               first_train_end + (i + 1) * validation_size))
-        for i in range(folds)
+        (
+            slice(0, min_train_size + fold_index * validation_size),
+            slice(
+                min_train_size + fold_index * validation_size,
+                min_train_size + (fold_index + 1) * validation_size,
+            ),
+        )
+        for fold_index in fold_indices
     )
 
-
-def _score(actual: Sequence[float], predicted: Sequence[float]) -> FoldMetrics:
+def _score(
+    actual: Sequence[float],
+    predicted: Sequence[float],
+    *,
+    fold_index: int,
+    train_samples: int,
+    train_start_utc: datetime,
+    train_end_utc: datetime,
+    validation_start_utc: datetime,
+    validation_end_utc: datetime,
+) -> FoldMetrics:
     if len(actual) != len(predicted) or not actual:
         raise ValueError("each fold must return one prediction per validation observation")
     errors = []
@@ -104,12 +136,17 @@ def _score(actual: Sequence[float], predicted: Sequence[float]) -> FoldMetrics:
             raise ValueError(f"non-finite value in fold at index {index}")
         errors.append(estimate_f - truth_f)
     return FoldMetrics(
+        fold_index=fold_index,
+        train_samples=train_samples,
         samples=len(errors),
         mae=sum(abs(error) for error in errors) / len(errors),
         rmse=math.sqrt(sum(error * error for error in errors) / len(errors)),
         bias_predicted_minus_actual=sum(errors) / len(errors),
+        train_start_utc=train_start_utc,
+        train_end_utc=train_end_utc,
+        validation_start_utc=validation_start_utc,
+        validation_end_utc=validation_end_utc,
     )
-
 
 
 def evaluate_horizon_windows(
@@ -200,6 +237,18 @@ def evaluate_expanding_window(
             validation_actual = values[validation_slice]
             validation_timestamps = tuple(timestamps[validation_slice])
             predictions = forecaster(train, validation_timestamps)
-            fold_scores.append(_score(validation_actual, predictions))
+            original_fold_index = (
+                (train_slice.stop - min_train_size) // validation_size
+            ) + 1
+            fold_scores.append(_score(
+                validation_actual,
+                predictions,
+                fold_index=original_fold_index,
+                train_samples=len(train),
+                train_start_utc=timestamps[train_slice.start],
+                train_end_utc=timestamps[train_slice.stop - 1],
+                validation_start_utc=timestamps[validation_slice.start],
+                validation_end_utc=timestamps[validation_slice.stop - 1],
+            ))
         results[model_id] = ModelBacktest(model_id, tuple(fold_scores))
     return results
