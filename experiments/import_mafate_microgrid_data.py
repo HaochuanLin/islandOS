@@ -11,6 +11,7 @@ import csv
 import hashlib
 import json
 import math
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -110,8 +111,22 @@ def _read_hourly(path: Path, fields: dict[str, str], scale: float = 1.0) -> dict
     timezone_modes: set[bool] = set()
     raw_count = 0
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        # The published Zenodo files start with a contact/location line before
+        # the real header, so skip any lines until one that begins with "Date".
+        skipped = 0
+        while True:
+            position = handle.tell()
+            line_text = handle.readline()
+            if not line_text:
+                handle.seek(0)
+                skipped = 0
+                break
+            if re.split(r"[,;\t]", line_text, maxsplit=1)[0].strip() == "Date":
+                handle.seek(position)
+                break
+            skipped += 1
         sample = handle.read(8192)
-        handle.seek(0)
+        handle.seek(position if skipped else 0)
         try:
             dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
         except csv.Error:
@@ -127,7 +142,7 @@ def _read_hourly(path: Path, fields: dict[str, str], scale: float = 1.0) -> dict
         missing = required - set(reader.fieldnames)
         if missing:
             raise ValueError(f"{path.name} missing columns: {', '.join(sorted(missing))}")
-        for line, row in enumerate(reader, start=2):
+        for line, row in enumerate(reader, start=2 + skipped):
             if None in row:
                 raise ValueError(f"{path.name} has extra fields at CSV line {line}")
             row = {(key or "").strip(): value for key, value in row.items()}
@@ -196,27 +211,53 @@ def _hour_range(start: datetime, end: datetime):
         current += timedelta(hours=1)
 
 
-def import_dataset(data_dir: str | Path, output_dir: str | Path) -> dict[str, Any]:
-    """Normalize five extracted Mafate CSV files and create an hourly merged table."""
+def _empty_series(fields: dict[str, str]) -> dict[str, Any]:
+    """Stand-in for a file that was not supplied: every hour stays blank."""
+    return {"path": None, "bins": {}, "raw_row_count": 0, "first_timestamp": None,
+            "last_timestamp": None, "timezone_aware": None, "fields": list(fields.values())}
+
+
+def import_dataset(data_dir: str | Path, output_dir: str | Path, *, allow_missing: bool = False) -> dict[str, Any]:
+    """Normalize the extracted Mafate CSV files and create an hourly merged table.
+
+    By default all five files are required. With ``allow_missing=True`` any
+    file that is not found is skipped and its columns are left blank, so a
+    single household file is enough to run the household-load forecast.
+    """
     root, output = Path(data_dir), Path(output_dir)
     if not root.is_dir():
         raise NotADirectoryError(f"Data directory not found: {root}")
     output.mkdir(parents=True, exist_ok=True)
-    paths = {key: _resolve_file(root, key) for key in DATASET_FILES}
+    paths: dict[str, Path] = {}
+    missing_files: list[str] = []
+    for key in DATASET_FILES:
+        try:
+            paths[key] = _resolve_file(root, key)
+        except FileNotFoundError:
+            if not allow_missing:
+                raise
+            missing_files.append(DATASET_FILES[key][0])
+    if not paths:
+        raise FileNotFoundError(f"No Mafate dataset files found under {root}")
 
-    meteo = _read_hourly(paths["meteo"], METEO_FIELDS)
-    solar = _read_hourly(paths["solar"], SOLAR_FIELDS)
-    houses = {}
-    for key, (last_channel, _) in HOUSE_CHANNELS.items():
-        fields = {f"Input{i}": f"input_{i}_kw" for i in range(1, last_channel + 1)}
-        houses[key] = _read_hourly(paths[key], fields, scale=0.001)
+    house_field_maps = {
+        key: {f"Input{i}": f"input_{i}_kw" for i in range(1, last_channel + 1)}
+        for key, (last_channel, _) in HOUSE_CHANNELS.items()
+    }
+    meteo = _read_hourly(paths["meteo"], METEO_FIELDS) if "meteo" in paths else _empty_series(METEO_FIELDS)
+    solar = _read_hourly(paths["solar"], SOLAR_FIELDS) if "solar" in paths else _empty_series(SOLAR_FIELDS)
+    houses = {
+        key: _read_hourly(paths[key], fields, scale=0.001) if key in paths else _empty_series(fields)
+        for key, fields in house_field_maps.items()
+    }
+    present = [series for series in [meteo, solar, *houses.values()] if series["path"] is not None]
 
-    timezone_modes = {series["timezone_aware"] for series in [meteo, solar, *houses.values()]}
+    timezone_modes = {series["timezone_aware"] for series in present}
     if len(timezone_modes) > 1:
         raise ValueError("Source files mix timezone-aware and timezone-naive timestamps")
 
     all_stamps = [
-        stamp for series in [meteo, solar, *houses.values()]
+        stamp for series in present
         for stamp in (series["first_timestamp"], series["last_timestamp"])
     ]
     start, end = min(all_stamps), max(all_stamps)
@@ -307,8 +348,9 @@ def import_dataset(data_dir: str | Path, output_dir: str | Path) -> dict[str, An
             "meteo": meteo, "solar": solar, **houses
         }.items()},
         "source_file_sha256": {
-            key: _sha256_file(paths[key]) for key in DATASET_FILES
+            key: _sha256_file(path) for key, path in paths.items()
         },
+        "missing_files_left_blank": missing_files,
         "hourly_bin_counts": {
             "meteo_hours_with_samples": len(meteo["bins"]),
             "solar_plant_hours_with_samples": len(solar["bins"]),
@@ -340,8 +382,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", required=True, help="Directory containing extracted Zenodo CSV files")
     parser.add_argument("--output-dir", required=True, help="Directory for normalized hourly outputs")
+    parser.add_argument("--allow-missing", action="store_true",
+                        help="Skip files that are not present and leave their columns blank")
     args = parser.parse_args()
-    print(json.dumps(import_dataset(args.data_dir, args.output_dir), indent=2, ensure_ascii=False))
+    print(json.dumps(import_dataset(args.data_dir, args.output_dir, allow_missing=args.allow_missing),
+                     indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

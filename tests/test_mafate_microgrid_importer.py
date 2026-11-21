@@ -127,3 +127,36 @@ class MafateImporterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MafateRealFileShapeTests(unittest.TestCase):
+    """The published Zenodo files have a contact line before the header."""
+
+    def test_leading_metadata_line_is_skipped_and_missing_files_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "raw"
+            source.mkdir()
+            (source / "Demand_house_1_dataset.csv").write_text(
+                "Lab PIMENT contact:someone@example.org Location:Roche-Plate Mafate,,,,\n"
+                "Date,Input1,Input2,Input3,Input4\n"
+                "2020-05-01 00:00:00,10.0,10.0,73.0,100.0\n"
+                "2020-05-01 00:01:00,10.0,10.0,73.0,300.0\n"
+                "2020-05-01 01:00:00,10.0,10.0,73.0,500.0\n",
+                encoding="utf-8",
+            )
+            manifest = import_dataset(source, root / "out", allow_missing=True)
+            self.assertIn("Meteo_dataset.csv", manifest["missing_files_left_blank"])
+            with (root / "out" / "microgrid_hourly.csv").open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertAlmostEqual(float(rows[0]["house_1_load_kw"]), 0.2)
+            self.assertAlmostEqual(float(rows[1]["house_1_load_kw"]), 0.5)
+            self.assertEqual(rows[0]["ghi_horizontal_kw_m2"], "")
+
+    def test_missing_files_still_rejected_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Demand_house_1_dataset.csv").write_text(
+                "Date,Input1,Input2,Input3,Input4\n2020-05-01 00:00:00,1,1,1,1\n", encoding="utf-8")
+            with self.assertRaises(FileNotFoundError):
+                import_dataset(root, root / "out")
