@@ -8,6 +8,7 @@ from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
     _canonicalize_opsd_history,
     _score_holdout,
+    build_parser,
 )
 
 
@@ -26,6 +27,13 @@ def _dataset(count=120):
         selected_history_sha256="a" * 64,
         data_sha256="a" * 64,
     )
+
+
+def test_cli_defaults_keep_24_hour_holdout_and_168_rolling_folds():
+    args = build_parser().parse_args(["--csv", "unused.csv"])
+
+    assert args.horizon == 24
+    assert args.max_rolling_folds == 168
 
 
 def test_opsd_units_are_explicitly_converted_to_canonical_site_units():

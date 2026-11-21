@@ -386,7 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--start-utc", type=_utc_bound, help="Inclusive ISO-8601 UTC start")
     parser.add_argument("--end-utc", type=_utc_bound, help="Exclusive ISO-8601 UTC end")
-    parser.add_argument("--horizon", type=int, default=168, help="Final chronological holdout / forecast horizon in hours (1–168)")
+    parser.add_argument("--horizon", type=int, default=24, help="Final chronological holdout / forecast horizon in hours (1–168)")
     parser.add_argument(
         "--rolling-validation", action="store_true",
         help="Also evaluate legacy and canonical forecast candidates on expanding windows",
@@ -396,8 +396,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Rolling validation horizons in hours (default: 1 6 24 168)",
     )
     parser.add_argument(
-        "--max-rolling-folds", type=int, default=24,
-        help="Maximum evenly spaced complete folds per canonical signal/horizon (2–1000; default: 168)",
+        "--max-rolling-folds", type=int, default=168,
+        help="Maximum evenly spaced complete folds per legacy and canonical signal/horizon (2–1000; default: 168)",
     )
     return parser
 
