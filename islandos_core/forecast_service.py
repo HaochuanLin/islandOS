@@ -64,6 +64,7 @@ class ForecastService:
         backtest_horizon: int = 24,
         season_length: int = 24,
         confidence_level: float = 0.90,
+        max_folds: int | None = None,
     ) -> ForecastBundleResult:
         if not isinstance(request, ForecastBundleRequest):
             raise TypeError("request must be a ForecastBundleRequest")
@@ -85,6 +86,7 @@ class ForecastService:
                 backtest_horizon=backtest_horizon,
                 season_length=season_length,
                 confidence_level=confidence_level,
+                max_folds=max_folds,
             )
             units[signal_request.signal_id] = signal_request.unit
 

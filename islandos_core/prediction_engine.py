@@ -466,6 +466,7 @@ class PredictionEngine:
         backtest_horizon: int = 24,
         season_length: int = 24,
         confidence_level: float = 0.90,
+        max_folds: int | None = None,
     ) -> PredictionResult:
         if not isinstance(request, ForecastRequest):
             raise TypeError("request must be a ForecastRequest")
@@ -476,6 +477,7 @@ class PredictionEngine:
         ranking = self.evaluate_candidates(
             values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            max_folds=max_folds,
         )
         selected_id = model_id or ranking[0].model_id
         if selected_id not in self._candidates:
@@ -487,6 +489,7 @@ class PredictionEngine:
         selected_metrics, absolute_errors = self._replay(
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            max_folds=max_folds,
         )
         _, registered_version = self._candidates[selected_id]
         predictions = self._predict(

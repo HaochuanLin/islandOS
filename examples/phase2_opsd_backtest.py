@@ -143,6 +143,7 @@ def _canonical_prediction_report(
         engine=engine,
         backtest_horizon=forecast_horizon,
         season_length=24,
+        max_folds=max_rolling_folds,
     )
     initial_history = min(48, len(training_timestamps) - 1)
     signals = {}

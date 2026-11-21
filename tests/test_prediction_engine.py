@@ -216,6 +216,18 @@ class TestPredictionEngine(unittest.TestCase):
                 backtest_horizon=1, season_length=2,
             )
 
+    def test_forecast_uses_the_same_fold_cap_for_selection_and_error_band(self):
+        request = make_request([float(index % 24) for index in range(120)])
+        result = PredictionEngine().forecast(
+            request,
+            initial_history=48,
+            backtest_horizon=1,
+            max_folds=5,
+        )
+
+        self.assertEqual(result.backtest.folds, 5)
+        self.assertEqual(result.interval_calibration_samples, 5)
+
     def test_candidate_identity_cannot_change_after_registration(self):
         engine = PredictionEngine()
         engine.register(MutatingCandidate())
