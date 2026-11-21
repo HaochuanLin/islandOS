@@ -86,6 +86,9 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     )
 
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
+    assert report["evidence_class"] == "public_historical_regional_aggregate"
+    assert report["site_telemetry"] is False
+    assert report["synthetic"] is False
     assert report["source_file_sha256"] == "b" * 64
     assert report["selected_history_sha256"] == "a" * 64
     assert len(report["canonical_bundle_history_sha256"]) == 64

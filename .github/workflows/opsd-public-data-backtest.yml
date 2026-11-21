@@ -174,7 +174,7 @@ jobs:
             --signals load solar wind price \
             --start-utc "${{ steps.window.outputs.start_utc }}" \
             --end-utc "${{ steps.window.outputs.end_utc }}" \
-            --horizon 24 \
+            --horizon 168 \
             --rolling-validation \
             --rolling-horizons 1 6 24 168 \
             --max-rolling-folds 168 \
@@ -201,9 +201,13 @@ jobs:
           assert set(report["signals"]) == {"load", "solar", "wind", "price"}
 
           canonical = report["canonical_prediction_service"]
+          assert provenance["evidence_class"] == "public_historical_regional_aggregate"
+          assert provenance["site_telemetry"] is False and provenance["synthetic"] is False
+          assert canonical["evidence_class"] == "public_historical_regional_aggregate"
+          assert canonical["site_telemetry"] is False and canonical["synthetic"] is False
           assert canonical["source_file_sha256"] == source_sha256
           assert canonical["selected_history_sha256"] == provenance["selected_history_sha256"]
-          assert canonical["holdout_window"]["holdout_samples"] == 24
+          assert canonical["holdout_window"]["holdout_samples"] == 168
           assert canonical["holdout_window"]["excluded_from_candidate_selection"] is True
           assert canonical["holdout_window"]["excluded_from_rolling_origin_evaluation"] is True
 
@@ -227,7 +231,7 @@ jobs:
                           for fold in model["folds"]
                       )
               canonical_signal = canonical["signals"][signal]
-              assert canonical_signal["holdout_metrics"]["samples"] == 24
+              assert canonical_signal["holdout_metrics"]["samples"] == 168
               for metric in ("mae", "rmse", "bias_predicted_minus_actual"):
                   assert math.isfinite(canonical_signal["holdout_metrics"][metric])
               candidates = canonical_signal["holdout_candidate_evaluations"]["models"]
@@ -300,7 +304,7 @@ jobs:
               "",
               "The report contains legacy Persistence / 24-hour Seasonal Naive / Ridge autoregression "
               "and canonical Persistence / Seasonal Naive / Recent Mean / Linear Trend comparisons "
-              "for 1, 6, 24 and 168-hour horizons. Canonical rolling origins are evenly sampled "
+              "for 1, 6, 24 and 168-hour horizons, with a separate 168-hour final chronological holdout. Canonical rolling origins are evenly sampled "
               "with the first and last complete blocks included; exact fold indices and UTC "
               "boundaries are in report.json.",
               "",

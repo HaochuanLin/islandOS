@@ -335,6 +335,9 @@ def _canonical_prediction_report(
             "limitations": list(result.limitations),
         }
     return {
+        "evidence_class": "public_historical_regional_aggregate",
+        "site_telemetry": False,
+        "synthetic": False,
         "engine": "canonical PredictionEngine via forecast_site_signals",
         "source_file_sha256": dataset.source_file_sha256,
         "selected_history_sha256": dataset.selected_history_sha256,
@@ -422,6 +425,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     report = {
         "data_provenance": {
+            "evidence_class": "public_historical_regional_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
             "source": dataset.source_name,
             "version": dataset.source_version,
             "source_url": dataset.source_url,
