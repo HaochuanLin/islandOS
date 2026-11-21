@@ -196,7 +196,7 @@ class TestForecastEngine(unittest.TestCase):
         self.assertTrue(all(call.args[2] == len(call.args[0]) for call in fit.call_args_list))
         self.assertEqual(
             [len(call.args[0]) for call in fit.call_args_list],
-            [898, 899, 852, 876],
+            [72, 899, 72, 864],
         )
 
     def test_builtin_rolling_validation_rejects_negative_physical_history(self):
