@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: islandos-opsd-backtest-\${{ github.workflow }}-\${{ github.ref }}
+  group: islandos-opsd-backtest-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      OPSD_REGION: \${{ github.event_name == 'workflow_dispatch' && inputs.region || 'AT' }}
+      OPSD_REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || 'AT' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -153,12 +153,12 @@ jobs:
               "synthetic": False,
           }
           Path("build/opsd/window.json").write_text(
-              json.dumps(payload, indent=2, sort_keys=True) + "\\n",
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              output.write(f"start_utc={payload['start_utc']}\\n")
-              output.write(f"end_utc={payload['end_utc_exclusive']}\\n")
+              output.write(f"start_utc={payload['start_utc']}\n")
+              output.write(f"end_utc={payload['end_utc_exclusive']}\n")
           print(json.dumps(payload, indent=2, sort_keys=True))
           PY
 
@@ -168,8 +168,8 @@ jobs:
             --csv build/opsd/time_series_60min_singleindex.csv \
             --region "$OPSD_REGION" \
             --signals load solar wind price \
-            --start-utc "\${{ steps.window.outputs.start_utc }}" \
-            --end-utc "\${{ steps.window.outputs.end_utc }}" \
+            --start-utc "${{ steps.window.outputs.start_utc }}" \
+            --end-utc "${{ steps.window.outputs.end_utc }}" \
             --horizon 24 \
             --rolling-validation \
             --rolling-horizons 1 6 24 168 \
@@ -293,14 +293,14 @@ jobs:
               "scaled into a customer facility, and unit conversion does not establish site-level accuracy.",
               "",
           ])
-          (root / "summary.md").write_text("\\n".join(lines), encoding="utf-8")
+          (root / "summary.md").write_text("\n".join(lines), encoding="utf-8")
           print((root / "summary.md").read_text(encoding="utf-8"))
           PY
 
       - name: Upload reproducible OPSD backtest evidence
         uses: actions/upload-artifact@v4
         with:
-          name: opsd-public-backtest-\${{ env.OPSD_REGION }}-\${{ github.sha }}
+          name: opsd-public-backtest-${{ env.OPSD_REGION }}-${{ github.sha }}
           path: |
             build/opsd/report.json
             build/opsd/window.json
