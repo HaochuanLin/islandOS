@@ -12,7 +12,7 @@ import random
 from typing import Sequence
 
 from islandos_core.energy_system import (
-    EnergySystemConfig, EnergySystemInputs, dispatch_energy_system,
+    EnergyModelError, EnergySystemConfig, EnergySystemInputs, dispatch_energy_system,
 )
 from islandos_core.multisignal_forecasting import SignalForecastResult
 
@@ -671,8 +671,15 @@ def optimize_battery_and_diesel_schedule(
     max_unmet_load_kwh: float | None = None,
     max_critical_unmet_load_kwh: float | None = None,
     terminal_battery_soc_min: float | None = None,
+    warm_start_from_rule_dispatch: bool = False,
 ) -> dict:
     """Jointly search battery, diesel, and optional aggregate flexible-load schedules.
+
+    With ``warm_start_from_rule_dispatch=True`` the initial population also
+    contains the schedule that the default rule dispatch produces on the
+    nominal scenario, so the search starts from a schedule that serves the
+    load and can only keep or improve on it. Diesel ramp-down and minimum
+    up/down times are handled by repairing every candidate before evaluation.
 
     The shared simulator clips battery/diesel requests to their configured
     physical limits. When enabled, flexible-load energy is conserved inside
@@ -682,15 +689,6 @@ def optimize_battery_and_diesel_schedule(
     """
     if config.battery is None or config.diesel is None:
         raise OptimizationError("both a configured battery and diesel unit are required")
-    if (
-        config.diesel.ramp_down_kw_per_hour is not None
-        or config.diesel.min_up_time_hours > 0
-        or config.diesel.min_down_time_hours > 0
-    ):
-        raise OptimizationError(
-            "joint battery-diesel search does not yet generate ramp-down/minimum-time "
-            "feasible commitment schedules; use direct dispatch with an explicit feasible schedule"
-        )
     if inputs.diesel_available is None:
         raise OptimizationError("diesel_available must be explicitly supplied")
     n = len(inputs.load_kw)
@@ -810,6 +808,75 @@ def optimize_battery_and_diesel_schedule(
             for _ in range(n)
         )
 
+    min_up_steps = math.ceil(config.diesel.min_up_time_hours / config.dt_hours - 1e-9)
+    min_down_steps = math.ceil(config.diesel.min_down_time_hours / config.dt_hours - 1e-9)
+    ramp_down_step_kw = (
+        None if config.diesel.ramp_down_kw_per_hour is None
+        else float(config.diesel.ramp_down_kw_per_hour) * config.dt_hours
+    )
+    diesel_repair_enabled = (
+        min_up_steps > 1 or min_down_steps > 1 or ramp_down_step_kw is not None
+    )
+
+    def repair_diesel(
+        commitments: tuple[bool, ...], targets: tuple[float, ...],
+    ) -> tuple[tuple[bool, ...], tuple[float, ...]]:
+        """Make a diesel genome respect minimum run times and ramp-down limits.
+
+        Short on-runs are extended forward to the minimum up time. Short
+        off-runs between two on-runs (not the initial off segment, whose
+        pre-horizon length is unknown) are filled in. Set-points are then
+        capped backwards from every stop so the unit can taper to zero at
+        the configured ramp-down rate. Requests may still be clipped by the
+        dispatch model, so any remaining conflict marks the candidate
+        infeasible rather than crashing the search.
+        """
+        if not diesel_repair_enabled:
+            return commitments, targets
+        state = list(commitments)
+        if min_up_steps > 1:
+            t = 0
+            while t < n:
+                if state[t] and (t == 0 or not state[t - 1]):
+                    end = t
+                    while end < n and state[end]:
+                        end += 1
+                    if end < n and end - t < min_up_steps:
+                        for k in range(end, min(n, t + min_up_steps)):
+                            state[k] = True
+                    t = end
+                else:
+                    t += 1
+        if min_down_steps > 1:
+            t = 1
+            while t < n:
+                if not state[t] and state[t - 1]:
+                    end = t
+                    while end < n and not state[end]:
+                        end += 1
+                    if end < n and end - t < min_down_steps:
+                        for k in range(t, end):
+                            state[k] = True
+                    t = end
+                else:
+                    t += 1
+        power = list(targets)
+        if ramp_down_step_kw is not None:
+            following = 0.0
+            for k in range(n - 1, -1, -1):
+                if not state[k]:
+                    following = 0.0
+                    continue
+                power[k] = round(min(power[k], following + ramp_down_step_kw), 8)
+                following = power[k]
+        return tuple(state), tuple(power)
+
+    def repair(genome: Genome) -> Genome:
+        if not diesel_repair_enabled:
+            return genome
+        commitments, targets = repair_diesel(genome[1], genome[2])
+        return (genome[0], commitments, targets, genome[3], genome[4])
+
     def evaluate(genome: Genome) -> dict:
         if genome not in cache:
             setpoints, commitments, diesel_targets, flexible_schedule, export_schedule = genome
@@ -823,6 +890,7 @@ def optimize_battery_and_diesel_schedule(
             per_scenario = {}
             audit_errors = []
             dispatch_by_scenario = {}
+            dispatch_rejection = None
             for scenario_name, source in scenario_inputs.items():
                 candidate_inputs = EnergySystemInputs(
                     pv_generation_kw=source.pv_generation_kw,
@@ -841,7 +909,11 @@ def optimize_battery_and_diesel_schedule(
                     diesel_power_setpoint_kw=diesel_targets,
                     grid_export_power_setpoint_kw=export_schedule,
                 )
-                scenario_dispatch = dispatch_energy_system(candidate_inputs, config)
+                try:
+                    scenario_dispatch = dispatch_energy_system(candidate_inputs, config)
+                except EnergyModelError as exc:
+                    dispatch_rejection = f"{scenario_name}:{exc}"
+                    break
                 scenario_audit = _audit(scenario_dispatch)
                 scenario_summary = scenario_dispatch["summary"]
                 scenario_objectives = {
@@ -888,6 +960,37 @@ def optimize_battery_and_diesel_schedule(
                 "estimated_energy_cost", "unmet_load_kwh",
                 "renewable_curtailed_kwh", "battery_throughput_kwh",
             )
+            if dispatch_rejection is not None:
+                # The shared simulator refused the schedule (for example a
+                # ramp-down or minimum stable output conflict). Keep the
+                # candidate in the cache as infeasible so the search moves on.
+                rejected_name = dispatch_rejection.split(":", 1)[0]
+                per_scenario[rejected_name] = {
+                    "objectives": {key: float("inf") for key in objective_keys},
+                    "summary": {
+                        "critical_unmet_load_kwh": float("inf"),
+                        "unmet_load_kwh": float("inf"),
+                    },
+                    "audit": {"passed": False, "errors": [dispatch_rejection]},
+                    "constraint_violations": ["dispatch_model_rejected_schedule"],
+                    "service_constraints_passed": False,
+                    "shortfall_diagnostics": [],
+                }
+                cache[genome] = {
+                    "battery_setpoints_kw": list(setpoints),
+                    "diesel_commitment_schedule": list(commitments),
+                    "diesel_power_setpoint_kw": list(diesel_targets),
+                    "flexible_load_power_kw": list(flexible_schedule),
+                    "grid_export_power_setpoint_kw": list(export_schedule),
+                    "objectives": {key: float("inf") for key in objective_keys},
+                    "summary": {},
+                    "audit": {"passed": False, "errors": [dispatch_rejection]},
+                    "service_constraints_passed": False,
+                    "feasible": False,
+                    "dispatch": None,
+                    "scenario_results": per_scenario,
+                }
+                return cache[genome]
             worst_case_objectives = {
                 key: max(
                     row["objectives"][key] for row in per_scenario.values()
@@ -947,17 +1050,34 @@ def optimize_battery_and_diesel_schedule(
     diesel_off = tuple(0.0 for _ in range(n))
     diesel_full = tuple(float(config.diesel.rated_power_kw) for _ in range(n))
     population: list[Genome] = [
-        (zero, off, diesel_off, random_flexible_schedule(), random_export_schedule()),
-        (zero, on, diesel_full, random_flexible_schedule(), random_export_schedule()),
+        repair((zero, off, diesel_off, random_flexible_schedule(), random_export_schedule())),
+        repair((zero, on, diesel_full, random_flexible_schedule(), random_export_schedule())),
     ]
+    if warm_start_from_rule_dispatch:
+        try:
+            rule_rows = dispatch_energy_system(inputs, config)["rows"]
+        except EnergyModelError:
+            rule_rows = None
+        if rule_rows is not None:
+            rule_genome = repair((
+                tuple(round(float(row["battery_discharge_kw"]) - float(row["battery_charge_kw"]), 8)
+                      for row in rule_rows),
+                tuple(float(row["diesel_generation_kw"]) > 0 for row in rule_rows),
+                tuple(round(min(float(config.diesel.rated_power_kw),
+                                float(row["diesel_generation_kw"])), 8) for row in rule_rows),
+                random_flexible_schedule(),
+                tuple(0.0 for _ in range(n)),
+            ))
+            if rule_genome not in population:
+                population.append(rule_genome)
     while len(population) < population_size:
-        genome: Genome = (
+        genome: Genome = repair((
             tuple(round(rng.uniform(lower, upper), 8) for _ in range(n)),
             tuple(bool(rng.getrandbits(1)) for _ in range(n)),
             tuple(round(rng.uniform(0.0, config.diesel.rated_power_kw), 8) for _ in range(n)),
             random_flexible_schedule(),
             random_export_schedule(),
-        )
+        ))
         if genome not in population:
             population.append(genome)
             evaluate(genome)
@@ -1041,11 +1161,11 @@ def optimize_battery_and_diesel_schedule(
                             float(flexible_load_max_power_kw), max(0.0, proposed)
                         )
                         break
-            child: Genome = (
+            child: Genome = repair((
                 tuple(battery_child), tuple(diesel_child),
                 tuple(diesel_power_child), tuple(flexible_tuple),
                 tuple(export_child),
-            )
+            ))
             offspring.append(child)
             evaluate(child)
         combined = list(dict.fromkeys(population + offspring))
@@ -1314,6 +1434,13 @@ def optimize_battery_and_diesel_schedule(
             "uses_shared_physical_dispatch_engine": True,
             "battery_soc_efficiency_and_capacity_fade_enforced": True,
             "diesel_minimum_load_ramp_up_fuel_and_availability_enforced": True,
+            "diesel_ramp_down_and_minimum_up_down_time_enforced": True,
+            "diesel_schedule_repair": (
+                "short on-runs extended to minimum up time, short off-runs filled to "
+                "minimum down time, set-points tapered backwards from each stop at the "
+                "ramp-down rate; schedules the dispatch model still rejects are infeasible"
+                if diesel_repair_enabled else "not needed for this diesel configuration"
+            ),
             "diesel_power_setpoint_optimized": True,
             "flexible_load_schedule_jointly_optimized": flexible_enabled,
             "flexible_load_energy_conserved": True,

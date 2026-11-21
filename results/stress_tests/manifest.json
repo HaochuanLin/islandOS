@@ -1,0 +1,67 @@
+{
+  "description": "Forecast stress and water-shortage stress tests on synthetic weeks. Not site data.",
+  "command": "python experiments/run_stress_tests.py --seeds 10",
+  "python": "3.13.18",
+  "numpy": "2.4.6",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "forecast_interval_bands": {
+    "renewable": 0.3,
+    "demand": 0.15,
+    "price": 0.25
+  },
+  "stress_events": {
+    "low_renewable_factor": 0.4,
+    "demand_spike_factor": 1.6,
+    "spike_days": [
+      2,
+      4
+    ]
+  },
+  "milp_reserve_m3": 20.0,
+  "assumptions": {
+    "rules": {
+      "baseline_shift_end_hour": 19,
+      "baseline_shift_start_hour": 7,
+      "baseline_stop_fill_fraction": 0.95,
+      "coordinated_reserve_fraction": 0.25,
+      "forecast_error_fraction": 0.0,
+      "forecast_error_seed": 7,
+      "forecast_lookahead_hours": 12,
+      "ro_min_run_hours": 1
+    },
+    "site": {
+      "battery_capacity_kwh": 120.0,
+      "battery_efficiency": 0.95,
+      "battery_initial_soc_kwh": 60.0,
+      "battery_max_charge_kw": 30.0,
+      "battery_max_discharge_kw": 30.0,
+      "battery_min_soc_kwh": 24.0,
+      "co2_kg_per_litre_diesel": 2.68,
+      "daily_water_demand_m3": 40.0,
+      "diesel_capacity_kw": 80.0,
+      "diesel_cost_per_kwh": 0.35,
+      "diesel_litres_per_kwh": 0.3,
+      "households_served": 150,
+      "mean_essential_load_kw": 30.0,
+      "pv_rated_kw": 60.0,
+      "ro_min_power_kw": 6.0,
+      "ro_rated_power_kw": 15.0,
+      "ro_recovery_ratio": 0.45,
+      "ro_specific_energy_kwh_per_m3": 4.0,
+      "tank_capacity_m3": 80.0,
+      "tank_initial_m3": 40.0,
+      "wind_rated_kw": 40.0
+    }
+  }
+}

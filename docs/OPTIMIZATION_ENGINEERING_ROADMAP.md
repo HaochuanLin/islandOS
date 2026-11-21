@@ -18,7 +18,7 @@ The repository already contains:
 Important current limitations:
 
 - The evolutionary search is stochastic and does not guarantee a global optimum.
-- The joint optimizer explicitly rejects diesel ramp-down and minimum up/down-time configurations because it does not yet generate commitment schedules satisfying those constraints.
+- The evolutionary optimizer now accepts diesel ramp-down and minimum up/down-time configurations by repairing every candidate schedule (short runs extended or filled, set-points tapered before each stop). Schedules the shared simulator still rejects are kept as infeasible candidates. A diesel minimum stable output combined with a slow ramp-down can still leave no feasible stop.
 - Water production policies are selected from separate heuristics before the energy schedule search; water and energy are not yet jointly optimized as one decision problem.
 - Forecast stress envelopes are deterministic scenarios, not calibrated joint probability distributions.
 - The optimizer is an offline advisory workflow; it does not write to equipment.
@@ -39,7 +39,7 @@ Important current limitations:
 
 ### Stage 2 — Equipment-constraint completeness
 
-**Status: bounded implementation delivered in the deterministic MILP reference path. The evolutionary optimizer remains unchanged and continues to reject its unsupported diesel commitment constraints. Initial fuel above tank capacity now fails closed with a regression test. The latest boundary-test additions still require a fresh full CI run.**
+**Status: delivered in the deterministic MILP reference path and, through candidate repair, in the evolutionary optimizer (`repair_diesel` in `optimization/energy_system_optimizer.py`, regression tests in `tests/test_optimizer_extensions.py`). Initial fuel above tank capacity fails closed with a regression test.**
 
 - Extend candidate generation so diesel schedules can satisfy configured ramp-up and ramp-down limits, minimum stable output, minimum up-time and minimum down-time.
 - Include fuel inventory / delivery limits where configured.
@@ -52,7 +52,7 @@ Important current limitations:
 
 ### Stage 3 — Deterministic optimization benchmark
 
-**Status: bounded MILP reference solver, shared-physics replay, independent diesel validation, equivalent-service rule baselines and objective-to-replay cost reconciliation implemented. Deterministic regression tests cover repeatability and infeasibility. Formal multi-case performance reporting, timeout-specific regression and a direct evolutionary-optimizer head-to-head remain follow-up work.**
+**Status: bounded MILP reference solver, shared-physics replay, independent diesel validation, equivalent-service rule baselines and objective-to-replay cost reconciliation implemented. A multi-case head-to-head against the evolutionary search (`experiments/run_optimizer_benchmark.py`, results in `results/optimizer_benchmark/`) and a timeout regression test are now delivered. All benchmark inputs are synthetic.**
 
 - Add a deterministic mathematical-programming reference solver using the already pinned SciPy MILP capability, subject to a formulation review.
 - Start with a clearly bounded model (battery, grid, diesel and essential load); add binary commitment variables only where required.
@@ -65,7 +65,7 @@ Important current limitations:
 
 ### Stage 4 — Forecast uncertainty and robustness
 
-**Status: interval scoring plus a deterministic directional stress-scenario builder implemented in `islandos_core/forecast_uncertainty.py` and `islandos_core/forecast_stress_scenarios.py`. Unit tests cover interval direction, horizon alignment, invalid bounds and explicit absence of joint probabilities. The stress cases are not yet connected to the optimizer's objective loop; site calibration remains unproven.**
+**Status: interval scoring plus a deterministic directional stress-scenario builder implemented in `islandos_core/forecast_uncertainty.py` and `islandos_core/forecast_stress_scenarios.py`. The stress cases are now passed through the joint MILP by `islandos_core/stress_dispatch.py` (`forecast_stress_study`), which reports how far each scenario moves the schedule and how a plan made on one scenario performs in the others (`experiments/run_stress_tests.py`, results in `results/stress_tests/`). The intervals used there are assumed bands on synthetic data; site calibration remains unproven.**
 
 - Validate forecast intervals chronologically and measure empirical coverage before treating bounds as uncertainty inputs.
 - Distinguish central forecasts, marginal stress envelopes and genuinely joint scenarios.
@@ -77,13 +77,13 @@ Important current limitations:
 
 ### Stage 5 — Joint water-energy-flexible-load optimization
 
-**Status: bounded joint water-energy MILP path implemented in `optimization/milp_dispatch_optimizer.py`; flexible-load co-optimization and expanded operating constraints remain open. The current implementation adds RO production and tank inventory as MILP variables, and replays RO electrical demand through the shared energy simulator.**
+**Status: bounded joint water-energy MILP path implemented in `optimization/milp_dispatch_optimizer.py`, now including a terminal tank level, an RO minimum production rate and one aggregate flexible load with a fixed energy budget and availability window. RO electrical demand and the flexible load are replayed through the shared energy simulator. Multiple flexible loads and RO start costs remain open.**
 
 - Replace preselected RO heuristics with decision variables for RO production, tank inventory and flexible-load timing.
 - Enforce water balance, tank bounds, RO capacity, service reserve, equipment operating windows and water-demand satisfaction.
 - Co-optimize water and energy costs while preserving critical-service priorities.
 - Compare against just-in-time and tariff-look-ahead RO baselines under identical service assumptions.
-- Current MILP baseline comparison replays battery-first/grid-first energy policies with the same just-in-time RO production profile; it does not yet benchmark the tariff-look-ahead policy.
+- The MILP baseline comparison replays battery-first/grid-first energy policies with the just-in-time RO profile and, under `water_policy_baselines`, with the tariff-look-ahead RO policy. A rule baseline that cannot serve the demand is reported as infeasible instead of failing the solve.
 
 **Acceptance gate:** the same schedule simultaneously passes electrical and water-service audits; any water shortfall is explicit; cost comparisons are made only at equivalent service.
 
@@ -110,7 +110,7 @@ Important current limitations:
 
 ## Current implementation boundary after Stage 4–6 kickoff
 
-- Stage 4 currently scores marginal interval coverage, width and under/over-coverage on aligned held-out observations, and builds central / renewable-low-demand-high / cost-high / combined deterministic stress cases from caller-supplied intervals. The cases carry no probabilities and are not yet passed through the optimizer for schedule-sensitivity comparison.
-- Stage 5 currently jointly chooses hourly RO production and electrical dispatch in one bounded MILP, with water tank balance, reserve and RO capacity constraints. Independent water replay is required. Flexible-load timing is not yet part of this MILP.
+- Stage 4 currently scores marginal interval coverage, width and under/over-coverage on aligned held-out observations, and builds central / renewable-low-demand-high / cost-high / combined deterministic stress cases from caller-supplied intervals. The cases carry no probabilities. `forecast_stress_study` re-plans the joint MILP on each case for schedule-sensitivity comparison and replays held plans across cases.
+- Stage 5 currently jointly chooses hourly RO production, flexible-load timing and electrical dispatch in one bounded MILP, with water tank balance, reserve, terminal level, RO capacity and RO minimum constraints. Independent water replay is required. Water-shortage stress events (low-renewable week, demand spike) are tested in `water_shortage_stress_test`; a plan with no tank reserve can run short when demand is higher than forecast, so a reserve or rolling re-planning is needed before any field use.
 - Stage 6 currently packages a MILP result into a synthetic human-review decision record, verifies its digest in an end-to-end example, and explicitly keeps approval pending with device writes and command generation disabled. Existing Shadow Mode comparison and SQLite hash-chain evidence are available, but the operator UI and site-specific retrospective evaluation are not complete.
 - No stage authorizes equipment control. All recommendations remain offline and human-reviewed.
