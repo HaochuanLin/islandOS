@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Mapping, Sequence
 
 
@@ -25,6 +27,21 @@ OPSD_ATTRIBUTION = (
     "Version 2020-10-06. https://doi.org/10.25832/time_series/2020-10-06. "
     "(Primary data from various sources; see OPSD source documentation.)"
 )
+
+
+def _sha256_stream(handle) -> str:
+    """Hash a binary stream from its current position with bounded memory."""
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    """Hash the exact source-file bytes with bounded memory usage."""
+    with path.open("rb") as handle:
+        return _sha256_stream(handle)
+
 
 _SIGNAL_COLUMNS = {
     "load": ("_load_actual_entsoe_transparency", "MW", True),
@@ -46,7 +63,24 @@ class PublicTimeSeriesDataset:
     source_version: str
     source_url: str
     attribution: str
+    source_file_sha256: str
     data_sha256: str
+
+    def __post_init__(self) -> None:
+        """Freeze nested collection fields so provenance cannot go stale by mutation."""
+        object.__setattr__(self, "timestamps", tuple(self.timestamps))
+        object.__setattr__(
+            self,
+            "history",
+            MappingProxyType({key: tuple(values) for key, values in self.history.items()}),
+        )
+        object.__setattr__(self, "units", MappingProxyType(dict(self.units)))
+        object.__setattr__(self, "source_columns", MappingProxyType(dict(self.source_columns)))
+
+    @property
+    def selected_history_sha256(self) -> str:
+        """SHA-256 of normalized selected rows; data_sha256 is kept as an alias."""
+        return self.data_sha256
 
 
 def _parse_utc_timestamp(raw: str, line_number: int) -> datetime:
@@ -139,7 +173,13 @@ def load_opsd_singleindex_csv(
     source_columns: dict[str, str] = {}
     units: dict[str, str] = {}
 
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+    # Hash and parse the same opened file descriptor. Re-hashing after parsing
+    # detects in-place changes during ingestion, so the reported source digest
+    # cannot silently describe different bytes from those used for the rows.
+    with csv_path.open("rb") as raw_handle:
+        source_file_sha256 = _sha256_stream(raw_handle)
+        raw_handle.seek(0)
+        handle = io.TextIOWrapper(raw_handle, encoding="utf-8-sig", newline="")
         reader = csv.DictReader(handle)
         if not reader.fieldnames or "utc_timestamp" not in reader.fieldnames:
             raise ValueError("OPSD CSV must contain a utc_timestamp column")
@@ -188,6 +228,14 @@ def load_opsd_singleindex_csv(
             for signal, number in parsed_values.items():
                 values[signal].append(number)
 
+        handle.detach()
+        raw_handle.seek(0)
+        if _sha256_stream(raw_handle) != source_file_sha256:
+            raise ValueError(
+                "OPSD source CSV changed while it was being read; "
+                "refusing inconsistent data provenance"
+            )
+
     if not timestamps:
         raise ValueError("no OPSD observations found for the requested region and time range")
 
@@ -213,5 +261,6 @@ def load_opsd_singleindex_csv(
         source_version=OPSD_VERSION,
         source_url=OPSD_SOURCE_URL,
         attribution=OPSD_ATTRIBUTION,
+        source_file_sha256=source_file_sha256,
         data_sha256=digest,
     )

@@ -1,10 +1,13 @@
 """Tests for strict Open Power System Data ingestion."""
 import csv
+import hashlib
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
+import islandos_core.opsd_adapter as opsd_adapter
 from islandos_core.opsd_adapter import load_opsd_singleindex_csv
 
 
@@ -18,11 +21,11 @@ class TestOPSDAdapter(unittest.TestCase):
             "AT_price_day_ahead",
         ]
 
-    def write_csv(self, rows):
+    def write_csv(self, rows, extra_columns=()):
         temp = tempfile.NamedTemporaryFile(mode="w", newline="", encoding="utf-8",
                                            suffix=".csv", delete=False)
         self.addCleanup(lambda: Path(temp.name).unlink(missing_ok=True))
-        writer = csv.DictWriter(temp, fieldnames=self.columns)
+        writer = csv.DictWriter(temp, fieldnames=self.columns + list(extra_columns))
         writer.writeheader()
         writer.writerows(rows)
         temp.close()
@@ -52,6 +55,68 @@ class TestOPSDAdapter(unittest.TestCase):
         self.assertEqual(result.source_version, "2020-10-06")
         self.assertEqual(len(result.data_sha256), 64)
         self.assertLess(result.history["price"][0], 0.0)
+
+    def test_records_exact_source_file_hash_and_normalized_history_hash(self):
+        path = self.write_csv(self.make_rows(12))
+        expected_file_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+        result = load_opsd_singleindex_csv(path, "AT")
+
+        self.assertEqual(result.source_file_sha256, expected_file_hash)
+        self.assertEqual(result.selected_history_sha256, result.data_sha256)
+        self.assertNotEqual(result.source_file_sha256, result.selected_history_sha256)
+
+    def test_dataset_collections_are_immutable_snapshots(self):
+        result = load_opsd_singleindex_csv(
+            self.write_csv(self.make_rows(12)), "AT"
+        )
+        selected_digest = result.selected_history_sha256
+        original_load = result.history["load"]
+
+        with self.assertRaises(TypeError):
+            result.history["load"] = (999.0,)
+        with self.assertRaises(TypeError):
+            result.units["load"] = "kW"
+        with self.assertRaises(TypeError):
+            result.source_columns["load"] = "tampered_column"
+
+        self.assertEqual(result.history["load"], original_load)
+        self.assertEqual(result.selected_history_sha256, selected_digest)
+
+    def test_irrelevant_source_columns_change_only_the_raw_file_hash(self):
+        rows = self.make_rows(12)
+        original_path = self.write_csv(rows)
+        extended_path = self.write_csv(rows, extra_columns=("UNUSED_METADATA",))
+
+        original = load_opsd_singleindex_csv(original_path, "AT")
+        extended = load_opsd_singleindex_csv(extended_path, "AT")
+
+        self.assertNotEqual(original.source_file_sha256, extended.source_file_sha256)
+        self.assertEqual(original.selected_history_sha256, extended.selected_history_sha256)
+
+    def test_rejects_source_file_mutated_during_ingestion(self):
+        path = self.write_csv(self.make_rows(12))
+        original_parser = opsd_adapter._parse_utc_timestamp
+        mutated = False
+
+        def mutate_source_once(raw, line_number):
+            nonlocal mutated
+            if not mutated:
+                # The CSV header has already been read when the first data
+                # timestamp is parsed. Change the opened file in place so the
+                # post-ingestion digest must detect the inconsistent snapshot.
+                with open(path, "r+b") as handle:
+                    handle.seek(0)
+                    handle.write(b"#")
+                mutated = True
+            return original_parser(raw, line_number)
+
+        with patch(
+            "islandos_core.opsd_adapter._parse_utc_timestamp",
+            side_effect=mutate_source_once,
+        ):
+            with self.assertRaisesRegex(ValueError, "changed while it was being read"):
+                load_opsd_singleindex_csv(path, "AT")
 
     def test_supports_selected_signal_subset_and_utc_window(self):
         path = self.write_csv(self.make_rows())
