@@ -178,7 +178,7 @@ class IslandOSStore:
         if not token:
             raise PermissionError("bearer token required")
         digest = hashlib.sha256(token.encode()).hexdigest()
-        with self.connect() as db:
+        with self.session() as db:
             row = db.execute("""
                 SELECT u.id AS user_id,u.tenant_id,u.role,u.email,s.expires_at
                 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=?
@@ -212,7 +212,7 @@ class IslandOSStore:
         )
 
     def list_sites(self, principal):
-        with self.connect() as db:
+        with self.session() as db:
             rows = db.execute(
                 "SELECT id,name,timezone,created_at FROM sites WHERE tenant_id=? ORDER BY name",
                 (principal["tenant_id"],),
@@ -227,14 +227,14 @@ class IslandOSStore:
         if not isinstance(timezone_name, str) or not timezone_name.strip() or len(timezone_name) > 80:
             raise ValueError("timezone must be explicit")
         site_id = secrets.token_hex(16)
-        with self._lock, self.connect() as db:
+        with self._lock, self.session() as db:
             db.execute("INSERT INTO sites VALUES (?,?,?,?,?)",
                        (site_id, principal["tenant_id"], name.strip(), timezone_name.strip(), _utcnow()))
             self._audit(db, principal["tenant_id"], principal["user_id"], "site.create", "site", site_id, {})
         return {"id": site_id, "name": name.strip(), "timezone": timezone_name.strip()}
 
     def ingest_telemetry(self, principal, site_id, payload, source):
-        with self._lock, self.connect() as db:
+        with self._lock, self.session() as db:
             site = db.execute("SELECT id FROM sites WHERE id=? AND tenant_id=?",
                               (site_id, principal["tenant_id"])).fetchone()
             if site is None:
@@ -259,7 +259,7 @@ class IslandOSStore:
                 "physical_write_performed": False}
 
     def latest_telemetry(self, principal, site_id):
-        with self.connect() as db:
+        with self.session() as db:
             row = db.execute(
                 "SELECT timestamp_utc,received_at_utc,values_json,source FROM telemetry WHERE tenant_id=? AND site_id=? ORDER BY timestamp_utc DESC LIMIT 1",
                 (principal["tenant_id"], site_id),
@@ -278,7 +278,7 @@ class IslandOSStore:
     def delete_site(self, principal, site_id):
         if principal["role"] != "owner":
             raise PermissionError("owner role required")
-        with self._lock, self.connect() as db:
+        with self._lock, self.session() as db:
             cursor = db.execute("DELETE FROM sites WHERE id=? AND tenant_id=?",
                                 (site_id, principal["tenant_id"]))
             if cursor.rowcount != 1:
@@ -361,7 +361,7 @@ class IslandOSStore:
         return {"tenant_id": tenant_id, "user_id": user_id, "role": role}
 
     def list_members(self, principal):
-        with self.connect() as db:
+        with self.session() as db:
             rows = db.execute(
                 "SELECT id,email,role,created_at FROM users WHERE tenant_id=? ORDER BY email",
                 (principal["tenant_id"],),
@@ -472,7 +472,7 @@ class IslandOSStore:
             query += " AND read_at IS NULL"
         query += " ORDER BY created_at DESC,id DESC LIMIT ?"
         args.append(limit)
-        with self.connect() as db:
+        with self.session() as db:
             rows = db.execute(query, args).fetchall()
         items = []
         for row in rows:
