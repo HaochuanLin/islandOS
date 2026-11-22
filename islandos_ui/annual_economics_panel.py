@@ -47,6 +47,33 @@ def binding_errors(binding: object) -> list[str]:
     return list(verify_investment_economics_binding(binding).get("errors") or [])
 
 
+def annual_inputs_supplied(
+    *,
+    baseline_annual_bill: float,
+    proposed_annual_bill: float,
+    upfront_capex: float,
+) -> bool:
+    """True only when the customer has supplied the figures this screen judges.
+
+    Both bills and the CAPEX field default to zero, and a zero is exactly what an
+    unfilled field looks like. Running the screen on those placeholders produces a
+    confident-looking "negative" verdict that describes nothing the customer said,
+    so the page asks this first and withholds every metric until a real baseline
+    bill and a real CAPEX quote exist. A zero *proposed* bill is allowed: an
+    off-grid site can legitimately claim it.
+    """
+    for name, value in (
+        ("baseline_annual_bill", baseline_annual_bill),
+        ("proposed_annual_bill", proposed_annual_bill),
+        ("upfront_capex", upfront_capex),
+    ):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be a number")
+        if value < 0:
+            raise ValueError(f"{name} must not be negative")
+    return float(baseline_annual_bill) > 0 and float(upfront_capex) > 0
+
+
 def basis_level(binding: Mapping) -> str:
     """Streamlit severity for the basis banner: 'warning' when withheld, else 'info'."""
     return "warning" if _require(binding).get("withheld") is True else "info"
