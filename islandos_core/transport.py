@@ -24,18 +24,23 @@ from .run_orchestration import replay_run_request
 class ApplicationHandler(BaseHTTPRequestHandler):
     server_version = "IslandOSApplicationViews/1"
 
-    def _send(self, status: int, payload: dict[str, Any]) -> None:
+    def _send(self, status: int, payload: dict[str, Any], *, cors: bool = False) -> None:
         body = json.dumps(payload, allow_nan=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if cors:
+            # Only the schema is cross-origin readable: it is a committed public file and a
+            # static viewer served from another port has to be able to fetch it. `/run`
+            # stays same-origin so no opened page can drive a replay on the user's machine.
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802 - http.server API
         if self.path == "/contracts":
-            self._send(200, contract_schema())
+            self._send(200, contract_schema(), cors=True)
         elif self.path == "/health":
             self._send(200, {"status": "ok"})
         else:

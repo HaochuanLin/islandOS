@@ -182,6 +182,21 @@ def test_the_transport_replays_a_joint_optimizer_request():
         thread.join(timeout=5)
 
 
+def test_only_the_schema_is_cross_origin_readable():
+    server = create_server(port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with urlopen(f"{base}/contracts", timeout=10) as response:
+            assert response.headers["Access-Control-Allow-Origin"] == "*"
+        with urlopen(f"{base}/health", timeout=10) as response:
+            assert response.headers["Access-Control-Allow-Origin"] is None
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
 def test_the_transport_refuses_an_invalid_request_with_400():
     server = create_server(port=0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
