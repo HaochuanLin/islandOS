@@ -194,6 +194,12 @@ Output `InvestmentEconomics` (frozen dataclass, `to_dict()` for serialisation): 
 
 Assumptions that must be recorded with any use of these numbers: energy-bill saving and incremental O&M are year-one values; escalation applies from year two; a single simulated day is never annualised; `service_equivalent=False` blocks every investment metric.
 
+### 6.3 Binding the annual figures to a run
+
+Producer: `islandos_core/investment_economics.py::bind_annual_economics_to_run(economics, manifest, *, annual_bill_source, annual_bill_period_utc)`; verifier: `verify_investment_economics_binding(binding)`.
+
+The annual bills are entered by the customer, so the binding is a **citation, not a derivation**. It records `run_id`, `site_ref`, `manifest_sha256`, `dataset_sha256`, `dataset_source_type`, the evaluation itself, and an `annual_basis` block whose `derived_from_run` is always `false`, plus `binding_sha256` over the canonical JSON. A blocked evaluation must also set `withheld: true`. Verification fails if the digest does not match, if the binding claims a device write or a command, if `derived_from_run` is not `false`, or if a blocked decision is not marked withheld. Do not present an annual saving as measured from the run; it is a figure the customer supplied for the equipment and service scope the run describes.
+
 ---
 
 ## 7. Stage 4 — decision
@@ -227,7 +233,7 @@ Recorded because a second implementer will hit them:
    - `forecast_optimizer_adapter.optimize_forecasted_resource_schedule` now emits a run-level `physical_audit` (`passed`, `errors`, `scope`, `scenarios_audited`) derived from the per-scenario `audit_passed` flags of the recommended schedule, so the audit is a replay of the same evidence rather than a second simulation. Its `scope` says plainly that it is a simulator replay audit, not site validation and not a safety certification.
    - `run_forecast_dispatch` assembles the `decision_record` right after the evidence digest, using the manifest for `site_ref`, `created_at_utc`, `data_provenance` and the digest chain (`manifest_sha256`, forecast `bundle_sha256`, `dataset_sha256`), and the recommendation's own `weights` for `objective_weights`. It then runs `verify_operator_decision_record` and raises if the record does not verify.
    - The run now returns `decision_record` and `decision_record_sha256`, so a "canonical planning run" is auditable on its own. The record stays read-only: `device_write_authorized` is `False`, `command_generated` is `False`, `human_review_required` is `True`, `operator_approval` is `pending`.
-3. **Annual investment economics is not manifest-bound.** `evaluate_investment_economics` takes annual customer-entered bills and is not fed by the operating-economics stage; nothing currently proves the annual numbers derive from a run with the same `dataset_sha256`. Treat the two economic contracts as parallel until an adapter exists.
+3. ~~**Annual investment economics is not manifest-bound.**~~ Closed in the only honest form available: the annual bills are customer-entered, so `bind_annual_economics_to_run` does not pretend they derive from the run. It records the run and dataset digests alongside the evaluation and states `derived_from_run: false` with the annualisation rule, and `verify_investment_economics_binding` fails a binding whose digest, read-only flags, or withheld flag disagree. The two contracts stay separate — operating economics comes from the run, annual economics is cited *against* it.
 4. ~~**Water extension changes `essential_load` in place.**~~ Closed by labelling instead of renaming, so nothing that already reads `essential_load` breaks: `water_service` now carries `essential_load_includes_ro_power: true`, the pre-RO series as `site_only_essential_load_kw`, and its digest as `site_only_electrical_load_history_sha256`. A consumer that wants "site load excluding water" reads that series (or subtracts `ro_power_kw_added_to_essential_load`) instead of assuming what the combined number contains.
 5. ~~**`generic_prediction_handoff.target_timestamps_utc` is taken from the PV forecast.**~~ Closed: the handoff clock is now read from the validated dispatch bundle, which refuses any signal whose target timestamps differ ("all resource forecasts must share identical target timestamps"). The handoff no longer depends on a signal being present, and a test asserts every signal's clock equals the handoff clock.
 
@@ -235,7 +241,7 @@ Recorded because a second implementer will hit them:
 
 1. Build the dataset and `create_run_manifest` first; never hand-build the payload.
 2. Feed the manifest, the tz-aware hourly timestamps, `history`, `units`, and the two availability arrays to `run_forecast_dispatch`. The clock is validated there against the forecast layer's own rule (≥72 tz-aware, contiguous hourly instants), so a bad clock fails before any model executes.
-3. Take economics from `robust_customer_economics` (operating) and `evaluate_investment_economics` (annual, explicit assumptions); never compute a saving yourself from `dispatch.summary` without the service gate.
+3. Take economics from `robust_customer_economics` (operating) and `evaluate_investment_economics` (annual, explicit assumptions); never compute a saving yourself from `dispatch.summary` without the service gate. When you quote annual figures next to a run, produce them through `bind_annual_economics_to_run` so the citation carries the run's digests and says the bills were entered.
 4. The operator record now comes with the run: read `decision_record` / `decision_record_sha256` from `run_forecast_dispatch`, and surface `status`, `physical_audit` and `human_review_required` before any number. Only build one yourself if you are composing stages outside the canonical run. `islandos_ui/decision_record_panel.render_decision_record` is the reference surface: it renders the status banner, the audit scope (including what it does not prove), the read-only guarantees and the record digest before the first metric.
 5. Log `manifest_sha256`, `forecast.bundle_sha256`, `evidence_sha256` and `record_sha256` together; a record without its digest chain is not evidence.
 

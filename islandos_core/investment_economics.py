@@ -1,9 +1,11 @@
 """Transparent, assumption-led lifecycle economics for customer investment screening."""
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Mapping
 
 
 @dataclass(frozen=True)
@@ -165,3 +167,107 @@ def evaluate_investment_economics(
         decision=decision,
         reasons=tuple(reasons) or ("Positive screening NPV under entered assumptions; validate all inputs before procurement.",),
     )
+
+
+MANIFEST_RECORD_TYPE = "islandos_canonical_run_manifest"
+BINDING_RECORD_TYPE = "investment_economics_run_binding"
+
+
+def _canonical(payload: Mapping) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def bind_annual_economics_to_run(
+    economics: InvestmentEconomics,
+    manifest: Mapping,
+    *,
+    annual_bill_source: str = "customer_entered_annual_bills",
+    annual_bill_period_utc: tuple[str, str] | None = None,
+) -> dict:
+    """Attach an annual evaluation to the run whose equipment and service it describes.
+
+    This is a citation, not a derivation: the annual bills are entered by the
+    customer, so the binding records ``derived_from_run: false`` and keeps the
+    run's digests only as the context a reader checks the figures against.
+    """
+    if not isinstance(economics, InvestmentEconomics):
+        raise TypeError("economics must be an InvestmentEconomics result")
+    if not isinstance(manifest, Mapping):
+        raise TypeError("manifest must be the canonical run manifest mapping")
+    if manifest.get("record_type") != MANIFEST_RECORD_TYPE:
+        raise ValueError("manifest must be a canonical run manifest")
+    for name in ("run_id", "site_ref", "manifest_sha256"):
+        value = manifest.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"manifest is missing {name}")
+    dataset = manifest.get("dataset")
+    if not isinstance(dataset, Mapping):
+        raise ValueError("manifest is missing its dataset block")
+    for name in ("sha256", "source_type"):
+        value = dataset.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"manifest dataset is missing {name}")
+    if not isinstance(annual_bill_source, str) or not annual_bill_source.strip():
+        raise ValueError("annual_bill_source must be a non-empty string")
+    if annual_bill_period_utc is not None:
+        if (not isinstance(annual_bill_period_utc, tuple) or len(annual_bill_period_utc) != 2
+                or not all(isinstance(item, str) and item.strip() for item in annual_bill_period_utc)):
+            raise ValueError("annual_bill_period_utc must be a pair of ISO-8601 timestamps")
+
+    binding = {
+        "schema_version": 1,
+        "record_type": BINDING_RECORD_TYPE,
+        "run_id": manifest["run_id"],
+        "site_ref": manifest["site_ref"],
+        "manifest_sha256": manifest["manifest_sha256"],
+        "dataset_sha256": dataset["sha256"],
+        "dataset_source_type": dataset["source_type"],
+        "annual_basis": {
+            "source": annual_bill_source,
+            "period_utc": list(annual_bill_period_utc) if annual_bill_period_utc else None,
+            "derived_from_run": False,
+            "annualisation": (
+                "customer-entered annual bills tied to this run's equipment and service scope; "
+                "a simulated day is never multiplied into a year"
+            ),
+        },
+        "service_equivalent": economics.service_equivalent,
+        "withheld": economics.service_equivalent is False,
+        "decision": economics.decision,
+        "economics": economics.to_dict(),
+        "device_write_authorized": False,
+        "command_generated": False,
+    }
+    binding["binding_sha256"] = _sha256(_canonical(binding))
+    return binding
+
+
+def verify_investment_economics_binding(binding: Mapping) -> dict:
+    """Fail-closed checks for a binding that a report or UI may quote."""
+    errors: list[str] = []
+    if not isinstance(binding, Mapping) or binding.get("record_type") != BINDING_RECORD_TYPE:
+        return {"valid": False, "errors": ["binding is not an investment economics run binding"]}
+    payload = {key: value for key, value in binding.items() if key != "binding_sha256"}
+    digest = binding.get("binding_sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        errors.append("binding_sha256 must be a 64-character digest")
+    else:
+        try:
+            if _sha256(_canonical(payload)) != digest:
+                errors.append("binding_sha256 does not match the binding contents")
+        except (TypeError, ValueError) as exc:
+            errors.append(f"binding contents are not canonical JSON: {exc}")
+    if binding.get("device_write_authorized") is not False:
+        errors.append("binding must never authorize a device write")
+    if binding.get("command_generated") is not False:
+        errors.append("binding must never claim a generated command")
+    basis = binding.get("annual_basis")
+    if not isinstance(basis, Mapping) or basis.get("derived_from_run") is not False:
+        errors.append("annual figures must be marked as entered, not derived from the run")
+    if binding.get("withheld") is not True and binding.get("decision") == "blocked":
+        errors.append("a blocked economics result must be marked withheld")
+    return {"valid": not errors, "errors": errors}

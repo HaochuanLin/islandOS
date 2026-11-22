@@ -1,6 +1,32 @@
 import pytest
 
-from islandos_core.investment_economics import evaluate_investment_economics
+from islandos_core.canonical_run import create_run_manifest
+from islandos_core.investment_economics import (
+    bind_annual_economics_to_run,
+    evaluate_investment_economics,
+    verify_investment_economics_binding,
+)
+
+
+def _manifest():
+    return create_run_manifest(
+        project_id="project-annual",
+        run_id="run-annual-001",
+        site_ref="site-annual",
+        created_at_utc="2026-11-18T00:00:00Z",
+        dataset_sha256="c" * 64,
+        dataset_schema_version="1.0",
+        source_type="customer_provided",
+        site_configuration_version="1",
+        site_configuration_sha256="d" * 64,
+        required_signals={"load_kw": "kW"},
+        forecast_horizon_hours=24,
+        optimizer_id="prediction_resource_dispatch",
+        optimizer_version="1",
+        optimizer_settings={},
+        scenario_assumptions={"grid_available": [True] * 24, "diesel_available": [True] * 24},
+        forecast_settings={"backtest_horizon": 24, "season_length": 24, "confidence_level": 0.9},
+    ).to_dict()
 
 
 def base(**overrides):
@@ -86,3 +112,43 @@ def test_negative_energy_saving_sensitivity_remains_ordered():
     values = result.sensitivity_npv
     assert values["low_20pct_energy_saving"] < values["base"]
     assert values["base"] < values["high_20pct_energy_saving"]
+
+
+def test_annual_economics_can_be_bound_to_the_run_it_describes():
+    binding = bind_annual_economics_to_run(
+        base(), _manifest(), annual_bill_period_utc=("2025-09-01T00:00:00Z", "2026-08-31T23:59:59Z")
+    )
+    assert binding["record_type"] == "investment_economics_run_binding"
+    assert binding["run_id"] == "run-annual-001"
+    assert binding["manifest_sha256"] == _manifest()["manifest_sha256"]
+    assert binding["dataset_sha256"] == "c" * 64
+    assert binding["dataset_source_type"] == "customer_provided"
+    assert binding["annual_basis"]["derived_from_run"] is False
+    assert binding["annual_basis"]["period_utc"][0].startswith("2025-09-01")
+    assert "never multiplied into a year" in binding["annual_basis"]["annualisation"]
+    assert binding["decision"] == "screen_positive"
+    assert binding["withheld"] is False
+    assert len(binding["binding_sha256"]) == 64
+    verification = verify_investment_economics_binding(binding)
+    assert verification["valid"], verification["errors"]
+
+
+def test_a_tampered_binding_does_not_verify():
+    binding = bind_annual_economics_to_run(base(), _manifest())
+    binding["economics"]["net_present_value"] += 1000.0
+    assert verify_investment_economics_binding(binding)["valid"] is False
+
+
+def test_a_withheld_result_must_say_it_is_withheld():
+    binding = bind_annual_economics_to_run(base(service_equivalent=False), _manifest())
+    assert binding["decision"] == "blocked"
+    assert binding["withheld"] is True
+    assert verify_investment_economics_binding(binding)["valid"] is True
+    binding["withheld"] = False
+    verification = verify_investment_economics_binding(binding)
+    assert verification["valid"] is False
+
+
+def test_binding_refuses_a_payload_that_is_not_a_run_manifest():
+    with pytest.raises(ValueError, match="canonical run manifest"):
+        bind_annual_economics_to_run(base(), {"run_id": "loose", "site_ref": "s"})
