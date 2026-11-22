@@ -36,7 +36,7 @@ import hashlib
 import json
 from typing import Any, Mapping, Sequence
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 
 # Every top-level field a view carries, declared once. Builders assemble exactly these
 # keys, and tests fail on any drift, so a client can be written against a stable surface
@@ -64,7 +64,7 @@ RUN_REQUEST_SITE_FIELDS = (
     "diesel_variable_cost_per_kwh",
     "digest",
 )
-HISTORY_FIELDS = ("signals", "units", "hour_count", "provenance", "source_sha256")
+HISTORY_FIELDS = ("timestamps_utc", "signals", "units", "hour_count", "provenance", "source_sha256")
 RESULT_SUMMARY_FIELDS = (
     "schema_version",
     "record_type",
@@ -218,6 +218,7 @@ def build_run_request(
     *,
     page: str,
     site: object,
+    timestamps: Sequence[Any],
     history: Mapping[str, Any],
     units: Mapping[str, Any],
     page_settings: Mapping[str, Any],
@@ -230,7 +231,9 @@ def build_run_request(
     ``history`` holds canonical signal names mapped to equal-length hourly series;
     ``units`` holds the same names mapped to their unit strings. The two key sets must
     agree, or the request is refused: a series without a unit cannot be rendered safely
-    by a client that does not know this repository.
+    by a client that does not know this repository. ``timestamps`` is the same length as
+    the series and is required: without the time axis a request cannot be replayed, only
+    described.
     """
     page = _require_page(page)
     _check_keys(page_settings, PAGE_SETTING_KEYS[page], "page_settings")
@@ -263,6 +266,19 @@ def build_run_request(
     if len(lengths) != 1:
         raise ValueError("every history series must share one length")
 
+    if isinstance(timestamps, (str, bytes)) or not isinstance(timestamps, Sequence):
+        raise ValueError("timestamps must be a sequence of datetimes or ISO strings")
+    stamps: list[str] = []
+    for stamp in timestamps:
+        if hasattr(stamp, "isoformat") and not isinstance(stamp, (str, bytes)):
+            stamps.append(str(stamp.isoformat()))
+        else:
+            stamps.append(_require_text(stamp, "history timestamp"))
+    if not stamps:
+        raise ValueError("timestamps must not be empty")
+    if len(stamps) != next(iter(lengths)):
+        raise ValueError("timestamps must share the length of every history series")
+
     settings_payload = dict(page_settings)
     for name in PAGE_SETTING_KEYS[page]:
         settings_payload[name] = _require_number(settings_payload[name], name)
@@ -289,6 +305,7 @@ def build_run_request(
         "page": page,
         "site": _site_payload(site),
         "history": {
+            "timestamps_utc": stamps,
             "signals": series,
             "units": {name: str(units[name]) for name in series},
             "hour_count": len(next(iter(series.values()))),

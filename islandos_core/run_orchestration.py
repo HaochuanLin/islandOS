@@ -13,8 +13,15 @@ read. No Streamlit import, no session state, no UI.
 
 from __future__ import annotations
 
+from dataclasses import asdict
+from datetime import datetime, timezone
+import hashlib
+import json
 from typing import Any, Mapping, Sequence
+import uuid
 
+from .app_view_models import build_run_result_summary
+from .canonical_run import create_run_manifest
 from .energy_system import EnergySystemConfig
 from .forecast_engine import forecast_signals
 from .forecast_optimizer_adapter import (
@@ -25,6 +32,7 @@ from .forecast_optimizer_adapter import (
 from .impact_assessment import assess_energy_policy_impact
 from optimization.energy_system_optimizer import optimize_energy_system, OptimizationWeights
 from .planning_workflow import run_forecast_dispatch
+from .site_inputs import SiteAssumptions
 
 
 def run_customer_dashboard(
@@ -119,3 +127,128 @@ def run_joint_optimizer(
         "result": result,
         "handoff": result["generic_prediction_handoff"],
     }
+
+
+def _site_from_request(request: Mapping[str, Any]) -> SiteAssumptions:
+    site = dict(request["site"])
+    site.pop("digest", None)
+    return SiteAssumptions(**site)
+
+
+def _timestamps_from_request(request: Mapping[str, Any]) -> tuple[datetime, ...]:
+    stamps = request["history"]["timestamps_utc"]
+    return tuple(
+        datetime.fromisoformat(str(stamp).replace("Z", "+00:00")) for stamp in stamps
+    )
+
+
+def _manifest_from_request(
+    request: Mapping[str, Any], config: EnergySystemConfig,
+) -> dict:
+    """The manifest the joint optimizer page builds, reconstructed from the request alone."""
+    history_block = request["history"]
+    dataset_payload = {
+        "timestamps_utc": list(history_block["timestamps_utc"]),
+        "signals": dict(history_block["signals"]),
+        "units": dict(history_block["units"]),
+    }
+    dataset_digest = history_block.get("source_sha256") or hashlib.sha256(
+        json.dumps(dataset_payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        .encode("utf-8")
+    ).hexdigest()
+    site_configuration_digest = hashlib.sha256(
+        json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        .encode("utf-8")
+    ).hexdigest()
+    availability = request["run_settings"]["availability"]
+    optimizer_settings = request["run_settings"]["optimizer_settings"]
+    horizon_hours = 24
+    return create_run_manifest(
+        project_id="streamlit-joint-resource-workspace",
+        run_id=f"run-{uuid.uuid4().hex}",
+        site_ref=(
+            "customer-uploaded-site" if history_block.get("source_sha256") else "synthetic-demo-site"
+        ),
+        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        dataset_sha256=dataset_digest,
+        dataset_schema_version="canonical-hourly-signals-v1",
+        source_type="customer_provided" if history_block.get("source_sha256") else "synthetic",
+        site_configuration_version="1",
+        site_configuration_sha256=site_configuration_digest,
+        required_signals=dict(history_block["units"]),
+        forecast_horizon_hours=horizon_hours,
+        optimizer_id="prediction_resource_dispatch",
+        optimizer_version="1",
+        optimizer_settings={
+            "population_size": int(optimizer_settings["population_size"]),
+            "generations": int(optimizer_settings["generations"]),
+            "seed": int(optimizer_settings["seed"]),
+        },
+        scenario_assumptions={
+            "grid_available": [bool(availability["grid_all_hours"])] * horizon_hours,
+            "diesel_available": [bool(availability["diesel_all_hours"])] * horizon_hours,
+        },
+        forecast_settings={
+            "backtest_horizon": 24,
+            "season_length": 24,
+            "confidence_level": 0.90,
+        },
+    )
+
+
+def replay_run_request(request: Mapping[str, Any]) -> dict:
+    """Replay a `run_request` view with no page and no Streamlit, and return its summary.
+
+    This is what a transport can call: the request carries the site, the time axis, the
+    history with its units, the page-specific settings and the run-specific settings, so
+    the same run can be produced from a file instead of a browser session. It refuses a
+    request whose page it does not know rather than guessing a sequence.
+    """
+    page = request.get("page")
+    site = _site_from_request(request)
+    timestamps = _timestamps_from_request(request)
+    history_block = request["history"]
+    history = dict(history_block["signals"])
+    units = dict(history_block["units"])
+    provenance = str(history_block["provenance"])
+    currency = str(request["run_settings"]["currency"])
+
+    if page == "customer_dashboard":
+        cost_priority = float(request["page_settings"]["cost_priority"])
+        outputs = run_customer_dashboard(
+            history_stamps=timestamps,
+            history=history,
+            units=units,
+            site=site,
+            currency=currency,
+            cost_priority=cost_priority,
+            provenance=provenance,
+        )
+        summary = build_run_result_summary(
+            page=page, result=outputs["result"], economics=outputs["economics"],
+            currency=currency,
+        )
+        return {"page": page, "result": summary, "annual": None}
+
+    if page == "joint_resource_optimizer":
+        config = site.to_energy_system_config()
+        manifest = _manifest_from_request(request, config)
+        availability = request["run_settings"]["availability"]
+        outputs = run_joint_optimizer(
+            run_manifest=manifest,
+            timestamps=timestamps,
+            history=history,
+            units=units,
+            config=config,
+            grid_available=[bool(availability["grid_all_hours"])] * 24,
+            diesel_available=[bool(availability["diesel_all_hours"])] * 24,
+        )
+        summary = build_run_result_summary(
+            page=page,
+            result=outputs["result"],
+            planning_run=outputs["planning_run"],
+            currency=currency,
+        )
+        return {"page": page, "result": summary, "annual": None}
+
+    raise ValueError(f"page must be one of customer_dashboard, joint_resource_optimizer; got {page!r}")

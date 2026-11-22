@@ -192,6 +192,7 @@ try:
     run_request_view = build_run_request(
         page="customer_dashboard",
         site=site_assumptions,
+        timestamps=history_stamps,
         history=history,
         units=units,
         page_settings={

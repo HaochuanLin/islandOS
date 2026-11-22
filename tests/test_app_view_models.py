@@ -133,6 +133,7 @@ def _dashboard_request(site=None):
     return build_run_request(
         page=PAGE_CUSTOMER_DASHBOARD,
         site=site or _site(),
+        timestamps=TIMESTAMPS,
         history=DASHBOARD_HISTORY,
         units=DASHBOARD_UNITS,
         page_settings={"demand_scale": 1.0, "tariff_scale": 1.0, "cost_priority": 0.7},
@@ -158,6 +159,7 @@ def _optimizer_request(site=None):
     return build_run_request(
         page=PAGE_JOINT_OPTIMIZER,
         site=site or _site(),
+        timestamps=TIMESTAMPS,
         history={
             "pv_power_kw": DASHBOARD_HISTORY["pv_power"],
             "wind_power_kw": DASHBOARD_HISTORY["wind_power"],
@@ -352,6 +354,7 @@ def test_missing_or_empty_inputs_fail_explicitly(mutate, message):
         build_run_request(
             page=PAGE_CUSTOMER_DASHBOARD,
             site=_site(),
+            timestamps=TIMESTAMPS,
             history=DASHBOARD_HISTORY,
             units=DASHBOARD_UNITS,
             page_settings=mutate(settings) if "scale" in message else settings,
@@ -364,13 +367,15 @@ def test_missing_or_empty_inputs_fail_explicitly(mutate, message):
 def test_the_request_refuses_an_unknown_page_key_or_mismatched_series():
     with pytest.raises(ValueError, match="page must be one of"):
         build_run_request(
-            page="something_else", site=_site(), history=DASHBOARD_HISTORY, units=DASHBOARD_UNITS,
+            page="something_else", site=_site(), timestamps=TIMESTAMPS,
+            history=DASHBOARD_HISTORY, units=DASHBOARD_UNITS,
             page_settings={}, run_settings={"currency": "USD"},
             provenance="Synthetic demonstration data", source_sha256=None,
         )
     with pytest.raises(ValueError, match="unknown fields"):
         build_run_request(
-            page=PAGE_JOINT_OPTIMIZER, site=_site(), history=DASHBOARD_HISTORY,
+            page=PAGE_JOINT_OPTIMIZER, site=_site(), timestamps=TIMESTAMPS,
+            history=DASHBOARD_HISTORY,
             units=DASHBOARD_UNITS, page_settings={"cost_priority": 0.7},
             run_settings={"currency": "USD"},
             provenance="Synthetic demonstration data", source_sha256=None,
@@ -378,7 +383,8 @@ def test_the_request_refuses_an_unknown_page_key_or_mismatched_series():
     ragged = {**DASHBOARD_HISTORY, "pv_power": DASHBOARD_HISTORY["pv_power"][:50]}
     with pytest.raises(ValueError, match="one length"):
         build_run_request(
-            page=PAGE_CUSTOMER_DASHBOARD, site=_site(), history=ragged, units=DASHBOARD_UNITS,
+            page=PAGE_CUSTOMER_DASHBOARD, site=_site(), timestamps=TIMESTAMPS,
+            history=ragged, units=DASHBOARD_UNITS,
             page_settings={"demand_scale": 1.0, "tariff_scale": 1.0, "cost_priority": 0.7},
             run_settings={
                 "currency": "USD",
@@ -400,7 +406,8 @@ def test_the_site_block_is_the_site_module_not_a_copy_of_defaults():
     assert view["site"]["digest"] == default_site().digest()
     with pytest.raises(ValueError, match="SiteAssumptions"):
         build_run_request(
-            page=PAGE_JOINT_OPTIMIZER, site=DEFAULT_SITE, history=DASHBOARD_HISTORY,
+            page=PAGE_JOINT_OPTIMIZER, site=DEFAULT_SITE, timestamps=TIMESTAMPS,
+            history=DASHBOARD_HISTORY,
             units=DASHBOARD_UNITS, page_settings={},
             run_settings={
                 "currency": "USD",
