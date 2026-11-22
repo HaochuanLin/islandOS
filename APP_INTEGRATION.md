@@ -225,6 +225,11 @@ Still not implemented: authentication, a hosted/public endpoint, a TypeScript pa
 validator dependency, a server-side run store, and any persistence of a request beyond the caller's own
 process.
 
+One React surface does consume the contracts without recomputing them: `frontend/application-views.html`
+(second Vite entry) loads a downloaded report's `application_views` block, renders request, result and
+annual summary, and can display `GET /contracts` field by field. It is a viewer, not a second
+implementation: it formats numbers the Python side already decided.
+
 
 ---
 

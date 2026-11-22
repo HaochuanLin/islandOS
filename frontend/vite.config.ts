@@ -17,6 +17,12 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        "application-views": "application-views.html"
+      }
+    }
   }
 });
