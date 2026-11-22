@@ -36,7 +36,7 @@ from islandos_core.annual_operating_basis import (
     annualise_run_summary,
     verify_annual_operating_basis,
 )
-from islandos_core.planning_workflow import run_forecast_dispatch
+from islandos_core.run_orchestration import run_joint_optimizer
 
 
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
@@ -207,21 +207,21 @@ try:
         },
     )
     with st.spinner("Validating run manifest, forecasting and searching the joint resource schedule…"):
-        planning_run = run_forecast_dispatch(
-            run_manifest,
+        # The canonical call order lives in islandos_core.run_orchestration, not in the page.
+        run_outputs = run_joint_optimizer(
+            run_manifest=run_manifest,
             timestamps=timestamps,
             history=signal_history,
             units=signal_units,
-            energy_system_config=config,
+            config=config,
             grid_available=grid_available,
             diesel_available=diesel_available,
         )
-    predictions = planning_run["forecast_results"]
-    target_timestamps = tuple(
-        point.timestamp for point in predictions["pv_power_kw"].points
-    )
-    result = planning_run["optimization"]
-    handoff = result["generic_prediction_handoff"]
+    planning_run = run_outputs["planning_run"]
+    predictions = run_outputs["predictions"]
+    target_timestamps = run_outputs["target_timestamps"]
+    result = run_outputs["result"]
+    handoff = run_outputs["handoff"]
     st.caption(f"Canonical run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
     render_decision_record(planning_run["decision_record"])
     st.subheader("Prediction engine")

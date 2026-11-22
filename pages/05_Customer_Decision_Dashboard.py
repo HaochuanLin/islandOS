@@ -38,19 +38,10 @@ from islandos_core.investment_economics import (
     evaluate_investment_economics,
     verify_investment_economics_binding,
 )
-from islandos_core.impact_assessment import assess_energy_policy_impact
+from islandos_core.run_orchestration import run_customer_dashboard
 from islandos_core.operator_decision import (
     build_operator_decision_record,
     verify_operator_decision_record,
-)
-from islandos_core.forecast_optimizer_adapter import (
-    build_coordination_inputs,
-    build_service_equivalent_economics,
-    evaluate_forecast_stress_scenarios,
-)
-from optimization.energy_system_optimizer import (
-    OptimizationWeights,
-    optimize_energy_system,
 )
 
 st.set_page_config(
@@ -180,18 +171,6 @@ units = {
 }
 
 try:
-    bundle = forecast_signals(
-        history_stamps,
-        history,
-        units,
-        horizon=24,
-        non_negative_signals=("pv_power", "wind_power", "essential_load"),
-    )
-    coordinated = build_coordination_inputs(
-        bundle,
-        grid_available=[True] * 24,
-        price_unit=f"{currency}/kWh",
-    )
     site_assumptions = SiteAssumptions(
         pv_rated_kw=float(pv_capacity),
         wind_rated_kw=float(wind_capacity),
@@ -236,22 +215,25 @@ try:
         provenance=source_label,
         source_sha256=source_sha256,
     )
-    weights = OptimizationWeights(
-        cost=float(cost_priority),
-        reliability=float(1.0 - cost_priority),
-        curtailment=0.0,
-        battery_wear=0.0,
-    )
-    result = optimize_energy_system(coordinated.inputs, config, weights=weights)
-    economics = build_service_equivalent_economics(result)
-    stress = evaluate_forecast_stress_scenarios(coordinated, config)
-    paired_impact = assess_energy_policy_impact(
-        coordinated.inputs,
-        config,
+    # The whole sequence lives in islandos_core.run_orchestration: forecast → coordination
+    # inputs → objective weights → optimize → service-equivalent economics → stress →
+    # paired impact. The page keeps the objects it renders and nothing about the order.
+    run_outputs = run_customer_dashboard(
+        history_stamps=history_stamps,
+        history=history,
+        units=units,
+        site=site_assumptions,
         currency=currency,
-        evaluation_period="24-hour dispatch scenario",
-        data_provenance=source_label,
+        cost_priority=float(cost_priority),
+        provenance=source_label,
     )
+    bundle = run_outputs["bundle"]
+    coordinated = run_outputs["coordinated"]
+    weights = run_outputs["weights"]
+    result = run_outputs["result"]
+    economics = run_outputs["economics"]
+    stress = run_outputs["stress"]
+    paired_impact = run_outputs["paired_impact"]
 
     recommended = result["recommendation"]["policy"]
     candidates = {row["policy"]: row for row in result["candidates"]}
