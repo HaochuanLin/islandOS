@@ -205,10 +205,14 @@ re-implementing any of it. What it would still have to supply itself is listed i
 
 ### 4.5 Still Streamlit-only, and still not implemented
 
-Streamlit-only today: page layout and widget wiring, `st.session_state` keys (§3), the download buttons,
-the caption wording, `AppTest`-based page tests, and every `islandos_ui/*` surface except
-`navigation.page_url_path`. The view models are built **in-process** and stored as page-local variables;
-they are not yet embedded in the downloadable report JSON.
+Streamlit-only today: page layout and widget wiring, `st.session_state` keys (§3), the caption wording,
+`AppTest`-based page tests, and every `islandos_ui/*` surface except `navigation.page_url_path`.
+
+The view models are built **in-process**, read by the page for its metrics, and also written into the
+page's downloadable JSON under `application_views` — `{request, result}` on 05, `{request, result,
+annual}` on 06, where `annual` is `null` unless the reader declares the equal-days assumption. That
+download is the closest thing to a transport today: it is a file the reader saves, not a call a client
+makes.
 
 Not implemented, deliberately stated rather than promised: no HTTP surface, no TypeScript types or
 package, no JSON Schema file, no server-side run store, no authentication, and no persistence of a

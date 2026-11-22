@@ -330,6 +330,7 @@ try:
                 summary_source = "summary of the candidate the optimizer selected"
                 break
     annual_record = None
+    annual_view = None
     project_annual = st.checkbox(
         "Project this 24-hour run onto a year (declared equal-days assumption)",
         key="annual_projection_joint_optimizer",
@@ -433,6 +434,13 @@ try:
         "robust_customer_economics": economics,
         "generic_prediction_handoff": handoff,
         "annual_operating_basis": annual_record,
+        # The application-facing view models, so a reader (or a non-Streamlit client) gets
+        # the same validated shapes the page rendered, not a second hand-built copy.
+        "application_views": {
+            "request": run_request_view,
+            "result": result_view,
+            "annual": annual_view,
+        },
         "forecast_scenario_scope": result.get("forecast_scenario_scope"),
         "decision_scope": result.get("decision_scope"),
         "assumptions": {

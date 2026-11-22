@@ -38,6 +38,81 @@ from typing import Any, Mapping, Sequence
 
 CONTRACT_VERSION = 1
 
+# Every top-level field a view carries, declared once. Builders assemble exactly these
+# keys, and tests fail on any drift, so a client can be written against a stable surface
+# (and `contract_schemas` can export it without guessing).
+REQUEST_FIELDS = (
+    "schema_version",
+    "request_type",
+    "page",
+    "site",
+    "history",
+    "page_settings",
+    "run_settings",
+    "request_sha256",
+)
+RUN_REQUEST_SITE_FIELDS = (
+    "pv_rated_kw",
+    "wind_rated_kw",
+    "grid_import_limit_kw",
+    "battery_capacity_kwh",
+    "battery_power_kw",
+    "battery_initial_soc",
+    "battery_min_soc",
+    "battery_max_soc",
+    "diesel_rated_kw",
+    "diesel_variable_cost_per_kwh",
+    "digest",
+)
+HISTORY_FIELDS = ("signals", "units", "hour_count", "provenance", "source_sha256")
+RESULT_SUMMARY_FIELDS = (
+    "schema_version",
+    "record_type",
+    "page",
+    "recommended_policy",
+    "recommended_policy_label",
+    "estimated_24h_energy_cost",
+    "unmet_load_kwh",
+    "grid_first_estimated_24h_energy_cost",
+    "service_equivalent",
+    "cost_comparison_valid",
+    "cost_reduction_vs_grid_first",
+    "savings_claim_withheld",
+    "candidate_policies",
+    "run_id",
+    "manifest_sha256",
+    "evidence_sha256",
+    "decision_record_status",
+    "physical_audit_passed",
+    "scenarios_audited",
+    "currency",
+    "summary_sha256",
+)
+ANNUAL_PROJECTION_FIELDS = (
+    "schema_version",
+    "record_type",
+    "run_id",
+    "manifest_sha256",
+    "data_provenance",
+    "summary_source",
+    "currency",
+    "basis",
+    "figures",
+    "components_inside_annual_energy_cost",
+    "definitions",
+    "scope",
+    "projection_sha256",
+)
+ANNUAL_BASIS_FIELDS = (
+    "days_equivalent_per_year",
+    "hours_equivalent_per_year",
+    "equal_day_assumption",
+    "derived_from_run",
+    "site_validated",
+    "measured",
+    "bill",
+)
+
 PAGE_CUSTOMER_DASHBOARD = "customer_dashboard"
 PAGE_JOINT_OPTIMIZER = "joint_resource_optimizer"
 PAGES = (PAGE_CUSTOMER_DASHBOARD, PAGE_JOINT_OPTIMIZER)
@@ -223,6 +298,12 @@ def build_run_request(
         "page_settings": settings_payload,
         "run_settings": run_payload,
     }
+    if tuple(payload) != REQUEST_FIELDS[:-1]:
+        raise AssertionError(f"request fields drifted: {sorted(payload)}")
+    if tuple(payload["site"]) != RUN_REQUEST_SITE_FIELDS:
+        raise AssertionError(f"site fields drifted: {sorted(payload['site'])}")
+    if tuple(payload["history"]) != HISTORY_FIELDS:
+        raise AssertionError(f"history fields drifted: {sorted(payload['history'])}")
     payload["request_sha256"] = _digest(payload)
     return payload
 
@@ -355,6 +436,8 @@ def build_run_result_summary(
             ),
             "currency": _optional_text(currency, "currency"),
         }
+    if tuple(payload) != RESULT_SUMMARY_FIELDS[:-1]:
+        raise AssertionError(f"summary fields drifted: {sorted(payload)}")
     payload["summary_sha256"] = _digest(payload)
     return payload
 
@@ -379,7 +462,7 @@ def build_annual_projection(record: Mapping[str, Any], *, currency: str | None =
     basis = record.get("basis")
     if not isinstance(figures, Mapping) or not isinstance(basis, Mapping):
         raise ValueError("annual projection is missing figures or basis")
-    return {
+    payload = {
         "schema_version": CONTRACT_VERSION,
         "record_type": "islandos_annual_projection_view",
         "run_id": _require_text(record.get("run_id"), "run_id"),
@@ -408,6 +491,11 @@ def build_annual_projection(record: Mapping[str, Any], *, currency: str | None =
         "scope": _require_text(record.get("scope"), "scope"),
         "projection_sha256": _require_text(record.get("annualisation_sha256"), "annualisation_sha256"),
     }
+    if tuple(payload) != ANNUAL_PROJECTION_FIELDS:
+        raise AssertionError(f"annual projection fields drifted: {sorted(payload)}")
+    if tuple(payload["basis"]) != ANNUAL_BASIS_FIELDS:
+        raise AssertionError(f"annual basis fields drifted: {sorted(payload['basis'])}")
+    return payload
 
 
 def to_json(view: Mapping[str, Any]) -> str:
