@@ -124,11 +124,6 @@ def stable_signature(payload: dict) -> str:
 with st.sidebar:
     st.markdown("## ⚡ IslandOS")
     st.caption("Energy & resource decision support")
-    page = st.radio(
-        "Navigate",
-        ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
-        label_visibility="collapsed",
-    )
     st.divider()
     st.caption("Research prototype · not for real-time control")
     st.download_button(
@@ -146,6 +141,15 @@ with st.sidebar:
         help="168 hourly UTC rows using the canonical forecast input columns. Synthetic demonstration data, not measured site data.",
         use_container_width=True,
     )
+
+# Section tabs sit in the main column so the sidebar keeps a single menu of
+# pages; the workspace's own sub-navigation must not compete with it.
+page = st.radio(
+    "Section",
+    ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
 
 if page == "Overview":
     st.markdown(
