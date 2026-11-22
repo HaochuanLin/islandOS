@@ -310,6 +310,111 @@ def _diagnose_milp_failure(inputs, site: IslandSiteConfig) -> dict:
             "exception_type": type(exc).__name__,
             "exception": str(exc),
         }
+    # Separate water-only feasibility from energy coupling. This tiny MILP
+    # preserves RO minimum-rate, tank bounds, hourly demand and terminal
+    # inventory, but removes the electrical balance. If it is feasible, feed
+    # that exact min-compliant RO schedule to the energy-only model.
+    try:
+        from scipy.optimize import Bounds, LinearConstraint, milp
+        from scipy.sparse import lil_matrix
+
+        n = len(demand)
+        dt = float(config.dt_hours)
+        capacity = float(water.ro_capacity_m3_per_hour)
+        minimum = float(ro_min_rate)
+        production = np.arange(0, n, dtype=int)
+        inventory = np.arange(n, 2 * n + 1, dtype=int)
+        ro_on = np.arange(2 * n + 1, 3 * n + 1, dtype=int)
+        total_vars = 3 * n + 1
+        lower = np.zeros(total_vars)
+        upper = np.full(total_vars, np.inf)
+        upper[production] = capacity
+        lower[inventory] = float(water.reserve_m3)
+        upper[inventory] = float(water.tank_capacity_m3)
+        lower[inventory[0]] = upper[inventory[0]] = float(water.initial_inventory_m3)
+        lower[inventory[-1]] = max(lower[inventory[-1]], float(site.tank_initial_m3))
+        upper[ro_on] = 1.0
+        integrality = np.zeros(total_vars, dtype=int)
+        integrality[ro_on] = 1
+        rows, row_l, row_u = [], [], []
+
+        def add_water_constraint(coefficients, lb, ub):
+            rows.append(coefficients)
+            row_l.append(lb)
+            row_u.append(ub)
+
+        for t in range(n):
+            add_water_constraint(
+                {int(inventory[t + 1]): 1.0, int(inventory[t]): -1.0,
+                 int(production[t]): -dt},
+                -float(demand[t]) * dt, -float(demand[t]) * dt,
+            )
+            add_water_constraint(
+                {int(production[t]): 1.0, int(ro_on[t]): -capacity},
+                -np.inf, 0.0,
+            )
+            add_water_constraint(
+                {int(production[t]): 1.0, int(ro_on[t]): -minimum},
+                0.0, np.inf,
+            )
+        matrix = lil_matrix((len(rows), total_vars), dtype=float)
+        for row_index, coefficients in enumerate(rows):
+            for column, value in coefficients.items():
+                matrix[row_index, column] = value
+        water_result = milp(
+            c=np.zeros(total_vars),
+            integrality=integrality,
+            bounds=Bounds(lower, upper),
+            constraints=LinearConstraint(
+                matrix.tocsr(), np.asarray(row_l), np.asarray(row_u)
+            ),
+            options={"time_limit": 30.0, "mip_rel_gap": 0.0},
+        )
+        if water_result.x is None:
+            tests["water_only_with_ro_minimum_and_terminal_tank"] = {
+                "feasible": False,
+                "solver_status": int(water_result.status),
+                "exception": str(water_result.message),
+            }
+        else:
+            rates = np.clip(water_result.x[production], 0.0, capacity).tolist()
+            tests["water_only_with_ro_minimum_and_terminal_tank"] = {
+                "feasible": True,
+                "solver_status": int(water_result.status),
+                "optimality_proven": bool(water_result.status == 0),
+                "total_production_m3": float(sum(rates) * dt),
+                "ending_inventory_m3": float(water_result.x[inventory[-1]]),
+                "ro_on_hours": int(sum(value >= 0.5 for value in water_result.x[ro_on])),
+            }
+            try:
+                energy_control = optimize_dispatch_milp(
+                    _energy_inputs(
+                        inputs, "island",
+                        [rate * water.specific_energy_kwh_per_m3 for rate in rates],
+                    ),
+                    config,
+                    time_limit_seconds=120.0,
+                    mip_relative_gap=0.0,
+                )
+                tests["energy_only_with_water_only_minimum_ro_schedule"] = {
+                    "feasible": True,
+                    "solver_status": energy_control.get("solver_status"),
+                    "optimality_proven": energy_control.get("optimality_proven_for_declared_milp"),
+                    "solve_time_seconds": energy_control.get("solve_time_seconds"),
+                }
+            except Exception as exc:
+                tests["energy_only_with_water_only_minimum_ro_schedule"] = {
+                    "feasible": False,
+                    "exception_type": type(exc).__name__,
+                    "exception": str(exc),
+                }
+    except Exception as exc:
+        tests["water_only_with_ro_minimum_and_terminal_tank"] = {
+            "feasible": False,
+            "exception_type": type(exc).__name__,
+            "exception": str(exc),
+        }
+
     return tests
 
 
