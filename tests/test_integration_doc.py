@@ -70,9 +70,16 @@ def test_the_dictionary_names_what_the_bills_must_never_be():
     assert "× 365" in text or "* 365" in text
 
 
-def test_the_unbridged_day_to_year_gap_stays_visible():
+def test_the_day_to_year_contract_stays_documented_and_conditional():
     text = DOC.read_text(encoding="utf-8")
-    # §6.5 and gap 6 both exist: dropping either would let a future implementer
-    # annualise the run's day cost without noticing it was never agreed.
+    # §6.5 now describes the projection bridge instead of only recording its absence.
+    # What must survive any future edit: the assumption is declared, never guessed;
+    # the record refuses to be a bill or a site validation; and the projection is never
+    # used to fill or check the customer's bill fields.
     assert "### 6.5" in text
-    assert "no bridge from the run's day to the annual bills" in text.lower() or "no bridge from the run's 24-hour cost" in text
+    lowered = text.lower()
+    assert "days_equivalent_per_year" in text
+    assert "a utility bill" in lowered
+    assert "summary_source" in text
+    assert "never a projection of a run" in text
+    assert "use the projection to fill or \"validate\" the two customer bill fields" in text

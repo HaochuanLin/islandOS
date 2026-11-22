@@ -226,11 +226,32 @@ Recorded because "annual energy cost" can mean at least three different things, 
 
 Two rules follow from this table. First, the run supplies **only** `service_equivalent`; every currency figure is supplied by the customer or a supplier, which is why §6.3 binds the figures *to* the run instead of deriving them *from* it. Second, year-one figures carry no escalation, and escalation starts at year two — putting tariff inflation inside the bills and again in `annual_energy_saving_escalation_rate` double-counts it.
 
-### 6.5 What is still missing: no bridge from the run's day to the annual bills
+### 6.5 A run's day can be projected onto a year — only with a declared assumption
 
-The two economics contracts meet only at the service gate. Nothing in the code converts the run's 24-hour `estimated_energy_cost` into an annual bill, and nothing checks the customer's two bills against the run's modelled day. That is deliberate — an annualisation needs a load-shape assumption, a seasonal weighting and a tariff-year definition that no dataset in this repository supplies — but it is a real gap for a customer trying to answer "what should I type in the two bill fields?".
+The two economics contracts still meet only at the service gate, and nothing converts the run's 24-hour `estimated_energy_cost` into a customer's annual bill. But "no bridge at all" stopped being true when `islandos_core/annual_operating_basis.py` landed: it projects one simulated day onto a year **under an assumption the caller must state**, and prints that assumption in the record.
 
-What a caller may do today without inventing data: show the run's day cost next to the bills as **context only**, labelled with its own scope ("modelled 24-hour dispatch cost, not an annual bill"), and never present the ratio as a validation of the entered numbers. Closing this gap needs a documented annualisation contract (which hours, which tariff year, which service scope) before any number crosses from the day to the year.
+The contract:
+
+- `annualise_run_summary(summary, dispatch_rows=…, simulated_hours, days_equivalent_per_year, run_id, manifest_sha256, data_provenance, summary_source)` scales eight summary figures (`load_energy_kwh`, `load_served_kwh`, `unmet_load_kwh`, `estimated_energy_cost`, `diesel_fuel_cost`, `battery_degradation_cost`, `diesel_start_cost`, `diesel_stop_cost`) by the declared day count, and derives diesel run hours by counting dispatch rows whose `diesel_generation_kw` is positive — it never assumes 365.
+- `days_equivalent_per_year` is an integer in 1–366 and travels inside the record as `basis.days_equivalent_per_year` with `basis.hours_equivalent_per_year`. The record also states `equal_day_assumption` ("each simulated day stands for the annual average day; no seasonal weighting, no load-growth and no tariff-year change"), `derived_from_run: true`, `site_validated: false`, `measured: false`, `bill: false`.
+- `summary_source` names which object inside the run was projected. On the joint optimizer page that is the recommended schedule's **own nominal dispatch summary** — the same 24-hour run behind the hourly setpoint rows — not a per-scenario replay and not the worst case across scenarios. Scenario replays stay where they are: annualising the base day does not annualise the worst case.
+- `annual_equipment_operating_cost` is fuel + battery throughput + diesel start/stop. It is a **breakdown of** `annual_energy_cost`, never an addition to it.
+- `verify_annual_operating_basis` re-derives `annualisation_sha256` and fails closed: a record that claims site validation, claims to be a bill, drops its `summary_source`, or carries an out-of-range day count is invalid.
+
+The six annual figures, fixed here so two pages cannot define them differently:
+
+| Figure | Unit / period | Means | Does not mean |
+|---|---|---|---|
+| `annual_load_energy_kwh` | kWh / year | energy the site demanded over the projection year | metered consumption |
+| `annual_load_served_kwh` | kWh / year | energy actually delivered to load | demand satisfied at every instant of a real year |
+| `annual_unmet_load_kwh` | kWh / year | demanded energy not served, same assumption applied | reliability, or a lost-production cost |
+| `annual_energy_cost` | currency / year, net | modelled net energy cost of the dispatch, already net of export revenue | a utility bill, or the customer's entered bill |
+| `annual_equipment_operating_cost` | currency / year | fuel, battery throughput and diesel start/stop **inside** the cost above | an additional cost, or O&M, or CAPEX |
+| `annual_diesel_run_hours` | hours / year | hours the diesel was committed in the run, scaled by the same assumption | maintenance hours, or a dispatch instruction |
+
+CAPEX is not in this table on purpose: it is an investment assumption entered on the customer dashboard (§6.4), never a projection of a run. So the two pages share this vocabulary and nothing else — the joint optimizer produces the six figures above from a simulated day, the customer dashboard takes bills and CAPEX as entered facts, and neither reads the other's numbers.
+
+What a caller still may not do: use the projection to fill or "validate" the two customer bill fields. The projection is a screening artefact of an offline run; the bills are customer-supplied facts. Same units, same period, different objects — and §6.4's rule that the run supplies only `service_equivalent` still holds.
 
 ---
 
@@ -268,7 +289,7 @@ Recorded because a second implementer will hit them:
 3. ~~**Annual investment economics is not manifest-bound.**~~ Closed in the only honest form available: the annual bills are customer-entered, so `bind_annual_economics_to_run` does not pretend they derive from the run. It records the run and dataset digests alongside the evaluation and states `derived_from_run: false` with the annualisation rule, and `verify_investment_economics_binding` fails a binding whose digest, read-only flags, or withheld flag disagree. The two contracts stay separate — operating economics comes from the run, annual economics is cited *against* it.
 4. ~~**Water extension changes `essential_load` in place.**~~ Closed by labelling instead of renaming, so nothing that already reads `essential_load` breaks: `water_service` now carries `essential_load_includes_ro_power: true`, the pre-RO series as `site_only_essential_load_kw`, and its digest as `site_only_electrical_load_history_sha256`. A consumer that wants "site load excluding water" reads that series (or subtracts `ro_power_kw_added_to_essential_load`) instead of assuming what the combined number contains.
 5. ~~**`generic_prediction_handoff.target_timestamps_utc` is taken from the PV forecast.**~~ Closed: the handoff clock is now read from the validated dispatch bundle, which refuses any signal whose target timestamps differ ("all resource forecasts must share identical target timestamps"). The handoff no longer depends on a signal being present, and a test asserts every signal's clock equals the handoff clock.
-6. **There is no bridge from the run's 24-hour cost to the customer's annual bills.** Open by choice, documented in §6.5. The page can show the modelled day cost as separate context, but nothing may convert it into an annual figure or use it to "validate" the bills the customer typed: the annualisation contract (which hours, which tariff year, which service scope) does not exist yet, and inventing one would put a fabricated number behind a real decision.
+6. ~~**There is no bridge from the run's 24-hour cost to the customer's annual bills.**~~ Closed to the extent that the code can close it honestly, by `islandos_core/annual_operating_basis.py` (§6.5): a caller can now project one simulated day onto a year, but only by declaring how many days a year stands for, and the record carries that declaration, says `site_validated: false` / `bill: false`, names the summary it projected, and fails verification if any of that stops being true. What stays open by choice: nothing converts that projection into the customer's bill fields or validates them against it. The joint optimizer page shows the projection; the customer dashboard shows entered bills; they are never compared.
 
 ## 9. Implementing against this document
 
