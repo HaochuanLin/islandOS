@@ -19,6 +19,8 @@ import os
 
 import streamlit as st
 
+from islandos_ui.navigation import page_url_path
+
 LOCAL_WORKSPACE_FLAG = "ISLANDOS_ENABLE_LOCAL_WORKSPACE"
 LOCAL_API_BASE_URL = "ISLANDOS_API_BASE_URL"
 
@@ -38,6 +40,10 @@ st.set_page_config(
 )
 
 
+def _url_path(page_file: str) -> str:
+    return page_url_path(page_file)
+
+
 def navigation_pages() -> dict:
     """Build the single menu. Order and groups are the only thing this file owns."""
     groups = {
@@ -49,16 +55,19 @@ def navigation_pages() -> dict:
                 "pages/05_Customer_Decision_Dashboard.py",
                 title="Decision dashboard",
                 icon="📊",
+                url_path=_url_path("pages/05_Customer_Decision_Dashboard.py"),
             ),
             st.Page(
                 "pages/06_Forecast_Led_Joint_Resource_Optimizer.py",
                 title="Joint resource optimizer",
                 icon="🔁",
+                url_path=_url_path("pages/06_Forecast_Led_Joint_Resource_Optimizer.py"),
             ),
             st.Page(
                 "pages/09_Device_Flexibility_Planner.py",
                 title="Device flexibility planner",
                 icon="🔌",
+                url_path=_url_path("pages/09_Device_Flexibility_Planner.py"),
             ),
         ],
         "Experimental": [
@@ -66,6 +75,7 @@ def navigation_pages() -> dict:
                 "pages/2_Rolling_Horizon_Lab.py",
                 title="Rolling horizon lab",
                 icon="🧪",
+                url_path=_url_path("pages/2_Rolling_Horizon_Lab.py"),
             ),
         ],
     }
@@ -75,11 +85,13 @@ def navigation_pages() -> dict:
                 "pages/07_Local_Customer_Workspace.py",
                 title="Customer workspace (local)",
                 icon="🗂️",
+                url_path=_url_path("pages/07_Local_Customer_Workspace.py"),
             ),
             st.Page(
                 "pages/08_Site_Workspace.py",
                 title="Site workspace (local)",
                 icon="🏗️",
+                url_path=_url_path("pages/08_Site_Workspace.py"),
             ),
         ]
     return groups
