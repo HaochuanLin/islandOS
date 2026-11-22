@@ -109,31 +109,38 @@ def _scenario_site(name: str) -> IslandSiteConfig:
     return replace(IslandSiteConfig(), **SCENARIOS[name]["changes"])
 
 
-def _row_for_csv(scenario: str, seed: int, input_sha256: str, row: dict) -> dict:
+def _row_for_csv(scenario: str, seed: int, input_sha256: str, row: dict, site: IslandSiteConfig) -> dict:
     strategy = row["strategy"]
+    diesel_kwh = float(row.get("diesel_kwh", 0.0))
+    curtailed = float(row.get("renewable_curtailed_kwh", 0.0))
+    renewable = float(row.get("renewable_available_kwh", 0.0))
+    demand = float(row.get("water_demand_m3", 0.0))
+    unmet_water = float(row.get("unmet_water_m3", 0.0))
+    ending_tank = float(row.get("ending_tank_m3", site.tank_initial_m3))
+    water_served = max(0.0, demand - unmet_water)
+    water_produced = max(0.0, ending_tank - site.tank_initial_m3 + water_served)
     return {
         "scenario": scenario,
         "seed": seed,
         "input_sha256": input_sha256,
         "strategy": strategy,
         "strategy_label": POLICY_LABELS.get(strategy, strategy),
-        "diesel_kwh": row.get("diesel_kwh"),
-        "diesel_litres": row.get("diesel_litres"),
+        "diesel_kwh": diesel_kwh,
+        "diesel_litres": float(row.get("diesel_litres", diesel_kwh * site.diesel_litres_per_kwh)),
         "diesel_litres_tank_adjusted": row.get("diesel_litres_tank_adjusted"),
         "diesel_hours": row.get("diesel_hours"),
-        "renewable_available_kwh": row.get("renewable_available_kwh"),
-        "renewable_curtailed_kwh": row.get("renewable_curtailed_kwh"),
-        "renewable_used_pct": row.get("renewable_used_pct"),
-        "water_demand_m3": row.get("water_demand_m3"),
-        "water_produced_m3": row.get("water_produced_m3"),
-        "unmet_water_m3": row.get("unmet_water_m3"),
-        "water_service_pct": row.get("water_service_pct"),
-        "ending_tank_m3": row.get("ending_tank_m3"),
+        "renewable_available_kwh": renewable,
+        "renewable_curtailed_kwh": curtailed,
+        "renewable_used_pct": 100.0 * (renewable - curtailed) / renewable if renewable else 0.0,
+        "water_demand_m3": demand,
+        "water_produced_m3": water_produced,
+        "unmet_water_m3": unmet_water,
+        "water_service_pct": 100.0 * water_served / demand if demand else 100.0,
+        "ending_tank_m3": ending_tank,
         "unmet_electric_kwh": row.get("unmet_electric_kwh"),
         "solver_status": row.get("solver_status"),
         "optimality_proven": row.get("optimality_proven"),
     }
-
 
 def _summarise(rows: list[dict]) -> dict:
     by_policy: dict[str, list[dict]] = {}
@@ -239,7 +246,7 @@ def main(argv: list[str] | None = None) -> dict:
             inputs = generate_synthetic_inputs(site, days=args.days, seed=seed)
             comparison = compare_with_optimizer(inputs, site, rules, case="island")
             for row in comparison["strategies"]:
-                csv_row = _row_for_csv(scenario, seed, comparison["input_sha256"], row)
+                csv_row = _row_for_csv(scenario, seed, comparison["input_sha256"], row, site)
                 all_rows.append(csv_row)
                 scenario_rows.append(csv_row)
         aggregate[scenario] = {
