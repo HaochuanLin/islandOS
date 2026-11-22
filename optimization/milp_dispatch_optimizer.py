@@ -219,9 +219,16 @@ def optimize_dispatch_milp(
     if fixed_water_production_m3_per_hour is not None:
         if water_service is None:
             raise OptimizationError("fixed water production requires water_service")
-        fixed_water_rates = series(
-            "fixed_water_production_m3_per_hour", fixed_water_production_m3_per_hour
-        )
+        try:
+            fixed_water_rates = [float(value) for value in fixed_water_production_m3_per_hour]
+        except (TypeError, ValueError) as exc:
+            raise OptimizationError(
+                "fixed_water_production_m3_per_hour must be a numeric sequence"
+            ) from exc
+        if len(fixed_water_rates) != n or any(not math.isfinite(value) for value in fixed_water_rates):
+            raise OptimizationError(
+                "fixed_water_production_m3_per_hour must contain one finite value per timestep"
+            )
         for t, rate in enumerate(fixed_water_rates):
             if rate < -1e-9 or rate > water_service.ro_capacity_m3_per_hour + 1e-9:
                 raise OptimizationError(f"fixed water production is outside RO capacity at {t}")
