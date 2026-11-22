@@ -80,6 +80,66 @@ def test_water_demand_and_flexible_load_join_forecasted_energy_optimizer():
     assert set(result["generic_prediction_handoff"]["source_signal_ids"]) == set(history)
 
 
+def test_combined_load_says_what_it_contains_and_keeps_the_site_only_series():
+    start = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    timestamps = tuple(start + timedelta(hours=i) for i in range(96))
+    site_load = [6.0 + (1.0 if i % 24 in range(17, 22) else 0.0) for i in range(96)]
+    history = {
+        "pv_power_kw": [max(0.0, 8.0 + 3.0 * ((i % 24) / 24)) for i in range(96)],
+        "wind_power_kw": [4.0] * 96,
+        "load_kw": site_load,
+        "tariff_per_kwh": [0.2] * 96,
+        "water_demand_m3_per_hour": [0.4] * 96,
+    }
+    units = {
+        "pv_power_kw": "kW", "wind_power_kw": "kW", "load_kw": "kW",
+        "tariff_per_kwh": "USD/kWh", "water_demand_m3_per_hour": "m3/h",
+    }
+    forecasts = forecast_site_signals(
+        timestamps, history, units, horizon=4, backtest_horizon=4, season_length=24,
+    )
+    config = EnergySystemConfig(
+        pv_rated_kw=20.0, wind_rated_kw=10.0, grid_import_limit_kw=20.0,
+        battery=BatterySpec(capacity_kwh=20.0, max_charge_kw=5.0, max_discharge_kw=5.0, initial_soc=0.6),
+        diesel=DieselSpec(rated_power_kw=15.0, variable_cost_per_kwh=0.3, ramp_up_kw_per_hour=15.0),
+    )
+    result = optimize_prediction_resource_schedule(
+        forecasts.results,
+        config,
+        history_start_utc=forecasts.history_start_utc,
+        history_end_utc=forecasts.history_end_utc,
+        grid_available=[True] * 4,
+        diesel_available=[True] * 4,
+        price_unit="USD/kWh",
+        population_size=4,
+        generations=1,
+        seed=41,
+        water_service=WaterServiceSpec(
+            specific_energy_kwh_per_m3=4.0, ro_capacity_m3_per_hour=5.0,
+            tank_capacity_m3=10.0, initial_inventory_m3=2.0, reserve_m3=0.5,
+        ),
+    )
+
+    water = result["water_service"]
+    assert water["essential_load_includes_ro_power"] is True
+    site_only = water["site_only_essential_load_kw"]
+    added = water["ro_power_kw_added_to_essential_load"]
+    # The site-only series must be the load forecast it came from: that is the
+    # series a consumer subtracts, instead of guessing what `essential_load` holds.
+    load_forecast = forecasts.results["load_kw"].points
+    assert site_only == pytest.approx([point.predicted_value for point in load_forecast])
+    assert len(site_only) == len(added)
+    assert any(value > 0 for value in added)
+    assert water["site_only_electrical_load_history_sha256"] == (
+        forecasts.results["load_kw"].input_history_sha256
+    )
+    # The handoff clock is the bundle's shared clock, not one signal's.
+    handoff = result["generic_prediction_handoff"]
+    expected = [point.timestamp.astimezone(timezone.utc).isoformat() for point in load_forecast]
+    assert handoff["target_timestamps_utc"] == expected
+    assert len(handoff["target_timestamps_utc"]) == 4
+
+
 def test_water_service_adapter_rejects_ro_capacity_shortfall():
     spec = WaterServiceSpec(
         specific_energy_kwh_per_m3=4.0,

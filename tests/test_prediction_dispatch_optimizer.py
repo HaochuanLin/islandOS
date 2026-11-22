@@ -80,6 +80,28 @@ def test_generic_prediction_results_run_joint_dispatch_optimizer():
     assert len(result["recommendation"]["battery_setpoints_kw"]) == 6
 
 
+def test_handoff_clock_comes_from_the_shared_horizon_not_one_signal():
+    start = datetime(2026, 11, 1, tzinfo=UTC)
+    results = _four_signal_results()
+    result = optimize_prediction_resource_schedule(
+        results,
+        _config(),
+        history_start_utc=start - timedelta(days=7),
+        history_end_utc=start,
+        grid_available=[True] * 6,
+        diesel_available=[True] * 6,
+        price_unit="USD/kWh",
+        population_size=4,
+        generations=1,
+        seed=17,
+    )
+    handoff_clock = result["generic_prediction_handoff"]["target_timestamps_utc"]
+    assert len(handoff_clock) == 6
+    for signal_id, forecast in results.items():
+        clocks = [point.timestamp.astimezone(UTC).isoformat() for point in forecast.points]
+        assert clocks == handoff_clock, signal_id
+
+
 def test_generic_prediction_optimizer_rejects_missing_signal():
     results = _four_signal_results()
     del results["wind_power_kw"]
