@@ -6,6 +6,8 @@ measured customer savings, a site-validated forecast, or equipment commands.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
+import hashlib
 import json
 import math
 
@@ -13,12 +15,18 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
+from islandos_ui.annual_economics_panel import render_annual_economics_basis
 
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
 from islandos_core.customer_dashboard import parse_customer_history_csv
+from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.forecast_engine import forecast_signals
-from islandos_core.investment_economics import evaluate_investment_economics
+from islandos_core.investment_economics import (
+    bind_annual_economics_to_run,
+    evaluate_investment_economics,
+    verify_investment_economics_binding,
+)
 from islandos_core.impact_assessment import assess_energy_policy_impact
 from islandos_core.operator_decision import (
     build_operator_decision_record,
@@ -357,9 +365,82 @@ try:
         service_equivalent=bool(service_equal and economics.get("cost_comparison_valid")),
     )
     st.subheader("Equipment investment screen")
+    # The annual figures cite this run; they are never derived from it. Build the
+    # manifest from the same inputs the screen was computed on, then bind.
+    annual_dataset_digest = source_sha256 or hashlib.sha256(
+        json.dumps(
+            {
+                "timestamps_utc": [stamp.isoformat() for stamp in history_stamps],
+                "signals": history,
+                "units": units,
+            },
+            sort_keys=True, separators=(",", ":"), allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    annual_config_digest = hashlib.sha256(
+        json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    annual_run_id = deterministic_run_id(
+        "run-dashboard",
+        {
+            "dataset_sha256": annual_dataset_digest,
+            "site_configuration_sha256": annual_config_digest,
+            "history_sha256": bundle.input_history_sha256,
+            "recommended_policy": recommended,
+            "weights": {
+                "cost": float(weights.cost),
+                "reliability": float(weights.reliability),
+                "curtailment": float(weights.curtailment),
+                "battery_wear": float(weights.battery_wear),
+            },
+            "project_life_years": int(project_life),
+            "currency": currency,
+        },
+    )
+    annual_run_manifest = create_run_manifest(
+        project_id="streamlit-customer-decision-dashboard",
+        run_id=annual_run_id,
+        site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
+        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        dataset_sha256=annual_dataset_digest,
+        dataset_schema_version="canonical-hourly-signals-v1",
+        source_type="customer_provided" if shared_payload is not None else "synthetic",
+        site_configuration_version="1",
+        site_configuration_sha256=annual_config_digest,
+        required_signals=units,
+        forecast_horizon_hours=24,
+        optimizer_id="prediction_resource_dispatch",
+        optimizer_version="1",
+        optimizer_settings={
+            "cost": float(weights.cost),
+            "reliability": float(weights.reliability),
+            "curtailment": float(weights.curtailment),
+            "battery_wear": float(weights.battery_wear),
+        },
+        scenario_assumptions={
+            "grid_available": [True] * 24,
+            "battery_configured": config.battery is not None,
+            "horizon_hours": 24,
+            "currency": currency,
+        },
+        forecast_settings={"backtest_horizon": 24, "season_length": 24, "confidence_level": 0.90},
+    ).to_dict()
+    economics_binding = bind_annual_economics_to_run(
+        investment,
+        annual_run_manifest,
+        annual_bill_source="customer_entered_annual_bills",
+    )
+    binding_verification = verify_investment_economics_binding(economics_binding)
+    if not binding_verification["valid"]:
+        st.error(
+            "Annual economics binding integrity check failed: "
+            + "; ".join(binding_verification["errors"])
+        )
+        st.stop()
+    render_annual_economics_basis(economics_binding)
     st.caption(
-        "Lifecycle results use customer-entered annual bills, supplier CAPEX, and O&M assumptions. "
-        "They are not inferred from the 24-hour simulation and are not a procurement guarantee."
+        "The metrics below are a screening result under the assumptions printed with them; "
+        "they are not a procurement guarantee."
     )
     if investment.decision == "blocked":
         st.warning(investment.reasons[0])
@@ -496,6 +577,8 @@ try:
         "paired_customer_impact": paired_impact,
         "operator_decision_record": operator_record,
         "investment_economics": investment_report,
+        "investment_economics_binding": economics_binding,
+        "investment_economics_binding": economics_binding,
         "scope": "offline screening; not measured savings or equipment control",
     }
     st.download_button(
