@@ -446,15 +446,26 @@ def _strategy_row(name: str, summary: dict, ending_tank: float, water_unmet_m3: 
     refill_kwh = (site.tank_initial_m3 - ending_tank) * site.ro_specific_energy_kwh_per_m3
     diesel_kwh = float(summary["diesel_generation_kwh"])
     litres = diesel_kwh * site.diesel_litres_per_kwh
+    renewable_kwh = float(summary.get("pv_energy_kwh", 0.0)) + float(summary.get("wind_energy_kwh", 0.0))
+    curtailed_kwh = float(summary.get("renewable_curtailed_kwh", 0.0))
+    water_demand_m3 = float(summary.get("water_demand_m3", 0.0))
+    water_served_m3 = max(0.0, water_demand_m3 - water_unmet_m3)
+    water_produced_m3 = max(0.0, ending_tank - site.tank_initial_m3 + water_served_m3)
     row = {
         "strategy": name,
         "case": case,
         "diesel_kwh": diesel_kwh,
+        "diesel_litres": litres,
         "grid_kwh": float(summary.get("grid_import_kwh", 0.0)),
         "energy_cost": float(summary["estimated_energy_cost"]),
         "ending_tank_m3": ending_tank,
         "unmet_electric_kwh": float(summary["unmet_load_kwh"]),
         "unmet_water_m3": water_unmet_m3,
+        "water_demand_m3": water_demand_m3,
+        "water_produced_m3": water_produced_m3,
+        "renewable_available_kwh": renewable_kwh,
+        "renewable_curtailed_kwh": curtailed_kwh,
+        "renewable_used_pct": 100.0 * (renewable_kwh - curtailed_kwh) / renewable_kwh if renewable_kwh else 0.0,
     }
     if case == "island":
         adjusted = litres + refill_kwh * site.diesel_litres_per_kwh
