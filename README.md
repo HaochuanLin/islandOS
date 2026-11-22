@@ -1,4 +1,4 @@
-# IslandOS
+# islandOS
 
 <p align="center">
   <strong>From Energy Data to Intelligent Decisions.</strong><br>
@@ -11,16 +11,16 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
 </p>
 
-IslandOS is an **AI-assisted, simulation-first energy and resource coordination decision-support platform** for energy-constrained regions and distributed infrastructure. It brings energy supply, demand, equipment, operating constraints, and resource requirements into a common workflow so users can examine future conditions, compare operating alternatives, and review explainable recommendations.
+islandOS is an **AI-assisted, simulation-first energy and resource coordination decision-support platform** for energy-constrained regions and distributed infrastructure. It brings energy supply, demand, equipment, operating constraints, and resource requirements into a common workflow so users can examine future conditions, compare operating alternatives, and review explainable recommendations.
 
 Here, AI refers primarily to forecasting, uncertainty analysis, and optimization. Language models may assist with interaction or explanation, but do not replace data validation, physical models, or constraint enforcement.
 
-> **Current scope:** IslandOS is an early-stage research prototype. Its five-step workflow is the product direction; individual modules have different maturity levels. It is not a deployed plant controller, and it does not autonomously operate physical equipment.
+> **Current scope:** islandOS is an early-stage research prototype. Its five-step workflow is the product direction; individual modules have different maturity levels. It is not a deployed plant controller, and it does not autonomously operate physical equipment.
 
 ## The five-step decision workflow
 
 <p align="center">
-  <img src="assets/islandos_workflow_2026_v2.svg" alt="IslandOS five-step workflow: INPUT validates data and assets, FORECAST estimates future conditions, COORDINATE generates resource schedules, COMPARE evaluates trade-offs, and DECIDE supports human review." width="100%">
+  <img src="assets/islandos_workflow_2026_v2.svg" alt="islandOS five-step workflow: INPUT validates data and assets, FORECAST estimates future conditions, COORDINATE generates resource schedules, COMPARE evaluates trade-offs, and DECIDE supports human review." width="100%">
 </p>
 
 *The five steps define the product workflow; selected offline paths are implemented while other capabilities remain experimental or planned. The diagram does not imply that every step is fully integrated, nor does it imply live equipment control, production deployment, or site validation.*
@@ -35,7 +35,7 @@ The workflow is designed to be extensible across use cases such as remote microg
 
 ## Try the interactive demo
 
-**[Open the public IslandOS demo](https://islandos.streamlit.app/)** — an interactive planning and simulation prototype.
+**[Open the public islandOS demo](https://islandos.streamlit.app/)** — an interactive planning and simulation prototype.
 
 You can explore the built-in synthetic scenario or upload hourly data, adjust selected equipment and storage assumptions, compare operating strategies, inspect hourly outcomes, and export results.
 
@@ -203,7 +203,7 @@ Passing tests verify software behavior, not forecast accuracy, engineering feasi
 
 ## Experimental pilot
 
-Nan'ao is a historical, bounded experimental scenario only; it is not the IslandOS product identity or a validated customer deployment. The archived seed-20261021 CSV/JSON outputs are superseded historical artifacts and must not be used as current product results. The active Nan'ao regression script and test remain for reproducibility; all scenario assumptions are unmeasured.
+Nan'ao is a historical, bounded experimental scenario only; it is not the islandOS product identity or a validated customer deployment. The archived seed-20261021 CSV/JSON outputs are superseded historical artifacts and must not be used as current product results. The active Nan'ao regression script and test remain for reproducibility; all scenario assumptions are unmeasured.
 
 ## License
 
