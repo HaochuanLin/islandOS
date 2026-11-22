@@ -88,3 +88,72 @@ def test_workflow_fails_closed_when_input_contract_differs_from_manifest():
             energy_system_config=config, grid_available=[True] * 6,
             diesel_available=[True] * 6,
         )
+
+
+def test_workflow_rejects_history_shorter_than_forecast_minimum():
+    timestamps, history, units, config, manifest = _inputs()
+    short_timestamps = timestamps[:71]
+    short_history = {key: values[:71] for key, values in history.items()}
+
+    with pytest.raises(ValueError, match="At least 72 hourly timestamps"):
+        run_forecast_dispatch(
+            manifest,
+            timestamps=short_timestamps,
+            history=short_history,
+            units=units,
+            energy_system_config=config,
+            grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+        )
+
+
+def test_workflow_rejects_non_contiguous_hourly_history_at_composition_boundary():
+    timestamps, history, units, config, manifest = _inputs()
+    malformed = list(timestamps)
+    malformed[48] += timedelta(minutes=15)
+
+    with pytest.raises(ValueError, match="contiguous hourly"):
+        run_forecast_dispatch(
+            manifest,
+            timestamps=malformed,
+            history=history,
+            units=units,
+            energy_system_config=config,
+            grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+        )
+
+
+def test_workflow_rejects_naive_history_timestamp_at_composition_boundary():
+    timestamps, history, units, config, manifest = _inputs()
+    malformed = list(timestamps)
+    malformed[0] = malformed[0].replace(tzinfo=None)
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        run_forecast_dispatch(
+            manifest,
+            timestamps=malformed,
+            history=history,
+            units=units,
+            energy_system_config=config,
+            grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+        )
+
+
+def test_workflow_rejects_signal_history_length_mismatch_before_forecasting():
+    timestamps, history, units, config, manifest = _inputs()
+    malformed = dict(history)
+    malformed["wind_power_kw"] = malformed["wind_power_kw"][:-1]
+
+    with pytest.raises(ValueError, match="wind_power_kw must have one value for every timestamp"):
+        run_forecast_dispatch(
+            manifest,
+            timestamps=timestamps,
+            history=malformed,
+            units=units,
+            energy_system_config=config,
+            grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+        )
+
