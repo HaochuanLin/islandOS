@@ -92,11 +92,36 @@ streamlit run app.py
 
 The app opens in your browser. For input columns, units, and assumptions, see the [app data guide](docs/ENERGY_WATER_STRATEGY_COMPARISON.md).
 
+## Navigation
+
+`app.py` is a thin shell: it owns `st.set_page_config` and one `st.navigation` menu, and does not render any section itself. The eight analysis sections live in `islandos_ui/workspace.py` and are reached through the workspace's own sub-navigation, so there is exactly one sidebar.
+
+| Menu group | Pages |
+| --- | --- |
+| Decision workspace | Workspace (all eight sections: overview, data onboarding, forecast lab, flexible-load cost optimizer, strategy simulator, microgrid screening, historical RO baseline, data guide) |
+| Customer views | Decision dashboard, joint resource optimizer, device flexibility planner |
+| Experimental | Rolling horizon lab (research view, synthetic inputs) |
+| Local deployment only | Customer workspace, site workspace — registered only when a local deployment is configured |
+
+The local-only pages are hidden in the hosted demo because they can only work against local services:
+
+```bash
+# site workspace (local SQLite workspace, no API required)
+ISLANDOS_ENABLE_LOCAL_WORKSPACE=1 streamlit run app.py
+
+# customer workspace (needs the loopback reference API)
+streamlit run app.py                       # terminal 1: python -m islandos_service_api
+ISLANDOS_API_BASE_URL=http://127.0.0.1:8000 streamlit run app.py   # terminal 2
+```
+
+Setting either variable adds the "Local deployment only" group; without them the public menu contains no dead entries. See [local site workspace](docs/SITE_WORKSPACE.md) and [local customer workspace UI](docs/STAGE_E_LOCAL_CUSTOMER_WORKSPACE_UI.md).
+
 ## Repository structure
 
 ```text
 islandOS/
-├── app.py                  # Streamlit research/demo entry point
+├── app.py                  # Streamlit entry point: page config and the single navigation menu
+├── islandos_ui/            # The Streamlit decision workspace (eight analysis sections)
 ├── islandos_service_api.py # Loopback-only local reference API
 ├── frontend/               # React + TypeScript customer-console foundation
 ├── islandos_core/          # Shared data, forecast, optimization, audit and safety logic
