@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
+from islandos_ui.decision_record_panel import render_decision_record
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
@@ -189,6 +190,7 @@ try:
     result = planning_run["optimization"]
     handoff = result["generic_prediction_handoff"]
     st.caption(f"Canonical run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
+    render_decision_record(planning_run["decision_record"])
     st.subheader("Prediction engine")
     model_rows = []
     for canonical_id, forecast in predictions.items():
@@ -263,6 +265,8 @@ try:
             "forecast_handoff": handoff,
             "forecast_scenario_scope": result.get("forecast_scenario_scope"),
             "decision_scope": result.get("decision_scope"),
+            "physical_audit": result.get("physical_audit"),
+            "operator_decision_record": planning_run["decision_record"],
             "objective": result.get("objective"),
             "optimizer": "bounded seeded heuristic; not a guaranteed global optimum",
             "device_write_authorized": handoff.get("device_write_authorized"),
@@ -277,6 +281,8 @@ try:
             "manifest_sha256": planning_run["manifest_sha256"],
             "forecast": planning_run["forecast"],
             "evidence_sha256": planning_run["evidence_sha256"],
+            "decision_record": planning_run["decision_record"],
+            "decision_record_sha256": planning_run["decision_record_sha256"],
             "human_review_required": planning_run["human_review_required"],
             "operator_approval": planning_run["operator_approval"],
             "device_write_authorized": planning_run["device_write_authorized"],
