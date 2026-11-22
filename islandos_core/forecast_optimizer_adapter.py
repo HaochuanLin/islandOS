@@ -482,6 +482,26 @@ def optimize_forecasted_resource_schedule(
         "same_schedule_replayed_across_all_scenarios": True,
         "objective_aggregation": "worst_case_across_supplied_scenarios",
     }
+    # The decision stage expects a run-level physical audit. Build it from the
+    # per-scenario audits already computed for the recommended schedule rather
+    # than re-running the simulator, so the record cites the same evidence.
+    scenario_audits = {
+        name: row.get("audit_passed") is True
+        for name, row in result["recommendation"].get("scenario_results", {}).items()
+    }
+    result["physical_audit"] = {
+        "passed": bool(scenario_audits) and all(scenario_audits.values()),
+        "errors": [
+            f"{name}: recommended schedule failed the physical dispatch audit"
+            for name, passed in sorted(scenario_audits.items())
+            if not passed
+        ],
+        "scope": (
+            "per-scenario simulator audit of the recommended schedule replay; "
+            "not site validation and not a safety certification"
+        ),
+        "scenarios_audited": sorted(scenario_audits),
+    }
     result["decision_scope"] = (
         "offline joint battery/diesel schedule search across deterministic forecast "
         "envelopes and grid outage stress; seeded heuristic, not a global optimum, "

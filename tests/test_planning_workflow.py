@@ -5,6 +5,7 @@ import pytest
 from islandos_core.canonical_run import create_run_manifest
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
 from islandos_core.planning_workflow import run_forecast_dispatch
+from islandos_core.operator_decision import verify_operator_decision_record
 
 
 def _inputs():
@@ -130,3 +131,32 @@ def test_clock_error_names_the_manifest_bound_workflow():
             units=units, energy_system_config=config, grid_available=[True] * 6,
             diesel_available=[True] * 6,
         )
+
+
+def test_canonical_run_builds_a_verifiable_operator_decision_record():
+    timestamps, history, units, config, manifest = _inputs()
+    result = run_forecast_dispatch(
+        manifest, timestamps=timestamps, history=history, units=units,
+        energy_system_config=config, grid_available=[True] * 6,
+        diesel_available=[True] * 6,
+    )
+    record = result["decision_record"]
+    assert result["decision_record_sha256"] == record["record_sha256"]
+    assert len(record["record_sha256"]) == 64
+    verification = verify_operator_decision_record(record)
+    assert verification["valid"], verification["errors"]
+    assert record["record_type"] == "offline_operator_decision_record"
+    assert record["site_ref"] == "synthetic-site"
+    assert record["data_provenance"] == "synthetic"
+    assert record["device_write_authorized"] is False
+    assert record["command_generated"] is False
+    assert record["human_review_required"] is True
+    assert record["operator_approval"] == "pending"
+    assert record["status"] == "ready_for_human_review"
+    assert result["optimization"]["physical_audit"]["passed"] is True
+    assert record["input_refs"] == [
+        f"manifest_sha256:{manifest.manifest_sha256}",
+        f"forecast_bundle_sha256:{result['forecast']['bundle_sha256']}",
+        "dataset_sha256:" + "a" * 64,
+    ]
+    assert record["recommendation_id"] == "run-integration-001:joint_resource_dispatch"

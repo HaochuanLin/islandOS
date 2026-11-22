@@ -13,6 +13,7 @@ from typing import Any
 
 from .canonical_run import CanonicalRunManifest, verify_run_manifest
 from .forecast_signal_catalog import forecast_site_signals, validate_hourly_timestamps
+from .operator_decision import build_operator_decision_record, verify_operator_decision_record
 from .prediction_dispatch_adapter import optimize_prediction_resource_schedule
 
 
@@ -168,6 +169,34 @@ def run_forecast_dispatch(
     except (TypeError, ValueError) as exc:
         raise ValueError(f"optimizer output is not safely serializable for evidence hashing: {exc}") from exc
 
+    weights = recommendation.get("weights")
+    if not isinstance(weights, Mapping) or not weights:
+        raise ValueError("optimizer recommendation must carry objective weights for the decision record")
+    operating_constraints = {
+        "grid_available": list(grid_available),
+        "diesel_available": list(diesel_available),
+        "optimizer_settings": dict(optimizer_settings),
+    }
+    decision_record = build_operator_decision_record(
+        dispatch_result,
+        site_ref=manifest_value["site_ref"],
+        recommendation_id=f"{manifest_value['run_id']}:{recommendation.get('policy', 'joint_resource_dispatch')}",
+        created_at_utc=manifest_value["created_at_utc"],
+        data_provenance=manifest_value["dataset"]["source_type"],
+        input_refs=[
+            f"manifest_sha256:{manifest_value['manifest_sha256']}",
+            f"forecast_bundle_sha256:{bundle.input_history_sha256}",
+            f"dataset_sha256:{manifest_value['dataset']['sha256']}",
+        ],
+        objective_weights=dict(weights),
+        operating_constraints=operating_constraints,
+    )
+    verification = verify_operator_decision_record(decision_record)
+    if not verification["valid"]:
+        raise ValueError(
+            "operator decision record failed verification: " + "; ".join(verification["errors"])
+        )
+
     return {
         "schema_version": 1,
         "record_type": "islandos_canonical_planning_run",
@@ -188,8 +217,10 @@ def run_forecast_dispatch(
             "settings": forecast_settings,
         },
         "optimization": dispatch_result,
-        # Keep typed forecasts for UI diagnostics; do not run a second forecast pipeline.
+        # Typed forecasts are kept for UI diagnostics; do not run a second pipeline.
         "forecast_results": dict(bundle.results),
+        "decision_record": decision_record,
+        "decision_record_sha256": decision_record["record_sha256"],
         "evidence_sha256": evidence_sha256,
         "human_review_required": True,
         "operator_approval": "pending",
