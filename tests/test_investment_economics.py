@@ -125,7 +125,10 @@ def test_annual_economics_can_be_bound_to_the_run_it_describes():
     assert binding["dataset_source_type"] == "customer_provided"
     assert binding["annual_basis"]["derived_from_run"] is False
     assert binding["annual_basis"]["period_utc"][0].startswith("2025-09-01")
-    assert "never multiplied into a year" in binding["annual_basis"]["annualisation"]
+    # The declaration is scoped to this screen: since the joint optimizer gained its
+    # own declared-assumption projection, "a simulated day is never annualised" would
+    # be false as a product-wide claim.
+    assert "never turns a simulated day into the bills it screens" in binding["annual_basis"]["annualisation"]
     assert binding["decision"] == "screen_positive"
     assert binding["withheld"] is False
     assert len(binding["binding_sha256"]) == 64

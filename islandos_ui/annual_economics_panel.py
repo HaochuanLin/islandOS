@@ -25,7 +25,7 @@ DEMONSTRATION_SOURCE = "synthetic_demonstration_figures"
 CUSTOMER_SOURCE = "customer_entered_annual_bills"
 _DEFAULT_ANNUALISATION = (
     "customer-entered annual bills tied to this run's equipment and service scope; "
-    "a simulated day is never multiplied into a year"
+    "this screen never turns a simulated day into the bills it screens"
 )
 _NOT_PROVEN = (
     "not the run's savings, not measured from the run, and not a procurement guarantee"

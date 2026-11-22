@@ -232,7 +232,7 @@ def bind_annual_economics_to_run(
             "derived_from_run": False,
             "annualisation": (
                 "customer-entered annual bills tied to this run's equipment and service scope; "
-                "a simulated day is never multiplied into a year"
+                "this screen never turns a simulated day into the bills it screens"
             ),
         },
         "service_equivalent": economics.service_equivalent,
