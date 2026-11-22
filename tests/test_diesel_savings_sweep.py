@@ -46,3 +46,26 @@ def test_summary_compares_against_fixed_and_simple_rule_without_hiding_shortages
 
 
 import pytest
+import csv
+import json
+from pathlib import Path
+import tempfile
+
+
+def test_one_seed_smoke_run_writes_auditable_artifacts():
+    from experiments.run_diesel_savings_sweep import main
+
+    with tempfile.TemporaryDirectory() as tmp:
+        main(["--seeds", "1", "--days", "1", "--output-dir", tmp])
+        output = Path(tmp)
+        for filename in ("per_seed.csv", "aggregate.json", "manifest.json", "summary.md"):
+            assert (output / filename).is_file()
+        with (output / "per_seed.csv").open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        assert rows
+        assert {row["scenario"] for row in rows} == set(SCENARIOS)
+        assert {"fixed_timetable", "surplus_rule", "forecast_rule_realistic", "joint_milp"} <= {
+            row["strategy"] for row in rows
+        }
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["data_provenance"] == "Synthetic demo data; not measured site data."
