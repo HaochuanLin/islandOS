@@ -206,6 +206,32 @@ The annual bills are entered by the customer, so the binding is a **citation, no
 
 On a page, the basis is a gate, not a footnote: the banner (bills entered by the customer, not derived from this run) and the withheld line must both sit **above** the first investment metric, and a binding that does not verify must stop the page rather than fall back to bare numbers. `islandos_ui/annual_economics_panel.py::render_annual_economics_basis` is the reference surface; `pages/05_Customer_Decision_Dashboard.py` is the worked example. `run_id` there is derived with `canonical_run.deterministic_run_id`, so an unchanged scenario keeps one run id across Streamlit reruns while a changed assumption becomes a different run.
 
+### 6.4 Annual basis — what each input means, and who may supply it
+
+Recorded because "annual energy cost" can mean at least three different things, and the screen silently assumes one of them. Values and validation below are those `evaluate_investment_economics` actually enforces.
+
+| Input | Unit / range | What it means on this screen | Legitimate supplier | What it must never be |
+|---|---|---|---|---|
+| `baseline_annual_energy_cost` | currency / year, ≥ 0 | A full year of the site's **current** energy spend at the service scope being compared | Customer's utility bills or metered tariff records | An annualisation of the run's 24-hour `grid_first` cost (`× 365`), or a market-average tariff |
+| `proposed_annual_energy_cost` | currency / year, ≥ 0 | The same year of load under the proposed equipment, **same service** | Customer estimate, supplier projection, or a separately validated study | The run's `estimated_energy_cost × 365`; the run's day is a dispatch study, not a bill forecast |
+| `annual_incremental_om_cost` | currency / year (year one), may be negative | Added O&M minus avoided O&M; negative means a net O&M saving | Supplier service schedule; customer maintenance records | The energy saving already counted in the two bills, or one-off installation labour (that belongs in CAPEX) |
+| `upfront_capex` | currency at year 0, ≥ 0 | Installed cost: equipment, installation, commissioning, permits | Supplier quote or signed contract value | Recurring O&M, a replacement inside the horizon, or a budget placeholder |
+| `project_life_years` | integer 1–40 | Evaluation horizon for the cashflow | Stated assumption | Equipment warranty length, or the financing tenor |
+| `discount_rate` | fraction 0–0.5 | Discount applied to every year's net cashflow | Stated assumption; a financing rate only if that is what it is | A hurdle rate quoted as the customer's cost of capital without saying so |
+| `annual_energy_saving_escalation_rate` | fraction −0.5–1.0 | Growth of the **saving** from year two | Stated assumption | Tariff inflation applied to the bills themselves (that is already inside the year-one bills) |
+| `annual_om_escalation_rate` | fraction −0.5–1.0 | Growth of incremental O&M from year two | Stated assumption | — |
+| `replacement_year` / `replacement_cost` | year within the life / currency ≥ 0 | One replacement inside the horizon; cost requires the year | Supplier or stated assumption | A second equipment purchase presented as O&M |
+| `residual_value` | currency ≥ 0, booked in the final year | Value left at end of life | Stated assumption | Salvage value of equipment the customer keeps |
+| `service_equivalent` | bool | Gate: the proposed policy serves the same energy service as the reference in the run | The run's operating comparison (`build_service_equivalent_economics(...).service_equivalent`) | A hand-set `true` to "unlock" the screen |
+
+Two rules follow from this table. First, the run supplies **only** `service_equivalent`; every currency figure is supplied by the customer or a supplier, which is why §6.3 binds the figures *to* the run instead of deriving them *from* it. Second, year-one figures carry no escalation, and escalation starts at year two — putting tariff inflation inside the bills and again in `annual_energy_saving_escalation_rate` double-counts it.
+
+### 6.5 What is still missing: no bridge from the run's day to the annual bills
+
+The two economics contracts meet only at the service gate. Nothing in the code converts the run's 24-hour `estimated_energy_cost` into an annual bill, and nothing checks the customer's two bills against the run's modelled day. That is deliberate — an annualisation needs a load-shape assumption, a seasonal weighting and a tariff-year definition that no dataset in this repository supplies — but it is a real gap for a customer trying to answer "what should I type in the two bill fields?".
+
+What a caller may do today without inventing data: show the run's day cost next to the bills as **context only**, labelled with its own scope ("modelled 24-hour dispatch cost, not an annual bill"), and never present the ratio as a validation of the entered numbers. Closing this gap needs a documented annualisation contract (which hours, which tariff year, which service scope) before any number crosses from the day to the year.
+
 ---
 
 ## 7. Stage 4 — decision
@@ -242,6 +268,7 @@ Recorded because a second implementer will hit them:
 3. ~~**Annual investment economics is not manifest-bound.**~~ Closed in the only honest form available: the annual bills are customer-entered, so `bind_annual_economics_to_run` does not pretend they derive from the run. It records the run and dataset digests alongside the evaluation and states `derived_from_run: false` with the annualisation rule, and `verify_investment_economics_binding` fails a binding whose digest, read-only flags, or withheld flag disagree. The two contracts stay separate — operating economics comes from the run, annual economics is cited *against* it.
 4. ~~**Water extension changes `essential_load` in place.**~~ Closed by labelling instead of renaming, so nothing that already reads `essential_load` breaks: `water_service` now carries `essential_load_includes_ro_power: true`, the pre-RO series as `site_only_essential_load_kw`, and its digest as `site_only_electrical_load_history_sha256`. A consumer that wants "site load excluding water" reads that series (or subtracts `ro_power_kw_added_to_essential_load`) instead of assuming what the combined number contains.
 5. ~~**`generic_prediction_handoff.target_timestamps_utc` is taken from the PV forecast.**~~ Closed: the handoff clock is now read from the validated dispatch bundle, which refuses any signal whose target timestamps differ ("all resource forecasts must share identical target timestamps"). The handoff no longer depends on a signal being present, and a test asserts every signal's clock equals the handoff clock.
+6. **There is no bridge from the run's 24-hour cost to the customer's annual bills.** Open by choice, documented in §6.5. The page can show the modelled day cost as separate context, but nothing may convert it into an annual figure or use it to "validate" the bills the customer typed: the annualisation contract (which hours, which tariff year, which service scope) does not exist yet, and inventing one would put a fabricated number behind a real decision.
 
 ## 9. Implementing against this document
 

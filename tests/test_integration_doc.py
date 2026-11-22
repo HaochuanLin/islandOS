@@ -37,3 +37,42 @@ def test_document_points_at_the_real_entry_points():
 def test_document_records_the_gaps_it_knows_about():
     text = DOC.read_text(encoding="utf-8")
     assert "Gaps between contract and code" in text
+
+
+ANNUAL_INPUTS = (
+    "baseline_annual_energy_cost",
+    "proposed_annual_energy_cost",
+    "annual_incremental_om_cost",
+    "upfront_capex",
+    "project_life_years",
+    "discount_rate",
+    "annual_energy_saving_escalation_rate",
+    "annual_om_escalation_rate",
+    "replacement_year",
+    "residual_value",
+    "service_equivalent",
+)
+
+
+def test_annual_basis_dictionary_names_every_input_the_screen_sends():
+    text = DOC.read_text(encoding="utf-8")
+    assert "### 6.4 Annual basis" in text
+    for name in ANNUAL_INPUTS:
+        assert name in text, f"§6.4 no longer defines {name}"
+    # The dictionary must not be a paraphrase: the validated ranges stay in it.
+    assert "integer 1–40" in text or "1-40" in text
+    assert "fraction 0–0.5" in text or "0-0.5" in text
+
+
+def test_the_dictionary_names_what_the_bills_must_never_be():
+    text = DOC.read_text(encoding="utf-8")
+    assert "must never be" in text
+    assert "× 365" in text or "* 365" in text
+
+
+def test_the_unbridged_day_to_year_gap_stays_visible():
+    text = DOC.read_text(encoding="utf-8")
+    # §6.5 and gap 6 both exist: dropping either would let a future implementer
+    # annualise the run's day cost without noticing it was never agreed.
+    assert "### 6.5" in text
+    assert "no bridge from the run's day to the annual bills" in text.lower() or "no bridge from the run's 24-hour cost" in text
