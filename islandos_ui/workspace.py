@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.page_header import render_page_header
 
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
@@ -149,6 +150,13 @@ page = st.radio(
     ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
     horizontal=True,
     label_visibility="collapsed",
+)
+
+render_page_header(
+    question="Whether a site's energy-water plan holds up when you screen it, forecast it, optimise it and compare strategies.",
+    data="The built-in synthetic demo, or a CSV/XLSX you upload; each section below states which it is using.",
+    conclusions="Which options are feasible, what they cost, and where the plan breaks under stress - never one 'right' answer.",
+    limits="Planning estimates from synthetic or unverified inputs; no live control and no measured savings.",
 )
 
 if page == "Overview":
