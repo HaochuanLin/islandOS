@@ -20,7 +20,12 @@ from islandos_ui.decision_record_panel import render_decision_record
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
-from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
+from islandos_core.site_inputs import (
+    BATTERY_INITIAL_SOC,
+    BATTERY_MAX_SOC,
+    BATTERY_MIN_SOC,
+    SiteAssumptions,
+)
 from islandos_core.canonical_run import create_run_manifest
 from islandos_core.annual_operating_basis import (
     annualise_run_summary,
@@ -116,24 +121,19 @@ signal_units = {
 }
 predictions = {}
 try:
-    config = EnergySystemConfig(
+    site_assumptions = SiteAssumptions(
         pv_rated_kw=float(pv_capacity),
         wind_rated_kw=float(wind_capacity),
         grid_import_limit_kw=float(grid_limit),
-        battery=BatterySpec(
-            capacity_kwh=float(battery_capacity),
-            max_charge_kw=float(battery_power),
-            max_discharge_kw=float(battery_power),
-            initial_soc=0.60,
-            min_soc=0.10,
-            max_soc=0.95,
-        ),
-        diesel=DieselSpec(
-            rated_power_kw=float(diesel_capacity),
-            variable_cost_per_kwh=float(diesel_cost),
-            ramp_up_kw_per_hour=float(diesel_capacity),
-        ),
+        battery_capacity_kwh=float(battery_capacity),
+        battery_power_kw=float(battery_power),
+        battery_initial_soc=BATTERY_INITIAL_SOC,
+        battery_min_soc=BATTERY_MIN_SOC,
+        battery_max_soc=BATTERY_MAX_SOC,
+        diesel_rated_kw=float(diesel_capacity),
+        diesel_variable_cost_per_kwh=float(diesel_cost),
     )
+    config = site_assumptions.to_energy_system_config()
     grid_available = [True] * 24
     diesel_available = [True] * 24
     dataset_payload = {

@@ -5,7 +5,8 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.page_header import render_page_header
 
-from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig, EnergySystemInputs, dispatch_energy_system
+from islandos_core.energy_system import EnergySystemInputs, dispatch_energy_system
+from islandos_core.site_inputs import device_planner_demo_site
 from islandos_core.flexible_tasks import DeviceTask, schedule_device_tasks
 from islandos_core.flexible_task_dispatch import attach_device_task_schedule
 
@@ -104,23 +105,10 @@ energy_inputs = EnergySystemInputs(
     grid_available=[True] * 24,
     diesel_available=[True] * 24,
 )
+site_assumptions = device_planner_demo_site()
+site_config = site_assumptions.to_energy_system_config()
 integrated_inputs = attach_device_task_schedule(energy_inputs, schedule)
-replay = dispatch_energy_system(
-    integrated_inputs,
-    EnergySystemConfig(
-        pv_rated_kw=12.0,
-        wind_rated_kw=4.5,
-        grid_import_limit_kw=20.0,
-        battery=BatterySpec(
-            capacity_kwh=12.0, max_charge_kw=4.0, max_discharge_kw=4.0,
-            initial_soc=0.60, min_soc=0.10, max_soc=0.95,
-        ),
-        diesel=DieselSpec(
-            rated_power_kw=5.0, variable_cost_per_kwh=0.35,
-            ramp_up_kw_per_hour=5.0,
-        ),
-    ),
-)
+replay = dispatch_energy_system(integrated_inputs, site_config)
 metrics = replay["summary"]
 
 # Like-for-like reference: same devices, required energy, windows and generation,
@@ -129,22 +117,7 @@ metrics = replay["summary"]
 # claimed real-world operating baseline.
 reference_schedule = schedule_device_tasks(tasks, [1.0] * 24, task_power_budget)
 reference_inputs = attach_device_task_schedule(energy_inputs, reference_schedule)
-reference_replay = dispatch_energy_system(
-    reference_inputs,
-    EnergySystemConfig(
-        pv_rated_kw=12.0,
-        wind_rated_kw=4.5,
-        grid_import_limit_kw=20.0,
-        battery=BatterySpec(
-            capacity_kwh=12.0, max_charge_kw=4.0, max_discharge_kw=4.0,
-            initial_soc=0.60, min_soc=0.10, max_soc=0.95,
-        ),
-        diesel=DieselSpec(
-            rated_power_kw=5.0, variable_cost_per_kwh=0.35,
-            ramp_up_kw_per_hour=5.0,
-        ),
-    ),
-)
+reference_replay = dispatch_energy_system(reference_inputs, site_config)
 reference_metrics = reference_replay["summary"]
 
 st.subheader("Like-for-like operating comparison")

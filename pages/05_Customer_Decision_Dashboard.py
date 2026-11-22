@@ -22,7 +22,12 @@ from islandos_ui.annual_economics_panel import (
     render_annual_economics_basis,
 )
 
-from islandos_core.energy_system import BatterySpec, EnergySystemConfig
+from islandos_core.site_inputs import (
+    BATTERY_INITIAL_SOC,
+    BATTERY_MAX_SOC,
+    BATTERY_MIN_SOC,
+    SiteAssumptions,
+)
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
@@ -186,22 +191,19 @@ try:
         grid_available=[True] * 24,
         price_unit=f"{currency}/kWh",
     )
-    battery = None
-    if battery_capacity > 0 and battery_power > 0:
-        battery = BatterySpec(
-            capacity_kwh=float(battery_capacity),
-            max_charge_kw=float(battery_power),
-            max_discharge_kw=float(battery_power),
-            initial_soc=0.60,
-            min_soc=0.10,
-            max_soc=0.95,
-        )
-    config = EnergySystemConfig(
+    site_assumptions = SiteAssumptions(
         pv_rated_kw=float(pv_capacity),
         wind_rated_kw=float(wind_capacity),
         grid_import_limit_kw=float(grid_limit),
-        battery=battery,
+        battery_capacity_kwh=float(battery_capacity),
+        battery_power_kw=float(battery_power),
+        battery_initial_soc=BATTERY_INITIAL_SOC,
+        battery_min_soc=BATTERY_MIN_SOC,
+        battery_max_soc=BATTERY_MAX_SOC,
+        diesel_rated_kw=0.0,
+        diesel_variable_cost_per_kwh=0.0,
     )
+    config = site_assumptions.to_energy_system_config()
     weights = OptimizationWeights(
         cost=float(cost_priority),
         reliability=float(1.0 - cost_priority),
