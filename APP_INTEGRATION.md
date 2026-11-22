@@ -17,6 +17,7 @@ long-lived server-side store. The public demo runs entirely inside one browser s
 | Pages (composition) | `app.py`, `pages/*.py` | Yes |
 | Streamlit surfaces | `islandos_ui/workspace.py`, `annual_economics_panel.py`, `decision_record_panel.py`, `page_header.py`, `upload_guard.py` | Yes |
 | Streamlit-free UI helper | `islandos_ui/navigation.py` (`page_url_path`) | No |
+| Application-facing view models | `islandos_core/app_view_models.py` | No |
 | Application/core | `islandos_core/*`, `optimization/*`, `experiments/*` | No |
 
 Site assumptions have exactly one construction point: `islandos_core/site_inputs.py`.
@@ -97,22 +98,123 @@ conclude that the pages disagree — they were never the same run.
 
 ---
 
-## 4. What a React/TypeScript front end would need (not implemented)
+## 4. The application-facing view models
 
-The bottom row of §1 is already the application layer: pure Python, no Streamlit, no UI state. A
-non-Streamlit front end would need a transport (HTTP/JSON) around those entry points, and three JSON
-shapes that do not exist yet:
+`islandos_core/app_view_models.py` is the boundary a second front end reads instead of re-deriving
+what a page already knows. It imports no Streamlit, touches no `st.session_state`, calls no page
+function, and holds no global state; it neither calculates nor optimises — it reads objects the core
+already produced, validates them, and returns plain JSON-able dictionaries with stated units,
+nullability and provenance. `tests/test_app_view_models.py` proves the imports are Streamlit-free in a
+subprocess (`'streamlit' not in sys.modules`) and pins every field below.
 
-- `run_request`: manifest payload + history + units + site config + availability flags (today: keyword
-  arguments to `run_forecast_dispatch`).
-- `run_result_summary`: run id, `manifest_sha256`, `evidence_sha256`, decision-record status, recommended
-  policy, service-equivalence verdict (today: Python dicts inside the page).
-- `annual_projection`: the six figures of `INTEGRATION.md` §6.5 with their declared basis (today: a record
-  produced by `annualise_run_summary`; its keys already match, but nothing serialises it to a documented
-  wire format).
+Three contracts, `CONTRACT_VERSION = 1`:
 
-This section states a boundary, not a delivered API. No HTTP surface, no TypeScript package, and no
-JSON schema file exist in this repository.
+| Builder | Answers | Refuses |
+|---|---|---|
+| `build_run_request(page=…, site=…, history=…, units=…, page_settings=…, run_settings=…, provenance=…, source_sha256=…)` | what this page asked the core to run | an unknown page, a page/run setting key outside that page's declared set, a signal without a unit, series of unequal length, non-numeric or empty series |
+| `build_run_result_summary(page=…, result=…, economics=…, planning_run=…, currency=…)` | what the run produced, limited to what the pages display | a dashboard summary without service-equivalent economics or without `grid_first` / the recommended policy in `candidates`; an optimizer summary without a planning run, `run_id`, `manifest_sha256` or `evidence_sha256` |
+| `build_annual_projection(record, currency=…)` | the declared-assumption annual projection | a record that `verify_annual_operating_basis` rejects (digest mismatch, claimed bill, claimed site validation, missing `summary_source`), or one missing `figures` / `basis` |
+
+`to_json(view)` serialises any of them with `sort_keys=True, allow_nan=False`.
+
+### 4.1 `run_request`
+
+| Field | Type | Unit | Required | Nullable | Source | Ownership |
+|---|---|---|---|---|---|---|
+| `schema_version` | int | – | yes | no | `CONTRACT_VERSION` | contract |
+| `request_type` | str | – | yes | no | constant `islandos_run_request` | contract |
+| `page` | str, `customer_dashboard` \| `joint_resource_optimizer` | – | yes | no | page | page discriminator |
+| `site` | dict | kW, kWh, currency/kWh, SOC as fraction | yes | no | `SiteAssumptions.describe()` + `digest()` | **site-level** (single source: `site_inputs`) |
+| `history.signals` | dict[str, list[float]] | kW per canonical signal | yes | no | the page's forecast input | data, not assumption |
+| `history.units` | dict[str, str] | unit string per signal | yes | no | page | data |
+| `history.hour_count` | int | hours | yes | no | derived from the series | data |
+| `history.provenance` | str | – | yes | no | page (`Uploaded CSV` / `Demonstration data`) | data provenance |
+| `history.source_sha256` | str, hex | – | yes | yes (`null` when nothing was uploaded) | page | data provenance |
+| `page_settings` | dict | per page | yes (`{}` allowed) | no | page | **page-specific** |
+| `run_settings` | dict | per page | yes | no | page | **run-specific** |
+| `request_sha256` | str, hex | – | yes | no | SHA-256 of the payload above | contract |
+
+The site block carries all ten `SiteAssumptions` fields — `pv_rated_kw`, `wind_rated_kw`,
+`grid_import_limit_kw`, `battery_capacity_kwh`, `battery_power_kw`, `battery_initial_soc`,
+`battery_min_soc`, `battery_max_soc`, `diesel_rated_kw`, `diesel_variable_cost_per_kwh` — plus `digest`,
+so a reader who only has the request still knows exactly which site it describes.
+
+Page-specific and run-specific blocks, per page:
+
+| Page | `page_settings` | `run_settings` |
+|---|---|---|
+| `customer_dashboard` (05) | `demand_scale`, `tariff_scale`, `cost_priority` (float, dimensionless) | `currency` (str); `investment` = `baseline_annual_energy_cost`, `proposed_annual_energy_cost`, `annual_incremental_om_cost`, `upfront_capex` (currency/year, currency, currency/year, currency), `project_life_years` (years, int), `discount_rate`, `annual_energy_saving_escalation_rate`, `annual_om_escalation_rate` (fraction/year) |
+| `joint_resource_optimizer` (06) | none (empty mapping, refused if it carries anything) | `currency` (str); `optimizer_settings` = `population_size`, `generations`, `seed` (int); `availability` = `grid_all_hours`, `diesel_all_hours` (bool) |
+
+### 4.2 `run_result_summary`
+
+| Field | Type | Unit | Required | Nullable | Source | Ownership |
+|---|---|---|---|---|---|---|
+| `schema_version`, `record_type`, `page` | int, str, str | – | yes | no | contract | contract |
+| `recommended_policy` | str \| null | – | yes | yes (06 only) | `result["recommendation"]["policy"]` | run |
+| `recommended_policy_label` | str | – | yes | no | policy with underscores replaced; `Optimizer Recommendation` on 06 when no policy is named | display |
+| `estimated_24h_energy_cost` | float \| null | currency/24 h | yes | yes (06) | selected candidate's `summary["estimated_energy_cost"]` | run (05 only) |
+| `unmet_load_kwh` | float \| null | kWh/24 h | yes | yes (06) | selected candidate's `summary["unmet_load_kwh"]` | run (05 only) |
+| `grid_first_estimated_24h_energy_cost` | float \| null | currency/24 h | yes | yes (06) | `grid_first` candidate's summary | run (05 only) |
+| `service_equivalent` | bool \| null | – | yes | yes (06) | `economics["service_equivalent"]` / `result["robust_customer_economics"]` | run |
+| `cost_comparison_valid` | bool \| null | – | yes | yes (06) | same | run |
+| `cost_reduction_vs_grid_first` | float \| null | currency/24 h | yes | yes | `estimated_cost_reduction` | run |
+| `savings_claim_withheld` | bool | – | yes | no | `not (service_equivalent and cost_comparison_valid)` (05) / `not cost_comparison_valid` (06) | gate |
+| `candidate_policies` | list[str] | – | yes | no (empty on 06) | `result["candidates"]` | run (05 only) |
+| `run_id`, `manifest_sha256`, `evidence_sha256` | str \| null | – | yes | yes (null on 05) | `planning_run` | run (06 only) |
+| `decision_record_status` | str \| null | – | yes | yes | `planning_run["decision_record"]["status"]` | run (06 only) |
+| `physical_audit_passed` | bool \| null | – | yes | yes | `decision_record["physical_audit"]["passed"]` | run (06 only) |
+| `scenarios_audited` | list[str] \| null | – | yes | yes | `physical_audit["scenarios_audited"]` (scenario **names**, sorted by the adapter) | run (06 only) |
+| `currency` | str \| null | – | yes | yes | page | display |
+| `summary_sha256` | str, hex | – | yes | no | SHA-256 of the payload | contract |
+
+The dashboard variant carries no run id at all, on purpose: the optimization run it displays is not the
+run its investment screen later cites. The optimizer variant carries that run's digests, so the two
+pages' summaries can never be mistaken for one run (§3).
+
+### 4.3 `annual_projection`
+
+| Field | Type | Unit | Required | Nullable | Source | Ownership |
+|---|---|---|---|---|---|---|
+| `schema_version`, `record_type` | int, str | – | yes | no | contract | contract |
+| `run_id`, `manifest_sha256` | str, str | – | yes | no | the annualisation record | run |
+| `data_provenance`, `summary_source` | str, str | – | yes | no | the record (`summary_source` names which dispatch summary was annualised) | provenance |
+| `currency` | str \| null | – | yes | yes | page | display |
+| `basis.days_equivalent_per_year`, `basis.hours_equivalent_per_year` | int, int | days, hours | yes | no | the record's declared assumption | **run-specific** assumption |
+| `basis.equal_day_assumption` | str | – | yes | no | the record's sentence | assumption |
+| `basis.derived_from_run`, `site_validated`, `measured`, `bill` | bool | – | yes | no | the record (`false` except `derived_from_run`) | provenance |
+| `figures` | dict[str, float] | kWh, currency, hours | yes | no | `INTEGRATION.md` §6.5 six figures | run |
+| `components_inside_annual_energy_cost` | dict[str, float] | currency | yes (may be empty) | no | the record's breakdown | run |
+| `definitions` | dict[str, {unit, meaning}] | – | yes | no | the record's six definitions | contract |
+| `scope` | str | – | yes | no | the record's scope sentence | contract |
+| `projection_sha256` | str, hex | – | yes | no | the record's `annualisation_sha256` | contract |
+
+### 4.4 How each page uses them, and what a React client would consume
+
+Page 05 builds its request once, right after `site_assumptions.to_energy_system_config()` and before the
+optimizer call, then reads `recommended_policy_label`, `estimated_24h_energy_cost`, `unmet_load_kwh`,
+`grid_first_estimated_24h_energy_cost` and `savings_claim_withheld` from the summary instead of indexing
+candidate dictionaries inline. Page 06 builds its request after the availability flags, reads
+`recommended_policy_label` from the summary, and reads the annual figures, basis and digests from the
+projection (which verifies the record before returning it).
+
+A non-Streamlit client would keep its own site inputs, render the same widgets, call `build_run_request`,
+hand the resulting document to the core entry point, and render `build_run_result_summary` /
+`build_annual_projection` — the same validation, the same field names, the same units, without
+re-implementing any of it. What it would still have to supply itself is listed in §4.5.
+
+### 4.5 Still Streamlit-only, and still not implemented
+
+Streamlit-only today: page layout and widget wiring, `st.session_state` keys (§3), the download buttons,
+the caption wording, `AppTest`-based page tests, and every `islandos_ui/*` surface except
+`navigation.page_url_path`. The view models are built **in-process** and stored as page-local variables;
+they are not yet embedded in the downloadable report JSON.
+
+Not implemented, deliberately stated rather than promised: no HTTP surface, no TypeScript types or
+package, no JSON Schema file, no server-side run store, no authentication, and no persistence of a
+request beyond the browser session. The contracts are a Python boundary, not a published API.
+No HTTP surface exists, and none is claimed here.
+
 
 ---
 
@@ -130,9 +232,11 @@ JSON schema file exist in this repository.
 2. **Run identity is not shared across pages.** See §3. No page can currently say "this is the same run
    the dashboard used", because no run id is handed off.
 3. **Data preparation lives inside Streamlit function bodies.** 05 and 06 build configs, manifests and
-   optimizer calls inline, so nothing except Streamlit can reuse that path. Planned: a Streamlit-free
-   view-model layer (T4). *Partially addressed: config construction now lives in `site_inputs`.*
-4. **No transport for a non-Streamlit front end.** §4.
+   optimizer calls inline, so nothing except Streamlit can reuse that path. *Partially addressed: config
+   construction now lives in `site_inputs`, and the request/result/annual shapes now live in
+   `app_view_models` (§4). The orchestration itself — which core function is called with which keyword
+   arguments — still sits in the page body.*
+4. **No transport for a non-Streamlit front end.** §4.5.
 
 Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
 Streamlit-free entry point is added to the bottom row of §1. `tests/test_app_integration_doc.py` guards

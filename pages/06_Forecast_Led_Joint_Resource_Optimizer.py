@@ -26,6 +26,11 @@ from islandos_core.site_inputs import (
     BATTERY_MIN_SOC,
     SiteAssumptions,
 )
+from islandos_core.app_view_models import (
+    build_annual_projection,
+    build_run_request,
+    build_run_result_summary,
+)
 from islandos_core.canonical_run import create_run_manifest
 from islandos_core.annual_operating_basis import (
     annualise_run_summary,
@@ -136,6 +141,30 @@ try:
     config = site_assumptions.to_energy_system_config()
     grid_available = [True] * 24
     diesel_available = [True] * 24
+    # The request this run answers, in the shared application-facing shape: site,
+    # history with units and provenance, and the run-specific settings (search knobs and
+    # availability). No page-specific block exists on this page, so it stays empty.
+    run_request_view = build_run_request(
+        page="joint_resource_optimizer",
+        site=site_assumptions,
+        history=signal_history,
+        units=signal_units,
+        page_settings={},
+        run_settings={
+            "currency": currency,
+            "optimizer_settings": {
+                "population_size": int(population),
+                "generations": int(generations),
+                "seed": int(seed),
+            },
+            "availability": {
+                "grid_all_hours": bool(all(grid_available)),
+                "diesel_all_hours": bool(all(diesel_available)),
+            },
+        },
+        provenance=source,
+        source_sha256=source_hash,
+    )
     dataset_payload = {
         "timestamps_utc": [stamp.isoformat() for stamp in timestamps],
         "signals": signal_history,
@@ -212,7 +241,13 @@ try:
     st.subheader("Recommended joint schedule")
     recommendation = result["recommendation"]
     recommended_policy = recommendation.get("policy", "optimizer recommendation")
-    st.metric("Selected policy", str(recommended_policy).replace("_", " ").title())
+    result_view = build_run_result_summary(
+        page="joint_resource_optimizer",
+        result=result,
+        planning_run=planning_run,
+        currency=currency,
+    )
+    st.metric("Selected policy", result_view["recommended_policy_label"])
     candidates = result.get("candidates", [])
     comparison_rows = []
     for candidate in candidates:
@@ -323,27 +358,28 @@ try:
                     + "; ".join(annual_verification["errors"])
                 )
                 st.stop()
-            figures = annual_record["figures"]
+            annual_view = build_annual_projection(annual_record, currency=currency)
+            figures = annual_view["figures"]
             a1, a2, a3, a4 = st.columns(4)
             a1.metric("Annual load energy", f"{figures['annual_load_energy_kwh']:,.0f} kWh")
             a2.metric(f"Annual energy cost ({currency})", f"{figures['annual_energy_cost']:,.2f}")
             a3.metric(f"Annual equipment operating cost ({currency})", f"{figures['annual_equipment_operating_cost']:,.2f}")
             a4.metric("Annual diesel run hours", f"{figures['annual_diesel_run_hours']:,.0f} h")
             st.caption(
-                f"Assumption: {days_equivalent} simulated day(s) per year "
-                f"({annual_record['basis']['hours_equivalent_per_year']} hours), each standing for the "
+                f"Assumption: {annual_view['basis']['days_equivalent_per_year']} simulated day(s) per year "
+                f"({annual_view['basis']['hours_equivalent_per_year']} hours), each standing for the "
                 "annual average day — no seasonal weighting, no load growth, no tariff-year change. "
                 "Equipment operating cost is a breakdown of the energy cost above (fuel, battery "
                 "throughput, diesel start/stop), not an addition to it. This is a projection of an "
                 "offline run, not a bill, not measured consumption, and not site-validated."
             )
             st.caption(
-                f"Traceable to run {annual_record['run_id']} · Manifest SHA-256 "
-                f"{annual_record['manifest_sha256'][:16]}… · Projection SHA-256 "
-                f"{annual_record['annualisation_sha256'][:16]}…"
+                f"Traceable to run {annual_view['run_id']} · Manifest SHA-256 "
+                f"{annual_view['manifest_sha256'][:16]}… · Projection SHA-256 "
+                f"{annual_view['projection_sha256'][:16]}…"
             )
             st.caption(
-                f"Projected figure source: {annual_record['summary_source']}. Each scenario in the "
+                f"Projected figure source: {annual_view['summary_source']}. Each scenario in the "
                 "run replays this same schedule under different inputs; annualising the base day "
                 "does not annualise the worst case, and no scenario probability is assigned."
             )
