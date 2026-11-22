@@ -22,6 +22,10 @@ from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig
 from islandos_core.canonical_run import create_run_manifest
+from islandos_core.annual_operating_basis import (
+    annualise_run_summary,
+    verify_annual_operating_basis,
+)
 from islandos_core.planning_workflow import run_forecast_dispatch
 
 
@@ -256,6 +260,99 @@ try:
     else:
         st.caption("Schedule vectors are available in the downloadable audit report.")
 
+    # The run above is 24 hours. A year is a different object, and this is where the
+    # page says so instead of quietly multiplying by 365: the reader declares how many
+    # days the simulated day stands for, and the record prints that declaration.
+    st.subheader("Annual operating basis")
+    st.caption(
+        "Everything above is one simulated 24-hour day. Annual operating figures are not "
+        "derived on this page unless an equal-days assumption is declared below; the "
+        "investment screen on the customer dashboard takes customer-entered annual bills "
+        "instead, and the two are not interchangeable."
+    )
+    selected_summary = None
+    selected_dispatch_rows = []
+    summary_source = ""
+    # The optimizer behind this page returns the recommended schedule's own 24-hour
+    # dispatch (nominal scenario) together with its summary. That dispatch is the run
+    # the setpoint chart above draws, so it is the only honest thing to project: using
+    # a per-scenario replay or a candidate summary would annualise a different day
+    # than the one on screen. The policy-keyed candidate path is kept as a fallback for
+    # any optimizer variant that returns candidates instead.
+    dispatch = recommendation.get("dispatch")
+    if isinstance(dispatch, dict) and isinstance(dispatch.get("summary"), dict) and dispatch["summary"]:
+        selected_summary = dispatch["summary"]
+        selected_dispatch_rows = list(dispatch.get("rows") or [])
+        summary_source = (
+            "recommended schedule's own nominal dispatch summary (the same 24-hour run "
+            "that produced the hourly setpoint rows on this page)"
+        )
+    else:
+        for candidate in candidates:
+            if candidate.get("policy") == recommended_policy:
+                selected_summary = candidate.get("summary")
+                selected_dispatch_rows = list((candidate.get("dispatch") or {}).get("rows") or [])
+                summary_source = "summary of the candidate the optimizer selected"
+                break
+    annual_record = None
+    project_annual = st.checkbox(
+        "Project this 24-hour run onto a year (declared equal-days assumption)",
+        key="annual_projection_joint_optimizer",
+    )
+    if project_annual:
+        days_equivalent = st.slider(
+            "Days the simulated day stands for, per year", 1, 366, 365, key="annual_days_joint_optimizer",
+        )
+        if selected_summary is None:
+            st.warning("The recommended policy's summary is missing, so no annual projection is produced.")
+        else:
+            annual_record = annualise_run_summary(
+                selected_summary,
+                dispatch_rows=selected_dispatch_rows,
+                simulated_hours=len(target_timestamps),
+                days_equivalent_per_year=int(days_equivalent),
+                run_id=planning_run["run_id"],
+                manifest_sha256=planning_run["manifest_sha256"],
+                data_provenance=source,
+                summary_source=summary_source,
+            )
+            annual_verification = verify_annual_operating_basis(annual_record)
+            if not annual_verification["valid"]:
+                st.error(
+                    "Annual operating basis integrity check failed: "
+                    + "; ".join(annual_verification["errors"])
+                )
+                st.stop()
+            figures = annual_record["figures"]
+            a1, a2, a3, a4 = st.columns(4)
+            a1.metric("Annual load energy", f"{figures['annual_load_energy_kwh']:,.0f} kWh")
+            a2.metric(f"Annual energy cost ({currency})", f"{figures['annual_energy_cost']:,.2f}")
+            a3.metric(f"Annual equipment operating cost ({currency})", f"{figures['annual_equipment_operating_cost']:,.2f}")
+            a4.metric("Annual diesel run hours", f"{figures['annual_diesel_run_hours']:,.0f} h")
+            st.caption(
+                f"Assumption: {days_equivalent} simulated day(s) per year "
+                f"({annual_record['basis']['hours_equivalent_per_year']} hours), each standing for the "
+                "annual average day — no seasonal weighting, no load growth, no tariff-year change. "
+                "Equipment operating cost is a breakdown of the energy cost above (fuel, battery "
+                "throughput, diesel start/stop), not an addition to it. This is a projection of an "
+                "offline run, not a bill, not measured consumption, and not site-validated."
+            )
+            st.caption(
+                f"Traceable to run {annual_record['run_id']} · Manifest SHA-256 "
+                f"{annual_record['manifest_sha256'][:16]}… · Projection SHA-256 "
+                f"{annual_record['annualisation_sha256'][:16]}…"
+            )
+            st.caption(
+                f"Projected figure source: {annual_record['summary_source']}. Each scenario in the "
+                "run replays this same schedule under different inputs; annualising the base day "
+                "does not annualise the worst case, and no scenario probability is assigned."
+            )
+    else:
+        st.caption(
+            "Annual figures are withheld: nothing is annualised until an equal-days assumption is "
+            "declared, because one simulated day is not a year."
+        )
+
     with st.expander("Decision trace, model provenance and limitations"):
         st.write({
             "source_file_sha256": source_hash,
@@ -299,6 +396,7 @@ try:
         "policy_comparison": comparison_rows,
         "robust_customer_economics": economics,
         "generic_prediction_handoff": handoff,
+        "annual_operating_basis": annual_record,
         "forecast_scenario_scope": result.get("forecast_scenario_scope"),
         "decision_scope": result.get("decision_scope"),
         "assumptions": {
