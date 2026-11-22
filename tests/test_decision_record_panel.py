@@ -67,6 +67,18 @@ def test_audit_text_names_what_the_audit_does_not_prove():
     assert "not site validation" in text or "safety certification" in text
 
 
+def test_a_scope_that_already_states_the_limit_is_not_repeated():
+    record = _record(
+        scope=(
+            "per-scenario simulator audit of the recommended schedule replay; "
+            "not site validation and not a safety certification"
+        )
+    )
+    text = audit_text(record)
+    assert text.count("not site validation") == 1
+    assert "not a safety certification" in text
+
+
 def test_digest_is_shortened_but_present():
     record = _record()
     digest = record["record_sha256"]
