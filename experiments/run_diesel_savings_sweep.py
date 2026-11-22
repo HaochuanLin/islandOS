@@ -408,6 +408,34 @@ def _diagnose_milp_failure(inputs, site: IslandSiteConfig) -> dict:
                     "exception_type": type(exc).__name__,
                     "exception": str(exc),
                 }
+            # Strongest control: keep the complete joint water-energy model,
+            # but pin its RO variables to the independently feasible water plan.
+            # This avoids comparing against the energy-only formulation, which
+            # has a different renewable-only battery-charging constraint branch.
+            try:
+                fixed_joint = optimize_dispatch_milp(
+                    _energy_inputs(inputs, "island"),
+                    config,
+                    water_service=water,
+                    water_demand_m3_per_hour=demand,
+                    terminal_water_inventory_min_m3=site.tank_initial_m3,
+                    ro_min_production_m3_per_hour=ro_min_rate,
+                    fixed_water_production_m3_per_hour=rates,
+                    time_limit_seconds=120.0,
+                    mip_relative_gap=0.0,
+                )
+                tests["joint_model_with_fixed_water_only_ro_schedule"] = {
+                    "feasible": True,
+                    "solver_status": fixed_joint.get("solver_status"),
+                    "optimality_proven": fixed_joint.get("optimality_proven_for_declared_milp"),
+                    "solve_time_seconds": fixed_joint.get("solve_time_seconds"),
+                }
+            except Exception as exc:
+                tests["joint_model_with_fixed_water_only_ro_schedule"] = {
+                    "feasible": False,
+                    "exception_type": type(exc).__name__,
+                    "exception": str(exc),
+                }
     except Exception as exc:
         tests["water_only_with_ro_minimum_and_terminal_tank"] = {
             "feasible": False,
