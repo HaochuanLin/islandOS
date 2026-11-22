@@ -5,6 +5,7 @@ import hashlib
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
 
 from experiments.rolling_horizon_dispatch import (
@@ -73,7 +74,7 @@ if previous_signature != signature:
 try:
     parsed = parse_scenario_csv(raw.decode("utf-8-sig"), name=source_label)
 except (UnicodeDecodeError, ValueError) as exc:
-    st.error(f"CSV validation failed: {exc}")
+    reject_upload("Scenario CSV", exc)
     st.stop()
 
 scenario = parsed["scenario"]

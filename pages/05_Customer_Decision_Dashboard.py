@@ -11,6 +11,7 @@ import math
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
 
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
@@ -115,7 +116,7 @@ if shared_payload is not None:
         prefix = "User-uploaded" if site_csv is not None else "Session-shared"
         source_label = f"{prefix}: {uploaded.source_name} (not independently verified)"
     except ValueError as exc:
-        st.error(f"Site history CSV rejected: {exc}")
+        reject_upload("Site history CSV", exc)
         st.stop()
 else:
     history_stamps = [now - timedelta(hours=168 - index) for index in range(168)]

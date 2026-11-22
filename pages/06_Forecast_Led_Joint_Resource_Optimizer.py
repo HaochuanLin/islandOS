@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
@@ -74,7 +75,7 @@ if shared_payload is not None:
     try:
         site = parse_customer_history_csv(shared_payload, source_name=shared_name)
     except ValueError as exc:
-        st.error(f"CSV rejected: {exc}")
+        reject_upload("Site history CSV", exc)
         st.stop()
     timestamps = list(site.timestamps_utc)
     values = {name: list(series) for name, series in site.signals.items()}
