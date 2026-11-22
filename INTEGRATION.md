@@ -200,6 +200,8 @@ Producer: `islandos_core/investment_economics.py::bind_annual_economics_to_run(e
 
 The annual bills are entered by the customer, so the binding is a **citation, not a derivation**. It records `run_id`, `site_ref`, `manifest_sha256`, `dataset_sha256`, `dataset_source_type`, the evaluation itself, and an `annual_basis` block whose `derived_from_run` is always `false`, plus `binding_sha256` over the canonical JSON. A blocked evaluation must also set `withheld: true`. Verification fails if the digest does not match, if the binding claims a device write or a command, if `derived_from_run` is not `false`, or if a blocked decision is not marked withheld. Do not present an annual saving as measured from the run; it is a figure the customer supplied for the equipment and service scope the run describes.
 
+On a page, the basis is a gate, not a footnote: the banner (bills entered by the customer, not derived from this run) and the withheld line must both sit **above** the first investment metric, and a binding that does not verify must stop the page rather than fall back to bare numbers. `islandos_ui/annual_economics_panel.py::render_annual_economics_basis` is the reference surface; `pages/05_Customer_Decision_Dashboard.py` is the worked example. `run_id` there is derived with `canonical_run.deterministic_run_id`, so an unchanged scenario keeps one run id across Streamlit reruns while a changed assumption becomes a different run.
+
 ---
 
 ## 7. Stage 4 — decision
@@ -241,8 +243,8 @@ Recorded because a second implementer will hit them:
 
 1. Build the dataset and `create_run_manifest` first; never hand-build the payload.
 2. Feed the manifest, the tz-aware hourly timestamps, `history`, `units`, and the two availability arrays to `run_forecast_dispatch`. The clock is validated there against the forecast layer's own rule (≥72 tz-aware, contiguous hourly instants), so a bad clock fails before any model executes.
-3. Take economics from `robust_customer_economics` (operating) and `evaluate_investment_economics` (annual, explicit assumptions); never compute a saving yourself from `dispatch.summary` without the service gate. When you quote annual figures next to a run, produce them through `bind_annual_economics_to_run` so the citation carries the run's digests and says the bills were entered.
+3. Take economics from `robust_customer_economics` (operating) and `evaluate_investment_economics` (annual, explicit assumptions); never compute a saving yourself from `dispatch.summary` without the service gate. When you quote annual figures next to a run, produce them through `bind_annual_economics_to_run` so the citation carries the run's digests and says the bills were entered, and surface it with `islandos_ui/annual_economics_panel.render_annual_economics_basis` **before** the first metric.
 4. The operator record now comes with the run: read `decision_record` / `decision_record_sha256` from `run_forecast_dispatch`, and surface `status`, `physical_audit` and `human_review_required` before any number. Only build one yourself if you are composing stages outside the canonical run. `islandos_ui/decision_record_panel.render_decision_record` is the reference surface: it renders the status banner, the audit scope (including what it does not prove), the read-only guarantees and the record digest before the first metric.
 5. Log `manifest_sha256`, `forecast.bundle_sha256`, `evidence_sha256` and `record_sha256` together; a record without its digest chain is not evidence.
 
-Reference tests: `tests/test_planning_workflow.py`, `tests/test_forecast_dispatch_demo.py`, `tests/test_operator_decision.py`, `tests/test_investment_economics.py`, `tests/test_prediction_dispatch_adapter.py`.
+Reference tests: `tests/test_planning_workflow.py`, `tests/test_forecast_dispatch_demo.py`, `tests/test_operator_decision.py`, `tests/test_investment_economics.py`, `tests/test_prediction_dispatch_adapter.py`, `tests/test_annual_economics_panel.py`.

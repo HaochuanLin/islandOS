@@ -2,7 +2,11 @@ from copy import deepcopy
 
 import pytest
 
-from islandos_core.canonical_run import create_run_manifest, verify_run_manifest
+from islandos_core.canonical_run import (
+    create_run_manifest,
+    deterministic_run_id,
+    verify_run_manifest,
+)
 
 
 def _manifest():
@@ -111,3 +115,31 @@ def test_manifest_return_value_is_detached_from_internal_state():
     first = manifest.to_dict()
     first["optimizer"]["settings"]["seed"] = 999
     assert manifest.to_dict()["optimizer"]["settings"]["seed"] == 7
+
+
+
+def test_a_run_id_is_stable_for_identical_run_defining_inputs():
+    inputs = {
+        "dataset_sha256": "a" * 64,
+        "site_configuration_sha256": "b" * 64,
+        "recommended_policy": "battery_first",
+        "weights": {"cost": 0.7, "reliability": 0.3},
+    }
+    first = deterministic_run_id("run-demo", inputs)
+    second = deterministic_run_id("run-demo", dict(inputs))
+    assert first == second
+    assert first.startswith("run-demo-")
+    assert len(first) == len("run-demo-") + 16
+
+
+def test_a_run_id_changes_when_a_run_defining_input_changes():
+    base = {"dataset_sha256": "a" * 64, "recommended_policy": "battery_first"}
+    changed = {"dataset_sha256": "a" * 64, "recommended_policy": "grid_first"}
+    assert deterministic_run_id("run-demo", base) != deterministic_run_id("run-demo", changed)
+
+
+def test_a_run_id_refuses_an_empty_prefix_or_payload():
+    with pytest.raises(ValueError, match="prefix"):
+        deterministic_run_id("   ", {"dataset_sha256": "a" * 64})
+    with pytest.raises(ValueError, match="payload"):
+        deterministic_run_id("run-demo", {})

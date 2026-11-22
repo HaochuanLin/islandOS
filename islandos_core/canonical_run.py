@@ -72,6 +72,24 @@ def _canonical_json(value: Mapping[str, Any]) -> str:
     )
 
 
+def deterministic_run_id(prefix: str, payload: Mapping[str, Any]) -> str:
+    """Derive a stable run identifier from the inputs that define the run.
+
+    A page that reruns on every widget change would otherwise mint a new uuid on
+    every keystroke, and a citation into "some run" stops pointing anywhere.
+    The same run-defining inputs must produce the same id; different inputs are
+    a different run and must produce a different one. The id is an identifier,
+    not evidence - the manifest digest is what a reader checks.
+    """
+    if not isinstance(prefix, str) or not prefix.strip():
+        raise ValueError("prefix must be a non-empty string")
+    if not isinstance(payload, Mapping) or not payload:
+        raise ValueError("payload must be a non-empty mapping of run-defining inputs")
+    normalized = _json_value(payload, "payload")
+    digest = hashlib.sha256(_canonical_json(normalized).encode("utf-8")).hexdigest()
+    return f"{prefix.strip()}-{digest[:16]}"
+
+
 @dataclass(frozen=True)
 class CanonicalRunManifest:
     """Immutable serialized manifest; callers receive detached dictionaries."""
