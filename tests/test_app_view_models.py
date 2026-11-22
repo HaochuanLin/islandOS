@@ -15,9 +15,15 @@ from pathlib import Path
 import pytest
 
 from islandos_core.app_view_models import (
+    ANNUAL_BASIS_FIELDS,
+    ANNUAL_PROJECTION_FIELDS,
     CONTRACT_VERSION,
+    HISTORY_FIELDS,
     PAGE_CUSTOMER_DASHBOARD,
     PAGE_JOINT_OPTIMIZER,
+    REQUEST_FIELDS,
+    RESULT_SUMMARY_FIELDS,
+    RUN_REQUEST_SITE_FIELDS,
     build_annual_projection,
     build_run_request,
     build_run_result_summary,
@@ -419,3 +425,58 @@ def test_synthetic_provenance_survives_into_every_contract(dashboard_run, optimi
     )
     assert verify_annual_operating_basis(record)["valid"] is True
     assert build_annual_projection(record)["data_provenance"] == "Synthetic demonstration data"
+
+
+def test_the_declared_field_sets_match_what_the_builders_return(dashboard_run, optimizer_run):
+    dashboard_result, economics = dashboard_run
+    request = _dashboard_request()
+    assert tuple(request) == REQUEST_FIELDS
+    assert tuple(request["site"]) == RUN_REQUEST_SITE_FIELDS
+    assert tuple(request["history"]) == HISTORY_FIELDS
+
+    summary = build_run_result_summary(
+        page=PAGE_CUSTOMER_DASHBOARD, result=dashboard_result, economics=economics, currency="USD",
+    )
+    assert tuple(summary) == RESULT_SUMMARY_FIELDS
+
+    planning_run, optimizer_result = optimizer_run
+    optimizer_summary = build_run_result_summary(
+        page=PAGE_JOINT_OPTIMIZER, result=optimizer_result, planning_run=planning_run,
+        currency="USD",
+    )
+    assert tuple(optimizer_summary) == RESULT_SUMMARY_FIELDS
+
+    dispatch = optimizer_result["recommendation"]["dispatch"]
+    record = annualise_run_summary(
+        dispatch["summary"], dispatch_rows=dispatch["rows"], simulated_hours=24,
+        days_equivalent_per_year=365, run_id=planning_run["run_id"],
+        manifest_sha256=planning_run["manifest_sha256"],
+        data_provenance="Synthetic demonstration data",
+        summary_source="recommended schedule's own nominal dispatch summary",
+    )
+    annual = build_annual_projection(record)
+    assert tuple(annual) == ANNUAL_PROJECTION_FIELDS
+    assert tuple(annual["basis"]) == ANNUAL_BASIS_FIELDS
+
+
+def test_the_contract_version_only_moves_forward():
+    assert isinstance(CONTRACT_VERSION, int) and not isinstance(CONTRACT_VERSION, bool)
+    assert CONTRACT_VERSION >= 1
+
+
+def test_the_pages_publish_the_same_views_they_render():
+    dashboard_source = (
+        REPO_ROOT / "pages" / "05_Customer_Decision_Dashboard.py"
+    ).read_text(encoding="utf-8")
+    optimizer_source = (
+        REPO_ROOT / "pages" / "06_Forecast_Led_Joint_Resource_Optimizer.py"
+    ).read_text(encoding="utf-8")
+    for source in (dashboard_source, optimizer_source):
+        assert '"application_views"' in source
+        assert '"request": run_request_view' in source
+        assert '"result": result_view' in source
+    assert '"annual": annual_view' in optimizer_source
+    # The annual view must exist even when the reader leaves the projection withheld, or
+    # the report would NameError on the default path.
+    assert optimizer_source.count("annual_view = None") == 1
+    assert "annual_view = build_annual_projection(" in optimizer_source

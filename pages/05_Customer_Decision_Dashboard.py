@@ -688,7 +688,12 @@ try:
         "operator_decision_record": operator_record,
         "investment_economics": investment_report,
         "investment_economics_binding": economics_binding,
-        "investment_economics_binding": economics_binding,
+        # The application-facing view models, so a reader (or a non-Streamlit client) gets
+        # the same validated shapes the page rendered, not a second hand-built copy.
+        "application_views": {
+            "request": run_request_view,
+            "result": result_view,
+        },
         "scope": "offline screening; not measured savings or equipment control",
     }
     st.download_button(
