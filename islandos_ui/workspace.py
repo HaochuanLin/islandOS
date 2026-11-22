@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
 
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
@@ -399,7 +400,7 @@ elif page == "Flexible-load cost optimizer":
                 "not independently verified site data"
             )
         except (ValueError, TypeError, UnicodeDecodeError, pd.errors.ParserError) as exc:
-            st.error(f"Cannot read scenario CSV: {exc}")
+            reject_upload("Scenario CSV", exc)
             st.stop()
 
     st.caption(f"Input provenance: {profile_provenance}")
@@ -513,7 +514,7 @@ elif page == "Flexible-load cost optimizer":
                     "rolling-origin historical replay (48-hour initial history plus one test day)."
                 )
         except (ValueError, TypeError, KeyError, UnicodeDecodeError, pd.errors.ParserError) as exc:
-            st.error(f"Cannot forecast tariff: {exc}")
+            reject_upload("Historical price CSV", exc)
             st.stop()
 
     profile = st.data_editor(
