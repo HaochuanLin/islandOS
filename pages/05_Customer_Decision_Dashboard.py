@@ -28,6 +28,7 @@ from islandos_core.site_inputs import (
     BATTERY_MIN_SOC,
     SiteAssumptions,
 )
+from islandos_core.app_view_models import build_run_request, build_run_result_summary
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
@@ -204,6 +205,37 @@ try:
         diesel_variable_cost_per_kwh=0.0,
     )
     config = site_assumptions.to_energy_system_config()
+    # The request this page acts on, in the shared application-facing shape: the site,
+    # the history with its units and provenance, this page's own simulation knobs and the
+    # entered investment assumptions. Built once, before the calculation, so what the
+    # page asked for is a recorded object rather than an implicit consequence of the code
+    # path below.
+    run_request_view = build_run_request(
+        page="customer_dashboard",
+        site=site_assumptions,
+        history=history,
+        units=units,
+        page_settings={
+            "demand_scale": float(demand_scale),
+            "tariff_scale": float(tariff_scale),
+            "cost_priority": float(cost_priority),
+        },
+        run_settings={
+            "currency": currency,
+            "investment": {
+                "baseline_annual_energy_cost": float(baseline_annual_bill),
+                "proposed_annual_energy_cost": float(proposed_annual_bill),
+                "annual_incremental_om_cost": float(incremental_om),
+                "upfront_capex": float(upfront_capex),
+                "project_life_years": int(project_life),
+                "discount_rate": float(discount_rate_pct) / 100.0,
+                "annual_energy_saving_escalation_rate": float(energy_saving_escalation_pct) / 100.0,
+                "annual_om_escalation_rate": float(om_escalation_pct) / 100.0,
+            },
+        },
+        provenance=source_label,
+        source_sha256=source_sha256,
+    )
     weights = OptimizationWeights(
         cost=float(cost_priority),
         reliability=float(1.0 - cost_priority),
@@ -226,19 +258,25 @@ try:
     selected = candidates[recommended]["summary"]
     baseline = candidates["grid_first"]["summary"]
     service_equal = economics["service_equivalent"]
+    result_view = build_run_result_summary(
+        page="customer_dashboard", result=result, economics=economics, currency=currency,
+    )
 
     st.subheader("Decision snapshot")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Recommended policy", recommended.replace("_", " ").title())
-    m2.metric("Estimated 24h energy cost", f"{selected['estimated_energy_cost']:,.2f} {currency}")
-    m3.metric("Unmet energy", f"{selected['unmet_load_kwh']:,.2f} kWh")
-    if service_equal and economics.get("cost_comparison_valid"):
-        saving = economics.get("estimated_cost_reduction")
+    m1.metric("Recommended policy", result_view["recommended_policy_label"])
+    m2.metric(
+        "Estimated 24h energy cost",
+        f"{result_view['estimated_24h_energy_cost']:,.2f} {result_view['currency'] or currency}",
+    )
+    m3.metric("Unmet energy", f"{result_view['unmet_load_kwh']:,.2f} kWh")
+    if result_view["service_equivalent"] and result_view["cost_comparison_valid"]:
+        saving = result_view["cost_reduction_vs_grid_first"]
         m4.metric("Modeled cost difference vs grid-first",
-                  f"{saving:,.2f} {currency}" if saving is not None else "Not available")
+                  f"{saving:,.2f} {result_view['currency'] or currency}" if saving is not None else "Not available")
     else:
         m4.metric("Customer savings claim", "Withheld")
-    if not service_equal:
+    if not result_view["service_equivalent"]:
         st.warning(
             "The recommended policy does not deliver service equivalent to the grid-first "
             "reference. A cost reduction is therefore not presented as customer savings."
