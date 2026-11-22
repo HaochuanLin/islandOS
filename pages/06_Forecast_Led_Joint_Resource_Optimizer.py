@@ -147,6 +147,7 @@ try:
     run_request_view = build_run_request(
         page="joint_resource_optimizer",
         site=site_assumptions,
+        timestamps=timestamps,
         history=signal_history,
         units=signal_units,
         page_settings={},
