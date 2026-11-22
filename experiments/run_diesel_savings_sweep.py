@@ -235,17 +235,77 @@ def main(argv: list[str] | None = None) -> dict:
     aggregate = {}
     all_rows = []
     scenario_manifest = {}
+    checkpoint_csv = output / "per_seed.csv"
+    failure_json = output / "failure_diagnostic.json"
+
+    def write_checkpoint() -> None:
+        # Persist every completed scenario/seed so a later solver failure never
+        # destroys already completed, auditable comparisons.
+        with checkpoint_csv.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
+            writer.writeheader()
+            writer.writerows(all_rows)
+
     for scenario, spec in SCENARIOS.items():
         site = _scenario_site(scenario)
         rules = StrategyRules()
         scenario_rows = []
         for seed in range(args.seeds):
             inputs = generate_synthetic_inputs(site, days=args.days, seed=seed)
-            comparison = compare_with_optimizer(inputs, site, rules, case="island")
+            input_sha256 = inputs.sha256()
+            print(
+                f"[diesel-sweep] starting scenario={scenario} seed={seed} "
+                f"hours={inputs.hours} input_sha256={input_sha256}",
+                flush=True,
+            )
+            try:
+                comparison = compare_with_optimizer(inputs, site, rules, case="island")
+            except Exception as exc:
+                failure = {
+                    "status": "failed",
+                    "scenario": scenario,
+                    "seed": seed,
+                    "input_sha256": input_sha256,
+                    "horizon_days": args.days,
+                    "horizon_hours": inputs.hours,
+                    "site_assumptions": asdict(site),
+                    "input_ranges": {
+                        "pv_kw_min": float(np.min(inputs.pv_kw)),
+                        "pv_kw_max": float(np.max(inputs.pv_kw)),
+                        "wind_kw_min": float(np.min(inputs.wind_kw)),
+                        "wind_kw_max": float(np.max(inputs.wind_kw)),
+                        "essential_load_kw_min": float(np.min(inputs.essential_kw)),
+                        "essential_load_kw_max": float(np.max(inputs.essential_kw)),
+                        "water_demand_m3_per_hour_min": float(np.min(inputs.water_demand_m3)),
+                        "water_demand_m3_per_hour_max": float(np.max(inputs.water_demand_m3)),
+                        "total_water_demand_m3": float(np.sum(inputs.water_demand_m3)),
+                    },
+                    "exception_type": type(exc).__name__,
+                    "exception": str(exc),
+                    "completed_comparisons": len(all_rows),
+                }
+                failure_json.write_text(json.dumps(failure, indent=2, sort_keys=True), encoding="utf-8")
+                write_checkpoint()
+                print(
+                    f"[diesel-sweep] FAILED scenario={scenario} seed={seed}: "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                raise RuntimeError(
+                    f"diesel sweep failed at scenario={scenario}, seed={seed}, "
+                    f"input_sha256={input_sha256}: {exc}"
+                ) from exc
             for row in comparison["strategies"]:
                 csv_row = _row_for_csv(scenario, seed, comparison["input_sha256"], row, site, float(inputs.water_demand_m3.sum()))
                 all_rows.append(csv_row)
                 scenario_rows.append(csv_row)
+            write_checkpoint()
+            print(
+                f"[diesel-sweep] completed scenario={scenario} seed={seed}; "
+                f"rows_saved={len(all_rows)}",
+                flush=True,
+            )
         aggregate[scenario] = {
             "description": spec["description"],
             "assumptions": asdict(site),
