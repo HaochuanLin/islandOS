@@ -85,10 +85,23 @@ def _validate_unit(signal_id: str, supplied: str, spec: ForecastSignalSpec) -> N
         )
 
 
-def _timestamps(values: Sequence[datetime]) -> tuple[datetime, ...]:
+MINIMUM_FORECAST_HISTORY_SAMPLES = 72
+
+
+def validate_forecast_timestamps(values: Sequence[datetime]) -> tuple[datetime, ...]:
+    """Normalize and validate the shared hourly history boundary for forecasting.
+
+    This public validator is also used by the canonical planning workflow so
+    the composition layer and the forecast service enforce one identical
+    minimum-history, timezone, and cadence contract.
+    """
+    if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
+        raise ValueError("timestamps must be a sequence of timezone-aware datetimes")
     stamps = tuple(values)
-    if len(stamps) < 72:
-        raise ValueError("At least 72 hourly timestamps are required")
+    if len(stamps) < MINIMUM_FORECAST_HISTORY_SAMPLES:
+        raise ValueError(
+            f"At least {MINIMUM_FORECAST_HISTORY_SAMPLES} hourly timestamps are required"
+        )
     normalized = []
     for stamp in stamps:
         if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
@@ -119,7 +132,7 @@ def forecast_site_signals(
     is not constrained unless a typed specification is registered. Candidate
     models are ranked by rolling-origin replay independently for each signal.
     """
-    stamps = _timestamps(timestamps)
+    stamps = validate_forecast_timestamps(timestamps)
     if not isinstance(history, Mapping) or not history:
         raise ValueError("history must be a non-empty mapping of site signals")
     if not isinstance(units, Mapping) or set(history) != set(units):
