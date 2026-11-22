@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.page_header import render_page_header
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
@@ -25,6 +26,13 @@ from islandos_core.planning_workflow import run_forecast_dispatch
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
 st.title("Forecast-led joint resource optimizer")
 st.caption("One pipeline: site history → model selection → aligned forecasts → battery/diesel schedule search")
+
+render_page_header(
+    question="What battery and diesel schedule follows from aligned forecasts for this site?",
+    data="The synthetic default, or an uploaded history put through the canonical forecast catalogue.",
+    conclusions="A candidate schedule, its energy balance, and whether the constraints bind.",
+    limits="A schedule-search result only: no device commands and no warranty of feasibility on real equipment.",
+)
 
 st.info(
     "Default inputs are synthetic. Uploaded CSV values are customer-supplied and not independently verified. "

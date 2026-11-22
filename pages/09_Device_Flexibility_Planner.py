@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.page_header import render_page_header
 
 from islandos_core.energy_system import BatterySpec, DieselSpec, EnergySystemConfig, EnergySystemInputs, dispatch_energy_system
 from islandos_core.flexible_tasks import DeviceTask, schedule_device_tasks
@@ -11,6 +12,13 @@ from islandos_core.flexible_task_dispatch import attach_device_task_schedule
 st.set_page_config(page_title="IslandOS | Device Flexibility", page_icon="⚡", layout="wide")
 st.title("Device-level load flexibility planner")
 st.caption("Stage H–J demonstration: protect essential services, then schedule deferrable equipment.")
+
+render_page_header(
+    question="Which loads can move without breaking essential service?",
+    data="An illustrative power budget, tariff and load profiles built into this page.",
+    conclusions="How much flexibility exists, and what it costs to use it.",
+    limits="A synthetic demonstration: the tariff and profiles are not measured site data.",
+)
 
 st.info(
     "Synthetic demonstration only. The power budget, tariff, load profiles and generation are illustrative; "

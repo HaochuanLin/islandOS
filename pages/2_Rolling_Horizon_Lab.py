@@ -5,6 +5,7 @@ import hashlib
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.page_header import render_page_header
 
 from experiments.rolling_horizon_dispatch import (
     generate_synthetic_scenario_csv,
@@ -14,6 +15,13 @@ from experiments.rolling_horizon_dispatch import (
 
 st.title("Rolling-horizon energy–water dispatch lab")
 st.caption("Research prototype · offline scenario analysis only · no live equipment control")
+
+render_page_header(
+    question="How does a rolling-horizon policy compare with perfect information on the same scenario?",
+    data="The built-in synthetic scenario, or a paired hourly CSV you upload.",
+    conclusions="The size of the gap between a realistic policy and an unattainable benchmark.",
+    limits="Perfect information is a reference, not a recommendation; missing values are not imputed.",
+)
 st.warning(
     "The built-in example is synthetic. Uploaded CSVs are processed in this app session; "
     "missing values are not imputed. The perfect-information policy is a non-deployable "

@@ -11,6 +11,7 @@ import math
 
 import pandas as pd
 import streamlit as st
+from islandos_ui.page_header import render_page_header
 
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
 from islandos_core.customer_dashboard import parse_customer_history_csv
@@ -40,6 +41,13 @@ st.set_page_config(
 
 st.title("Customer decision dashboard")
 st.caption("Forecast → compare operating policies → review cost and reliability trade-offs")
+
+render_page_header(
+    question="Given a site's history, what does the forecast imply for the cost and reliability trade-off?",
+    data="A synthetic default history, or your uploaded CSV/XLSX (session-only, with a recorded hash).",
+    conclusions="Which operating policy is worth comparing next, and how much of the gap is forecast-driven.",
+    limits="Offline planning estimates, not measured customer savings or a site-validated forecast.",
+)
 
 st.info(
     "Demonstration mode: all default inputs are synthetic. Replace them with "
