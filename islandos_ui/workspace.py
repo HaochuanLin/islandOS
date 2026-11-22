@@ -1759,12 +1759,30 @@ elif page == "Forecast lab":
     from islandos_core.prediction_engine import PredictionEngine
 
     st.info("Built-in candidates are statistical baselines, not trained AI models. Use measured or explicitly labelled data; synthetic examples are for workflow demonstration only.")
-    forecast_source_type = st.selectbox("Data provenance", options=sorted(ALLOWED_SOURCE_TYPES), index=1, key="forecast_lab_source_type")
-    forecast_file = st.file_uploader("Upload a timestamped CSV", type=["csv"], key="forecast_lab_csv")
-    if forecast_file is not None:
-        forecast_bytes = forecast_file.getvalue()
+    forecast_mode = st.radio(
+        "Forecast input",
+        ["Built-in synthetic demo history", "Upload a timestamped CSV"],
+        horizontal=True,
+        key="forecast_lab_input_mode",
+    )
+    if forecast_mode.startswith("Built-in"):
+        forecast_bytes = synthetic_forecast_history_csv()
+        forecast_name = "islandos_synthetic_forecast_demo.csv"
+        forecast_source_type = "synthetic"
+        forecast_file = None
+        st.warning(
+            "**Demo Data** - 168 hourly rows generated in-process from `islandos_core.demo_datasets`. "
+            "This is synthetic demonstration data, not measured site history and not a customer file; "
+            "upload a CSV to run the same workflow on your own data."
+        )
+    else:
+        forecast_source_type = st.selectbox("Data provenance", options=sorted(ALLOWED_SOURCE_TYPES), index=1, key="forecast_lab_source_type")
+        forecast_file = st.file_uploader("Upload a timestamped CSV", type=["csv"], key="forecast_lab_csv")
+        forecast_bytes = forecast_file.getvalue() if forecast_file is not None else None
+        forecast_name = forecast_file.name if forecast_file is not None else None
+    if forecast_bytes is not None:
         try:
-            import_report = inspect_csv_bytes(forecast_bytes, source_type=forecast_source_type, source_name=forecast_file.name)
+            import_report = inspect_csv_bytes(forecast_bytes, source_type=forecast_source_type, source_name=forecast_name)
             st.metric("Import status", import_report["status"].replace("_", " ").title())
             st.caption(f"{import_report['row_count']} rows · {import_report['error_count']} errors · {import_report['warning_count']} warnings · SHA-256 {import_report['artifact']['sha256'][:16]}…")
             if import_report.get("issues"):
