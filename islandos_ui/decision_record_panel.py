@@ -47,10 +47,11 @@ def audit_text(record: Mapping) -> str:
     scope = str(audit.get("scope") or "per-scenario simulator replay of the recommended schedule").rstrip(".")
     scenarios = audit.get("scenarios_audited") or []
     count = f"{len(scenarios)} scenario(s) replayed" if scenarios else "scenarios replayed"
-    return (
-        f"Physical audit passed ({count}). Scope: {scope}. "
-        "That is a simulator replay, not site validation and not a safety certification."
-    )
+    standing = "That is a simulator replay, not site validation and not a safety certification."
+    # The adapter's scope already carries this sentence; do not print it twice.
+    if "not site validation" in scope or "safety certification" in scope:
+        return f"Physical audit passed ({count}). Scope: {scope}."
+    return f"Physical audit passed ({count}). Scope: {scope}. {standing}"
 
 
 def record_facts(record: Mapping) -> list[tuple[str, str]]:
