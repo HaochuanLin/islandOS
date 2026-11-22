@@ -33,7 +33,7 @@ CANONICAL_UNITS = {
 }
 
 _HEADER_ALIASES = {
-    "load_kw": {"load", "load_kw", "demand", "demand_kw", "site_load", "site_load_kw", "critical_load_kw", "critical_load", "active_load_kw"},
+    "load_kw": {"load", "load_kw", "demand", "demand_kw", "site_load", "site_load_kw", "critical_load_kw", "critical_load", "active_load_kw", "essential_load", "essential_load_kw"},
     "flexible_load_kw": {"flexible_load", "flexible_load_kw", "shiftable_load_kw", "controllable_load_kw"},
     "water_demand_m3_per_hour": {"water_demand", "water_demand_m3_per_hour", "water_demand_m3h", "water_use_m3_per_hour"},
     "pv_power_kw": {"pv", "pv_kw", "pv_power", "pv_power_kw", "solar", "solar_kw", "solar_power_kw"},
@@ -52,7 +52,9 @@ _TIMESTAMP_ALIASES = {"timestamp", "timestamp_utc", "datetime", "date_time", "ti
 _UNIT_SUFFIXES = {
     "kw": "kW", "w": "W", "mw": "MW",
     "%": "%", "pct": "%", "l/h": "L/h", "lph": "L/h",
-    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh", "m3/h": "m3/h",
+    "c": "degC", "°c": "degC", "currency/kwh": "currency/kWh",
+    "kwh": "currency/kWh", "m3/h": "m3/h",
+    "kva": "kVA", "mwh": "MWh",
 }
 
 
@@ -89,9 +91,12 @@ def _split_header_unit(header: str) -> tuple[str, str | None]:
         unit_raw = match.group(2).strip().lower().replace(" ", "")
         return _normalise_header(match.group(1)), _UNIT_SUFFIXES.get(unit_raw, unit_raw)
     normalized = _normalise_header(raw)
-    match = re.match(r"^(.*?)[_-](kw|mw|w|kwh|pct|lph)$", normalized)
+    match = re.match(r"^(.*?)[_-](kw|mw|w|kwh|mwh|kva|pct|lph)$", normalized)
     if match:
-        return match.group(1), _UNIT_SUFFIXES[match.group(2)]
+        # Unknown suffixes must not raise: an unrecognised unit is reported as a
+        # unit mismatch (ValueError) instead of an unhandled KeyError, so a bad
+        # header fails closed with an actionable message.
+        return match.group(1), _UNIT_SUFFIXES.get(match.group(2), match.group(2))
     return normalized, None
 
 
