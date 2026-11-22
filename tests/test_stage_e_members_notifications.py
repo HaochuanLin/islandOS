@@ -1,6 +1,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from islandos_service_api import IslandOSStore
@@ -71,7 +72,9 @@ class TestStageEMemberAndNotificationLifecycle(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.store.accept_invitation("invalid-token-value-that-is-long-enough", "valid-password-123")
 
-        with sqlite3.connect(self.store.path) as db:
+        # `with sqlite3.connect(...) as db` only commits; it never closes the handle.
+        # On Windows an open handle blocks TemporaryDirectory.cleanup(), so close explicitly.
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute(
                 "UPDATE invitations SET expires_at=? WHERE id=?",
                 ("2000-01-01T00:00:00Z", invitation["invitation_id"]),
@@ -83,7 +86,9 @@ class TestStageEMemberAndNotificationLifecycle(unittest.TestCase):
 
     def test_invitation_expiry_is_enforced(self):
         invitation = self.store.create_invitation(self.owner, "expired@example.test")
-        with sqlite3.connect(self.store.path) as db:
+        # `with sqlite3.connect(...) as db` only commits; it never closes the handle.
+        # On Windows an open handle blocks TemporaryDirectory.cleanup(), so close explicitly.
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute(
                 "UPDATE invitations SET expires_at=? WHERE id=?",
                 ("2000-01-01T00:00:00Z", invitation["invitation_id"]),
