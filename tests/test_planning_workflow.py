@@ -88,3 +88,45 @@ def test_workflow_fails_closed_when_input_contract_differs_from_manifest():
             energy_system_config=config, grid_available=[True] * 6,
             diesel_available=[True] * 6,
         )
+
+
+@pytest.mark.parametrize(
+    ("case", "message"),
+    [
+        ("too_short", "At least 72 hourly timestamps are required"),
+        ("missing_hour", "contiguous hourly instants"),
+        ("naive", "timezone-aware"),
+    ],
+)
+def test_short_or_irregular_clock_is_rejected_before_a_model_runs(case, message):
+    """The composition layer must apply the forecast layer's clock rule itself.
+
+    Previously it only checked for three observations, so a five-row history
+    failed one call later inside the forecast stage with a less specific error.
+    """
+    timestamps, history, units, config, manifest = _inputs()
+    if case == "too_short":
+        timestamps = timestamps[:3]
+        history = {key: values[:3] for key, values in history.items()}
+    elif case == "missing_hour":
+        timestamps = timestamps[:40] + timestamps[41:]
+        history = {key: values[:40] + values[41:] for key, values in history.items()}
+    else:
+        timestamps = tuple(stamp.replace(tzinfo=None) for stamp in timestamps)
+
+    with pytest.raises(ValueError, match=message):
+        run_forecast_dispatch(
+            manifest, timestamps=timestamps, history=history, units=units,
+            energy_system_config=config, grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+        )
+
+
+def test_clock_error_names_the_manifest_bound_workflow():
+    timestamps, history, units, config, manifest = _inputs()
+    with pytest.raises(ValueError, match="forecast history clock is invalid"):
+        run_forecast_dispatch(
+            manifest, timestamps=timestamps[:3], history={k: v[:3] for k, v in history.items()},
+            units=units, energy_system_config=config, grid_available=[True] * 6,
+            diesel_available=[True] * 6,
+        )

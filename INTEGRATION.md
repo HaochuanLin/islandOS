@@ -34,8 +34,8 @@ Any stage may be re-run independently, but a stage's output is only valid for th
 
 | Topic | Rule | Enforced by |
 |---|---|---|
-| Timestamps | `datetime` with an explicit timezone, normalised to UTC; serialised as ISO-8601 with offset (`+00:00`), never naive, never `Z`-only | `forecast_signal_catalog._timestamps`, `canonical_run._utc_timestamp`, `operator_decision._utc` |
-| Sampling | One row per hour, strictly increasing, **contiguous** — a missing hour is a contract violation, not a gap to interpolate | `forecast_signal_catalog._timestamps` |
+| Timestamps | `datetime` with an explicit timezone, normalised to UTC; serialised as ISO-8601 with offset (`+00:00`), never naive, never `Z`-only | `forecast_signal_catalog.validate_hourly_timestamps`, `canonical_run._utc_timestamp`, `operator_decision._utc` |
+| Sampling | One row per hour, strictly increasing, **contiguous** — a missing hour is a contract violation, not a gap to interpolate | `forecast_signal_catalog.validate_hourly_timestamps` (called by both forecast and composition layers) |
 | Units | Every signal carries an explicit unit string; `currency/kWh` or an ISO currency form (`USD/kWh`) for prices; power in `kW`, energy in `kWh`, water in `m3/h` or `m3` | `forecast_signal_catalog._validate_unit`, `prediction_dispatch_adapter` |
 | Missing values | Never imputed. A gap fails the stage that needs the value | all stages |
 | Numbers | Finite, JSON-serialisable; `NaN`/`Infinity` rejected before hashing | `canonical_run._json_value`, `planning_workflow._canonical_digest` |
@@ -222,8 +222,8 @@ This is a single-timestep heuristic recommendation for a human, not a schedule a
 
 Recorded because a second implementer will hit them:
 
-1. **Timestamp-length check is weaker in the composition layer than in the forecast layer.** `run_forecast_dispatch` accepts three timestamps; `forecast_site_signals` then requires 72 contiguous hourly instants. A 3-row history fails one call later with a message from the forecast stage. Fix by moving the 72-row/contiguity check into the manifest or the composition layer.
-2. **The decision record is not built inside `run_forecast_dispatch`.** The canonical run returns `recommendation`, `robust_customer_economics` and `decision_scope`, but the operator record is a separate call the caller (or UI) must make. Until that is composed, a "canonical planning run" is not by itself an auditable decision.
+1. ~~**Timestamp-length check is weaker in the composition layer than in the forecast layer.**~~ Closed: `run_forecast_dispatch` now calls `validate_hourly_timestamps` (the forecast layer's own rule) before any model runs, so a short, naive, or gapped clock is rejected with `forecast history clock is invalid: …` instead of failing one stage later.
+2. **The decision record is not built inside `run_forecast_dispatch`.** The canonical run returns `recommendation`, `robust_customer_economics` and `decision_scope`, but the operator record is a separate call the caller (or UI) must make. Until that is composed, a "canonical planning run" is not by itself an auditable decision. The joint optimizer also does not emit the `physical_audit` object the record builder requires, so composing it needs a decision on how that audit is produced, not just a wiring change.
 3. **Annual investment economics is not manifest-bound.** `evaluate_investment_economics` takes annual customer-entered bills and is not fed by the operating-economics stage; nothing currently proves the annual numbers derive from a run with the same `dataset_sha256`. Treat the two economic contracts as parallel until an adapter exists.
 4. **Water extension changes `essential_load` in place.** The RO electrical load is added to `essential_load` points, and the combined digest is stored in the load result. A consumer that expects `essential_load` to mean "site load excluding water" will double count; the `water_service.ro_power_kw_added_to_essential_load` array is the explicit subtraction.
 5. **`generic_prediction_handoff.target_timestamps_utc` is taken from the PV forecast.** It assumes all signals share the same horizon timestamps, which the catalogue currently guarantees, but the assumption is not asserted at that line.
@@ -231,7 +231,7 @@ Recorded because a second implementer will hit them:
 ## 9. Implementing against this document
 
 1. Build the dataset and `create_run_manifest` first; never hand-build the payload.
-2. Feed the manifest, the tz-aware hourly timestamps, `history`, `units`, and the two availability arrays to `run_forecast_dispatch`.
+2. Feed the manifest, the tz-aware hourly timestamps, `history`, `units`, and the two availability arrays to `run_forecast_dispatch`. The clock is validated there against the forecast layer's own rule (≥72 tz-aware, contiguous hourly instants), so a bad clock fails before any model executes.
 3. Take economics from `robust_customer_economics` (operating) and `evaluate_investment_economics` (annual, explicit assumptions); never compute a saving yourself from `dispatch.summary` without the service gate.
 4. Build the operator record with `build_operator_decision_record`, and surface `status`, `physical_audit` and `human_review_required` before any number.
 5. Log `manifest_sha256`, `forecast.bundle_sha256`, `evidence_sha256` and `record_sha256` together; a record without its digest chain is not evidence.

@@ -12,7 +12,7 @@ import json
 from typing import Any
 
 from .canonical_run import CanonicalRunManifest, verify_run_manifest
-from .forecast_signal_catalog import forecast_site_signals
+from .forecast_signal_catalog import forecast_site_signals, validate_hourly_timestamps
 from .prediction_dispatch_adapter import optimize_prediction_resource_schedule
 
 
@@ -72,8 +72,10 @@ def run_forecast_dispatch(
         raise ValueError("history signal IDs must exactly match the manifest required_signals")
     if not isinstance(units, Mapping) or dict(units) != required_signals:
         raise ValueError("units must exactly match the manifest signal-to-unit contract")
-    if not isinstance(timestamps, Sequence) or len(timestamps) < 3:
-        raise ValueError("timestamps must contain at least three observations")
+    try:
+        validate_hourly_timestamps(timestamps)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"forecast history clock is invalid: {exc}") from exc
     horizon = forecast_spec["horizon_hours"]
     if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
         raise ValueError("manifest forecast horizon is invalid")

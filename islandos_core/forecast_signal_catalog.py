@@ -85,7 +85,13 @@ def _validate_unit(signal_id: str, supplied: str, spec: ForecastSignalSpec) -> N
         )
 
 
-def _timestamps(values: Sequence[datetime]) -> tuple[datetime, ...]:
+def validate_hourly_timestamps(values: Sequence[datetime]) -> tuple[datetime, ...]:
+    """Validate a forecast history clock and return it normalised to UTC.
+
+    The rules live here, next to the forecast contract, and are reused by any
+    caller that gates a run before a model executes. A run whose clock is short,
+    naive, or has a missing hour is rejected here rather than one stage later.
+    """
     stamps = tuple(values)
     if len(stamps) < 72:
         raise ValueError("At least 72 hourly timestamps are required")
@@ -98,6 +104,10 @@ def _timestamps(values: Sequence[datetime]) -> tuple[datetime, ...]:
         if right - left != timedelta(hours=1):
             raise ValueError("Timestamps must be strictly ordered, contiguous hourly instants")
     return tuple(normalized)
+
+
+# Internal alias kept so existing call sites and imports stay unchanged.
+_timestamps = validate_hourly_timestamps
 
 
 def forecast_site_signals(
