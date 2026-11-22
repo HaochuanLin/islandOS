@@ -16,7 +16,9 @@ import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
 from islandos_ui.annual_economics_panel import (
+    DEMONSTRATION_VALUES,
     annual_inputs_supplied,
+    annual_source_for,
     render_annual_economics_basis,
 )
 
@@ -92,11 +94,27 @@ with st.sidebar:
         st.caption("The page-specific upload takes priority over the shared session dataset.")
     st.divider()
     st.subheader("Investment assumptions")
-    st.caption("Enter customer-confirmed annual bills and supplier quotes. Do not annualize the 24-hour simulation.")
-    baseline_annual_bill = st.number_input("Baseline annual energy bill", min_value=0.0, value=0.0, step=1000.0)
-    proposed_annual_bill = st.number_input("Proposed annual energy bill", min_value=0.0, value=0.0, step=1000.0)
-    incremental_om = st.number_input("Annual incremental O&M cost (+ cost / − saving)", min_value=-10000000.0, max_value=10000000.0, value=0.0, step=500.0)
-    upfront_capex = st.number_input("Installed equipment CAPEX", min_value=0.0, value=0.0, step=5000.0)
+    st.caption(
+        "A demonstration set of annual bills, O&M and CAPEX is pre-filled so the screen is "
+        "readable on first open. Every field is editable; set the baseline bill and the CAPEX "
+        "to zero to see the withheld state instead."
+    )
+    baseline_annual_bill = st.number_input(
+        "Baseline annual energy bill", min_value=0.0,
+        value=DEMONSTRATION_VALUES["baseline_annual_bill"], step=1000.0,
+    )
+    proposed_annual_bill = st.number_input(
+        "Proposed annual energy bill", min_value=0.0,
+        value=DEMONSTRATION_VALUES["proposed_annual_bill"], step=1000.0,
+    )
+    incremental_om = st.number_input(
+        "Annual incremental O&M cost (+ cost / − saving)", min_value=-10000000.0, max_value=10000000.0,
+        value=DEMONSTRATION_VALUES["annual_incremental_om"], step=500.0,
+    )
+    upfront_capex = st.number_input(
+        "Installed equipment CAPEX", min_value=0.0,
+        value=DEMONSTRATION_VALUES["upfront_capex"], step=5000.0,
+    )
     project_life = st.slider("Project evaluation life (years)", 1, 30, 10)
     discount_rate_pct = st.slider("Discount rate (%)", 0.0, 30.0, 8.0, 0.5)
     energy_saving_escalation_pct = st.slider("Annual energy-saving escalation (%)", -10.0, 20.0, 0.0, 0.5)
@@ -438,7 +456,12 @@ try:
         economics_binding = bind_annual_economics_to_run(
             investment,
             annual_run_manifest,
-            annual_bill_source="customer_entered_annual_bills",
+            annual_bill_source=annual_source_for(
+                baseline_annual_bill=baseline_annual_bill,
+                proposed_annual_bill=proposed_annual_bill,
+                annual_incremental_om=incremental_om,
+                upfront_capex=upfront_capex,
+            ),
         )
         binding_verification = verify_investment_economics_binding(economics_binding)
         if not binding_verification["valid"]:
