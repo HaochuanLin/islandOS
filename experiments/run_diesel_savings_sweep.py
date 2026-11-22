@@ -219,6 +219,100 @@ def _write_summary(path: Path, results: dict, seeds: int, days: int) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+
+def _diagnose_milp_failure(inputs, site: IslandSiteConfig) -> dict:
+    """Run bounded ablation solves to isolate water/energy constraints after a failure.
+
+    These diagnostics never replace the failed production result and never
+    alter scenario assumptions. They are written only when the primary solve
+    fails, to distinguish RO minimum-rate and terminal-tank feasibility effects.
+    """
+    from islandos_core.impact_scenario import (
+        StrategyRules,
+        _energy_inputs,
+        energy_system_setup,
+        run_strategy,
+    )
+    from optimization.milp_dispatch_optimizer import optimize_dispatch_milp
+
+    config, water = energy_system_setup(site, "island")
+    demand = [float(value) for value in inputs.water_demand_m3]
+    ro_min_rate = site.ro_min_power_kw / site.ro_specific_energy_kwh_per_m3
+    tests = {}
+
+    variants = {
+        "full_joint_constraints": {
+            "water_service": water,
+            "water_demand_m3_per_hour": demand,
+            "terminal_water_inventory_min_m3": site.tank_initial_m3,
+            "ro_min_production_m3_per_hour": ro_min_rate,
+        },
+        "without_ro_minimum_rate": {
+            "water_service": water,
+            "water_demand_m3_per_hour": demand,
+            "terminal_water_inventory_min_m3": site.tank_initial_m3,
+            "ro_min_production_m3_per_hour": 0.0,
+        },
+        "without_terminal_tank_requirement": {
+            "water_service": water,
+            "water_demand_m3_per_hour": demand,
+            "terminal_water_inventory_min_m3": None,
+            "ro_min_production_m3_per_hour": ro_min_rate,
+        },
+        "without_ro_minimum_or_terminal_requirement": {
+            "water_service": water,
+            "water_demand_m3_per_hour": demand,
+            "terminal_water_inventory_min_m3": None,
+            "ro_min_production_m3_per_hour": 0.0,
+        },
+    }
+
+    for name, kwargs in variants.items():
+        try:
+            result = optimize_dispatch_milp(
+                _energy_inputs(inputs, "island"),
+                config,
+                time_limit_seconds=120.0,
+                mip_relative_gap=0.0,
+                **kwargs,
+            )
+            tests[name] = {
+                "feasible": True,
+                "solver_status": result.get("solver_status"),
+                "optimality_proven": result.get("optimality_proven_for_declared_milp"),
+                "solve_time_seconds": result.get("solve_time_seconds"),
+            }
+        except Exception as exc:
+            tests[name] = {
+                "feasible": False,
+                "exception_type": type(exc).__name__,
+                "exception": str(exc),
+            }
+
+    # Independent energy-only control with the fixed RO timetable.
+    try:
+        fixed = run_strategy("baseline", inputs, site, StrategyRules())
+        control = optimize_dispatch_milp(
+            _energy_inputs(inputs, "island", fixed.hourly["ro_power_kw"]),
+            config,
+            time_limit_seconds=120.0,
+            mip_relative_gap=0.0,
+        )
+        tests["energy_only_with_fixed_ro_schedule"] = {
+            "feasible": True,
+            "solver_status": control.get("solver_status"),
+            "optimality_proven": control.get("optimality_proven_for_declared_milp"),
+            "solve_time_seconds": control.get("solve_time_seconds"),
+        }
+    except Exception as exc:
+        tests["energy_only_with_fixed_ro_schedule"] = {
+            "feasible": False,
+            "exception_type": type(exc).__name__,
+            "exception": str(exc),
+        }
+    return tests
+
+
 def main(argv: list[str] | None = None) -> dict:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--seeds", type=int, default=10)
@@ -283,6 +377,7 @@ def main(argv: list[str] | None = None) -> dict:
                     "exception_type": type(exc).__name__,
                     "exception": str(exc),
                     "completed_comparisons": len(all_rows),
+                    "milp_ablation_diagnostics": _diagnose_milp_failure(inputs, site),
                 }
                 failure_json.write_text(json.dumps(failure, indent=2, sort_keys=True), encoding="utf-8")
                 write_checkpoint()
