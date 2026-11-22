@@ -478,8 +478,12 @@ def optimize_prediction_resource_schedule(
             key: value.input_history_sha256 for key, value in sorted(results.items())
         },
         "target_timestamps_utc": [
+            # Read from the validated bundle, which refused any signal whose
+            # target clock differed; asserting it here used to mean assuming pv's.
             point.timestamp.astimezone(timezone.utc).isoformat()
-            for point in results["pv_power_kw"].points
+            for point in bundle.forecasts[
+                {**required, **optional}.get(source_ids[0], source_ids[0])
+            ].points
         ],
         "mode": "offline_schedule_search",
         "device_write_authorized": False,
@@ -495,6 +499,12 @@ def optimize_prediction_resource_schedule(
             "ro_production_m3": list(water_load.production_m3),
             "tank_inventory_after_demand_m3": list(water_load.inventory_after_demand_m3),
             "ro_power_kw_added_to_essential_load": list(water_load.ro_power_kw),
+            # `essential_load` above is the combined load, not the site load.
+            # Both the pre-RO series and its digest are kept so a consumer can
+            # subtract exactly instead of guessing what the number contains.
+            "essential_load_includes_ro_power": True,
+            "site_only_essential_load_kw": [point.predicted_value for point in load_result.points],
+            "site_only_electrical_load_history_sha256": load_result.input_history_sha256,
             "total_demand_upper_bound_m3": water_load.total_demand_m3,
             "total_ro_production_m3": water_load.total_production_m3,
             "specific_energy_kwh_per_m3": water_load.specific_energy_kwh_per_m3,
