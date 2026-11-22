@@ -192,7 +192,7 @@ Producer: `evaluate_investment_economics(...)`. Inputs: `baseline_annual_energy_
 
 Output `InvestmentEconomics` (frozen dataclass, `to_dict()` for serialisation): `service_equivalent`, `annual_energy_cost_saving`, `annual_net_operating_benefit`, `simple_payback_years`, `discounted_payback_years`, `net_present_value`, `break_even_annual_energy_saving`, `sensitivity_npv`, `annual_cashflows`, `decision`, `reasons`.
 
-Assumptions that must be recorded with any use of these numbers: energy-bill saving and incremental O&M are year-one values; escalation applies from year two; a single simulated day is never annualised; `service_equivalent=False` blocks every investment metric.
+Assumptions that must be recorded with any use of these numbers: energy-bill saving and incremental O&M are year-one values; escalation applies from year two; **this screen never turns a simulated day into the bills it screens**; `service_equivalent=False` blocks every investment metric. Annualising a run is a different, separately labelled object (§6.5): it exists on the joint optimizer page, it is not a bill, and it is never compared with the bills entered here.
 
 Zero is what an unfilled field looks like, not a customer figure. A surface that offers these inputs must therefore gate on the customer having supplied a baseline bill and a CAPEX quote (`islandos_ui/annual_economics_panel.annual_inputs_supplied`) and withhold every metric, the run citation and the cashflow table otherwise — screening placeholder zeros produces a confident "negative" verdict that describes nothing the customer said. A zero *proposed* bill is a legitimate claim (an off-grid site) and does not trip the gate.
 
