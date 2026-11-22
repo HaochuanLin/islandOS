@@ -22,11 +22,15 @@ from islandos_core.investment_economics import (
     evaluate_investment_economics,
 )
 from islandos_ui.annual_economics_panel import (
+    DEMONSTRATION_SOURCE,
+    DEMONSTRATION_VALUES,
     annual_basis_text,
     annual_inputs_supplied,
+    annual_source_for,
     basis_level,
     binding_errors,
     binding_facts,
+    is_demonstration,
     withheld_text,
 )
 
@@ -104,7 +108,7 @@ def test_the_basis_repeats_the_stated_billing_period_when_one_is_given():
 def test_a_withheld_result_is_a_warning_and_says_no_metric_is_quoted():
     binding = _binding(service_equivalent=False)
     assert basis_level(binding) == "warning"
-    assert binding_facts(binding)[2] == ("Withheld", "yes")
+    assert dict(binding_facts(binding))["Withheld"] == "yes"
     assert "no investment metric is quoted" in withheld_text(binding)
 
 
@@ -199,4 +203,62 @@ def test_the_dashboard_withholds_the_screen_when_the_inputs_are_missing():
     # an unfilled page must not render a verdict computed on zeros.
     assert gate < withheld
     assert gate < first_metric
+
+
+def test_the_default_page_prefills_the_demonstration_values():
+    demo = DEMONSTRATION_VALUES
+    assert annual_source_for(**{
+        "baseline_annual_bill": demo["baseline_annual_bill"],
+        "proposed_annual_bill": demo["proposed_annual_bill"],
+        "annual_incremental_om": demo["annual_incremental_om"],
+        "upfront_capex": demo["upfront_capex"],
+    }) == DEMONSTRATION_SOURCE
+    assert annual_inputs_supplied(
+        baseline_annual_bill=demo["baseline_annual_bill"],
+        proposed_annual_bill=demo["proposed_annual_bill"],
+        upfront_capex=demo["upfront_capex"],
+    ) is True
+
+
+def test_any_edited_value_stops_being_a_demonstration():
+    demo = DEMONSTRATION_VALUES
+    assert annual_source_for(
+        baseline_annual_bill=demo["baseline_annual_bill"],
+        proposed_annual_bill=demo["proposed_annual_bill"],
+        annual_incremental_om=demo["annual_incremental_om"],
+        upfront_capex=demo["upfront_capex"] + 1.0,
+    ) == "customer_entered_annual_bills"
+
+
+def test_a_demonstration_binding_is_labelled_as_illustrative_not_as_customer_data():
+    demo = DEMONSTRATION_VALUES
+    binding = bind_annual_economics_to_run(
+        _economics(
+            baseline_annual_energy_cost=demo["baseline_annual_bill"],
+            proposed_annual_energy_cost=demo["proposed_annual_bill"],
+            annual_incremental_om_cost=demo["annual_incremental_om"],
+            upfront_capex=demo["upfront_capex"],
+            project_life_years=10,
+            discount_rate=0.08,
+        ),
+        _manifest(),
+        annual_bill_source=annual_source_for(
+            baseline_annual_bill=demo["baseline_annual_bill"],
+            proposed_annual_bill=demo["proposed_annual_bill"],
+            annual_incremental_om=demo["annual_incremental_om"],
+            upfront_capex=demo["upfront_capex"],
+        ),
+    )
+    assert is_demonstration(binding) is True
+    text = annual_basis_text(binding)
+    assert text.startswith("Illustrative screening results")
+    assert "not a customer quote" in text
+    assert "site-validated return" in text
+    assert dict(binding_facts(binding))["Bills / O&M / CAPEX"].startswith("synthetic demonstration")
+
+
+def test_a_customer_binding_is_not_labelled_as_a_demonstration():
+    assert is_demonstration(_binding()) is False
+    assert annual_basis_text(_binding()).startswith("Annual bills are entered by the customer")
+
 

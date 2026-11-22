@@ -21,6 +21,8 @@ import streamlit as st
 from islandos_core.investment_economics import verify_investment_economics_binding
 
 RECORD_TYPE = "investment_economics_run_binding"
+DEMONSTRATION_SOURCE = "synthetic_demonstration_figures"
+CUSTOMER_SOURCE = "customer_entered_annual_bills"
 _DEFAULT_ANNUALISATION = (
     "customer-entered annual bills tied to this run's equipment and service scope; "
     "a simulated day is never multiplied into a year"
@@ -28,6 +30,21 @@ _DEFAULT_ANNUALISATION = (
 _NOT_PROVEN = (
     "not the run's savings, not measured from the run, and not a procurement guarantee"
 )
+_NOT_PROVEN_DEMO = (
+    "synthetic demonstration figures for showing how the screen works, not a customer "
+    "quote, a market price, a measured saving, or a site-validated return"
+)
+
+# The example the dashboard pre-fills so a first-time reader sees a complete screen.
+# Chosen to produce one screen-positive case (NPV ≈ +21k, payback ≈ 6 years at the
+# page's 10-year/8% defaults) so the decision wording is legible; they are not a
+# quote for any site.
+DEMONSTRATION_VALUES = {
+    "baseline_annual_bill": 120_000.0,
+    "proposed_annual_bill": 84_000.0,
+    "annual_incremental_om": 6_000.0,
+    "upfront_capex": 180_000.0,
+}
 
 
 def _require(binding: object) -> Mapping:
@@ -74,9 +91,46 @@ def annual_inputs_supplied(
     return float(baseline_annual_bill) > 0 and float(upfront_capex) > 0
 
 
+def annual_source_for(
+    *,
+    baseline_annual_bill: float,
+    proposed_annual_bill: float,
+    annual_incremental_om: float,
+    upfront_capex: float,
+) -> str:
+    """The provenance string for the annual figures a page is about to bind.
+
+    A page that pre-fills its own example numbers so a first-time reader sees a
+    complete screen must not let those numbers pass as customer data. Values that
+    still equal the page's demonstration set are labelled synthetic; anything the
+    customer changed is labelled customer-entered.
+    """
+    demo = DEMONSTRATION_VALUES
+    unchanged = (
+        float(baseline_annual_bill) == demo["baseline_annual_bill"]
+        and float(proposed_annual_bill) == demo["proposed_annual_bill"]
+        and float(annual_incremental_om) == demo["annual_incremental_om"]
+        and float(upfront_capex) == demo["upfront_capex"]
+    )
+    return DEMONSTRATION_SOURCE if unchanged else CUSTOMER_SOURCE
+
+
 def basis_level(binding: Mapping) -> str:
     """Streamlit severity for the basis banner: 'warning' when withheld, else 'info'."""
     return "warning" if _require(binding).get("withheld") is True else "info"
+
+
+def source_of(binding: Mapping) -> str:
+    """The provenance string the binding recorded for the annual figures."""
+    basis = _require(binding).get("annual_basis")
+    if not isinstance(basis, Mapping):
+        basis = {}
+    return str(basis.get("source") or CUSTOMER_SOURCE)
+
+
+def is_demonstration(binding: Mapping) -> bool:
+    """True when the annual figures are the page's own synthetic example values."""
+    return source_of(binding) == DEMONSTRATION_SOURCE
 
 
 def annual_basis_text(binding: Mapping) -> str:
@@ -84,8 +138,14 @@ def annual_basis_text(binding: Mapping) -> str:
     basis = _require(binding).get("annual_basis")
     if not isinstance(basis, Mapping):
         basis = {}
-    source = str(basis.get("source") or "customer_entered_annual_bills")
-    text = f"Annual bills are entered by the customer ({source}), so they are {_NOT_PROVEN}"
+    source = source_of(binding)
+    if source == DEMONSTRATION_SOURCE:
+        text = (
+            "Illustrative screening results: the annual bills, incremental O&M and CAPEX "
+            f"are {_NOT_PROVEN_DEMO} (source: {source})"
+        )
+    else:
+        text = f"Annual bills are entered by the customer ({source}), so they are {_NOT_PROVEN}"
     period = basis.get("period_utc")
     if isinstance(period, (list, tuple)) and len(period) == 2:
         text += f"; the stated billing period is {period[0]} to {period[1]}"
@@ -115,8 +175,14 @@ def binding_facts(binding: Mapping) -> list[tuple[str, str]]:
     manifest = str(record.get("manifest_sha256") or "")
     digest = str(record.get("binding_sha256") or "")
     annualisation = str(basis.get("annualisation") or _DEFAULT_ANNUALISATION).rstrip(".")
+    demo = source_of(record) == DEMONSTRATION_SOURCE
     return [
         ("Run", str(record.get("run_id") or "missing")),
+        (
+            "Bills / O&M / CAPEX",
+            "synthetic demonstration values entered on this page" if demo
+            else "entered by the customer, not computed here",
+        ),
         ("Derived from this run", "no - the annual bills were entered, not computed here"),
         ("Withheld", "yes" if record.get("withheld") is True else "no"),
         ("Annualisation", annualisation),

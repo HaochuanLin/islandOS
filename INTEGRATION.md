@@ -196,6 +196,8 @@ Assumptions that must be recorded with any use of these numbers: energy-bill sav
 
 Zero is what an unfilled field looks like, not a customer figure. A surface that offers these inputs must therefore gate on the customer having supplied a baseline bill and a CAPEX quote (`islandos_ui/annual_economics_panel.annual_inputs_supplied`) and withhold every metric, the run citation and the cashflow table otherwise — screening placeholder zeros produces a confident "negative" verdict that describes nothing the customer said. A zero *proposed* bill is a legitimate claim (an off-grid site) and does not trip the gate.
 
+A surface may also pre-fill its own demonstration set so a first-time reader sees a complete screen, but then the provenance has to say so in three places: the banner leads with "Illustrative screening results", the binding's `annual_basis.source` is `synthetic_demonstration_figures` (`annual_source_for` decides this by comparing the values with the page's `DEMONSTRATION_VALUES`), and the facts line names them as synthetic. Any edited value falls back to `customer_entered_annual_bills`, and zeroing the bill and CAPEX still reaches the withheld branch — pre-filling must not delete the blank path.
+
 ### 6.3 Binding the annual figures to a run
 
 Producer: `islandos_core/investment_economics.py::bind_annual_economics_to_run(economics, manifest, *, annual_bill_source, annual_bill_period_utc)`; verifier: `verify_investment_economics_binding(binding)`.
