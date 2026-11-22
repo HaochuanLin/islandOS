@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import csv
 from dataclasses import asdict, replace
-import hashlib
 import json
 from pathlib import Path
 import platform
@@ -28,7 +27,6 @@ if str(ROOT) not in sys.path:
 from islandos_core.impact_scenario import (  # noqa: E402
     IslandSiteConfig,
     StrategyRules,
-    assumptions_record,
     compare_with_optimizer,
     generate_synthetic_inputs,
 )
