@@ -36,6 +36,7 @@ ENTRY_POINTS = [
     ("islandos_core/flexible_task_dispatch.py", "attach_device_task_schedule"),
     ("islandos_core/energy_system.py", "dispatch_energy_system"),
     ("islandos_core/assets.py", "evaluate_asset_readiness"),
+    ("islandos_core/site_inputs.py", "to_energy_system_config"),
 ]
 
 

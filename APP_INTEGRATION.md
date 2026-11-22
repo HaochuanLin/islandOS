@@ -19,6 +19,13 @@ long-lived server-side store. The public demo runs entirely inside one browser s
 | Streamlit-free UI helper | `islandos_ui/navigation.py` (`page_url_path`) | No |
 | Application/core | `islandos_core/*`, `optimization/*`, `experiments/*` | No |
 
+Site assumptions have exactly one construction point: `islandos_core/site_inputs.py`.
+`SiteAssumptions` holds the ten fields that describe a site's physical conditions, refuses to
+default any of them, and `to_energy_system_config()` is the only function allowed to assemble an
+`EnergySystemConfig`. Pages collect inputs and call it; they no longer build configs themselves.
+`DEFAULT_SITE` is the dashboard/joint-optimizer site; `DEVICE_PLANNER_DEMO_SITE` is the planner's
+deliberately smaller demo site — a different site, declared rather than merged.
+
 The rule this table encodes: **a page may render, but it may not compute**. Every number a page shows has
 to arrive from a function in the bottom row. `islandos_ui/navigation.py` is the only file under
 `islandos_ui` that is already usable by a non-Streamlit front end.
@@ -40,7 +47,9 @@ to arrive from a function in the bottom row. `islandos_ui/navigation.py` is the 
 | Site workspace (08) | `site_workspace.*`, `workspace_store.*`, `assets.evaluate_asset_readiness` | local workspace directory, `AssetRecord` | readiness report |
 
 Every function named above is importable without Streamlit; `tests/test_app_integration_doc.py` fails if
-one of them disappears from the repository.
+one of them disappears from the repository. Every page that describes a site also goes through
+`islandos_core/site_inputs.py::SiteAssumptions.to_energy_system_config` before any core calculation, so
+the site half of each call's inputs has one origin.
 
 ### 2.1 Page files and their routes
 
@@ -109,15 +118,20 @@ JSON schema file exist in this repository.
 
 ## 5. Known breaks
 
-1. **Site assumptions are assembled three times.** 05 (`pages/05…`, ~line 199), 06 (~line 119) and 09
-   (~lines 110 and 134) each call `EnergySystemConfig(...)` from their own sidebar widgets, with
-   different field sets. Two pages describing "the site" can hold different assumptions, and nothing
-   detects it. Planned: one constructor shared by all three (T3 in the integration prompt).
+1. ~~**Site assumptions are assembled three times.**~~ Closed: `islandos_core/site_inputs.py` is now
+   the single construction point. `SiteAssumptions` carries only site-level fields (PV, wind, grid
+   limit, battery capacity/power/SOC bounds, diesel rating and variable cost); page-specific
+   settings (objective weights, the dashboard's load and tariff scalars, the optimizer's search
+   population/generations/seed, the planner's tasks and price vector) and run-specific settings
+   (investment life, discount rate, escalation, availability flags) stay on their pages. Every
+   default value, unit and type is pinned by `tests/test_site_inputs.py`. The device planner keeps
+   a *different* site on purpose (`DEVICE_PLANNER_DEMO_SITE`: 12 kW PV, 4.5 kW wind, 20 kW grid,
+   12 kWh / 4 kW battery, 5 kW diesel) instead of inheriting the 40/20/100 site.
 2. **Run identity is not shared across pages.** See §3. No page can currently say "this is the same run
    the dashboard used", because no run id is handed off.
 3. **Data preparation lives inside Streamlit function bodies.** 05 and 06 build configs, manifests and
    optimizer calls inline, so nothing except Streamlit can reuse that path. Planned: a Streamlit-free
-   view-model layer (T4).
+   view-model layer (T4). *Partially addressed: config construction now lives in `site_inputs`.*
 4. **No transport for a non-Streamlit front end.** §4.
 
 Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
