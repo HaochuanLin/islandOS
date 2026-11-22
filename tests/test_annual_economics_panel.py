@@ -23,6 +23,7 @@ from islandos_core.investment_economics import (
 )
 from islandos_ui.annual_economics_panel import (
     annual_basis_text,
+    annual_inputs_supplied,
     basis_level,
     binding_errors,
     binding_facts,
@@ -144,3 +145,58 @@ def test_the_dashboard_binds_a_manifest_built_from_its_own_inputs():
     assert "verify_investment_economics_binding(" in source
     # The citation must reach the downloadable report, not only the screen.
     assert '"investment_economics_binding": economics_binding' in source
+
+
+def test_unfilled_placeholder_zeros_are_not_treated_as_customer_figures():
+    # Both bills and the CAPEX field default to zero, so the untouched page is
+    # exactly this case: a zero screen, not a decision.
+    assert annual_inputs_supplied(
+        baseline_annual_bill=0.0,
+        proposed_annual_bill=0.0,
+        upfront_capex=0.0,
+    ) is False
+    assert annual_inputs_supplied(
+        baseline_annual_bill=0.0,
+        proposed_annual_bill=0.0,
+        upfront_capex=120_000.0,
+    ) is False
+
+
+def test_a_real_bill_and_a_real_capex_quote_unlock_the_screen():
+    assert annual_inputs_supplied(
+        baseline_annual_bill=100_000.0,
+        proposed_annual_bill=0.0,
+        upfront_capex=120_000.0,
+    ) is True
+
+
+@pytest.mark.parametrize(
+    "overrides, message",
+    [
+        ({"baseline_annual_bill": -1.0}, "must not be negative"),
+        ({"upfront_capex": -5.0}, "must not be negative"),
+        ({"proposed_annual_bill": True}, "must be a number"),
+        ({"baseline_annual_bill": "100000"}, "must be a number"),
+    ],
+)
+def test_the_input_check_refuses_nonsense_instead_of_guessing(overrides, message):
+    args = dict(
+        baseline_annual_bill=100_000.0,
+        proposed_annual_bill=70_000.0,
+        upfront_capex=120_000.0,
+    )
+    args.update(overrides)
+    with pytest.raises(ValueError, match=message):
+        annual_inputs_supplied(**args)
+
+
+def test_the_dashboard_withholds_the_screen_when_the_inputs_are_missing():
+    source = PAGE.read_text(encoding="utf-8")
+    gate = source.index("annual_inputs_entered = annual_inputs_supplied(")
+    withheld = source.index('"status": "withheld_inputs_not_entered"')
+    first_metric = source.index('i1.metric("Net present value"')
+    # The gate runs before the metrics, and the placeholder branch exists at all:
+    # an unfilled page must not render a verdict computed on zeros.
+    assert gate < withheld
+    assert gate < first_metric
+

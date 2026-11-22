@@ -15,7 +15,10 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
-from islandos_ui.annual_economics_panel import render_annual_economics_basis
+from islandos_ui.annual_economics_panel import (
+    annual_inputs_supplied,
+    render_annual_economics_basis,
+)
 
 from islandos_core.energy_system import BatterySpec, EnergySystemConfig
 from islandos_core.customer_dashboard import parse_customer_history_csv
@@ -350,122 +353,166 @@ try:
         "No scenario probabilities or joint confidence coverage are assigned."
     )
 
-    investment = evaluate_investment_economics(
-        baseline_annual_energy_cost=float(baseline_annual_bill),
-        proposed_annual_energy_cost=float(proposed_annual_bill),
-        annual_incremental_om_cost=float(incremental_om),
-        upfront_capex=float(upfront_capex),
-        project_life_years=int(project_life),
-        discount_rate=float(discount_rate_pct) / 100.0,
-        annual_energy_saving_escalation_rate=float(energy_saving_escalation_pct) / 100.0,
-        annual_om_escalation_rate=float(om_escalation_pct) / 100.0,
-        replacement_year=int(replacement_year) if replacement_year is not None else None,
-        replacement_cost=float(replacement_cost),
-        residual_value=float(residual_value),
-        service_equivalent=bool(service_equal and economics.get("cost_comparison_valid")),
-    )
     st.subheader("Equipment investment screen")
-    # The annual figures cite this run; they are never derived from it. Build the
-    # manifest from the same inputs the screen was computed on, then bind.
-    annual_dataset_digest = source_sha256 or hashlib.sha256(
-        json.dumps(
+    economics_binding = None
+    annual_inputs_entered = annual_inputs_supplied(
+        baseline_annual_bill=baseline_annual_bill,
+        proposed_annual_bill=proposed_annual_bill,
+        upfront_capex=upfront_capex,
+    )
+    if annual_inputs_entered:
+        investment = evaluate_investment_economics(
+            baseline_annual_energy_cost=float(baseline_annual_bill),
+            proposed_annual_energy_cost=float(proposed_annual_bill),
+            annual_incremental_om_cost=float(incremental_om),
+            upfront_capex=float(upfront_capex),
+            project_life_years=int(project_life),
+            discount_rate=float(discount_rate_pct) / 100.0,
+            annual_energy_saving_escalation_rate=float(energy_saving_escalation_pct) / 100.0,
+            annual_om_escalation_rate=float(om_escalation_pct) / 100.0,
+            replacement_year=int(replacement_year) if replacement_year is not None else None,
+            replacement_cost=float(replacement_cost),
+            residual_value=float(residual_value),
+            service_equivalent=bool(service_equal and economics.get("cost_comparison_valid")),
+        )
+        # The annual figures cite this run; they are never derived from it. Build the
+        # manifest from the same inputs the screen was computed on, then bind.
+        annual_dataset_digest = source_sha256 or hashlib.sha256(
+            json.dumps(
+                {
+                    "timestamps_utc": [stamp.isoformat() for stamp in history_stamps],
+                    "signals": history,
+                    "units": units,
+                },
+                sort_keys=True, separators=(",", ":"), allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest()
+        annual_config_digest = hashlib.sha256(
+            json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        ).hexdigest()
+        annual_run_id = deterministic_run_id(
+            "run-dashboard",
             {
-                "timestamps_utc": [stamp.isoformat() for stamp in history_stamps],
-                "signals": history,
-                "units": units,
+                "dataset_sha256": annual_dataset_digest,
+                "site_configuration_sha256": annual_config_digest,
+                "history_sha256": bundle.input_history_sha256,
+                "recommended_policy": recommended,
+                "weights": {
+                    "cost": float(weights.cost),
+                    "reliability": float(weights.reliability),
+                    "curtailment": float(weights.curtailment),
+                    "battery_wear": float(weights.battery_wear),
+                },
+                "project_life_years": int(project_life),
+                "currency": currency,
             },
-            sort_keys=True, separators=(",", ":"), allow_nan=False,
-        ).encode("utf-8")
-    ).hexdigest()
-    annual_config_digest = hashlib.sha256(
-        json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
-    ).hexdigest()
-    annual_run_id = deterministic_run_id(
-        "run-dashboard",
-        {
-            "dataset_sha256": annual_dataset_digest,
-            "site_configuration_sha256": annual_config_digest,
-            "history_sha256": bundle.input_history_sha256,
-            "recommended_policy": recommended,
-            "weights": {
+        )
+        annual_run_manifest = create_run_manifest(
+            project_id="streamlit-customer-decision-dashboard",
+            run_id=annual_run_id,
+            site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
+            created_at_utc=datetime.now(timezone.utc).isoformat(),
+            dataset_sha256=annual_dataset_digest,
+            dataset_schema_version="canonical-hourly-signals-v1",
+            source_type="customer_provided" if shared_payload is not None else "synthetic",
+            site_configuration_version="1",
+            site_configuration_sha256=annual_config_digest,
+            required_signals=units,
+            forecast_horizon_hours=24,
+            optimizer_id="prediction_resource_dispatch",
+            optimizer_version="1",
+            optimizer_settings={
                 "cost": float(weights.cost),
                 "reliability": float(weights.reliability),
                 "curtailment": float(weights.curtailment),
                 "battery_wear": float(weights.battery_wear),
             },
-            "project_life_years": int(project_life),
-            "currency": currency,
-        },
-    )
-    annual_run_manifest = create_run_manifest(
-        project_id="streamlit-customer-decision-dashboard",
-        run_id=annual_run_id,
-        site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
-        created_at_utc=datetime.now(timezone.utc).isoformat(),
-        dataset_sha256=annual_dataset_digest,
-        dataset_schema_version="canonical-hourly-signals-v1",
-        source_type="customer_provided" if shared_payload is not None else "synthetic",
-        site_configuration_version="1",
-        site_configuration_sha256=annual_config_digest,
-        required_signals=units,
-        forecast_horizon_hours=24,
-        optimizer_id="prediction_resource_dispatch",
-        optimizer_version="1",
-        optimizer_settings={
-            "cost": float(weights.cost),
-            "reliability": float(weights.reliability),
-            "curtailment": float(weights.curtailment),
-            "battery_wear": float(weights.battery_wear),
-        },
-        scenario_assumptions={
-            "grid_available": [True] * 24,
-            "battery_configured": config.battery is not None,
-            "horizon_hours": 24,
-            "currency": currency,
-        },
-        forecast_settings={"backtest_horizon": 24, "season_length": 24, "confidence_level": 0.90},
-    ).to_dict()
-    economics_binding = bind_annual_economics_to_run(
-        investment,
-        annual_run_manifest,
-        annual_bill_source="customer_entered_annual_bills",
-    )
-    binding_verification = verify_investment_economics_binding(economics_binding)
-    if not binding_verification["valid"]:
-        st.error(
-            "Annual economics binding integrity check failed: "
-            + "; ".join(binding_verification["errors"])
+            scenario_assumptions={
+                "grid_available": [True] * 24,
+                "battery_configured": config.battery is not None,
+                "horizon_hours": 24,
+                "currency": currency,
+            },
+            forecast_settings={"backtest_horizon": 24, "season_length": 24, "confidence_level": 0.90},
+        ).to_dict()
+        economics_binding = bind_annual_economics_to_run(
+            investment,
+            annual_run_manifest,
+            annual_bill_source="customer_entered_annual_bills",
         )
-        st.stop()
-    render_annual_economics_basis(economics_binding)
-    st.caption(
-        "The metrics below are a screening result under the assumptions printed with them; "
-        "they are not a procurement guarantee."
-    )
-    if investment.decision == "blocked":
-        st.warning(investment.reasons[0])
+        binding_verification = verify_investment_economics_binding(economics_binding)
+        if not binding_verification["valid"]:
+            st.error(
+                "Annual economics binding integrity check failed: "
+                + "; ".join(binding_verification["errors"])
+            )
+            st.stop()
+        render_annual_economics_basis(economics_binding)
+        st.caption(
+            "The metrics below are a screening result under the assumptions printed with them; "
+            "they are not a procurement guarantee."
+        )
+        if investment.decision == "blocked":
+            st.warning(investment.reasons[0])
+        else:
+            i1, i2, i3, i4 = st.columns(4)
+            i1.metric("Net present value", f"{investment.net_present_value:,.0f} {currency}")
+            i2.metric("Simple payback", f"{investment.simple_payback_years:.1f} years" if investment.simple_payback_years is not None else "Not achieved")
+            i3.metric("Discounted payback", f"{investment.discounted_payback_years:.1f} years" if investment.discounted_payback_years is not None else "Not achieved")
+            i4.metric("Break-even annual energy saving", f"{investment.break_even_annual_energy_saving:,.0f} {currency}")
+            st.write({
+                "Screen result": investment.decision.replace("_", " ").title(),
+                "Annual energy-bill difference": investment.annual_energy_cost_saving,
+                "Annual net operating benefit after incremental O&M": investment.annual_net_operating_benefit,
+                "Reasons / review notes": investment.reasons,
+            })
+            sensitivity_frame = pd.DataFrame([
+                {"Case": label.replace("_", " ").title(), "NPV": value}
+                for label, value in investment.sensitivity_npv.items()
+            ]).set_index("Case")
+            st.caption("Sensitivity varies year-one energy-bill saving by ±20%; all other assumptions and escalation rates remain fixed.")
+            st.bar_chart(sensitivity_frame)
+            st.subheader("Annual investment cashflow")
+            cashflow_frame = pd.DataFrame(investment.annual_cashflows)
+            st.dataframe(cashflow_frame, use_container_width=True, hide_index=True)
+        investment_report = investment.to_dict()
+
     else:
-        i1, i2, i3, i4 = st.columns(4)
-        i1.metric("Net present value", f"{investment.net_present_value:,.0f} {currency}")
-        i2.metric("Simple payback", f"{investment.simple_payback_years:.1f} years" if investment.simple_payback_years is not None else "Not achieved")
-        i3.metric("Discounted payback", f"{investment.discounted_payback_years:.1f} years" if investment.discounted_payback_years is not None else "Not achieved")
-        i4.metric("Break-even annual energy saving", f"{investment.break_even_annual_energy_saving:,.0f} {currency}")
-        st.write({
-            "Screen result": investment.decision.replace("_", " ").title(),
-            "Annual energy-bill difference": investment.annual_energy_cost_saving,
-            "Annual net operating benefit after incremental O&M": investment.annual_net_operating_benefit,
-            "Reasons / review notes": investment.reasons,
-        })
-        sensitivity_frame = pd.DataFrame([
-            {"Case": label.replace("_", " ").title(), "NPV": value}
-            for label, value in investment.sensitivity_npv.items()
-        ]).set_index("Case")
-        st.caption("Sensitivity varies year-one energy-bill saving by ±20%; all other assumptions and escalation rates remain fixed.")
-        st.bar_chart(sensitivity_frame)
-        st.subheader("Annual investment cashflow")
-        cashflow_frame = pd.DataFrame(investment.annual_cashflows)
-        st.dataframe(cashflow_frame, use_container_width=True, hide_index=True)
-    investment_report = investment.to_dict()
+        # A zero bill is what an unfilled field looks like, not a customer figure.
+        # Screening it produces a confident "negative" verdict that describes
+        # nothing the customer said, so every metric is withheld instead.
+        st.warning(
+            "Withheld - the baseline annual bill and the installed CAPEX have not both been "
+            "entered. Those fields default to zero, and zero is what an empty field looks like, "
+            "not a customer figure, so there is no screen to show here. Enter the baseline and "
+            "proposed annual bills plus a supplier CAPEX quote in the sidebar; the screen, its "
+            "run citation and the cashflow table then appear together."
+        )
+        investment_report = {
+            "status": "withheld_inputs_not_entered",
+            "reason": (
+                "the baseline annual bill and installed CAPEX were not both entered; "
+                "the remaining placeholders are zero, not a customer figure"
+            ),
+            "metrics_withheld": [
+                "net_present_value",
+                "simple_payback_years",
+                "discounted_payback_years",
+                "break_even_annual_energy_saving",
+                "sensitivity_npv",
+                "annual_cashflows",
+            ],
+            "inputs_as_entered": {
+                "baseline_annual_energy_cost": float(baseline_annual_bill),
+                "proposed_annual_energy_cost": float(proposed_annual_bill),
+                "annual_incremental_om_cost": float(incremental_om),
+                "upfront_capex": float(upfront_capex),
+            },
+        }
+        st.caption(
+            "Nothing is bound to a run while the inputs are missing: a binding would have to "
+            "describe bills nobody entered."
+        )
     selected_candidate = candidates[recommended]
     operator_result = dict(result)
     operator_result.update({

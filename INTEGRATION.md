@@ -194,6 +194,8 @@ Output `InvestmentEconomics` (frozen dataclass, `to_dict()` for serialisation): 
 
 Assumptions that must be recorded with any use of these numbers: energy-bill saving and incremental O&M are year-one values; escalation applies from year two; a single simulated day is never annualised; `service_equivalent=False` blocks every investment metric.
 
+Zero is what an unfilled field looks like, not a customer figure. A surface that offers these inputs must therefore gate on the customer having supplied a baseline bill and a CAPEX quote (`islandos_ui/annual_economics_panel.annual_inputs_supplied`) and withhold every metric, the run citation and the cashflow table otherwise — screening placeholder zeros produces a confident "negative" verdict that describes nothing the customer said. A zero *proposed* bill is a legitimate claim (an off-grid site) and does not trip the gate.
+
 ### 6.3 Binding the annual figures to a run
 
 Producer: `islandos_core/investment_economics.py::bind_annual_economics_to_run(economics, manifest, *, annual_bill_source, annual_bill_period_utc)`; verifier: `verify_investment_economics_binding(binding)`.
