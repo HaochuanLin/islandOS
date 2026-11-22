@@ -18,6 +18,7 @@ long-lived server-side store. The public demo runs entirely inside one browser s
 | Streamlit surfaces | `islandos_ui/workspace.py`, `annual_economics_panel.py`, `decision_record_panel.py`, `page_header.py`, `upload_guard.py` | Yes |
 | Streamlit-free UI helper | `islandos_ui/navigation.py` (`page_url_path`) | No |
 | Application-facing view models | `islandos_core/app_view_models.py` | No |
+| Run orchestration | `islandos_core/run_orchestration.py` | No |
 | Application/core | `islandos_core/*`, `optimization/*`, `experiments/*` | No |
 
 Site assumptions have exactly one construction point: `islandos_core/site_inputs.py`.
@@ -199,9 +200,10 @@ candidate dictionaries inline. Page 06 builds its request after the availability
 projection (which verifies the record before returning it).
 
 A non-Streamlit client would keep its own site inputs, render the same widgets, call `build_run_request`,
-hand the resulting document to the core entry point, and render `build_run_result_summary` /
-`build_annual_projection` — the same validation, the same field names, the same units, without
-re-implementing any of it. What it would still have to supply itself is listed in §4.5.
+hand the resulting document to `islandos_core/run_orchestration.py` (`run_customer_dashboard` /
+`run_joint_optimizer`), and render `build_run_result_summary` / `build_annual_projection` — the same
+validation, the same field names, the same units, and the same call order, without re-implementing any
+of it. What it would still have to supply itself is listed in §4.5.
 
 ### 4.5 Still Streamlit-only, and still not implemented
 
@@ -235,11 +237,11 @@ No HTTP surface exists, and none is claimed here.
    12 kWh / 4 kW battery, 5 kW diesel) instead of inheriting the 40/20/100 site.
 2. **Run identity is not shared across pages.** See §3. No page can currently say "this is the same run
    the dashboard used", because no run id is handed off.
-3. **Data preparation lives inside Streamlit function bodies.** 05 and 06 build configs, manifests and
-   optimizer calls inline, so nothing except Streamlit can reuse that path. *Partially addressed: config
-   construction now lives in `site_inputs`, and the request/result/annual shapes now live in
-   `app_view_models` (§4). The orchestration itself — which core function is called with which keyword
-   arguments — still sits in the page body.*
+3. ~~**Data preparation lives inside Streamlit function bodies.**~~ Closed by two steps: config
+   construction lives in `site_inputs` (T3), the request/result/annual shapes in `app_view_models`
+   (T4), and the *call order* in `run_orchestration` (T8). Pages 05 and 06 now collect inputs,
+   build their request, call one orchestration function, and render. What remains page-side is
+   widget wiring and the presentation of values that already exist.
 4. **No transport for a non-Streamlit front end.** §4.5.
 
 Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
