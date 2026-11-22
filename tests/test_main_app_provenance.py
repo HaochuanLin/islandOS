@@ -4,6 +4,10 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 
+# The section UI lives in islandos_ui/workspace.py and is rendered by the
+# app.py navigation shell. The shell must be the entrypoint here: the workspace
+# links to other pages with st.page_link, which only resolves for pages
+# registered in st.navigation.
 APP = Path(__file__).resolve().parents[1] / "app.py"
 
 
