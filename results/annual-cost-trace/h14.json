@@ -1,0 +1,168 @@
+{
+  "anchor_utc": "2026-11-22T14:00:00+00:00",
+  "anchor_hour_utc": 14,
+  "run_id": "run-trace-36049224eb2c49f0",
+  "manifest_sha256": "8ea976fff59a7931e08154be81c6a0548089e03d15a5037855a7c10f4b37e088",
+  "site_configuration_sha256": "99c3cf0c3f3c7db25a0dc5cc255d6e9d546b39902fb990d2db34c7284fbaa8ee",
+  "dataset_sha256": "6a58b14c0115bc45622dd06f68c30ff90ddcc0ea261a6d92b424c6c89796813f",
+  "optimizer_settings": {
+    "generations": 5,
+    "population_size": 12,
+    "seed": 20261113
+  },
+  "recommended_policy": null,
+  "day_summary": {
+    "load_energy_kwh": 510.0,
+    "load_served_kwh": 510.0,
+    "unmet_load_kwh": 0.0,
+    "estimated_energy_cost": 21.12206434,
+    "grid_energy_cost": 21.12206434,
+    "grid_export_revenue": 0.0,
+    "grid_import_kwh": 138.38704762,
+    "grid_export_energy_kwh": 0.0,
+    "battery_throughput_kwh": 122.61389661,
+    "battery_degradation_cost": 0.0,
+    "diesel_generation_kwh": 0.0,
+    "diesel_fuel_cost": 0.0,
+    "diesel_start_cost": 0.0,
+    "diesel_stop_cost": 0.0,
+    "grid_demand_charge": 0.0,
+    "diesel_energy_cost": 0.0,
+    "renewable_curtailed_kwh": 0.93143312
+  },
+  "target_window": {
+    "first_hour_utc": "2026-11-22T15:00:00+00:00",
+    "last_hour_utc": "2026-11-23T14:00:00+00:00",
+    "tariff_sum": 3.91,
+    "tariff_mean": 0.162917,
+    "tariff_shape": [
+      "0.16",
+      "0.16",
+      "0.27",
+      "0.27",
+      "0.27",
+      "0.27",
+      "0.27",
+      "0.16",
+      "0.16",
+      "0.08",
+      "0.08",
+      "0.08",
+      "0.08",
+      "0.08",
+      "0.08",
+      "0.16",
+      "0.16",
+      "0.16",
+      "0.16",
+      "0.16",
+      "0.16",
+      "0.16",
+      "0.16",
+      "0.16"
+    ],
+    "pv_kwh": 199.240371,
+    "wind_kwh": 207.550982,
+    "load_kwh": 510.0
+  },
+  "annual_record": {
+    "schema_version": 1,
+    "record_type": "annual_operating_basis_projection",
+    "run_id": "run-trace-36049224eb2c49f0",
+    "manifest_sha256": "8ea976fff59a7931e08154be81c6a0548089e03d15a5037855a7c10f4b37e088",
+    "data_provenance": "Synthetic demonstration data",
+    "summary_source": "recommended schedule's own nominal dispatch summary (the same 24-hour run that produced the hourly setpoint rows on this page)",
+    "simulated_hours": 24,
+    "basis": {
+      "days_equivalent_per_year": 365,
+      "hours_equivalent_per_year": 8760,
+      "equal_day_assumption": "each simulated day stands for the annual average day; no seasonal weighting, no load-growth and no tariff-year change are applied",
+      "derived_from_run": true,
+      "site_validated": false,
+      "measured": false,
+      "bill": false
+    },
+    "figures": {
+      "annual_load_energy_kwh": 186150.0,
+      "annual_load_served_kwh": 186150.0,
+      "annual_unmet_load_kwh": 0.0,
+      "annual_energy_cost": 7709.553484,
+      "annual_equipment_operating_cost": 0.0,
+      "annual_diesel_run_hours": 0.0
+    },
+    "components_inside_annual_energy_cost": {
+      "diesel_fuel_cost": 0.0,
+      "battery_degradation_cost": 0.0,
+      "diesel_start_stop_cost": 0.0
+    },
+    "definitions": {
+      "annual_load_energy_kwh": {
+        "unit": "kWh / year",
+        "meaning": "energy the site demanded over the projection year"
+      },
+      "annual_load_served_kwh": {
+        "unit": "kWh / year",
+        "meaning": "energy actually delivered to load over the projection year"
+      },
+      "annual_unmet_load_kwh": {
+        "unit": "kWh / year",
+        "meaning": "demanded energy not served, before and after the same assumption"
+      },
+      "annual_energy_cost": {
+        "unit": "currency / year (net)",
+        "meaning": "modelled net energy cost of the dispatch over the projection year, already net of export revenue; a projection, not a bill"
+      },
+      "annual_equipment_operating_cost": {
+        "unit": "currency / year",
+        "meaning": "fuel, battery throughput and diesel start/stop inside the annual energy cost above; a breakdown of that cost, never an addition to it"
+      },
+      "annual_diesel_run_hours": {
+        "unit": "hours / year",
+        "meaning": "hours the diesel generator was committed in the run, scaled by the same assumption"
+      }
+    },
+    "scope": "Annual projection of a 24-hour offline dispatch run under a declared equal-days assumption: not a utility bill, not measured annual consumption, not a site-validated forecast, and not an equipment command.",
+    "device_write_authorized": false,
+    "command_generated": false,
+    "annualisation_sha256": "3696952deb26d2ca236bf4c137e6933316ef3a0351c677a31d33367ca7c3aff0"
+  },
+  "annual_view_figures": {
+    "annual_load_energy_kwh": 186150.0,
+    "annual_load_served_kwh": 186150.0,
+    "annual_unmet_load_kwh": 0.0,
+    "annual_energy_cost": 7709.553484,
+    "annual_equipment_operating_cost": 0.0,
+    "annual_diesel_run_hours": 0.0
+  },
+  "annual_verified": {
+    "valid": true,
+    "errors": []
+  },
+  "identity": {
+    "day_parts": {
+      "grid_energy_cost": 21.12206434,
+      "grid_demand_charge": 0.0,
+      "diesel_energy_cost": 0.0,
+      "diesel_fuel_cost": 0.0,
+      "battery_degradation_cost": 0.0,
+      "diesel_start_cost": 0.0,
+      "diesel_stop_cost": 0.0
+    },
+    "day_export_revenue": 0.0,
+    "day_net_recomputed": 21.12206434,
+    "day_estimated_energy_cost": 21.12206434,
+    "day_difference": 0.0,
+    "annual_parts": {
+      "grid_energy_cost": 7709.553484,
+      "grid_demand_charge": 0.0,
+      "diesel_energy_cost": 0.0,
+      "diesel_fuel_cost": 0.0,
+      "battery_degradation_cost": 0.0,
+      "diesel_start_cost": 0.0,
+      "diesel_stop_cost": 0.0
+    },
+    "annual_export_revenue": 0.0,
+    "annual_net_recomputed": 7709.553484,
+    "annual_energy_cost_in_record": 7709.553484
+  }
+}

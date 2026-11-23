@@ -4,6 +4,16 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The two recorded 06 annual costs are now checked-in, reproducible evidence.** `scripts/trace_annual_energy_cost.py`
+  replays page 06's default path at an explicit anchor and reuses `islandos_core.demo_site_history` rather
+  than keeping a second copy of the synthetic formulas. `results/annual-cost-trace/` holds the 14:00Z run
+  (`7,709.553484 USD/year`), the 02:00Z run (`5,332.569196`), and the 24-hour sweep (`4,548.683071` to
+  `8,631.338277`), plus a README that states what the evidence does and does not show. `186,150 kWh`,
+  `0.00` equipment cost and `0 h` diesel run time hold in all 26 runs; the annual gap is the daily grid
+  import (`138.387` vs `93.688 kWh`) at the same `3.91` tariff sum, not a tariff change.
+  `tests/test_trace_annual_energy_cost.py` pins the 14:00Z and 02:00Z figures. No page formula, contract
+  field, or `schema_version` changed.
+
 - **06's run identity is derived from the window it describes, not from the wall clock.** The page minted
   a fresh `run_id` with `uuid4()` and stamped `created_at_utc` with `datetime.now(timezone.utc)` on every
   render, so two downloads of the same pinned window carried different `run_id`, `manifest_sha256`,
