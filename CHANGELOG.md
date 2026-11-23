@@ -4,6 +4,24 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The contract now has a written migration rule, and a gate that fails when it is skipped.**
+  `CONTRACT_VERSION` was `3` with three committed artifacts and no statement of when to bump or what
+  must move with it, so the next field change could land in one file. `APP_INTEGRATION.md` gains §4.7
+  "Contract versioning": a table of what counts as a bump (add / remove / rename / retype a field, a
+  unit or definition change, a per-page key change, a new page) and what does not (captions, comments,
+  tests, formatting); the order to change things in (`CONTRACT_VERSION` → field tuples → builders →
+  generated artifacts → `contracts.ts` and the viewer → tests → this document and this file); a
+  copy-paste checklist; and the rule that old version files stay. The number now has one source:
+  `SCHEMA_PATH` was the last literal `app_view_models.v3.json` and is now derived from
+  `CONTRACT_VERSION`, and the generated `frontend/src/contracts.ts` header states the version it was
+  rendered from. `tests/test_contract_versioning.py` fails unless the long table's `contract_version`,
+  the JSON Schema's `$id` and its per-object `schema_version` consts, and the TypeScript header all
+  name `CONTRACT_VERSION`; it is also parametrised over each single-artifact edit, so the "only changed
+  one place" case is proven to fail rather than assumed. Verified two ways: raising `CONTRACT_VERSION`
+  to `4` alone failed on the missing regenerated files, and copying the v3 artifacts under v4 names
+  failed naming all three stale versions; both passed again after reverting. No runtime, schema or
+  page change.
+
 - **The viewer is now a local tool, and the question is closed rather than deferred.** After the landing
   route (`GET /`), the open item was whether `frontend/application-views.html` is a local tool or a third
   console page. It is a local tool: it reads a downloaded report and `GET /contracts` on loopback, holds

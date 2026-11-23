@@ -323,6 +323,91 @@ The 09 demo's own numbers (72 kWh protected, 17 kWh flexible, 13.77 charge, 6.0 
 import, 15.44 cost, 0.00 unmet, 0.00 shed) are asserted in `tests/test_app_view_models.py` and replayed
 through the transport, so a regression in either path fails a test rather than moving a number silently.
 
+### 4.7 Contract versioning
+
+`CONTRACT_VERSION` in `islandos_core/app_view_models.py` is the only place the number is written.
+Everything else derives from it: the long table's `contract_version`, the JSON Schema's `$id` and the
+`schema_version` `const` in every object, the header comment of `frontend/src/contracts.ts`, and the file
+names under `docs/contracts/`. `tests/test_contract_versioning.py` fails unless the three committed
+artifacts and the module agree, and fails if an artifact is still on an old file name.
+
+One number covers the whole `app_view_models` data model, not one per contract: the four shapes travel
+together in one `application_views` block, so a client holding a report needs a single answer to "which
+shapes am I reading". The version is a monotonic integer — `1`, `2`, `3` — never reused, never a
+prerelease. It is not semver, and deliberately so: every object is closed (`additionalProperties: false`)
+and every declared key is required, so there is no compatible "add an optional field" move. Under
+SchemaVer's terms, an addition to a closed object is a MODEL-level change — it prevents interaction with
+data written under the previous version — so one integer is the whole vocabulary this contract needs.
+
+#### When to bump
+
+| Change | Bump? | Why |
+|---|---|---|
+| Add a field to any object | **yes** | closed objects: a v3 reader rejects the key, a v4 reader requires it |
+| Remove or rename a field | **yes** | the old key disappears; both versions treated it as required |
+| Change a field's type, nullability or required-ness | **yes** | the `const`, the TypeScript property and the validator all change |
+| Change a unit or a definition while the type stays (`kW` → `kWh`, 24 h → a year) | **yes** | the shape is identical but the numbers no longer mean the same thing |
+| Change a per-page key set (`page_settings`, `run_settings`, `page_inputs`) or add a page | **yes** | the `if`/`then` branches and the `page` discriminator are contract surface |
+| Change a caption, docstring, comment, test or generator formatting | no | nothing a client reads changes |
+
+The test that a bump is earned: compare the emitted document both ways. If a v3 report no longer
+validates against the v4 schema, and a v4 report does not validate against v3, the change is a contract
+change. If both directions pass, it was documentation, not contract — leave the number alone.
+
+#### What must move together
+
+In this order. Each step reads the one above, so doing them out of order is how a "one-place PR" happens.
+
+1. `CONTRACT_VERSION` in `islandos_core/app_view_models.py`, then the field tuples the builders assert
+   against (`REQUEST_FIELDS`, `RESULT_SUMMARY_FIELDS`, `*_FIELDS`, `PAGE_SETTING_KEYS`,
+   `RUN_SETTING_KEYS`).
+2. The builders in the same module — `build_run_request`, `build_run_result_summary`,
+   `build_device_flexibility_summary`, `build_annual_projection`. A field the schema declares but the
+   builder never emits fails `tests/test_app_view_models.py`, not the schema test.
+3. `islandos_core/run_orchestration.py` and `islandos_core/transport.py`, only if the changed field
+   crosses them.
+4. The three generated artifacts (§4.5), one command each — never hand-edited.
+5. The front end that imports them: `frontend/src/contracts.ts` is regenerated; a new nullable field has
+   to be handled in `frontend/src/ApplicationViews.tsx` before `npm run build` passes.
+6. The tests that pin the surface: `tests/test_app_view_models.py` (page values),
+   `tests/test_contract_json_schema.py` (a built request and its replay validate),
+   `tests/test_application_transport.py` (`GET /contracts`, `POST /run`), and
+   `tests/test_contract_versioning.py` (the three artifacts and the version).
+7. This document and `CHANGELOG.md`: the §4.1–§4.6 field tables, the artifact table in §4.5, and one
+   Unreleased bullet saying what changed and that an older report is now refused.
+
+#### Checklist
+
+Every pull request that touches the contract copies this list into its description and ticks it. The
+gate is `python -m pytest -q`, which `.github/workflows/python-unit-tests.yml` already runs on every
+pull request, so no new workflow is needed.
+
+- [ ] Decide the bump: one row of the table above, with the "which report stops validating" answer
+      written down.
+- [ ] `CONTRACT_VERSION = N + 1`; no live path still names `v{N}` (`docs/contracts/` keeps the old files,
+      nothing else should).
+- [ ] Field tuples and builders updated; `python -m pytest tests/test_app_view_models.py -q` green.
+- [ ] `python -m islandos_core.contract_schemas` → `docs/contracts/app_view_models.v{N+1}.json`.
+- [ ] `python -m islandos_core.contract_schemas --json-schema` → `app_view_models.v{N+1}.schema.json`.
+- [ ] `python -m islandos_core.contract_schemas --typescript` → `frontend/src/contracts.ts`.
+- [ ] `python -m pytest tests/test_contract_versioning.py tests/test_contract_json_schema.py
+      tests/test_contract_typescript.py tests/test_application_transport.py -q` green.
+- [ ] `cd frontend && npm run build` — the viewer compiles against the regenerated types.
+- [ ] §4.1–§4.6 tables, the §4.5 artifact table and this section's file names updated; `CHANGELOG.md`
+      bullet added.
+- [ ] The previous version's files left in place, not rewritten or deleted.
+
+#### Old versions
+
+Old files stay. `docs/contracts/app_view_models.v2.json` is still the only description of the reports
+already downloaded under v2; a bump to v4 adds `v4.json` and `v4.schema.json` and leaves both v3 files
+untouched. Nothing regenerates a previous version, and no test compares it to the current module — that
+is the point: a frozen file describes a frozen shape. A v2 report opened in the viewer or posted to
+`POST /run` is refused with a version error instead of being read halfway, because `schema_version` is a
+`const` in every object of the JSON Schema: the refusal comes from the validator, not from a rule
+someone has to remember. Keeping the old files costs a few kilobytes; deleting them loses the only
+written answer to "what did that cited report contain".
+
 ---
 
 ## 5. Known breaks
