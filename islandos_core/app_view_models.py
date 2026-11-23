@@ -36,7 +36,7 @@ import hashlib
 import json
 from typing import Any, Mapping, Sequence
 
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 4
 
 # Every top-level field a view carries, declared once. Builders assemble exactly these
 # keys, and tests fail on any drift, so a client can be written against a stable surface
