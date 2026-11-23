@@ -1,0 +1,9 @@
+# Static file serving is what makes the build stamp readable over HTTP:
+# Streamlit serves ./static/<name> at /app/static/<name>. Without it, every
+# route on the hosted app — including /app/static/build_info.json — returns the
+# same front-end shell, and nothing about the running code is observable.
+[server]
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false

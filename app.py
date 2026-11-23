@@ -19,6 +19,7 @@ import os
 
 import streamlit as st
 
+from islandos_core import build_info
 from islandos_ui.navigation import page_url_path
 
 LOCAL_WORKSPACE_FLAG = "ISLANDOS_ENABLE_LOCAL_WORKSPACE"
@@ -38,6 +39,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def deployment_stamp() -> dict:
+    """The build stamp for this deployment, also published as a static file.
+
+    ``/app/static/build_info.json`` is the only route on the hosted app that
+    returns the app's own data instead of the front-end shell, so it is what
+    ``scripts/check_deployment.py`` reads. The write is best-effort: a read-only
+    deployment still renders the page, and the sidebar line is then the only
+    place the stamp appears.
+    """
+    stamp = build_info.build_stamp()
+    try:
+        build_info.write_stamp(stamp)
+    except OSError:
+        pass
+    return stamp
 
 
 def _url_path(page_file: str) -> str:
@@ -97,4 +116,9 @@ def navigation_pages() -> dict:
     return groups
 
 
-st.navigation(navigation_pages()).run()
+navigation = st.navigation(navigation_pages())
+navigation.run()
+
+with st.sidebar:
+    st.divider()
+    st.caption(build_info.caption(deployment_stamp()))

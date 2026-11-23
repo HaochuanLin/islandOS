@@ -4,6 +4,44 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **"Which commit is the hosted app running?" is now a claim with evidence, not a blank.** `APP_INTEGRATION.md`
+  said the deployed commit could not be shown from outside. Half of that was measured rather than assumed: on
+  2026-11-23 every route on `islandos.streamlit.app` — a page, `/_stcore/health`, an invented path — answered
+  `200` with one identical 9,782-byte Streamlit front-end shell, and the HTML carries no page title, button
+  label or `schema_version` string at all, because Streamlit draws the page in the browser. Scraping the page
+  therefore proves nothing, and an HTTP status cannot tell a live page from a missing one. The app now
+  publishes a build stamp where the bytes *are* app-specific: `islandos_core/build_info.py` reads the
+  deployment's own checkout (`git rev-parse HEAD`), `app.py` writes `static/build_info.json` at start-up and
+  captions the sidebar `build <sha> (<resolved_from>)`, and `.streamlit/config.toml` enables
+  `[server] enableStaticServing` so the file is served at `/app/static/build_info.json`. The commit is never a
+  constant in the repository: a committed SHA would assert a fact nobody verified, and a CI-written stamp
+  cannot contain the SHA of the commit that adds it, so it would only ever describe its parent.
+  `tests/test_build_info.py` fails if a literal 40-hex value ever appears in the module. A deployment with no
+  git metadata says `unknown` with the reason instead of inventing a value; `ISLANDOS_BUILD_COMMIT` is
+  accepted for container builds but reported as `environment`, and is never compared to a branch.
+  `scripts/check_deployment.py` turns this into one repeatable assertion: the three page routes must return
+  the app shell, a headless session must render the page, the sidebar line must name the commit the stamp
+  publishes, and `--expect-commit` must match it. A stamp that disagrees with itself — a short form that
+  does not match its full commit, a sidebar line carrying the right sha with the wrong source tag — is
+  refused rather than treated as a partial match. Exit codes 0–5 separate "passed", "page broken", "stamp
+  missing", "commit drift", "self-declared commit" and "render did not confirm". `--warm` exists because a
+  Streamlit script only runs when a session connects: a fresh container has no stamp file until someone opens
+  the app, and an HTTP-only probe would call that deployment broken. `hosted-app-health.yml` runs the script
+  (installing `playwright==1.65.2` and Chromium for the warm-up) six-hourly with the commit assertion, and on
+  push and pull request without it, because a run seconds after a merge would report drift that has not
+  happened yet. `tests/test_check_deployment.py` covers every classification against a local server; the one
+  test that talks to the public app is skipped unless `ISLANDOS_LIVE_DEPLOYMENT=1`. Rendering has to be read
+  in the right frame as well: Community Cloud serves a wrapper whose own body is ~72 characters of chrome
+  around `<iframe src="…/~/+/">`, and the app's DOM exists only inside that frame — a 180-second wait for the
+  container in the page itself timed out against a deployment that was rendering fine, so the warm-up
+  searches every frame and records `frame_url`. Run against the deployment as it stands, the check reports
+  `stamp_unavailable` (exit 2), because the running container predates this change; that is the same
+  distinction §7.4 keeps. What this still does not
+  prove is listed in `APP_INTEGRATION.md` §7.4 — that the process executes the commit it reports, that
+  dependencies equal the lock, Streamlit Cloud's own provenance, that the stamp cannot be made to lie, and
+  anything else the rendered page shows. One manual "Reboot app" is needed after this merge, because a
+  changed `.streamlit/config.toml` only takes effect on restart.
+
 - **The contract now has a written migration rule, and a gate that fails when it is skipped.**
   `CONTRACT_VERSION` was `3` with three committed artifacts and no statement of when to bump or what
   must move with it, so the next field change could land in one file. `APP_INTEGRATION.md` gains §4.7

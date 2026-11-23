@@ -489,17 +489,130 @@ The deployed artifact is the Streamlit Community Cloud app that builds from `mai
 - `https://islandos.streamlit.app/Forecast_Led_Joint_Resource_Optimizer`
 - `https://islandos.streamlit.app/Device_Flexibility_Planner`
 
-**Can be shown from outside:** each page URL answers, the app renders the numbers its inputs imply — for
-05 and 06 that includes the Demo clock date and hour, which default to "today, now" — and the report a
-page lets you download states `schema_version: 3` and carries `application_views` with the contract's
-key set — which a stock validator checks against `docs/contracts/app_view_models.v3.schema.json`.
-A recorded demo figure is reproducible only together with the pin that produced it; the unpinned default
-is live and changes with the calendar.
-`.github/workflows/hosted-app-health.yml` checks reachability on a schedule.
+"Which commit is it running?" used to be unanswerable: the page exposed no build stamp, and no deploy hook
+wrote one. The reason is measured (§7.1), not assumed. What answers it now is a stamp the app writes from
+its own checkout (§7.2), read by one script that turns it into a repeatable assertion (§7.3); §7.4 lists
+what that still cannot show.
 
-**Cannot be shown from outside:** which commit the deployment is running. The public page does not expose a
-build stamp, and no deploy hook writes one into the app, so "the site runs `2ba8dad`" is not a verifiable
-claim. What can be stated is narrower and true: the deployed app serves reports whose contract version and
-field set are `3`, and `schema_version` in a downloaded report is the honest link between that report and
-this contract. To close the gap properly would need either Streamlit Cloud's deployment metadata or a
-self-reported build id baked at build time; neither exists here, and the docs do not pretend otherwise.
+### 7.1 What the front end exposes — measured 2026-11-23
+
+| Request | Response |
+|---|---|
+| `/`, `/Customer_Decision_Dashboard`, `/Forecast_Led_Joint_Resource_Optimizer`, `/Device_Flexibility_Planner` | `200`, `text/html`, one identical 9,782-byte Streamlit shell |
+| `/_stcore/health` | the same shell, not `ok` |
+| a path that does not exist | the same shell, `200` |
+| any of the above without a session cookie | `303` to `share.streamlit.io/-/auth/app`, then the shell once the cookie jar is kept |
+| `/` loaded in a headless browser | the page's own body is ~72 characters of chrome around `<iframe src="…/~/+/">`; the sidebar, the pages and every `data-testid` exist only inside that frame |
+
+Consequences, which bound what any check may claim:
+
+- an HTTP status proves nothing: a missing page and a live page answer the same `200`;
+- no page title, button label or `schema_version` string is present in the HTML, because Streamlit renders
+  the page in the browser — "scrape the visible marker" cannot be done without a headless browser;
+- even with a browser, the app is not in the document that was served: a check that waits for the app
+  container in the outer page times out against a perfectly healthy deployment (measured 2026-11-23:
+  a 180-second timeout on `[data-testid="stAppViewContainer"]` while the page rendered normally inside
+  the iframe);
+- the three page routes differ only in their URL; the server returns the same bytes for each.
+
+Separately, a report downloaded from a page states `schema_version: 3` and carries `application_views`; that
+ties the *file* to the contract (`docs/contracts/app_view_models.v3.schema.json` validates it) and says
+nothing about which code produced it.
+
+The one route that returns app-specific bytes is `./static`, which Streamlit serves at `/app/static/<name>`
+when `[server] enableStaticServing = true` (`.streamlit/config.toml`). That is where the build stamp lives.
+
+### 7.2 The build stamp
+
+At start-up `app.py` calls `islandos_core.build_info.build_stamp()`, writes the result to
+`static/build_info.json` (best-effort: a read-only deployment still renders the page), and captions the
+sidebar with `build <short sha> (<resolved_from>)`.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `1`; a consumer refuses anything else |
+| `source_commit`, `source_commit_short` | the deployment's `git rev-parse HEAD`, or `null` |
+| `resolved_from` | `git` (read from the checkout), `environment` (`ISLANDOS_BUILD_COMMIT`), `none` |
+| `unresolved_reason` | why no commit was found: `not-a-git-checkout`, `git-not-runnable`, `unexpected-rev-parse-output` |
+| `working_tree_dirty` | tracked files differ from that commit; untracked files are ignored, so the stamp's own write does not mark every deployment dirty |
+| `captured_at_utc` | when the stamp was read |
+
+The commit is read from the deployment, never from a constant in this repository: a committed SHA would
+assert a fact nobody verified. A CI-written stamp is also unusable as an answer, because a commit cannot
+contain its own SHA — the file would describe the parent of the commit that adds it, and every merge would
+produce a second commit whose own identity is again unrecorded. `tests/test_build_info.py` fails if
+`build_info.py` ever contains a literal 40-hex value.
+
+`ISLANDOS_BUILD_COMMIT` is accepted for a deployment without git metadata (a container build) and is
+reported as `environment`; it is a declaration, not a measurement, so §7.3 never compares it to a branch.
+
+### 7.3 The check
+
+```
+python scripts/check_deployment.py --base-url https://islandos.streamlit.app \
+    --warm --expect-commit "$(git rev-parse HEAD)"
+```
+
+It probes the three page routes, opens the app once in a headless browser, re-reads the stamp, and writes a
+JSON report with `--report`. Exit codes:
+
+| Code | Meaning |
+|---|---|
+| 0 | three pages return the app shell, the app renders, the stamp is published, and (when expected) the commit matches |
+| 1 | a page route did not return the Streamlit shell |
+| 2 | the stamp is missing, unreadable, or a sign-in redirect made it unreadable |
+| 3 | the published commit differs from `--expect-commit`, or `--expect-commit` is not a full SHA |
+| 4 | a commit cannot be asserted: the deployment publishes none, or a self-declared one |
+| 5 | the rendered app did not confirm the stamp: it raised, showed no build line, or the line named another commit |
+
+`--warm` is not a convenience. A Streamlit script runs only when a browser session connects, so a container
+that has just restarted has no `static/build_info.json` until someone opens the app; an HTTP-only probe
+would call that healthy app "missing a stamp". The warm-up runs one session, re-reads the file, and compares
+the sidebar's `build` line with it — which also asserts that the page renders without an exception. The
+workflow installs `playwright==1.65.2` and Chromium for this step, pinned in the workflow rather than in
+`requirements-ci.lock` because the unit-test job needs no browser.
+
+The warm-up searches every frame of the page for the app container, because a self-hosted server renders
+the app in the page itself while Community Cloud renders it in the wrapper iframe (§7.1). The report
+records `frame_url`, so the evidence names the frame whose sidebar was read.
+
+Before comparing anything the check validates the document itself: schema version, a 40-hex
+`source_commit`, `resolved_from` in `{git, environment, none}`, a `source_commit_short` that agrees with the
+full commit, `working_tree_dirty` as a boolean or `null`, and a capture timestamp. A stamp that disagrees
+with itself is `stamp_unavailable` (exit 2) rather than a partial match, and the sidebar line has to carry
+the same source tag as the stamp — `build 1a2b3c4 (environment)` does not confirm a `git` stamp even
+though the sha matches.
+
+The report separates `claims` (each with `proved` and its evidence) from `not_proved`.
+`.github/workflows/hosted-app-health.yml` runs it six-hourly and on manual dispatch with `--expect-commit`
+set to the checked-out `main`; on push and pull request it runs without the commit assertion and without
+failing the build, because a run seconds after a merge would race Streamlit Cloud's own file update and
+report drift that has not happened yet.
+
+### 7.4 What is still not proved
+
+- that the process executes the code of the commit it reports, beyond the checkout the stamp is read from;
+- that the installed dependencies equal `requirements-runtime.lock`;
+- Streamlit Community Cloud's own build identity, provenance or CDN behaviour;
+- that the stamp cannot be made to lie — a code change could report a constant, and no external check
+  detects that; only review and `tests/test_build_info.py` stand against it;
+- everything the rendered page shows beyond the build line: only the elements the check reads are inspected.
+
+### 7.5 Rebuild timing, and the failure this catches
+
+Streamlit Community Cloud updates app files from the repository almost in real time, redeploys fully when
+dependencies change, and needs a reboot when `.streamlit/config.toml` changes. A stamped commit can
+therefore lag `main` for minutes after a merge — expected, not a defect. What the six-hourly run catches is
+a deployment that is *stuck*: a commit that no longer matches `main`, or a stamp that stopped being served.
+Two consequences follow from the same mechanism. A merge that adds or changes the configuration needs one
+manual "Reboot app" before `/app/static/build_info.json` answers JSON instead of the shell; until that
+happens the scheduled run fails with exit 2 and says exactly that. And because a container writes the stamp
+on its first session, the file can be absent on an otherwise healthy deployment — which is why the check
+warms the app instead of treating "no file yet" as "broken".
+
+---
+
+Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
+Streamlit-free entry point is added to the bottom row of §1; a new externally observable fact is added to
+§7 and to `scripts/check_deployment.py`, or §7 says it is not observable.
+`tests/test_app_integration_doc.py` guards these three.
