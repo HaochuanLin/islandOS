@@ -43,7 +43,14 @@ python -m islandos_core.transport   # with the repository's .venv active, see th
 Then open **http://127.0.0.1:8765/**. The transport serves the built page at `GET /` and its files
 under `GET /assets/<file>` from `frontend/dist/assets` only, so the page and its `/contracts` read
 share one origin. Without a build, `GET /` answers `404` with the `npm run build` hint instead of an
-empty page.
+empty page. `GET /application-views.html` returns the same page byte for byte, so a bookmark of either
+URL works.
+
+Two surfaces, two servers. The transport serves the viewer and nothing else: `GET /index.html`
+answers `404`, so `http://127.0.0.1:8765/` never lands on the console. The console is its own server
+(`npm run dev`, or `npm run preview` over the same build), and only there does the footer link have a
+console page to sit on. If 8765 is taken, pass `--port 8799`; `Ctrl+C` stops it, and nothing survives
+the run.
 
 **From the console.** Start the console as usual (`npm run dev` in `frontend/`, against the local
 reference API). After sign-in, the footer link opens `application-views.html` from the same build.
@@ -64,7 +71,8 @@ all that page can do from `file://`; start the transport if you also want the sc
   - the **annual projection** — present only when the 06 download carries one (it is `null` until the
     reader declares the equal-days assumption).
 - **The contract itself.** "Load contracts" reads `GET /contracts` and prints `run_request`,
-  `run_result_summary` and `annual_projection` field by field with type, unit, nullability and owner.
+  `run_result_summary`, `device_flexibility_summary` and `annual_projection` field by field with type,
+  unit, nullability and owner.
 - Nothing else. There is no report browser, no history, no search.
 
 ## What it does not do
@@ -115,3 +123,22 @@ The transport test serves a temporary build, checks the HTML/JS content types, r
 `assets/../…` traversal, and covers the missing-build `404`. For the console entry, open the console
 after `npm run dev` and follow the footer link; the target is `application-views.html` from the same
 build.
+
+Measured on `ddc4c58` from a clean worktree, transport on `--port 8799`:
+
+| Check | Result |
+|---|---|
+| `npm run build` | 35 modules transformed; `dist/application-views.html` 0.67 kB; `assets/application-views-*.js` 8.65 kB |
+| `GET /` | 200, 671 B |
+| `GET /application-views.html` | 200, 671 B, identical to `/` |
+| `GET /assets/application-views-*.js` | 200, 8 648 B |
+| `GET /contracts` | 200, 10 902 B |
+| `GET /index.html` | 404 |
+| `GET /assets/../index.html` | 404 |
+| `pytest` transport + integration doc + contract TS + contract schema | 42 passed |
+| built console bundle | contains `application-views.html` and `Contract viewer`, so the footer link survives the build |
+
+Loading a real 09 download on that build shows `72.0` / `17.0` / `6.0` / `13.77 USD` against the
+`103.2 kWh · 15.44 USD` earliest-feasible reference, and `Load contracts` fills the `run_request`,
+`run_result_summary`, `device_flexibility_summary` and `annual_projection` tables from the same
+origin.
