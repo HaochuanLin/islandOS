@@ -20,21 +20,31 @@ from typing import Any
 from .contract_schemas import contract_schema
 from .run_orchestration import replay_run_request
 
+MAX_BODY_BYTES = 1_000_000
+PATHS = ["/contracts", "/run", "/health"]
+
 
 class ApplicationHandler(BaseHTTPRequestHandler):
     server_version = "IslandOSApplicationViews/1"
 
-    def _send(self, status: int, payload: dict[str, Any], *, cors: bool = False) -> None:
+    def _send(
+        self, status: int, payload: dict[str, Any], *, cors: bool = False,
+        allow: str | None = None,
+    ) -> None:
         body = json.dumps(payload, allow_nan=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if allow:
+            self.send_header("Allow", allow)
         if cors:
             # Only the schema is cross-origin readable: it is a committed public file and a
             # static viewer served from another port has to be able to fetch it. `/run`
             # stays same-origin so no opened page can drive a replay on the user's machine.
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Accept")
         self.end_headers()
         self.wfile.write(body)
 
@@ -44,15 +54,49 @@ class ApplicationHandler(BaseHTTPRequestHandler):
         elif self.path == "/health":
             self._send(200, {"status": "ok"})
         else:
-            self._send(404, {"error": "unknown path", "paths": ["/contracts", "/run", "/health"]})
+            self._send(404, {"error": "unknown path", "paths": PATHS})
+
+    def do_OPTIONS(self) -> None:  # noqa: N802 - http.server API
+        # Preflight for the one cross-origin read. `/run` deliberately has no preflight:
+        # it is not a cross-origin surface.
+        if self.path == "/contracts":
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Accept")
+            self.send_header("Allow", "GET, OPTIONS")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif self.path == "/run":
+            self._send(405, {"error": "method not allowed; POST /run only", "paths": PATHS},
+                       allow="POST")
+        else:
+            self._send(404, {"error": "unknown path", "paths": PATHS})
+
+    def _method_not_allowed(self) -> None:
+        self._send(405, {"error": f"{self.command} is not supported", "paths": PATHS},
+                   allow="GET, POST, OPTIONS")
+
+    do_PUT = _method_not_allowed  # noqa: N815 - http.server API
+    do_DELETE = _method_not_allowed  # noqa: N815 - http.server API
+    do_PATCH = _method_not_allowed  # noqa: N815 - http.server API
 
     def do_POST(self) -> None:  # noqa: N802 - http.server API
         if self.path != "/run":
-            self._send(404, {"error": "unknown path", "paths": ["/contracts", "/run", "/health"]})
+            self._send(404, {"error": "unknown path", "paths": PATHS})
+            return
+        content_type = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if content_type != "application/json":
+            self._send(415, {"error": "body must declare Content-Type: application/json"})
             return
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0:
             self._send(400, {"error": "empty body"})
+            return
+        if length > MAX_BODY_BYTES:
+            # Refuse before reading: a caller cannot make this process buffer an arbitrary body.
+            self.close_connection = True
+            self._send(413, {"error": f"body exceeds {MAX_BODY_BYTES} bytes"})
             return
         try:
             request = json.loads(self.rfile.read(length).decode("utf-8"))

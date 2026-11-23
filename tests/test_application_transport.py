@@ -1,6 +1,7 @@
 """The schema file and the read-only transport agree with the builders they describe."""
 
 from datetime import datetime, timedelta, timezone
+import http.client
 import json
 from pathlib import Path
 import threading
@@ -263,6 +264,76 @@ def test_the_transport_replays_a_device_flexibility_request():
         assert result["flexible_task_energy_kwh"] == 17.0
         assert round(result["scheduled_energy_charge"], 2) == 13.77
         assert round(result["estimated_energy_cost"], 2) == 15.44
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+def test_the_transport_rejects_a_wrong_content_type_and_an_oversized_body():
+    server = create_server(port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        wrong_type = Request(
+            f"{base}/run", data=b"{}", method="POST",
+            headers={"Content-Type": "text/plain"},
+        )
+        try:
+            urlopen(wrong_type, timeout=10)
+        except HTTPError as exc:
+            assert exc.code == 415
+            assert "application/json" in json.loads(exc.read())["error"]
+        else:  # pragma: no cover - the request above must fail
+            raise AssertionError("a non-JSON body was accepted")
+
+        # Announce an oversized body without sending it: the server must refuse before
+        # reading, so the status line is available even though the connection closes.
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
+        try:
+            connection.putrequest("POST", "/run")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Length", str(1_000_001))
+            connection.endheaders()
+            response = connection.getresponse()
+            assert response.status == 413
+            assert "exceeds" in json.loads(response.read())["error"]
+        finally:
+            connection.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+def test_the_transport_answers_preflight_for_the_schema_only():
+    server = create_server(port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        required = Request(f"{base}/contracts", method="OPTIONS")
+        with urlopen(required, timeout=10) as response:
+            assert response.status == 204
+            assert response.headers["Access-Control-Allow-Origin"] == "*"
+            assert "GET" in response.headers["Access-Control-Allow-Methods"]
+
+        # `/run` stays same-origin: its preflight is refused, not answered with CORS.
+        run_preflight = Request(f"{base}/run", method="OPTIONS")
+        try:
+            urlopen(run_preflight, timeout=10)
+        except HTTPError as exc:
+            assert exc.code == 405
+            assert exc.headers["Allow"] == "POST"
+        else:  # pragma: no cover - the request above must fail
+            raise AssertionError("POST /run answered a cross-origin preflight")
+
+        delete = Request(f"{base}/run", method="DELETE")
+        try:
+            urlopen(delete, timeout=10)
+        except HTTPError as exc:
+            assert exc.code == 405
+        else:  # pragma: no cover - the request above must fail
+            raise AssertionError("DELETE was accepted")
     finally:
         server.shutdown()
         thread.join(timeout=5)

@@ -237,7 +237,10 @@ and is not part of the Streamlit deployment. It serves `GET /contracts` (the sch
 `islandos_core.contract_schemas`, committed at `docs/contracts/app_view_models.v3.json`) and `POST /run`
 (replays one `run_request` through `run_orchestration.replay_run_request` and returns its summary — 05,
 06 or 09, depending on the page discriminator). An
-unsupported or malformed request gets `400` with a readable reason, never a silent default. `GET /contracts`
+unsupported or malformed request gets `400` with a readable reason, never a silent default. `POST /run`
+also requires `Content-Type: application/json` (`415` otherwise), refuses a declared body over 1 MB before
+reading it (`413`), and only `GET /contracts` answers an `OPTIONS` preflight — `OPTIONS /run` and
+unsupported methods get `405`. `GET /contracts`
 alone carries `Access-Control-Allow-Origin: *`, because the schema is a committed public file and a
 static viewer served from another local port must be able to read it; `POST /run` stays same-origin so a
 page the user happens to have open cannot drive a replay on their machine.
