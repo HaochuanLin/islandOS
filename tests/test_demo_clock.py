@@ -29,6 +29,24 @@ def _metric(app: AppTest, label_fragment: str) -> str:
     return matches[0].value
 
 
+def test_the_default_clock_is_frozen_on_both_pages():
+    """Opening the page on any day shows the recorded window, not the wall clock."""
+    app5 = AppTest.from_file(str(PAGE_05), default_timeout=180).run()
+    assert not app5.exception, [str(error) for error in app5.exception]
+    assert app5.date_input(key="demo_date_dashboard").value == date(2026, 11, 22)
+    assert app5.slider(key=CLOCK_05).value == 14
+    assert _metric(app5, "Estimated 24h energy cost") == "17.93 USD"
+
+    app6 = AppTest.from_file(str(PAGE_06), default_timeout=180).run()
+    assert not app6.exception, [str(error) for error in app6.exception]
+    assert app6.date_input(key="demo_date_joint_optimizer").value == date(2026, 11, 22)
+    assert app6.slider(key=CLOCK_06).value == 14
+    app6.checkbox(key="annual_projection_joint_optimizer").check().run()
+    assert not app6.exception, [str(error) for error in app6.exception]
+    assert _metric(app6, "Annual load energy") == "186,150 kWh"
+    assert _metric(app6, "Annual energy cost") == "7,709.55"
+
+
 def test_pinning_06_at_14_and_2_reproduces_the_two_recorded_annual_costs():
     app = AppTest.from_file(str(PAGE_06), default_timeout=180).run()
     assert not app.exception, [str(error) for error in app.exception]

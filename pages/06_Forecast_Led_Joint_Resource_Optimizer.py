@@ -34,6 +34,7 @@ from islandos_core.demo_site_history import (
     build_synthetic_site_history,
     demo_anchor_for_hour,
 )
+from islandos_core.demo_clock_defaults import DEMO_CLOCK_DEFAULT_DATE, DEMO_CLOCK_DEFAULT_HOUR
 from islandos_core.annual_operating_basis import (
     annualise_run_summary,
     verify_annual_operating_basis,
@@ -82,17 +83,23 @@ with st.sidebar:
     st.divider()
     st.subheader("Demo clock")
     demo_date = st.date_input(
-        "Demo date (UTC)", value=now.date(), key="demo_date_joint_optimizer",
-        help="The date the synthetic window ends on. Defaults to today.",
+        "Demo date (UTC)", value=DEMO_CLOCK_DEFAULT_DATE, key="demo_date_joint_optimizer",
+        help=(
+            "The date the synthetic window ends on. Defaults to 2026-11-22, frozen so "
+            "the default screen is reproducible."
+        ),
     )
     demo_hour = st.slider(
-        "Demo clock (UTC hour)", 0, 23, now.hour, key="demo_clock_hour_joint_optimizer",
+        "Demo clock (UTC hour)", 0, 23, DEMO_CLOCK_DEFAULT_HOUR, key="demo_clock_hour_joint_optimizer",
         help=(
             "Pins the synthetic default history to this UTC hour so a recorded annual "
             "figure can be reproduced. It has no effect on an uploaded CSV."
         ),
     )
-    st.caption("Synthetic default only; an uploaded CSV carries its own timestamps.")
+    st.caption(
+        "Synthetic default only, frozen at 2026-11-22 14:00 UTC; move either control to "
+        "reproduce another hour. An uploaded CSV carries its own timestamps."
+    )
 
 demo_anchor = demo_anchor_for_hour(now, int(demo_hour), demo_date=demo_date)
 source = "Synthetic demonstration data"
