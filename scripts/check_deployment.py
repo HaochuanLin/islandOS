@@ -5,11 +5,13 @@ Run against the public Streamlit app:
 
     python scripts/check_deployment.py --base-url https://islandos.streamlit.app
 
-Three page routes must answer with the Streamlit front-end shell, and the app
-must publish its own checkout commit at ``/app/static/build_info.json``. When
-``--expect-commit`` is given, the published commit must equal it; on any other
-value the report says why the comparison cannot be made, and never turns "could
-not check" into "checked and passed".
+Three page routes must answer with the Streamlit front-end shell, and the
+deployment must name the checkout it runs from. Two sources can carry that name:
+``/app/static/build_info.json`` when the host serves static files, and the
+sidebar's ``build <sha>`` line, which only a browser session can read. When
+``--expect-commit`` is given, the named commit must equal it; on any other value
+the report says why the comparison cannot be made, and never turns "could not
+check" into "checked and passed".
 
 Measured facts this script is built on (2026-11-23, islandos.streamlit.app):
 
@@ -19,22 +21,27 @@ Measured facts this script is built on (2026-11-23, islandos.streamlit.app):
   HTML (Streamlit draws all of that in the browser);
 * an unauthenticated request is redirected through
   ``share.streamlit.io/-/auth/app`` and needs a cookie jar to reach the shell;
-* the only app-specific bytes served over HTTP are the files Streamlit exposes
-  from ``./static`` at ``/app/static/<name>`` — which is why the build stamp is
-  published there instead of being scraped out of the page.
+* the only app-specific bytes that could be served over HTTP would come from
+  ``./static`` at ``/app/static/<name>``, but Community Cloud does not serve
+  that route: after the app was restarted on this commit,
+  ``/app/static/build_info.json`` still answered ``200`` with the same shell,
+  while the rendered sidebar named the commit (measured 2026-11-23). The stamp
+  is therefore read when the host serves it — self-hosted, or a future Cloud
+  build that enables the route — and the sidebar line is the load-bearing
+  evidence on Community Cloud.
 
 Exit codes: 0 all checks passed, 1 a page route is not the app shell, 2 the
-stamp is missing or unreadable, 3 the published commit differs from
-``--expect-commit``, 4 a commit was expected but the deployment does not
-publish one it can be compared against, 5 the rendered app did not confirm the
-stamp.
+deployment names no commit through either source, 3 the named commit differs
+from ``--expect-commit``, 4 a commit was expected but the deployment does not
+name one it can be compared against, 5 the rendered app did not confirm the
+commit it names.
 
 ``--warm`` opens the app once in a headless browser. That is not a convenience:
-a Streamlit script only runs when a browser session connects, so on a container
-that has just restarted the stamp file does not exist yet, and an HTTP-only
-probe would report a missing stamp for an app that is perfectly healthy. The
-same page load also proves the app renders without an exception, and lets the
-sidebar's ``build`` line be compared with the published file.
+a Streamlit script only runs when a browser session connects, so a container
+that has just restarted has nothing on disk yet, and an HTTP-only probe would
+report a missing stamp for an app that is perfectly healthy — or, on Cloud,
+never see the commit at all. The same page load also proves the app renders
+without an exception, and exposes the sidebar's ``build`` line.
 """
 
 from __future__ import annotations
@@ -98,6 +105,27 @@ RESOLVED_FROM_VALUES = ("git", "environment", "none")
 
 BUILD_LINE_PATTERN = re.compile(r"build ([0-9a-f]{7}|unknown)(?: \((git|environment|none)\))?")
 """The sidebar caption: ``build 1a2b3c4 (git)``, optionally ``· dirty tree``."""
+
+BASIS_STAMP = "stamp"
+BASIS_RENDERED = "rendered"
+"""Where the commit a deployment names was read from."""
+
+
+def build_line_commit(line: object) -> tuple[str | None, str | None]:
+    """Split a sidebar caption into ``(sha, source)``.
+
+    ``build 1a2b3c4 (git)`` yields ``("1a2b3c4", "git")``. ``build unknown
+    (<reason>)`` yields ``(None, None)`` — no commit and no source tag — while a
+    line with a sha and no tag yields ``(sha, None)``, which the caller must
+    treat as unattributed rather than assume it came from git.
+    """
+    if not line:
+        return None, None
+    match = BUILD_LINE_PATTERN.search(str(line))
+    if match is None:
+        return None, None
+    sha, source = match.group(1), match.group(2)
+    return (None if sha == "unknown" else sha), source
 
 
 @dataclass
@@ -239,24 +267,95 @@ def read_stamp(probe: Probe) -> dict:
     return {"state": "published", "stamp": stamp, "reason": ""}
 
 
-def compare_commit(stamp: Mapping[str, object] | None, expected: str | None) -> dict:
-    """Decide whether the published commit can be compared, and whether it matches."""
+def reported_commit(
+    stamp: Mapping[str, object] | None, render: Mapping[str, object] | None
+) -> tuple[dict | None, str]:
+    """Return the commit the deployment names, and where that name was read.
+
+    The stamp carries a full 40-character SHA. The sidebar carries seven
+    characters, which is enough to compare against the first seven of an
+    expected commit, but not enough to reconstruct one.
+    """
+    if stamp and stamp.get("source_commit"):
+        return {
+            "commit": stamp.get("source_commit"),
+            "short": stamp.get("source_commit_short"),
+            "resolved_from": stamp.get("resolved_from"),
+            "basis": BASIS_STAMP,
+        }, BASIS_STAMP
+    sha, source = build_line_commit((render or {}).get("build_line"))
+    if sha:
+        return {
+            "commit": None,
+            "short": sha,
+            "resolved_from": source,
+            "basis": BASIS_RENDERED,
+        }, BASIS_RENDERED
+    return None, ""
+
+
+def compare_commit(
+    stamp: Mapping[str, object] | None,
+    expected: str | None,
+    render: Mapping[str, object] | None = None,
+) -> dict:
+    """Decide whether the named commit can be compared, and whether it matches."""
     expected = (expected or "").strip().lower()
     if not expected:
-        return {"assertion": "not-requested", "expected": None, "reported": None, "detail": ""}
+        return {
+            "assertion": "not-requested",
+            "expected": None,
+            "reported": None,
+            "detail": "",
+            "basis": None,
+        }
     if not SHA_PATTERN.match(expected):
         return {
             "assertion": "invalid-expectation",
             "expected": expected,
             "reported": None,
             "detail": "--expect-commit is not a 40-character lower-case SHA",
+            "basis": None,
         }
-    if not stamp:
+    named, basis = reported_commit(stamp, render)
+    if named is None:
         return {
             "assertion": "unavailable",
             "expected": expected,
             "reported": None,
-            "detail": "no stamp to compare against",
+            "detail": "neither the stamp nor the sidebar names a commit",
+            "basis": None,
+        }
+    if basis == BASIS_RENDERED:
+        source = named.get("resolved_from")
+        if source != "git":
+            return {
+                "assertion": "unassertable",
+                "expected": expected,
+                "reported": named.get("short"),
+                "detail": (
+                    "the sidebar names a commit it does not attribute to git"
+                    + (f" ({source})" if source else ", with no source tag")
+                ),
+                "basis": BASIS_RENDERED,
+            }
+        if expected.startswith(str(named.get("short"))):
+            return {
+                "assertion": "match",
+                "expected": expected,
+                "reported": named.get("short"),
+                "detail": (
+                    "the sidebar shows seven characters; they are the first seven "
+                    "of the expected commit, and the rest was not displayed"
+                ),
+                "basis": BASIS_RENDERED,
+            }
+        return {
+            "assertion": "mismatch",
+            "expected": expected,
+            "reported": named.get("short"),
+            "detail": "the sidebar names a different commit than the one expected",
+            "basis": BASIS_RENDERED,
         }
     reported = stamp.get("source_commit")
     if not reported:
@@ -265,6 +364,7 @@ def compare_commit(stamp: Mapping[str, object] | None, expected: str | None) -> 
             "expected": expected,
             "reported": None,
             "detail": f"the deployment publishes no commit ({stamp.get('unresolved_reason')})",
+            "basis": BASIS_STAMP,
         }
     if stamp.get("resolved_from") != "git":
         return {
@@ -275,14 +375,22 @@ def compare_commit(stamp: Mapping[str, object] | None, expected: str | None) -> 
                 "the published commit is self-declared "
                 f"({stamp.get('resolved_from')}), not read from the deployment's checkout"
             ),
+            "basis": BASIS_STAMP,
         }
     if reported == expected:
-        return {"assertion": "match", "expected": expected, "reported": reported, "detail": ""}
+        return {
+            "assertion": "match",
+            "expected": expected,
+            "reported": reported,
+            "detail": "",
+            "basis": BASIS_STAMP,
+        }
     return {
         "assertion": "mismatch",
         "expected": expected,
         "reported": reported,
         "detail": "the deployment is running a different commit than the one expected",
+        "basis": BASIS_STAMP,
     }
 
 
@@ -394,27 +502,38 @@ def warm_page(base_url: str, page: str = "/", timeout: float = 90.0) -> dict:
 
 
 def check_build_line(render: Mapping[str, object], stamp: Mapping[str, object] | None) -> dict:
-    """Does the sidebar line name the commit the stamp publishes?"""
+    """Does the sidebar line agree with the stamp, or — with no stamp — stand on its own?"""
     line = render.get("build_line")
     if render.get("state") != "ok":
         return {"matches": False, "reason": "the app was not rendered"}
     if not line:
         return {"matches": False, "reason": "no build line in the sidebar"}
+    sha, source = build_line_commit(line)
     short = (stamp or {}).get("source_commit_short")
-    source = (stamp or {}).get("resolved_from")
     if short:
+        stamp_source = stamp.get("resolved_from")
         named = str(short) in str(line)
-        attributed = not source or f"({source})" in str(line)
+        attributed = source is None or source == stamp_source
         if named and attributed:
             return {"matches": True, "reason": ""}
         return {
             "matches": False,
-            "reason": f"sidebar says {line!r}, stamp says {short} ({source})",
+            "reason": f"sidebar says {line!r}, stamp says {short} ({stamp_source})",
+        }
+    if sha:
+        if source == "git":
+            return {"matches": True, "reason": ""}
+        return {
+            "matches": False,
+            "reason": (
+                f"sidebar says {line!r}, which does not attribute the sha to git"
+                + (f" ({source})" if source else " (no source tag)")
+            ),
         }
     named_unknown = "unknown" in str(line)
     return {
         "matches": named_unknown,
-        "reason": "" if named_unknown else f"sidebar says {line!r} but the stamp has no commit",
+        "reason": "" if named_unknown else f"sidebar says {line!r} but names no commit",
     }
 
 
@@ -422,7 +541,10 @@ NOT_PROVED: tuple[str, ...] = (
     "everything the rendered page shows beyond the build line: the shell is the "
     "same for every route, and only the elements this check reads are inspected",
     "that the running process executes the code of the commit it reports, beyond "
-    "the checkout the stamp is read from",
+    "the checkout it reads git from",
+    "that the host serves the static stamp: Community Cloud answered "
+    "/app/static/build_info.json with the front-end shell after a restart on "
+    "2026-11-23, so on Cloud the commit is read from the rendered sidebar only",
     "that the installed dependencies equal requirements-runtime.lock",
     "Streamlit Community Cloud's own build identity or provenance",
     "that the stamp cannot be made to lie: a code change could report a constant, "
@@ -444,15 +566,14 @@ def verdict_for(
     """Pick the single verdict the report states; the order is documented in §7.3.
 
     Pages first (the check is worthless if the routes do not answer), then the
-    render, then the stamp, then the two cross-checks that need both, then the
-    commit assertion.
+    render, then the build line, the cross-check with a stamp if one is served,
+    then the commit assertion. ``no_evidence`` is the last resort: nothing asked
+    and nothing named, which an HTTP-only run against Cloud produces every time.
     """
     if not pages_ok:
         return "pages_failed"
     if warm and not render_ok:
         return "render_failed"
-    if not stamp_ok:
-        return "stamp_unavailable"
     if warm and not render.get("build_line"):
         return "build_line_missing"
     if warm and not line["matches"]:
@@ -461,6 +582,8 @@ def verdict_for(
         return "commit_mismatch"
     if commit["assertion"] in {"unavailable", "unassertable"}:
         return "commit_unassertable"
+    if not warm and not stamp_ok:
+        return "no_evidence"
     return "ok"
 
 
@@ -486,8 +609,8 @@ def run_check(
     # Read the stamp after the session: a fresh container has no file until one runs.
     stamp_probe = fetch(opener, base + STAMP_PATH, timeout)
     stamp = read_stamp(stamp_probe)
-    commit = compare_commit(stamp["stamp"], expect_commit)
     line = check_build_line(render, stamp["stamp"]) if warm else {"matches": False, "reason": ""}
+    commit = compare_commit(stamp["stamp"], expect_commit, render)
 
     pages_ok = bool(page_probes) and all(p.kind == "streamlit_shell" for p in page_probes)
     render_ok = warm and render["state"] == "ok" and not render["exception"]
@@ -518,12 +641,15 @@ def run_check(
             "evidence": render,
         },
         {
-            "claim": "the sidebar's build line names the commit the stamp publishes",
+            "claim": (
+                "the sidebar's build line names a commit, and agrees with the "
+                "stamp when the host serves one"
+            ),
             "proved": bool(line["matches"]),
             "evidence": {"build_line": render.get("build_line"), **line},
         },
         {
-            "claim": "the published commit equals the expected commit",
+            "claim": "the commit the deployment names equals the expected commit",
             "proved": commit["assertion"] == "match",
             "evidence": commit,
         },
@@ -555,7 +681,7 @@ def run_check(
 EXIT_CODES: dict[str, int] = {
     "ok": 0,
     "pages_failed": 1,
-    "stamp_unavailable": 2,
+    "no_evidence": 2,
     "commit_mismatch": 3,
     "commit_unassertable": 4,
     "render_failed": 5,
