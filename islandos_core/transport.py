@@ -1,13 +1,16 @@
 """A read-only, stateless HTTP surface over the application contracts.
 
-Two endpoints, no authentication, no persistence, no writes:
+Three surfaces, no authentication, no persistence, no writes:
 
 ``GET /contracts``   the machine-readable schema (`contract_schemas.contract_schema()`)
 ``POST /run``        replay one `run_request` and return its summary (+ annual)
+``GET /``            the built contract viewer (`frontend/application-views.html`)
 
 The server binds to 127.0.0.1 by default and is not part of the Streamlit deployment. It
 exists so a non-Streamlit client can obtain the same validated shapes the pages render
-without re-implementing the call sequence or the field rules.
+without re-implementing the call sequence or the field rules, and so a locally built
+viewer can be opened without a second web server: serving the HTML from the same origin
+means its `/contracts` fetch is same-origin and needs no allowance.
 """
 
 from __future__ import annotations
@@ -15,13 +18,22 @@ from __future__ import annotations
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from pathlib import Path
 from typing import Any
 
 from .contract_schemas import contract_schema
 from .run_orchestration import replay_run_request
 
 MAX_BODY_BYTES = 1_000_000
-PATHS = ["/contracts", "/run", "/health"]
+PATHS = ["/", "/contracts", "/run", "/health"]
+
+#: Where `npm run build` leaves the viewer. Read at request time so a test can point it at
+#: a temporary directory instead of requiring a built `dist/` in CI.
+VIEWER_DIR = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+_VIEWER_HINT = "run `npm run build` in frontend/ first"
+_CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
+                  ".woff2": "font/woff2"}
 
 
 class ApplicationHandler(BaseHTTPRequestHandler):
@@ -48,8 +60,38 @@ class ApplicationHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_file(self, path: Path) -> None:
+        body = path.read_bytes()
+        content_type = _CONTENT_TYPES.get(path.suffix, "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_viewer(self) -> None:
+        index = VIEWER_DIR / "application-views.html"
+        if not index.is_file():
+            self._send(404, {"error": "the viewer is not built", "hint": _VIEWER_HINT})
+        else:
+            self._send_file(index)
+
+    def _send_asset(self, relative: str) -> None:
+        root = (VIEWER_DIR / "assets").resolve()
+        candidate = (root / relative).resolve()
+        # A path cannot leave the build output, and the file is served as bytes only.
+        if root not in candidate.parents or not candidate.is_file():
+            self._send(404, {"error": "unknown asset", "hint": _VIEWER_HINT})
+            return
+        self._send_file(candidate)
+
     def do_GET(self) -> None:  # noqa: N802 - http.server API
-        if self.path == "/contracts":
+        if self.path in ("/", "/application-views.html"):
+            self._send_viewer()
+        elif self.path.startswith("/assets/"):
+            self._send_asset(self.path[len("/assets/"):])
+        elif self.path == "/contracts":
             self._send(200, contract_schema(), cors=True)
         elif self.path == "/health":
             self._send(200, {"status": "ok"})
@@ -129,7 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
     server = create_server(args.host, args.port)
-    print(f"serving on http://{args.host}:{server.server_port} (GET /contracts, POST /run)")
+    print(
+        f"serving on http://{args.host}:{server.server_port} "
+        "(GET / for the built viewer, /contracts, POST /run)"
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
