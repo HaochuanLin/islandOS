@@ -44,7 +44,9 @@ Then open **http://127.0.0.1:8765/**. The transport serves the built page at `GE
 under `GET /assets/<file>` from `frontend/dist/assets` only, so the page and its `/contracts` read
 share one origin. Without a build, `GET /` answers `404` with the `npm run build` hint instead of an
 empty page. `GET /application-views.html` returns the same page byte for byte, so a bookmark of either
-URL works.
+URL works. The page reads `/contracts` from the origin that served it and falls back to
+`http://127.0.0.1:8765`, so `--port 8799` needs no edit and `npm run dev` still reaches the default
+transport.
 
 Two surfaces, two servers. The transport serves the viewer and nothing else: `GET /index.html`
 answers `404`, so `http://127.0.0.1:8765/` never lands on the console. The console is its own server
@@ -128,10 +130,10 @@ Measured on `ddc4c58` from a clean worktree, transport on `--port 8799`:
 
 | Check | Result |
 |---|---|
-| `npm run build` | 35 modules transformed; `dist/application-views.html` 0.67 kB; `assets/application-views-*.js` 8.65 kB |
-| `GET /` | 200, 671 B |
-| `GET /application-views.html` | 200, 671 B, identical to `/` |
-| `GET /assets/application-views-*.js` | 200, 8 648 B |
+| `npm run build` | 35 modules transformed; `dist/application-views.html` 0.67 kB; `assets/application-views-*.js` 9.09 kB |
+| `GET /` | 200, 672 B |
+| `GET /application-views.html` | 200, 672 B, identical to `/` |
+| `GET /assets/application-views-*.js` | 200, 9 088 B |
 | `GET /contracts` | 200, 10 902 B |
 | `GET /index.html` | 404 |
 | `GET /assets/../index.html` | 404 |
