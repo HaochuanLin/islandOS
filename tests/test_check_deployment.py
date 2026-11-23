@@ -416,7 +416,7 @@ class LiveDeploymentTests(unittest.TestCase):
         if report["verdict"] == "stamp_unavailable":
             self.skipTest(
                 "the deployed app predates the build stamp, so there is nothing to compare yet; "
-                "rerun after it is rebuilt (APP_INTEGRATION.md section 6.5)"
+                "rerun after it is rebuilt (APP_INTEGRATION.md section 7.5)"
             )
         self.assertEqual(report["verdict"], "ok", json.dumps(report, indent=2))
 
@@ -426,7 +426,7 @@ class LiveDeploymentTests(unittest.TestCase):
             self.skipTest(render["detail"])
         self.assertEqual(render["state"], "ok", json.dumps(render, indent=2))
         # Community Cloud renders the app inside a wrapper iframe, so the frame that
-        # was read has to be named in the evidence; see APP_INTEGRATION.md section 6.1.
+        # was read has to be named in the evidence; see APP_INTEGRATION.md section 7.1.
         self.assertIn("frame_url", render)
 
 

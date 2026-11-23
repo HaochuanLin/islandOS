@@ -349,9 +349,51 @@ through the transport, so a regression in either path fails a test rather than m
    endpoint, a published npm package, and a run store. The contract now also ships a draft 2020-12 JSON
    Schema and generated TypeScript types, but neither is distributed.
 
+Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
+Streamlit-free entry point is added to the bottom row of §1. `tests/test_app_integration_doc.py` guards
+these three.
+
 ---
 
-## 6. What "deployed" can and cannot prove
+## 6. The demo clock: why two runs disagree, and how to get a number back
+
+Pages 05 and 06 both open on a synthetic 168-hour history. Until this change that history was anchored to
+`datetime.now(timezone.utc)`, and the PV/wind ripple is keyed to the row index, so opening the page one
+hour later moves the 24-hour day across the ripple. The load total stays the same; the projected cost
+does not. That is why the same 06 page was recorded at `7,709.55 USD/year` and later at `5,332.57` with
+no formula change.
+
+Both pages now carry a **Demo clock** in the sidebar:
+
+- `Demo date (UTC)` defaults to today, `Demo clock (UTC hour)` defaults to the current UTC hour. The
+  defaults reproduce the old live behaviour exactly; neither control freezes anything.
+- The controls only touch the synthetic default. An uploaded CSV supplies its own timestamps, and the
+  clock is ignored.
+- 06's annual caption names the 24-hour window the projection belongs to, and the history caption names
+  the pin. 05's history caption names the pin too.
+- The pinned window enters the run request as `history.timestamps_utc`, so a downloaded report carries
+  the timestamps a replay needs. No contract field was added and the schema version did not move.
+
+**06 is a function of the hour.** Its generator has no weekday term, so pinning `14` gives
+`7,709.55` and pinning `2` gives `5,332.57` on any date, with `186,150 kWh` unchanged. Pin the date only
+to make the printed window stable.
+
+**05 is a function of the date and the hour.** Its load formula carries `1.2 * (day < 5)`, so the
+weekday mix inside the 168-hour window matters. Pinning `2026-11-22 14:00Z` reproduces the recorded
+`17.93 USD` (`17.931016` before rounding). On `2026-11-23` the same hour gives `19.91`, not because the
+code moved but because the window now contains a different set of weekdays; a scan of 2026-11-09…30
+shows `17.931016` on the dates whose window matches (11-15, 11-22, 11-29) and other values elsewhere.
+This is why the demo clock carries a date as well as an hour, and why `tests/test_demo_clock.py` pins
+both before asserting the recorded figure.
+
+What this proves: a recorded demo number can be reproduced from the controls, and the difference between
+two recorded runs is a difference of input window, not of formula. What it does not prove: that the demo
+figure is a property of the site. It is still synthetic, still unvalidated, and still moves if the
+defaults are left live.
+
+---
+
+## 7. What "deployed" can and cannot prove
 
 The deployed artifact is the Streamlit Community Cloud app that builds from `main`:
 
@@ -360,11 +402,11 @@ The deployed artifact is the Streamlit Community Cloud app that builds from `mai
 - `https://islandos.streamlit.app/Device_Flexibility_Planner`
 
 "Which commit is it running?" used to be unanswerable: the page exposed no build stamp, and no deploy hook
-wrote one. The reason is measured (§6.1), not assumed. What answers it now is a stamp the app writes from
-its own checkout (§6.2), read by one script that turns it into a repeatable assertion (§6.3); §6.4 lists
+wrote one. The reason is measured (§7.1), not assumed. What answers it now is a stamp the app writes from
+its own checkout (§7.2), read by one script that turns it into a repeatable assertion (§7.3); §7.4 lists
 what that still cannot show.
 
-### 6.1 What the front end exposes — measured 2026-11-23
+### 7.1 What the front end exposes — measured 2026-11-23
 
 | Request | Response |
 |---|---|
@@ -392,7 +434,7 @@ nothing about which code produced it.
 The one route that returns app-specific bytes is `./static`, which Streamlit serves at `/app/static/<name>`
 when `[server] enableStaticServing = true` (`.streamlit/config.toml`). That is where the build stamp lives.
 
-### 6.2 The build stamp
+### 7.2 The build stamp
 
 At start-up `app.py` calls `islandos_core.build_info.build_stamp()`, writes the result to
 `static/build_info.json` (best-effort: a read-only deployment still renders the page), and captions the
@@ -414,9 +456,9 @@ produce a second commit whose own identity is again unrecorded. `tests/test_buil
 `build_info.py` ever contains a literal 40-hex value.
 
 `ISLANDOS_BUILD_COMMIT` is accepted for a deployment without git metadata (a container build) and is
-reported as `environment`; it is a declaration, not a measurement, so §6.3 never compares it to a branch.
+reported as `environment`; it is a declaration, not a measurement, so §7.3 never compares it to a branch.
 
-### 6.3 The check
+### 7.3 The check
 
 ```
 python scripts/check_deployment.py --base-url https://islandos.streamlit.app \
@@ -443,7 +485,7 @@ workflow installs `playwright==1.65.2` and Chromium for this step, pinned in the
 `requirements-ci.lock` because the unit-test job needs no browser.
 
 The warm-up searches every frame of the page for the app container, because a self-hosted server renders
-the app in the page itself while Community Cloud renders it in the wrapper iframe (§6.1). The report
+the app in the page itself while Community Cloud renders it in the wrapper iframe (§7.1). The report
 records `frame_url`, so the evidence names the frame whose sidebar was read.
 
 Before comparing anything the check validates the document itself: schema version, a 40-hex
@@ -459,7 +501,7 @@ set to the checked-out `main`; on push and pull request it runs without the comm
 failing the build, because a run seconds after a merge would race Streamlit Cloud's own file update and
 report drift that has not happened yet.
 
-### 6.4 What is still not proved
+### 7.4 What is still not proved
 
 - that the process executes the code of the commit it reports, beyond the checkout the stamp is read from;
 - that the installed dependencies equal `requirements-runtime.lock`;
@@ -468,7 +510,7 @@ report drift that has not happened yet.
   detects that; only review and `tests/test_build_info.py` stand against it;
 - everything the rendered page shows beyond the build line: only the elements the check reads are inspected.
 
-### 6.5 Rebuild timing, and the failure this catches
+### 7.5 Rebuild timing, and the failure this catches
 
 Streamlit Community Cloud updates app files from the repository almost in real time, redeploys fully when
 dependencies change, and needs a reboot when `.streamlit/config.toml` changes. A stamped commit can
@@ -484,5 +526,5 @@ warms the app instead of treating "no file yet" as "broken".
 
 Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
 Streamlit-free entry point is added to the bottom row of §1; a new externally observable fact is added to
-§6 and to `scripts/check_deployment.py`, or §6 says it is not observable.
+§7 and to `scripts/check_deployment.py`, or §7 says it is not observable.
 `tests/test_app_integration_doc.py` guards these three.

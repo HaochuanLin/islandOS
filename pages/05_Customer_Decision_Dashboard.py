@@ -30,6 +30,7 @@ from islandos_core.site_inputs import (
 )
 from islandos_core.app_view_models import build_run_request, build_run_result_summary
 from islandos_core.customer_dashboard import parse_customer_history_csv
+from islandos_core.demo_site_history import demo_anchor_for_hour
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.forecast_engine import forecast_signals
@@ -68,6 +69,8 @@ st.info(
     "you are authorized to share, and use redacted or non-sensitive exports."
 )
 
+now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
 with st.sidebar:
     st.subheader("Scenario assumptions")
     currency = st.text_input("Currency label", value="USD").strip() or "currency"
@@ -89,6 +92,23 @@ with st.sidebar:
             st.rerun()
     if site_csv is not None:
         st.caption("The page-specific upload takes priority over the shared session dataset.")
+    st.divider()
+    st.subheader("Demo clock")
+    demo_date = st.date_input(
+        "Demo date (UTC)", value=now.date(), key="demo_date_dashboard",
+        help=(
+            "The date the synthetic window ends on. Defaults to today. The load "
+            "formula carries a weekday term, so the date matters here as well as the hour."
+        ),
+    )
+    demo_hour = st.slider(
+        "Demo clock (UTC hour)", 0, 23, now.hour, key="demo_clock_hour_dashboard",
+        help=(
+            "Pins the synthetic default history to this UTC hour so a recorded cost "
+            "can be reproduced. It has no effect on an uploaded CSV."
+        ),
+    )
+    st.caption("Synthetic default only; an uploaded CSV carries its own timestamps.")
     st.divider()
     st.subheader("Investment assumptions")
     st.caption(
@@ -121,7 +141,7 @@ with st.sidebar:
     replacement_cost = st.number_input("Replacement cost", min_value=0.0, value=0.0, step=1000.0) if has_replacement else 0.0
     residual_value = st.number_input("Residual value at end of project", min_value=0.0, value=0.0, step=1000.0)
 
-now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+demo_anchor = demo_anchor_for_hour(now, int(demo_hour), demo_date=demo_date)
 history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
 source_sha256 = None
 source_label = "Synthetic demonstration data"
@@ -145,7 +165,7 @@ if shared_payload is not None:
         reject_upload("Site history CSV", exc)
         st.stop()
 else:
-    history_stamps = [now - timedelta(hours=168 - index) for index in range(168)]
+    history_stamps = [demo_anchor - timedelta(hours=168 - index) for index in range(168)]
     for index, stamp in enumerate(history_stamps):
         hour = stamp.hour
         day = stamp.weekday()
@@ -161,6 +181,11 @@ else:
         history["essential_load"].append(round(load, 3))
         history["electricity_price"].append(round(tariff, 4))
 
+demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
+st.caption(
+    f"History window: {history_stamps[0].isoformat()} → {history_stamps[-1].isoformat()} "
+    f"({len(history_stamps)} hourly rows){demo_note}"
+)
 st.caption(f"Input provenance: {source_label}")
 
 units = {

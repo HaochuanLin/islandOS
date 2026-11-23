@@ -89,7 +89,7 @@ def test_the_document_does_not_promise_a_transport_that_does_not_exist():
 
 def test_the_deployment_section_matches_the_check_that_implements_it():
     text = _doc()
-    section = text[text.index("## 6.") :]
+    section = text[text.index("## 7.") :]
     assert "scripts/check_deployment.py" in section
     assert "static/build_info.json" in section
     assert "islandos_core.build_info" in section
@@ -98,5 +98,5 @@ def test_the_deployment_section_matches_the_check_that_implements_it():
     import check_deployment
 
     for code in sorted(set(check_deployment.EXIT_CODES.values())):
-        assert re.search(rf"(?m)^\| {code} \|", section), f"§6 does not document exit code {code}"
+        assert re.search(rf"(?m)^\| {code} \|", section), f"§7 does not document exit code {code}"
     assert "not proved" in section.lower()

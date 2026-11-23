@@ -36,11 +36,52 @@ Notable project changes are recorded here. This is a research prototype; version
   container in the page itself timed out against a deployment that was rendering fine, so the warm-up
   searches every frame and records `frame_url`. Run against the deployment as it stands, the check reports
   `stamp_unavailable` (exit 2), because the running container predates this change; that is the same
-  distinction §6.4 keeps. What this still does not
-  prove is listed in `APP_INTEGRATION.md` §6.4 — that the process executes the commit it reports, that
+  distinction §7.4 keeps. What this still does not
+  prove is listed in `APP_INTEGRATION.md` §7.4 — that the process executes the commit it reports, that
   dependencies equal the lock, Streamlit Cloud's own provenance, that the stamp cannot be made to lie, and
   anything else the rendered page shows. One manual "Reboot app" is needed after this merge, because a
   changed `.streamlit/config.toml` only takes effect on restart.
+
+- **The two recorded 06 annual costs are now checked-in, reproducible evidence.** `scripts/trace_annual_energy_cost.py`
+  replays page 06's default path at an explicit anchor and reuses `islandos_core.demo_site_history` rather
+  than keeping a second copy of the synthetic formulas. `results/annual-cost-trace/` holds the 14:00Z run
+  (`7,709.553484 USD/year`), the 02:00Z run (`5,332.569196`), and the 24-hour sweep (`4,548.683071` to
+  `8,631.338277`), plus a README that states what the evidence does and does not show. `186,150 kWh`,
+  `0.00` equipment cost and `0 h` diesel run time hold in all 26 runs; the annual gap is the daily grid
+  import (`138.387` vs `93.688 kWh`) at the same `3.91` tariff sum, not a tariff change.
+  `tests/test_trace_annual_energy_cost.py` pins the 14:00Z and 02:00Z figures. No page formula, contract
+  field, or `schema_version` changed.
+
+- **06's run identity is derived from the window it describes, not from the wall clock.** The page minted
+  a fresh `run_id` with `uuid4()` and stamped `created_at_utc` with `datetime.now(timezone.utc)` on every
+  render, so two downloads of the same pinned window carried different `run_id`, `manifest_sha256`,
+  `summary_sha256` and `projection_sha256` even though the request and every figure were identical — a
+  reader could not tell whether the two files were the same record. `run_id` now comes from
+  `deterministic_run_id("run", …)` over the dataset digest, site-configuration digest, window end, currency,
+  search settings and availability, and `created_at_utc` is the window the run speaks for (the demo anchor
+  for synthetic data, the last history hour for an uploaded CSV). Same pin, same file: two renders now
+  agree field for field, and moving the pin from 14 to 02 changes the id as it should.
+  `tests/test_demo_clock.py::test_a_pinned_window_downloads_as_the_same_record_twice` captures the real
+  download bytes through `st.download_button` and compares both fields across two renders and across two
+  pins. The recorded figures are untouched: pin 14 still gives `7,709.55 USD/year`, pin 02 `5,332.57`,
+  `186,150 kWh` in both. No contract field was added and `schema_version` stays at `3`.
+
+- **A demo clock makes the two recorded demo figures reproducible without freezing them.** Pages 05 and
+  06 built their synthetic 168-hour history from `datetime.now(timezone.utc)`, and the PV/wind ripple
+  is keyed to the row index: one hour later the 24-hour day sits on a different part of the ripple and
+  the projected cost moves while the load total does not. Both pages now have a sidebar `Demo date (UTC)`
+  and `Demo clock (UTC hour)`, defaulting to today and the current hour, so the default stays live while
+  a reader can type back a recorded window. 06's annual caption names the 24-hour window it projects and
+  the history caption names the pin; 05's history caption names the pin. The pinned timestamps still
+  enter the request as `history.timestamps_utc`; no contract field was added and `schema_version` stayed
+  at `3`. Pinning 06 at 14 gives `7,709.55 USD/year` and at 02 gives `5,332.57` with `186,150 kWh`
+  unchanged. Pinning 05 at `2026-11-22 14:00Z` reproduces the recorded `17.93 USD`; the same hour on
+  `2026-11-23` gives `19.91` because 05's load carries a `1.2 * (day < 5)` weekday term, so its window
+  depends on the date as well as the hour — `17.931016` recurs on the dates whose weekday mix matches
+  (11-15, 11-22, 11-29 in a 2026-11-09…30 scan). `tests/test_demo_clock.py` pins both pages at those
+  windows, and `tests/test_demo_site_history.py` pins the anchor helper, including its date argument and
+  its refusal of naive timestamps. `APP_INTEGRATION.md` gains a "Demo clock" section and its deployed-app
+  sentence no longer implies the 05/06 demo figures are independent of when the page is opened.
 
 - **The viewer is now a local tool, and the question is closed rather than deferred.** After the landing
   route (`GET /`), the open item was whether `frontend/application-views.html` is a local tool or a third
@@ -55,7 +96,6 @@ Notable project changes are recorded here. This is a research prototype; version
   (critical/flexible energy, peak task demand, charge, earliest-feasible reference) instead of reading
   05/06-only fields, and `frontend/src/ApplicationViews.tsx` was expanded from one minified line into
   readable JSX without changing what any number means.
-
 - **The viewer now has a landing route: one command, one origin.** `frontend/application-views.html` could
   only be opened from the Vite dev server or from disk, and from disk its `/contracts` fetch was a
   cross-origin request — the reason `GET /contracts` still carries `Access-Control-Allow-Origin: *`.
@@ -67,6 +107,17 @@ Notable project changes are recorded here. This is a research prototype; version
   that `assets/../secret.txt` and a missing build both 404, and the real `dist/` from `npm run build` was
   fetched through the route (`/` 200, `assets/application-views-*.js` 200). No new endpoint beyond these two
   reads, no writes, no change to `/contracts` or `/run`.
+
+- **The synthetic window behind 06's annual figure is now a parameter, not the wall clock.** The page
+  built its default 168-hour history inside its body from `datetime.now(timezone.utc)`, with PV and wind
+  ripple keyed to the row index; the same code at 14:00 UTC projected `7,709.55 USD/year` and at 02:00 UTC
+  `5,332.57`, while `186,150 kWh` stayed unchanged. `islandos_core/demo_site_history.py` now holds the
+  same numbers verbatim and takes `anchor_utc` as an argument; the page still passes "now", so no visible
+  value moves (AppTest at the same hour: `186,150 kWh / 5,281.63 / 0.00 / 0 h` before and after).
+  `tests/test_demo_site_history.py` pins the properties: the same anchor reproduces the same window, every
+  24-hour block carries `510 kWh` of load, anchors 02 and 14 differ in PV but not in daily load or the
+  24-point tariff total, and the builder never reads a clock. This makes the input declarable; it does not
+  add a UI control to pin it.
 
 - **The contract now has a standard JSON Schema, not only a description of one.** `docs/contracts/app_view_models.v3.json`
   said what each field carries, but nothing a stock validator could enforce; "a JSON Schema file" had been

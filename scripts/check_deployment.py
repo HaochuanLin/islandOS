@@ -428,7 +428,7 @@ NOT_PROVED: tuple[str, ...] = (
     "that the stamp cannot be made to lie: a code change could report a constant, "
     "which no external check can detect",
 )
-"""What the report must keep saying it did not prove; ``APP_INTEGRATION.md`` §6.4
+"""What the report must keep saying it did not prove; ``APP_INTEGRATION.md`` §7.4
 lists the same items."""
 
 
@@ -441,7 +441,7 @@ def verdict_for(
     line: Mapping[str, object],
     commit: Mapping[str, object],
 ) -> str:
-    """Pick the single verdict the report states; the order is documented in §6.3.
+    """Pick the single verdict the report states; the order is documented in §7.3.
 
     Pages first (the check is worthless if the routes do not answer), then the
     render, then the stamp, then the two cross-checks that need both, then the
@@ -562,7 +562,7 @@ EXIT_CODES: dict[str, int] = {
     "build_line_missing": 5,
     "render_mismatch": 5,
 }
-"""The documented mapping; ``APP_INTEGRATION.md`` §6 lists the same codes."""
+"""The documented mapping; ``APP_INTEGRATION.md`` §7 lists the same codes."""
 
 
 def exit_code_for(report: Mapping[str, object]) -> int:
@@ -577,7 +577,7 @@ def exit_code_for(report: Mapping[str, object]) -> int:
     except KeyError:
         raise KeyError(
             f"verdict {verdict!r} has no exit code: add it to EXIT_CODES and to "
-            "APP_INTEGRATION.md section 6"
+            "APP_INTEGRATION.md section 7"
         ) from None
 
 
