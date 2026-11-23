@@ -143,7 +143,7 @@ function App() {
           {!notifications.length ? <div className="empty-state compact"><strong>All quiet</strong><p>Data-quality and system notices will appear here.</p></div> : <div className="notification-list">{notifications.map((item) => <article className={item.read_at ? "notification read" : "notification"} key={item.id}><span className={`severity ${item.severity}`} /><div className="notification-body"><div className="notification-title"><strong>{item.title}</strong><small>{new Date(item.created_at).toLocaleString()}</small></div><p>{item.message}</p>{!item.read_at && <button className="text-button" onClick={() => markRead(item)}>Mark as read</button>}</div></article>)}</div>}
         </section>
       </div>
-      <footer className="page-foot"><span>Last refreshed: {lastUpdated || "—"}</span><span>IslandOS · Customer Console · API v1</span></footer>
+      <footer className="page-foot"><span>Last refreshed: {lastUpdated || "—"}</span><span>IslandOS · Customer Console · API v1 · <a className="foot-link" href="./application-views.html" target="_blank" rel="noopener noreferrer">Contract viewer (read only) ↗</a></span></footer>
     </main>
   </div>;
 }
