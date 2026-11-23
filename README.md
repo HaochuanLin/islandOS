@@ -146,6 +146,7 @@ Some legacy Python entry points remain in the repository root for compatibility 
 | Start with | What it covers |
 |---|---|
 | [Integration contract](INTEGRATION.md) | Field-level data contract between prediction, optimization, economics and decision: schemas, units, timestamp rules, producer/consumer map, fail-closed behaviour and known gaps |
+| [Contract viewer](frontend/README.md) | Local read-only viewer for 05/06/09 downloads and `GET /contracts`: how to open it, what it shows, and why it neither computes nor writes |
 | [Product system blueprint](docs/PRODUCT_SYSTEM_BLUEPRINT.md) | Five-step product workflow, internal architecture mapping, current implementation, and maturity boundaries |
 | [AI architecture](docs/AI_ARCHITECTURE.md) | Forecasting, coordination, comparison, maturity labels and technical guardrails |
 | [Repository map](docs/REPOSITORY_MAP.md) | Where code, experiments, tests, and documentation live |
