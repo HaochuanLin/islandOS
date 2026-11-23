@@ -8,6 +8,8 @@ import threading
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
+
 from islandos_core.app_view_models import (
     ANNUAL_BASIS_FIELDS,
     ANNUAL_PROJECTION_FIELDS,
@@ -385,3 +387,35 @@ def test_the_same_joint_request_replays_to_the_same_run():
     assert first["result"]["run_id"] != replay_run_request(
         {**request, "run_settings": {**request["run_settings"], "currency": "EUR"}}
     )["result"]["run_id"]
+
+def test_the_transport_serves_the_built_viewer_and_nothing_else(tmp_path, monkeypatch):
+    import islandos_core.transport as transport_module
+
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "application-views.html").write_text("<html>viewer</html>", encoding="utf-8")
+    (tmp_path / "assets" / "application-views.js").write_text("console.log(1)", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("not yours", encoding="utf-8")
+    monkeypatch.setattr(transport_module, "VIEWER_DIR", tmp_path)
+
+    server = create_server(port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with urlopen(f"{base}/", timeout=10) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"].startswith("text/html")
+            assert response.read().decode("utf-8") == "<html>viewer</html>"
+        with urlopen(f"{base}/assets/application-views.js", timeout=10) as response:
+            assert response.headers["Content-Type"].startswith("text/javascript")
+        with pytest.raises(HTTPError) as outside:
+            urlopen(f"{base}/assets/../secret.txt", timeout=10)
+        assert outside.value.code == 404
+        monkeypatch.setattr(transport_module, "VIEWER_DIR", tmp_path / "missing")
+        with pytest.raises(HTTPError) as absent:
+            urlopen(f"{base}/", timeout=10)
+        assert absent.value.code == 404
+        assert json.loads(absent.value.read())["hint"].startswith("run `npm run build`")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)

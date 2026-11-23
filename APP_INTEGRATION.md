@@ -253,6 +253,12 @@ committed because the browser build needs it, and `tests/test_contract_typescrip
 committed file equals `typescript_source()` byte for byte, so a renamed field cannot reach the viewer
 unnoticed. It is not a published npm package.
 
+The viewer has a landing route instead of a second server: `python -m islandos_core.transport` also serves
+`GET /` (the built `frontend/dist/application-views.html`) and `GET /assets/<file>` (only files under
+`frontend/dist/assets`, traversal refused), so one command gives a browser page that reads `/contracts`
+same-origin. Without a build it answers `404` with `hint: run npm run build in frontend/ first` rather than
+pretending to serve a page.
+
 Replay identity: the page's own 06 run mints a uuid and stamps the wall clock, so two page runs over the
 same inputs are two sessions. A replay has neither, so `replay_run_request` passes
 `deterministic_run_id("run", {"request": request})` and a fixed `REPLAY_CREATED_AT_UTC`
@@ -416,10 +422,33 @@ written answer to "what did that cited report contain".
    build their request, call one orchestration function, and render. What remains page-side is
    widget wiring and the presentation of values that already exist.
 4. ~~**No transport for a non-Streamlit front end.**~~ Closed: `islandos_core/transport.py` serves
-   `GET /contracts`, `GET /health` and `POST /run` over loopback, and `replay_run_request` covers all
-   three pages. Still open is what §4.5 lists: authentication, a hosted endpoint, a TypeScript package,
-   a JSON Schema validator, and a run store.
+   `GET /` (the built viewer), `GET /contracts`, `GET /health` and `POST /run` over loopback, and
+   `replay_run_request` covers all three pages. Still open is what §4.5 lists: authentication, a hosted
+   endpoint, a published npm package, and a run store. The contract now also ships a draft 2020-12 JSON
+   Schema and generated TypeScript types, but neither is distributed.
 
 Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
 Streamlit-free entry point is added to the bottom row of §1. `tests/test_app_integration_doc.py` guards
 these three.
+
+---
+
+## 6. What "deployed" can and cannot prove
+
+The deployed artifact is the Streamlit Community Cloud app that builds from `main`:
+
+- `https://islandos.streamlit.app/Customer_Decision_Dashboard`
+- `https://islandos.streamlit.app/Forecast_Led_Joint_Resource_Optimizer`
+- `https://islandos.streamlit.app/Device_Flexibility_Planner`
+
+**Can be shown from outside:** each page URL answers, the app renders the same numbers the tests pin, and
+the report a page lets you download states `schema_version: 3` and carries `application_views` with the
+contract's key set — which a stock validator checks against `docs/contracts/app_view_models.v3.schema.json`.
+`.github/workflows/hosted-app-health.yml` checks reachability on a schedule.
+
+**Cannot be shown from outside:** which commit the deployment is running. The public page does not expose a
+build stamp, and no deploy hook writes one into the app, so "the site runs `2ba8dad`" is not a verifiable
+claim. What can be stated is narrower and true: the deployed app serves reports whose contract version and
+field set are `3`, and `schema_version` in a downloaded report is the honest link between that report and
+this contract. To close the gap properly would need either Streamlit Cloud's deployment metadata or a
+self-reported build id baked at build time; neither exists here, and the docs do not pretend otherwise.
