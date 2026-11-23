@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
@@ -32,6 +31,7 @@ from islandos_core.app_view_models import (
     build_run_result_summary,
 )
 from islandos_core.canonical_run import create_run_manifest
+from islandos_core.demo_site_history import build_synthetic_site_history
 from islandos_core.annual_operating_basis import (
     annualise_run_summary,
     verify_annual_operating_basis,
@@ -98,15 +98,18 @@ if shared_payload is not None:
     source = f"{prefix} CSV: {site.source_name} (not independently verified)"
     source_hash = site.source_sha256
 else:
-    timestamps = [now - timedelta(hours=167 - i) for i in range(168)]
-    values = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
-    for i, stamp in enumerate(timestamps):
-        hour = stamp.hour
-        solar = max(0.0, 30.0 * math.sin(math.pi * (hour - 6) / 12.0))
-        values["pv_power"].append(min(pv_capacity, solar * (0.86 + 0.08 * math.sin(i * 0.17))))
-        values["wind_power"].append(min(wind_capacity, 8.0 + 3.0 * math.sin(i * 0.21 + 0.7)))
-        values["essential_load"].append(20.0 + 4.0 * (hour in range(17, 23)) + 2.0 * (hour in range(7, 10)))
-        values["electricity_price"].append(0.08 if hour < 6 else 0.27 if hour in range(17, 22) else 0.16)
+    # The default window is synthetic and its anchor is the run hour; the builder
+    # takes that anchor as an argument so a caller (or a test) can pin it.
+    synthetic = build_synthetic_site_history(
+        now, pv_rated_kw=float(pv_capacity), wind_rated_kw=float(wind_capacity)
+    )
+    timestamps = list(synthetic.timestamps)
+    values = {
+        "pv_power": list(synthetic.pv_power_kw),
+        "wind_power": list(synthetic.wind_power_kw),
+        "essential_load": list(synthetic.load_kw),
+        "electricity_price": list(synthetic.tariff_per_kwh),
+    }
     source_hash = None
 
 st.caption(f"Data provenance: {source}")
