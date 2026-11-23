@@ -4,6 +4,17 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The TypeScript side now compiles against the contract instead of a copy of it.** `frontend/ApplicationViews.tsx`
+  declared its own `Field`/`Contract`/`Schema` shapes, so a renamed or retyped field would have compiled
+  cleanly and failed only at runtime. `python -m islandos_core.contract_schemas --typescript` now renders
+  `frontend/src/contracts.ts` from the same `contract_schema()` dict that produces
+  `docs/contracts/app_view_models.v3.json` — one interface per block (`RunRequest`, its `site`, `history`
+  and `page_inputs`, `DeviceTask`, `RunResultSummary`, `AnnualProjection` with `basis`, the 09
+  `DeviceFlexibilitySummary`, plus `ContractField`/`ContractBody`/`ContractSchema`), each property annotated
+  with its `type · unit · owner`. The viewer imports those types, `tsc -b && vite build` passes unchanged
+  against them, and `tests/test_contract_typescript.py` fails unless the committed file equals
+  `typescript_source()` byte for byte. No UI behaviour, value, unit or algorithm change.
+
 - **The read-only transport now states its own limits.** `POST /run` requires `Content-Type: application/json` (`415` otherwise), refuses a declared body above 1 MB before reading it (`413`), and only `GET /contracts` answers an `OPTIONS` preflight; `OPTIONS /run` and `PUT`/`DELETE`/`PATCH` get `405`. The cross-origin allowance is unchanged and still limited to the schema read: `/run` never carries `Access-Control-Allow-Origin`. No endpoint, payload or replay path changed.
 
 - **The device flexibility planner now publishes the same kind of request the other two pages do.** 09 had no `application_views` because its inputs are not sliders: three `DeviceTask` objects and a 24-hour residual power budget. Rather than widening `page_settings` — which means "numeric knobs" and is read by every consumer — the contract gains a `page_inputs` block (`CONTRACT_VERSION = 3`), `null` on 05 and 06 and carrying `task_power_budget_kw` plus the validated task list on 09. `run_orchestration.run_device_planner` holds the page's own order (schedule → tariff-aware replay → earliest-feasible reference), `replay_run_request` covers 09, and `build_device_flexibility_summary` copies the schedule's critical/flexible energy, charge and peak plus the two replays' grid import, cost, unmet and shed. The page's metrics are unchanged (72 kWh / 17 kWh / 13.77 / 6.0 kW / 103.2 kWh / 15.44 / 0.00 / 0.00), each of those numbers is now asserted in `tests/test_app_view_models.py`, and the transport replay of a real 09 request returns the same values. `docs/contracts/app_view_models.v3.json` is generated from the field constants. No algorithm, objective, default, tariff or annualisation change.
