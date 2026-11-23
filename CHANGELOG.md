@@ -4,6 +4,18 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The viewer now has a landing route: one command, one origin.** `frontend/application-views.html` could
+  only be opened from the Vite dev server or from disk, and from disk its `/contracts` fetch was a
+  cross-origin request — the reason `GET /contracts` still carries `Access-Control-Allow-Origin: *`.
+  `python -m islandos_core.transport` now serves `GET /` (the built `frontend/dist/application-views.html`)
+  and `GET /assets/<file>` from `frontend/dist/assets` only, resolving each path and refusing anything
+  outside the build output. With the viewer same-origin, its schema read needs no allowance at all. Without
+  a build, `GET /` returns `404` with `hint: run npm run build in frontend/ first` instead of an empty page.
+  `tests/test_application_transport.py` serves a temporary build, checks the HTML and JS content types, checks
+  that `assets/../secret.txt` and a missing build both 404, and the real `dist/` from `npm run build` was
+  fetched through the route (`/` 200, `assets/application-views-*.js` 200). No new endpoint beyond these two
+  reads, no writes, no change to `/contracts` or `/run`.
+
 - **The contract now has a standard JSON Schema, not only a description of one.** `docs/contracts/app_view_models.v3.json`
   said what each field carries, but nothing a stock validator could enforce; "a JSON Schema file" had been
   on the not-implemented list since the contract was introduced. `python -m islandos_core.contract_schemas
