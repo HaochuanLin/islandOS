@@ -4,6 +4,23 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **A demo clock makes the two recorded demo figures reproducible without freezing them.** Pages 05 and
+  06 built their synthetic 168-hour history from `datetime.now(timezone.utc)`, and the PV/wind ripple
+  is keyed to the row index: one hour later the 24-hour day sits on a different part of the ripple and
+  the projected cost moves while the load total does not. Both pages now have a sidebar `Demo date (UTC)`
+  and `Demo clock (UTC hour)`, defaulting to today and the current hour, so the default stays live while
+  a reader can type back a recorded window. 06's annual caption names the 24-hour window it projects and
+  the history caption names the pin; 05's history caption names the pin. The pinned timestamps still
+  enter the request as `history.timestamps_utc`; no contract field was added and `schema_version` stayed
+  at `3`. Pinning 06 at 14 gives `7,709.55 USD/year` and at 02 gives `5,332.57` with `186,150 kWh`
+  unchanged. Pinning 05 at `2026-11-22 14:00Z` reproduces the recorded `17.93 USD`; the same hour on
+  `2026-11-23` gives `19.91` because 05's load carries a `1.2 * (day < 5)` weekday term, so its window
+  depends on the date as well as the hour — `17.931016` recurs on the dates whose weekday mix matches
+  (11-15, 11-22, 11-29 in a 2026-11-09…30 scan). `tests/test_demo_clock.py` pins both pages at those
+  windows, and `tests/test_demo_site_history.py` pins the anchor helper, including its date argument and
+  its refusal of naive timestamps. `APP_INTEGRATION.md` gains a "Demo clock" section and its deployed-app
+  sentence no longer implies the 05/06 demo figures are independent of when the page is opened.
+
 - **The viewer is now a local tool, and the question is closed rather than deferred.** After the landing
   route (`GET /`), the open item was whether `frontend/application-views.html` is a local tool or a third
   console page. It is a local tool: it reads a downloaded report and `GET /contracts` on loopback, holds
@@ -17,7 +34,6 @@ Notable project changes are recorded here. This is a research prototype; version
   (critical/flexible energy, peak task demand, charge, earliest-feasible reference) instead of reading
   05/06-only fields, and `frontend/src/ApplicationViews.tsx` was expanded from one minified line into
   readable JSX without changing what any number means.
-
 - **The viewer now has a landing route: one command, one origin.** `frontend/application-views.html` could
   only be opened from the Vite dev server or from disk, and from disk its `/contracts` fetch was a
   cross-origin request — the reason `GET /contracts` still carries `Access-Control-Allow-Origin: *`.
