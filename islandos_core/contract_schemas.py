@@ -344,10 +344,199 @@ def write_typescript(path: Path | None = None) -> Path:
     return target
 
 
+JSON_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "docs"
+    / "contracts"
+    / f"app_view_models.v{CONTRACT_VERSION}.schema.json"
+)
+
+_JSON_SCALARS = {
+    "integer": {"type": "integer"},
+    "number": {"type": "number"},
+    "string": {"type": "string"},
+    "boolean": {"type": "boolean"},
+}
+
+
+def _json_value(field: dict[str, Any], *, ref: str | None = None, item_ref: str | None = None) -> dict:
+    """One field's JSON Schema type, nullable included as a union with null."""
+    base_type = field["type"]
+    if ref:
+        schema: dict[str, Any] = {"$ref": f"#/$defs/{ref}"}
+    elif item_ref:
+        schema = {"type": "array", "items": {"$ref": f"#/$defs/{item_ref}"}}
+    elif base_type in _JSON_SCALARS:
+        schema = dict(_JSON_SCALARS[base_type])
+    elif base_type == "object":
+        schema = {"type": "object"}
+    elif base_type == "array[string]":
+        schema = {"type": "array", "items": {"type": "string"}}
+    elif base_type == "array[number]":
+        schema = {"type": "array", "items": {"type": "number"}}
+    elif base_type == "array[boolean]":
+        schema = {"type": "array", "items": {"type": "boolean"}}
+    elif base_type == "array[object]":
+        schema = {"type": "array", "items": {"type": "object"}}
+    elif base_type == "object[number]":
+        schema = {"type": "object", "additionalProperties": {"type": "number"}}
+    elif base_type == "object[number[]]":
+        schema = {
+            "type": "object",
+            "additionalProperties": {"type": "array", "items": {"type": "number"}},
+        }
+    elif base_type == "object[string]":
+        schema = {"type": "object", "additionalProperties": {"type": "string"}}
+    elif base_type == "object[object]":
+        schema = {"type": "object", "additionalProperties": {"type": "object"}}
+    else:
+        raise KeyError(f"no JSON Schema mapping for contract type {base_type!r}")
+    if field["nullable"]:
+        return {"anyOf": [schema, {"type": "null"}]}
+    return schema
+
+
+def _json_object(
+    fields: list[dict[str, Any]],
+    *,
+    refs: dict[str, tuple[str | None, str | None]] | None = None,
+) -> dict[str, Any]:
+    props: dict[str, Any] = {}
+    for field in fields:
+        ref, item_ref = (refs or {}).get(field["name"], (None, None))
+        props[field["name"]] = _json_value(field, ref=ref, item_ref=item_ref)
+    if "schema_version" in props:
+        # A report written under an older contract is a different document, not a value
+        # that happens to be off by one: pin the version so a v2 file fails loudly.
+        props["schema_version"] = {"type": "integer", "const": CONTRACT_VERSION}
+    return {
+        "type": "object",
+        "properties": props,
+        "required": [field["name"] for field in fields],
+        "additionalProperties": False,
+    }
+
+
+def json_schema() -> dict[str, Any]:
+    """The same contract, as a draft 2020-12 JSON Schema a standard validator can enforce.
+
+    The long-form file (`app_view_models.v3.json`) describes type, unit, nullability and
+    owner for a human reader; this one is the machine-checkable half. Objects here are
+    closed (`additionalProperties: false`) because the builders assert the exact key set,
+    and the per-page shape of `page_settings` / `run_settings` / `page_inputs` is encoded
+    as `if`/`then` on `page` instead of being merged into one permissive object.
+    """
+    schema = contract_schema()
+    contracts = schema["contracts"]
+
+    defs: dict[str, Any] = {
+        "run_request_site": _json_object(
+            contracts["run_request"]["nested"]["site"]
+        ),
+        "run_request_history": _json_object(
+            contracts["run_request"]["nested"]["history"]
+        ),
+        "device_task": _json_object(contracts["run_request"]["nested"]["device_tasks"]),
+        "run_request_page_inputs": _json_object(
+            contracts["run_request"]["nested"]["page_inputs"],
+            refs={"tasks": (None, "device_task")},
+        ),
+        "run_result_summary": _json_object(contracts["run_result_summary"]["fields"]),
+        "device_flexibility_summary": _json_object(
+            contracts["device_flexibility_summary"]["fields"]
+        ),
+        "annual_projection_basis": _json_object(
+            contracts["annual_projection"]["nested"]["basis"]
+        ),
+        "annual_projection": _json_object(
+            contracts["annual_projection"]["fields"],
+            refs={"basis": ("annual_projection_basis", None)},
+        ),
+    }
+
+    page_conditions: list[dict[str, Any]] = []
+    for page in schema["pages"]:
+        page_keys = contracts["run_request"]["page_settings_keys"][page]
+        run_keys = contracts["run_request"]["run_settings_keys"][page]
+        then: dict[str, Any] = {
+            "properties": {
+                "page_settings": {
+                    "type": "object",
+                    "properties": {key: {} for key in page_keys},
+                    "required": list(page_keys),
+                    "additionalProperties": False,
+                },
+                "run_settings": {
+                    "type": "object",
+                    "properties": {key: {} for key in run_keys},
+                    "required": list(run_keys),
+                    "additionalProperties": False,
+                },
+            },
+            "required": ["page_settings", "run_settings"],
+        }
+        if page == PAGE_DEVICE_PLANNER:
+            then["required"].append("page_inputs")
+            then["properties"]["page_inputs"] = {"$ref": "#/$defs/run_request_page_inputs"}
+        else:
+            then["properties"]["page_inputs"] = {"type": "null"}
+        page_conditions.append(
+            {
+                "if": {"properties": {"page": {"const": page}}, "required": ["page"]},
+                "then": then,
+            }
+        )
+
+    request_schema = _json_object(
+        contracts["run_request"]["fields"],
+        refs={
+            "site": ("run_request_site", None),
+            "history": ("run_request_history", None),
+        },
+    )
+    request_schema["allOf"] = page_conditions
+    defs["run_request"] = request_schema
+
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": (
+            "https://islandos.local/contracts/"
+            f"app_view_models.v{CONTRACT_VERSION}.schema.json"
+        ),
+        "title": f"IslandOS application view models, contract version {CONTRACT_VERSION}",
+        "description": (
+            "Generated from islandos_core.contract_schemas; do not edit. "
+            "Run: python -m islandos_core.contract_schemas --json-schema"
+        ),
+        "$defs": defs,
+        "oneOf": [
+            {"$ref": "#/$defs/run_request"},
+            {"$ref": "#/$defs/run_result_summary"},
+            {"$ref": "#/$defs/device_flexibility_summary"},
+            {"$ref": "#/$defs/annual_projection"},
+        ],
+    }
+
+
+def write_json_schema(path: Path | None = None) -> Path:
+    target = path or JSON_SCHEMA_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(json_schema(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return target
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate the contract artifacts")
     parser.add_argument("--typescript", action="store_true", help="write frontend/src/contracts.ts")
+    parser.add_argument("--json-schema", action="store_true", help="write the draft 2020-12 schema")
     args = parser.parse_args()
-    print(write_typescript() if args.typescript else write_schema())
+    if args.typescript:
+        print(write_typescript())
+    elif args.json_schema:
+        print(write_json_schema())
+    else:
+        print(write_schema())
