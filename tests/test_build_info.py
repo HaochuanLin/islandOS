@@ -166,6 +166,15 @@ class StampPublishingTests(unittest.TestCase):
             self.assertEqual(json.loads(target.read_text(encoding="utf-8")), stamp)
             self.assertEqual(list(target.parent.glob("*.tmp")), [])
 
+    def test_the_file_and_the_download_are_the_same_bytes(self):
+        stamp = build_info.build_stamp(runner=Runner(completed(SHA + "\n")), environ={})
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "static" / build_info.STAMP_FILENAME
+            build_info.write_stamp(stamp, target)
+            self.assertEqual(target.read_bytes(), build_info.serialise_stamp(stamp))
+            self.assertTrue(target.read_bytes().endswith(b"\n"))
+            self.assertEqual(json.loads(target.read_bytes()), stamp)
+
     def test_stamp_path_and_url_agree(self):
         self.assertEqual(build_info.stamp_path(ROOT), ROOT / "static" / "build_info.json")
         self.assertEqual(build_info.STAMP_URL_PATH, "/app/static/build_info.json")
@@ -213,7 +222,11 @@ class NoFakeStampTests(unittest.TestCase):
         source = (ROOT / "app.py").read_text(encoding="utf-8")
         self.assertIn("build_info.build_stamp()", source)
         self.assertIn("build_info.write_stamp(stamp)", source)
-        self.assertIn("build_info.caption(deployment_stamp())", source)
+        self.assertIn("build_info.caption(stamp)", source)
+        # Where static serving is unavailable the download is the only route that
+        # carries the bytes, so its label is part of the contract the check uses.
+        self.assertIn("Download build stamp (JSON)", source)
+        self.assertIn("build_info.serialise_stamp(stamp)", source)
 
 
 class SidebarTests(unittest.TestCase):
@@ -232,6 +245,14 @@ class SidebarTests(unittest.TestCase):
         expected = published["source_commit_short"] or "unknown"
         self.assertIn(expected, captions[-1])
         self.assertIn(published["resolved_from"], captions[-1])
+
+    def test_the_sidebar_offers_the_stamp_as_a_json_download(self):
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120).run()
+        self.assertFalse(app.exception)
+        labels = [button.proto.label for button in app.sidebar.get("download_button")]
+        self.assertIn("Download build stamp (JSON)", labels)
 
 
 if __name__ == "__main__":

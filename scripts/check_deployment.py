@@ -6,12 +6,13 @@ Run against the public Streamlit app:
     python scripts/check_deployment.py --base-url https://islandos.streamlit.app
 
 Three page routes must answer with the Streamlit front-end shell, and the
-deployment must name the checkout it runs from. Two sources can carry that name:
-``/app/static/build_info.json`` when the host serves static files, and the
-sidebar's ``build <sha>`` line, which only a browser session can read. When
-``--expect-commit`` is given, the named commit must equal it; on any other value
-the report says why the comparison cannot be made, and never turns "could not
-check" into "checked and passed".
+deployment must name the checkout it runs from. Three sources can carry that
+name: ``/app/static/build_info.json`` when the host serves static files, the
+sidebar's ``build <sha>`` download button — the same document, through a route
+that needs no static serving — and, when neither is available, the rendered
+``build <sha>`` line. When ``--expect-commit`` is given, the named commit must
+equal it; on any other value the report says why the comparison cannot be made,
+and never turns "could not check" into "checked and passed".
 
 Measured facts this script is built on (2026-11-23, islandos.streamlit.app):
 
@@ -27,11 +28,12 @@ Measured facts this script is built on (2026-11-23, islandos.streamlit.app):
   ``/app/static/build_info.json`` still answered ``200`` with the same shell,
   while the rendered sidebar named the commit (measured 2026-11-23). The stamp
   is therefore read when the host serves it — self-hosted, or a future Cloud
-  build that enables the route — and the sidebar line is the load-bearing
-  evidence on Community Cloud.
+  build that enables the route — and otherwise taken from the sidebar's
+  download button, which hands over the same document without static serving.
+  The rendered ``build`` line remains the last resort.
 
 Exit codes: 0 all checks passed, 1 a page route is not the app shell, 2 the
-deployment names no commit through either source, 3 the named commit differs
+deployment names no commit through any source, 3 the named commit differs
 from ``--expect-commit``, 4 a commit was expected but the deployment does not
 name one it can be compared against, 5 the rendered app did not confirm the
 commit it names.
@@ -77,6 +79,14 @@ and someone updates both — which is the point."""
 
 STAMP_SCHEMA_VERSION = 1
 """The stamp schema this checker understands, pinned for the same reason."""
+
+STAMP_DOWNLOAD_LABEL = "Download build stamp (JSON)"
+"""The sidebar button that hands the same bytes to a reader.
+
+Community Cloud serves files that are in the repository, not files a session writes,
+so ``STAMP_PATH`` answers with the front-end shell there. The download is the route
+that works on both a self-hosted server and Community Cloud; it is read through the
+same headless session that warms the app."""
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -444,6 +454,46 @@ def _poll_sidebar(frame: object, timeout: float) -> tuple[str, str | None, bool]
         time.sleep(0.5)
 
 
+def capture_stamp_download(frame: object, session: object, timeout: float = 20.0) -> dict:
+    """Click the sidebar's download button and read the bytes it hands over.
+
+    This is the stamp route that does not depend on static file serving, so it is
+    the one that can carry a Community Cloud deployment's full commit. The document
+    is validated with the same rules as the static file: a download is a transport,
+    not a weaker kind of evidence.
+    """
+    result: dict = {
+        "state": "not-found",
+        "reason": "no button labelled " + repr(STAMP_DOWNLOAD_LABEL),
+        "file_name": None,
+        "bytes": None,
+        "document": None,
+    }
+    try:
+        button = frame.get_by_role("button", name=STAMP_DOWNLOAD_LABEL).first
+        if not button.count():
+            return result
+        with session.expect_download(timeout=timeout * 1000) as download_info:
+            button.click()
+        download = download_info.value
+        path = download.path()
+        data = Path(path).read_bytes() if path else b""
+        result.update(file_name=download.suggested_filename, bytes=len(data))
+        try:
+            document = json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            result.update(state="unreadable", reason=f"{type(error).__name__}: {error}")
+            return result
+        stamp, reason = validate_stamp(document)
+        if stamp is None:
+            result.update(state="unreadable", reason=reason)
+            return result
+        result.update(state="captured", reason="", document=stamp)
+    except Exception as error:  # noqa: BLE001 - Playwright raises many types
+        result.update(state="failed", reason=f"{type(error).__name__}: {str(error)[:300]}")
+    return result
+
+
 def warm_page(base_url: str, page: str = "/", timeout: float = 90.0) -> dict:
     """Open the app in a headless browser and read the sidebar's build line.
 
@@ -464,6 +514,7 @@ def warm_page(base_url: str, page: str = "/", timeout: float = 90.0) -> dict:
             "page": page,
             "frame_url": None,
             "sidebar_text": "",
+            "download": {"state": "not-attempted", "reason": "playwright is not installed"},
         }
     result: dict = {
         "state": "failed",
@@ -473,6 +524,7 @@ def warm_page(base_url: str, page: str = "/", timeout: float = 90.0) -> dict:
         "page": page,
         "frame_url": None,
         "sidebar_text": "",
+        "download": {"state": "not-attempted", "reason": "the app was not rendered"},
     }
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -493,6 +545,11 @@ def warm_page(base_url: str, page: str = "/", timeout: float = 90.0) -> dict:
                 exception=exception,
                 sidebar_text=sidebar_text[:400],
                 frame_url=frame.url,
+            )
+            # The download is the stamp route that works where static serving does
+            # not; it is read in this session because it cannot be reached without one.
+            result["download"] = capture_stamp_download(
+                frame, session, timeout=min(20.0, timeout)
             )
         except Exception as error:  # noqa: BLE001 - Playwright raises many types
             result["detail"] = f"{type(error).__name__}: {str(error)[:300]}"
@@ -544,7 +601,8 @@ NOT_PROVED: tuple[str, ...] = (
     "the checkout it reads git from",
     "that the host serves the static stamp: Community Cloud answered "
     "/app/static/build_info.json with the front-end shell after a restart on "
-    "2026-11-23, so on Cloud the commit is read from the rendered sidebar only",
+    "2026-11-23, so on Cloud the stamp is read from the sidebar download, and the "
+    "static file and the download are never compared byte for byte",
     "that the installed dependencies equal requirements-runtime.lock",
     "Streamlit Community Cloud's own build identity or provenance",
     "that the stamp cannot be made to lie: a code change could report a constant, "
@@ -587,6 +645,46 @@ def verdict_for(
     return "ok"
 
 
+def resolve_stamp(
+    static: Mapping[str, object], render: Mapping[str, object], warm: bool
+) -> dict:
+    """Pick the stamp the report should use, and say which route it came from.
+
+    The static file is preferred: it is the route a plain HTTP reader can fetch. When
+    it answers with the front-end shell, the sidebar download is the same document
+    through a transport that works on Community Cloud. Neither route is trusted more
+    than the other — both are validated by :func:`validate_stamp`.
+    """
+    download = render.get("download") if isinstance(render, Mapping) else None
+    download = download if isinstance(download, Mapping) else {}
+    if static.get("state") == "published":
+        return {
+            "state": "published",
+            "source": "static",
+            "document": static.get("stamp"),
+            "reason": "",
+        }
+    if warm and download.get("state") == "captured":
+        return {
+            "state": "published",
+            "source": "download",
+            "document": download.get("document"),
+            "reason": "",
+        }
+    reason = str(static.get("reason") or "")
+    if warm:
+        download_reason = str(download.get("reason") or download.get("state") or "")
+        reason = (
+            f"{reason}; download: {download_reason}" if reason else f"download: {download_reason}"
+        )
+    return {
+        "state": str(static.get("state")),
+        "source": None,
+        "document": None,
+        "reason": reason,
+    }
+
+
 def run_check(
     base_url: str = DEFAULT_BASE_URL,
     pages: Sequence[str] = PAGE_PATHS,
@@ -603,14 +701,23 @@ def run_check(
     base = base_url.rstrip("/")
     opener = opener or build_opener()
     page_probes = [fetch(opener, base + path, timeout) for path in pages]
-    render: dict = {"state": "not-requested", "build_line": None, "exception": None, "detail": ""}
+    render: dict = {
+        "state": "not-requested",
+        "build_line": None,
+        "exception": None,
+        "detail": "",
+        "download": {"state": "not-attempted", "reason": "--warm was not requested"},
+    }
     if warm:
         render = (warm_runner or warm_page)(base, warm_page_path, warm_timeout)
     # Read the stamp after the session: a fresh container has no file until one runs.
     stamp_probe = fetch(opener, base + STAMP_PATH, timeout)
-    stamp = read_stamp(stamp_probe)
-    line = check_build_line(render, stamp["stamp"]) if warm else {"matches": False, "reason": ""}
-    commit = compare_commit(stamp["stamp"], expect_commit, render)
+    static_stamp = read_stamp(stamp_probe)
+    stamp = resolve_stamp(static_stamp, render, warm)
+    line = (
+        check_build_line(render, stamp["document"]) if warm else {"matches": False, "reason": ""}
+    )
+    commit = compare_commit(stamp["document"], expect_commit, render)
 
     pages_ok = bool(page_probes) and all(p.kind == "streamlit_shell" for p in page_probes)
     render_ok = warm and render["state"] == "ok" and not render["exception"]
@@ -625,13 +732,17 @@ def run_check(
         },
         {
             "claim": (
-                "the deployment publishes a build stamp at "
-                f"{STAMP_PATH} that names the checkout it runs from"
+                "the deployment publishes a build stamp that names the checkout it runs "
+                "from (a static file, or the sidebar download, which is the route "
+                "available where static serving is not)"
             ),
             "proved": stamp_ok,
             "evidence": {
+                "source": stamp["source"],
                 "response": stamp_probe.as_dict(),
-                "stamp": stamp["stamp"],
+                "static": {"state": static_stamp["state"], "reason": static_stamp["reason"]},
+                "download": render.get("download"),
+                "stamp": stamp["document"],
                 "reason": stamp["reason"],
             },
         },
@@ -666,9 +777,15 @@ def run_check(
         "pages": [p.as_dict() for p in page_probes],
         "stamp": {
             "state": stamp["state"],
+            "source": stamp["source"],
             "reason": stamp["reason"],
-            "document": stamp["stamp"],
-            "response": stamp_probe.as_dict(),
+            "document": stamp["document"],
+            "static": {
+                "state": static_stamp["state"],
+                "reason": static_stamp["reason"],
+                "response": stamp_probe.as_dict(),
+            },
+            "download": render.get("download"),
         },
         "rendered": render,
         "commit": commit,

@@ -372,6 +372,92 @@ class WarmTests(unittest.TestCase):
             )
         self.assertEqual(report["verdict"], "render_failed")
 
+
+class DownloadStampTests(unittest.TestCase):
+    """Community Cloud serves the shell at the static path; the download carries the stamp."""
+
+    captured = {
+        "state": "captured",
+        "reason": "",
+        "file_name": "build_info.json",
+        "bytes": 260,
+        "document": STAMP,
+    }
+
+    def warm(self, download=None, **overrides):
+        base = {
+            "state": "ok",
+            "build_line": f"build {SHA[:7]} (git)",
+            "exception": False,
+            "detail": "",
+            "download": download if download is not None else {"state": "not-attempted"},
+        }
+        base.update(overrides)
+        return lambda base_url, page, timeout: dict(base)
+
+    def unserved_routes(self):
+        routes = routes_with_stamp()
+        routes[check.STAMP_PATH] = (200, "text/html; charset=utf-8", SHELL.encode())
+        return routes
+
+    def test_a_shell_at_the_static_path_is_proved_by_the_download(self):
+        with LocalServer(self.unserved_routes()) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), expect_commit=SHA, warm=True,
+                warm_runner=self.warm(self.captured),
+            )
+        self.assertEqual(report["stamp"]["static"]["state"], "not_served")
+        self.assertEqual(report["stamp"]["source"], "download")
+        self.assertEqual(report["stamp"]["state"], "published")
+        self.assertEqual(report["verdict"], "ok")
+        self.assertEqual(check.exit_code_for(report), 0)
+        stamp_claim = next(c for c in report["claims"] if "build stamp" in c["claim"])
+        self.assertTrue(stamp_claim["proved"])
+        self.assertEqual(stamp_claim["evidence"]["source"], "download")
+        # A full 40-character commit beats the seven characters a sidebar shows.
+        self.assertEqual(report["commit"]["basis"], "stamp")
+        self.assertEqual(report["commit"]["reported"], SHA)
+
+    def test_the_download_commit_is_compared_like_the_static_one(self):
+        with LocalServer(self.unserved_routes()) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), expect_commit=OTHER_SHA, warm=True,
+                warm_runner=self.warm(self.captured),
+            )
+        self.assertEqual(report["commit"]["assertion"], "mismatch")
+        self.assertEqual(report["verdict"], "commit_mismatch")
+
+    def test_a_sidebar_without_the_download_falls_back_to_the_rendered_line(self):
+        # The #321 route still works: no stamp, but the line names the commit.
+        with LocalServer(self.unserved_routes()) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), expect_commit=SHA, warm=True,
+                warm_runner=self.warm({"state": "not-found", "reason": "no such button"}),
+            )
+        self.assertEqual(report["stamp"]["state"], "not_served")
+        self.assertEqual(report["commit"]["basis"], "rendered")
+        self.assertEqual(report["verdict"], "ok")
+
+    def test_an_unreadable_download_does_not_become_a_stamp(self):
+        with LocalServer(self.unserved_routes()) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), warm=True,
+                warm_runner=self.warm(
+                    {"state": "unreadable", "reason": "unsupported schema_version 2"}
+                ),
+            )
+        self.assertEqual(report["stamp"]["state"], "not_served")
+        self.assertIn("schema_version 2", json.dumps(report["stamp"]["download"]))
+
+    def test_a_static_stamp_is_preferred_when_both_routes_work(self):
+        with LocalServer(routes_with_stamp()) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), warm=True,
+                warm_runner=self.warm(self.captured),
+            )
+        self.assertEqual(report["stamp"]["source"], "static")
+        self.assertEqual(report["verdict"], "ok")
+
     def test_a_page_without_the_caption_fails(self):
         with LocalServer(routes_with_stamp()) as base:
             report = check.run_check(
@@ -442,7 +528,16 @@ class MissingBrowserTests(unittest.TestCase):
         self.assertEqual(result["state"], "playwright-missing")
         self.assertEqual(
             set(result),
-            {"state", "build_line", "exception", "detail", "page", "frame_url", "sidebar_text"},
+            {
+                "state",
+                "build_line",
+                "exception",
+                "detail",
+                "page",
+                "frame_url",
+                "sidebar_text",
+                "download",
+            },
         )
 
 
