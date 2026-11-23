@@ -1,7 +1,11 @@
-# Static file serving is what makes the build stamp readable over HTTP:
-# Streamlit serves ./static/<name> at /app/static/<name>. Without it, every
-# route on the hosted app — including /app/static/build_info.json — returns the
-# same front-end shell, and nothing about the running code is observable.
+# Static file serving, for a host that actually serves it: Streamlit exposes
+# ./static/<name> at /app/static/<name> under the main script, which is where
+# the build stamp is written (islandos_core/build_info.py). It is only usable
+# self-hosted. Streamlit Community Cloud does not serve that route — measured
+# 2026-11-23: /app/static/build_info.json answered with the same front-end shell
+# after the app was restarted, while the sidebar caption named the commit — so
+# on Cloud the commit is read from the sidebar line, not from this file. See
+# APP_INTEGRATION.md §7.1–§7.3 before expecting a served stamp.
 [server]
 enableStaticServing = true
 
