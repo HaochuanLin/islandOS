@@ -4,6 +4,14 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The deployment check waits for the download button instead of racing its caption.**
+  Streamlit renders the sidebar's `build …` line before the button beside it. `capture_stamp_download` read
+  once, so a read landing in that gap found no button and the stamp fell back to the seven-character caption
+  — observed on `3e1a990`, where the button appeared three seconds later. `find_stamp_button` now polls for
+  up to ten seconds; on a real timeout the report says how long it waited, and the rendered-line fallback is
+  unchanged. `tests/test_check_deployment.py` covers a late mount, a never-mounted button, and the timeout
+  wording.
+
 - **The default demo clock is frozen at 2026-11-22 14:00 UTC, so a default page reports one number.**
   Pages 05 and 06 used to pass `now.date()` and `now.hour` into the synthetic window; because the PV/wind
   ripple is keyed to the row index, the same code reported anywhere between `4,548.68` and `8,631.34`
