@@ -4,6 +4,20 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **06's run identity is derived from the window it describes, not from the wall clock.** The page minted
+  a fresh `run_id` with `uuid4()` and stamped `created_at_utc` with `datetime.now(timezone.utc)` on every
+  render, so two downloads of the same pinned window carried different `run_id`, `manifest_sha256`,
+  `summary_sha256` and `projection_sha256` even though the request and every figure were identical — a
+  reader could not tell whether the two files were the same record. `run_id` now comes from
+  `deterministic_run_id("run", …)` over the dataset digest, site-configuration digest, window end, currency,
+  search settings and availability, and `created_at_utc` is the window the run speaks for (the demo anchor
+  for synthetic data, the last history hour for an uploaded CSV). Same pin, same file: two renders now
+  agree field for field, and moving the pin from 14 to 02 changes the id as it should.
+  `tests/test_demo_clock.py::test_a_pinned_window_downloads_as_the_same_record_twice` captures the real
+  download bytes through `st.download_button` and compares both fields across two renders and across two
+  pins. The recorded figures are untouched: pin 14 still gives `7,709.55 USD/year`, pin 02 `5,332.57`,
+  `186,150 kWh` in both. No contract field was added and `schema_version` stays at `3`.
+
 - **A demo clock makes the two recorded demo figures reproducible without freezing them.** Pages 05 and
   06 built their synthetic 168-hour history from `datetime.now(timezone.utc)`, and the PV/wind ripple
   is keyed to the row index: one hour later the 24-hour day sits on a different part of the ripple and

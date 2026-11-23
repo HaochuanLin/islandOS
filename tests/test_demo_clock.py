@@ -7,9 +7,11 @@ lands on the numbers the work log quotes. 06 needs only the hour; 05 also needs 
 date, because its synthetic load carries a weekday term.
 """
 
+import json
 from datetime import date
 from pathlib import Path
 
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -63,3 +65,44 @@ def test_the_document_no_longer_implies_the_demo_figures_are_clock_independent()
     assert "17.93" in text and "19.91" in text
     # The old sentence claimed the deployed app renders "the same numbers the tests pin".
     assert "renders the same numbers the tests pin" not in text
+
+
+def _annual_identity(date: date, hour: int) -> dict:
+    """Pin 06 at ``date``/``hour`` and read the identity fields of its own annual view."""
+    captured: dict[str, bytes] = {}
+    original = st.download_button
+
+    def recorder(label, data=None, *args, **kwargs):
+        if data is not None:
+            captured[label] = data if isinstance(data, bytes) else bytes(data)
+        return original(label, data=data, *args, **kwargs)
+
+    st.download_button = recorder
+    try:
+        app = AppTest.from_file(str(PAGE_06), default_timeout=180).run()
+        assert not app.exception, [str(error) for error in app.exception]
+        app.date_input(key="demo_date_joint_optimizer").set_value(date)
+        app.slider(key=CLOCK_06).set_value(hour)
+        app.checkbox(key="annual_projection_joint_optimizer").check()
+        app.run()
+        assert not app.exception, [str(error) for error in app.exception]
+    finally:
+        st.download_button = original
+    payload = next(value for label, value in captured.items() if "joint schedule audit" in label.lower())
+    views = json.loads(payload)["application_views"]
+    annual = views["annual"]
+    return {
+        "run_id": annual["run_id"],
+        "manifest_sha256": annual["manifest_sha256"],
+        "projection_sha256": annual["projection_sha256"],
+    }
+
+
+def test_a_pinned_window_downloads_as_the_same_record_twice():
+    first = _annual_identity(date(2026, 11, 22), 14)
+    second = _annual_identity(date(2026, 11, 22), 14)
+    assert first == second
+    # A different window is a different run, so its identity must move with it.
+    other = _annual_identity(date(2026, 11, 22), 2)
+    assert other["projection_sha256"] != first["projection_sha256"]
+    assert other["run_id"] != first["run_id"]
