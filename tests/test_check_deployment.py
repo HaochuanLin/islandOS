@@ -212,14 +212,75 @@ class RunCheckTests(unittest.TestCase):
         commit_claim = next(c for c in report["claims"] if "equals the expected commit" in c["claim"])
         self.assertFalse(commit_claim["proved"])
 
-    def test_an_unpublished_stamp_fails_even_though_every_page_is_up(self):
+    def test_an_http_only_run_against_a_host_without_static_files_reports_no_evidence(self):
         routes = routes_with_stamp()
         routes[check.STAMP_PATH] = (200, "text/html; charset=utf-8", SHELL.encode())
         with LocalServer(routes) as base:
             report = check.run_check(base_url=base, pages=("/page-a",), expect_commit=SHA)
         self.assertEqual(report["stamp"]["state"], "not_served")
-        self.assertEqual(report["verdict"], "stamp_unavailable")
+        self.assertEqual(report["verdict"], "commit_unassertable")
+        self.assertEqual(check.exit_code_for(report), 4)
+        self.assertEqual(report["commit"]["assertion"], "unavailable")
+
+    def test_an_http_only_run_that_asks_nothing_and_sees_nothing_is_no_evidence(self):
+        routes = routes_with_stamp()
+        routes[check.STAMP_PATH] = (200, "text/html; charset=utf-8", SHELL.encode())
+        with LocalServer(routes) as base:
+            report = check.run_check(base_url=base, pages=("/page-a",))
+        self.assertEqual(report["verdict"], "no_evidence")
         self.assertEqual(check.exit_code_for(report), 2)
+
+    def test_the_sidebar_carries_the_commit_when_the_host_serves_no_stamp(self):
+        routes = routes_with_stamp()
+        routes[check.STAMP_PATH] = (200, "text/html; charset=utf-8", SHELL.encode())
+        warm = lambda base_url, page, timeout: {  # noqa: E731 - one-line stub
+            "state": "ok",
+            "build_line": f"build {SHA[:7]} (git)",
+            "exception": False,
+            "detail": "",
+        }
+        with LocalServer(routes) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), expect_commit=SHA, warm=True, warm_runner=warm
+            )
+        self.assertEqual(report["verdict"], "ok")
+        self.assertEqual(check.exit_code_for(report), 0)
+        self.assertEqual(report["commit"]["assertion"], "match")
+        self.assertEqual(report["commit"]["basis"], "rendered")
+        self.assertEqual(report["commit"]["reported"], SHA[:7])
+        self.assertFalse(report["stamp"]["state"] == "published")
+
+    def test_a_sidebar_seven_characters_that_do_not_prefix_the_expectation_mismatch(self):
+        routes = routes_with_stamp()
+        routes[check.STAMP_PATH] = (200, "text/html; charset=utf-8", SHELL.encode())
+        warm = lambda base_url, page, timeout: {  # noqa: E731 - one-line stub
+            "state": "ok",
+            "build_line": f"build {OTHER_SHA[:7]} (git)",
+            "exception": False,
+            "detail": "",
+        }
+        with LocalServer(routes) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), expect_commit=SHA, warm=True, warm_runner=warm
+            )
+        self.assertEqual(report["verdict"], "commit_mismatch")
+        self.assertEqual(check.exit_code_for(report), 3)
+
+    def test_a_sidebar_sha_without_a_source_tag_is_not_asserted(self):
+        routes = routes_with_stamp()
+        routes[check.STAMP_PATH] = (200, "text/html; charset=utf-8", SHELL.encode())
+        warm = lambda base_url, page, timeout: {  # noqa: E731 - one-line stub
+            "state": "ok",
+            "build_line": f"build {SHA[:7]}",
+            "exception": False,
+            "detail": "",
+        }
+        with LocalServer(routes) as base:
+            report = check.run_check(
+                base_url=base, pages=("/page-a",), expect_commit=SHA, warm=True, warm_runner=warm
+            )
+        self.assertEqual(report["verdict"], "render_mismatch")
+        self.assertIn("no source tag", report["claims"][3]["evidence"]["reason"])
 
     def test_a_missing_page_fails(self):
         routes = routes_with_stamp(pages={"/page-a": (404, "text/plain", b"missing")})
@@ -364,7 +425,7 @@ class ExitCodeTests(unittest.TestCase):
             {
                 "ok",
                 "pages_failed",
-                "stamp_unavailable",
+                "no_evidence",
                 "commit_mismatch",
                 "commit_unassertable",
                 "render_failed",

@@ -519,14 +519,19 @@ Separately, a report downloaded from a page states `schema_version: 3` and carri
 ties the *file* to the contract (`docs/contracts/app_view_models.v3.schema.json` validates it) and says
 nothing about which code produced it.
 
-The one route that returns app-specific bytes is `./static`, which Streamlit serves at `/app/static/<name>`
-when `[server] enableStaticServing = true` (`.streamlit/config.toml`). That is where the build stamp lives.
+The build stamp was meant to be served from `./static`: `/app/static/<name>`, with
+`[server] enableStaticServing = true` in `.streamlit/config.toml`. Measured on 2026-11-23, after the app had
+been rebooted onto `46d145a`, `/app/static/build_info.json` still answered with the same 9,782-byte shell,
+while the sidebar inside the iframe said `build 46d145a (git)`. On Community Cloud that route is therefore
+not available: no app-specific bytes are served, and the commit is readable only from the rendered sidebar.
+The file remains useful for a self-hosted run, or for a host that does serve `./static`.
 
 ### 7.2 The build stamp
 
 At start-up `app.py` calls `islandos_core.build_info.build_stamp()`, writes the result to
 `static/build_info.json` (best-effort: a read-only deployment still renders the page), and captions the
-sidebar with `build <short sha> (<resolved_from>)`.
+sidebar with `build <short sha> (<resolved_from>)`. The file is written whether or not the host serves it;
+§7.1 records where it is, and is not, readable.
 
 | Field | Meaning |
 |---|---|
@@ -553,24 +558,28 @@ python scripts/check_deployment.py --base-url https://islandos.streamlit.app \
     --warm --expect-commit "$(git rev-parse HEAD)"
 ```
 
-It probes the three page routes, opens the app once in a headless browser, re-reads the stamp, and writes a
-JSON report with `--report`. Exit codes:
+It probes the three page routes, opens the app once in a headless browser and reads the sidebar's build
+line, re-reads the stamp, and writes a JSON report with `--report`. The commit is taken from whichever
+source names one: the stamp when the host serves it (all 40 characters), the sidebar otherwise (seven
+characters, compared as a prefix of `--expect-commit`, with `commit.basis` telling the report which source
+was used). Exit codes:
 
 | Code | Meaning |
 |---|---|
-| 0 | three pages return the app shell, the app renders, the stamp is published, and (when expected) the commit matches |
+| 0 | three pages return the app shell, the app renders, a build line names a commit, and (when expected) it matches |
 | 1 | a page route did not return the Streamlit shell |
-| 2 | the stamp is missing, unreadable, or a sign-in redirect made it unreadable |
-| 3 | the published commit differs from `--expect-commit`, or `--expect-commit` is not a full SHA |
-| 4 | a commit cannot be asserted: the deployment publishes none, or a self-declared one |
-| 5 | the rendered app did not confirm the stamp: it raised, showed no build line, or the line named another commit |
+| 2 | nothing was named and nothing was asked: an HTTP-only run that neither expected a commit nor found a stamp |
+| 3 | the named commit differs from `--expect-commit`, or `--expect-commit` is not a full SHA |
+| 4 | a commit was expected but the deployment names none that can be compared: no source named one, or the only one is self-declared |
+| 5 | the rendered app did not name a commit: it raised, showed no build line, or the line was unattributed or disagreed with a served stamp |
 
-`--warm` is not a convenience. A Streamlit script runs only when a browser session connects, so a container
-that has just restarted has no `static/build_info.json` until someone opens the app; an HTTP-only probe
-would call that healthy app "missing a stamp". The warm-up runs one session, re-reads the file, and compares
-the sidebar's `build` line with it — which also asserts that the page renders without an exception. The
-workflow installs `playwright==1.65.2` and Chromium for this step, pinned in the workflow rather than in
-`requirements-ci.lock` because the unit-test job needs no browser.
+`--warm` is not a convenience. A Streamlit script runs only when a browser session connects, so an
+HTTP-only probe sees nothing of the running process on Community Cloud — measured: the stamp path answers
+with the shell (§7.1) — and on a container that has just restarted, a self-hosted stamp file does not
+exist yet either. The warm-up runs one session, so the sidebar's `build` line is the evidence whenever a
+stamp is not served, and is cross-checked against the file when one is. It also asserts that the page
+renders without an exception. The workflow installs `playwright==1.65.2` and Chromium for this step,
+pinned in the workflow rather than in `requirements-ci.lock` because the unit-test job needs no browser.
 
 The warm-up searches every frame of the page for the app container, because a self-hosted server renders
 the app in the page itself while Community Cloud renders it in the wrapper iframe (§7.1). The report
@@ -579,9 +588,10 @@ records `frame_url`, so the evidence names the frame whose sidebar was read.
 Before comparing anything the check validates the document itself: schema version, a 40-hex
 `source_commit`, `resolved_from` in `{git, environment, none}`, a `source_commit_short` that agrees with the
 full commit, `working_tree_dirty` as a boolean or `null`, and a capture timestamp. A stamp that disagrees
-with itself is `stamp_unavailable` (exit 2) rather than a partial match, and the sidebar line has to carry
-the same source tag as the stamp — `build 1a2b3c4 (environment)` does not confirm a `git` stamp even
-though the sha matches.
+with itself is treated as unreadable rather than as a partial match, and the sidebar line must carry the
+same source tag as the stamp — `build 1a2b3c4 (environment)` does not confirm a `git` stamp even though
+the sha matches. With no stamp served, the line itself must attribute the sha to `git`; a bare
+`build 1a2b3c4` is reported as unattributed instead of being assumed.
 
 The report separates `claims` (each with `proved` and its evidence) from `not_proved`.
 `.github/workflows/hosted-app-health.yml` runs it six-hourly and on manual dispatch with `--expect-commit`
@@ -591,24 +601,30 @@ report drift that has not happened yet.
 
 ### 7.4 What is still not proved
 
-- that the process executes the code of the commit it reports, beyond the checkout the stamp is read from;
+- that the process executes the code of the commit it reports, beyond the checkout `git` is read from;
+- that Community Cloud serves the static stamp at all: `/app/static/build_info.json` answered with the
+  front-end shell after a reboot on 2026-11-23, so on Cloud the evidence is a seven-character line rendered
+  in the sidebar, not a file;
 - that the installed dependencies equal `requirements-runtime.lock`;
 - Streamlit Community Cloud's own build identity, provenance or CDN behaviour;
-- that the stamp cannot be made to lie — a code change could report a constant, and no external check
-  detects that; only review and `tests/test_build_info.py` stand against it;
+- that the stamp or the caption cannot be made to lie — a code change could report a constant, and no
+  external check detects that; only review and `tests/test_build_info.py` stand against it;
 - everything the rendered page shows beyond the build line: only the elements the check reads are inspected.
 
 ### 7.5 Rebuild timing, and the failure this catches
 
 Streamlit Community Cloud updates app files from the repository almost in real time, redeploys fully when
-dependencies change, and needs a reboot when `.streamlit/config.toml` changes. A stamped commit can
-therefore lag `main` for minutes after a merge — expected, not a defect. What the six-hourly run catches is
-a deployment that is *stuck*: a commit that no longer matches `main`, or a stamp that stopped being served.
-Two consequences follow from the same mechanism. A merge that adds or changes the configuration needs one
-manual "Reboot app" before `/app/static/build_info.json` answers JSON instead of the shell; until that
-happens the scheduled run fails with exit 2 and says exactly that. And because a container writes the stamp
-on its first session, the file can be absent on an otherwise healthy deployment — which is why the check
-warms the app instead of treating "no file yet" as "broken".
+dependencies change, and needs a reboot when `.streamlit/config.toml` changes. A deployment can therefore
+lag `main` for minutes after a merge — expected, not a defect. What the six-hourly run catches is a
+deployment that is *stuck*: a sidebar that still names an older commit, or one that stops naming a commit
+at all.
+
+The mechanism is the sidebar caption, not the static file. Because a Streamlit script runs only when a
+session connects, the caption exists only on a page someone opened — which is why the check warms the app
+rather than trusting an HTTP read; and because Community Cloud does not serve `./static` (§7.1), a reboot
+does not change that: the caption is the evidence there, and the file only ever appears on a host that
+serves it. A drift verdict therefore means "the running code is not the commit on `main`", and exit 5 means
+"the running code did not say which commit it is" — the two failures worth paging for.
 
 ---
 

@@ -13,7 +13,8 @@ Notable project changes are recorded here. This is a research prototype; version
   publishes a build stamp where the bytes *are* app-specific: `islandos_core/build_info.py` reads the
   deployment's own checkout (`git rev-parse HEAD`), `app.py` writes `static/build_info.json` at start-up and
   captions the sidebar `build <sha> (<resolved_from>)`, and `.streamlit/config.toml` enables
-  `[server] enableStaticServing` so the file is served at `/app/static/build_info.json`. The commit is never a
+  `[server] enableStaticServing` so that the file would be served at `/app/static/build_info.json` on a host
+  that enables the route. The commit is never a
   constant in the repository: a committed SHA would assert a fact nobody verified, and a CI-written stamp
   cannot contain the SHA of the commit that adds it, so it would only ever describe its parent.
   `tests/test_build_info.py` fails if a literal 40-hex value ever appears in the module. A deployment with no
@@ -35,12 +36,27 @@ Notable project changes are recorded here. This is a research prototype; version
   around `<iframe src="…/~/+/">`, and the app's DOM exists only inside that frame — a 180-second wait for the
   container in the page itself timed out against a deployment that was rendering fine, so the warm-up
   searches every frame and records `frame_url`. Run against the deployment as it stands, the check reports
-  `stamp_unavailable` (exit 2), because the running container predates this change; that is the same
-  distinction §7.4 keeps. What this still does not
+  `stamp_unavailable` (exit 2), because the running container predated the change; the follow-up below
+  records what a reboot then showed. What this still does not
   prove is listed in `APP_INTEGRATION.md` §7.4 — that the process executes the commit it reports, that
   dependencies equal the lock, Streamlit Cloud's own provenance, that the stamp cannot be made to lie, and
-  anything else the rendered page shows. One manual "Reboot app" is needed after this merge, because a
-  changed `.streamlit/config.toml` only takes effect on restart.
+  anything else the rendered page shows. A reboot was done, and it showed the file is not served at all
+  (next entry).
+
+- **The commit proof no longer depends on a route Community Cloud does not serve.** The stamp was built on
+  the assumption that `[server] enableStaticServing` would make `/app/static/build_info.json` readable from
+  outside. After a reboot onto `46d145a` the path still answered with the same front-end shell, so there was
+  never a served file to read, and a check that insisted on one could only report a missing stamp. The check
+  now takes the commit from whichever source names it: the stamp when the host serves it (all 40 characters),
+  otherwise the sidebar's `build <sha> (git)` line read in a headless browser — seven characters, compared
+  as a prefix of `--expect-commit` and reported with `commit.basis: rendered`. The assertions themselves are
+  unchanged: three page routes, a render with no exception, a build line that names a commit (and agrees
+  with a served stamp), and the commit matching `--expect-commit`; drift is still exit 3, an unattributed
+  sha is still refused rather than assumed. Two exit codes moved: exit 2 now means "nothing asked, nothing
+  named" (an HTTP-only run against Cloud), while "expected a commit and found none" stays exit 4. What does
+  not change is what this proves: the seven-character line is the deployment's own claim exactly as the
+  file was, so §7.4's "cannot be made to lie" limit stands, and that the process executes the code it names
+  remains unproved.
 
 - **The contract now has a written migration rule, and a gate that fails when it is skipped.**
   `CONTRACT_VERSION` was `3` with three committed artifacts and no statement of when to bump or what
