@@ -4,6 +4,29 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The contract now has a written migration rule, and a gate that fails when it is skipped.**
+  `CONTRACT_VERSION` was `3` with three committed artifacts and no statement of when to bump or what
+  must move with it, so the next field change could land in one file. `APP_INTEGRATION.md` gains §4.7
+  "Contract versioning": a table of what counts as a bump (add / remove / rename / retype a field, a
+  unit or definition change, a per-page key change, a new page) and what does not (captions, comments,
+  tests, formatting); the order to change things in (`CONTRACT_VERSION` → field tuples → builders →
+  generated artifacts → `contracts.ts` and the viewer → tests → this document and this file); a
+  copy-paste checklist; and the rule that old version files stay. The number now has one source:
+  `SCHEMA_PATH` was the last literal `app_view_models.v3.json` and is now derived from
+  `CONTRACT_VERSION`, the JSON Schema's `$id` is its own file name rather than a second spelling of
+  it, and the generated `frontend/src/contracts.ts` header states the version it was rendered from.
+  `tests/test_contract_versioning.py` fails unless the long table's `contract_version`,
+  the JSON Schema's `$id` and its per-object `schema_version` consts, and the TypeScript header all
+  name `CONTRACT_VERSION`; it is also parametrised over each single-artifact edit, so the "only changed
+  one place" case is proven to fail rather than assumed, and it fails on any file under
+  `docs/contracts` naming a version above the constant, so a rolled-back bump cannot leave a v4
+  artifact behind. Verified two ways: raising `CONTRACT_VERSION`
+  to `4` alone failed on the missing regenerated files, and copying the v3 artifacts under v4 names
+  failed naming all three stale versions; both passed again after reverting. Repeating the first case
+  on the pull request, where only `CONTRACT_VERSION` moved, turned the `Python unit tests` gate red
+  (#1334) and the revert restored it (#1335), so the failure is the test's, not a local accident.
+  No runtime, schema or page change.
+
 - **The two recorded 06 annual costs are now checked-in, reproducible evidence.** `scripts/trace_annual_energy_cost.py`
   replays page 06's default path at an explicit anchor and reuses `islandos_core.demo_site_history` rather
   than keeping a second copy of the synthetic formulas. `results/annual-cost-trace/` holds the 14:00Z run
