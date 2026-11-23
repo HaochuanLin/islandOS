@@ -4,6 +4,25 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **A broken session dataset no longer replaces page 05 or 06 with a stack trace.**
+  `get_session_dataset` fails closed when the record fails its SHA-256 check, but both pages called it
+  outside a handler, so a stale or tampered record took the whole surface down. `read_session_dataset`
+  now returns `(record, reason)`, clears the bad record, and the pages tell the reader to upload again;
+  the next run starts from a known state. `tests/test_session_dataset.py` covers the core helper and
+  `tests/test_app_identity_and_recovery.py` opens both pages with a deliberately broken record.
+
+- **05's annual-economics binding no longer changes identity on every rerun.**
+  The manifest behind the binding stamped `datetime.now()`, and the digest includes that timestamp:
+  two renders of the same inputs produced different manifest and binding SHA-256 values even though the
+  run id stayed the same. The page now uses the window the run describes — the demo anchor for synthetic
+  data, the last history hour for an upload — the same rule 06 already follows.
+
+- **Build-stamp writes no longer share one `.tmp` file.**
+  Two writers truncated and renamed the same temporary, and on Windows a concurrent `os.replace` can fail
+  outright; the stamp is now written to a private temporary and the rename is serialised and retried.
+  `tests/test_build_info.py` writes eight stamps from eight threads and checks the surviving file is one
+  complete document with no temporary left behind.
+
 - **The deployment check waits for the download button instead of racing its caption.**
   Streamlit renders the sidebar's `build …` line before the button beside it. `capture_stamp_download` read
   once, so a read landing in that gap found no button and the stamp fell back to the seven-character caption

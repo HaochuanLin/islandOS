@@ -17,7 +17,7 @@ from islandos_ui.page_header import render_page_header
 from islandos_ui.decision_record_panel import render_decision_record
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
-from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
+from islandos_core.session_dataset import clear_session_dataset, read_session_dataset
 from islandos_core.site_inputs import (
     BATTERY_INITIAL_SOC,
     BATTERY_MAX_SOC,
@@ -64,7 +64,13 @@ with st.sidebar:
     st.subheader("Site and asset assumptions")
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
-    shared_dataset = get_session_dataset(st.session_state)
+    shared_dataset, dataset_error = read_session_dataset(st.session_state)
+    if dataset_error:
+        st.warning(
+            "The shared session dataset was discarded: "
+            f"{dataset_error}. Upload the file again on this page or use the shared "
+            "upload control if you still need it."
+        )
     if shared_dataset is not None:
         st.caption(f"Session dataset available: {shared_dataset['file_name']} · SHA-256 {shared_dataset['sha256'][:12]}…")
         if st.button("Clear session dataset", key="clear_shared_dataset_joint_optimizer"):

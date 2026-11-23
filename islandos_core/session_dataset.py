@@ -67,3 +67,20 @@ def get_session_dataset(
 def clear_session_dataset(session_state: MutableMapping[str, Any]) -> None:
     """Remove the session-scoped dataset handoff."""
     session_state.pop(SESSION_DATASET_KEY, None)
+
+
+def read_session_dataset(
+    session_state: MutableMapping[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Return the verified dataset, or discard a broken one and explain why.
+
+    A page renders inside a session that outlives one script run, so a record that
+    fails verification must not raise out of the page: an exception replaces the
+    whole surface with a stack trace. The bad record is cleared here, and the page
+    tells the reader to upload again — the next run starts from a known state.
+    """
+    try:
+        return get_session_dataset(session_state), None
+    except ValueError as error:
+        clear_session_dataset(session_state)
+        return None, str(error)

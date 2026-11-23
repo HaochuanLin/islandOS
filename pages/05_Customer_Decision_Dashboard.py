@@ -33,7 +33,7 @@ from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.demo_site_history import demo_anchor_for_hour
 from islandos_core.demo_clock_defaults import DEMO_CLOCK_DEFAULT_DATE, DEMO_CLOCK_DEFAULT_HOUR
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
-from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
+from islandos_core.session_dataset import clear_session_dataset, read_session_dataset
 from islandos_core.forecast_engine import forecast_signals
 from islandos_core.investment_economics import (
     bind_annual_economics_to_run,
@@ -85,7 +85,13 @@ with st.sidebar:
     wind_capacity = st.number_input("Installed wind capacity (kW)", min_value=0.0, value=20.0, step=1.0)
     grid_limit = st.number_input("Grid import limit (kW)", min_value=0.0, value=100.0, step=5.0)
     site_csv = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
-    shared_dataset = get_session_dataset(st.session_state)
+    shared_dataset, dataset_error = read_session_dataset(st.session_state)
+    if dataset_error:
+        st.warning(
+            "The shared session dataset was discarded: "
+            f"{dataset_error}. Upload the file again on this page or use the shared "
+            "upload control if you still need it."
+        )
     if shared_dataset is not None:
         st.caption(f"Session dataset available: {shared_dataset['file_name']} · SHA-256 {shared_dataset['sha256'][:12]}…")
         if st.button("Clear session dataset", key="clear_shared_dataset_dashboard"):
@@ -482,7 +488,13 @@ try:
             project_id="streamlit-customer-decision-dashboard",
             run_id=annual_run_id,
             site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
-            created_at_utc=datetime.now(timezone.utc).isoformat(),
+            # The annual binding cites a run, so its identity must come from the
+            # window the run speaks for, not from the moment the page was opened:
+            # otherwise two renders of the same inputs produce different manifest
+            # and binding digests and a reader cannot tell they are the same record.
+            created_at_utc=(
+                demo_anchor if shared_payload is None else history_stamps[-1]
+            ).isoformat(),
             dataset_sha256=annual_dataset_digest,
             dataset_schema_version="canonical-hourly-signals-v1",
             source_type="customer_provided" if shared_payload is not None else "synthetic",

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -174,6 +175,25 @@ class StampPublishingTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), build_info.serialise_stamp(stamp))
             self.assertTrue(target.read_bytes().endswith(b"\n"))
             self.assertEqual(json.loads(target.read_bytes()), stamp)
+
+    def test_concurrent_writes_never_share_a_temporary_file(self):
+        """Each writer owns its temporary, so the last rename wins cleanly."""
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "static" / build_info.STAMP_FILENAME
+            stamps = [
+                build_info.build_stamp(
+                    runner=Runner(completed(SHA + "\n")),
+                    environ={},
+                    now=datetime(2026, 11, 23, 12, index, tzinfo=timezone.utc),
+                )
+                for index in range(8)
+            ]
+            expected = {build_info.serialise_stamp(stamp) for stamp in stamps}
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(lambda stamp: build_info.write_stamp(stamp, target), stamps * 5))
+
+            self.assertIn(target.read_bytes(), expected)
+            self.assertEqual(list(target.parent.glob("*.tmp")), [])
 
     def test_stamp_path_and_url_agree(self):
         self.assertEqual(build_info.stamp_path(ROOT), ROOT / "static" / "build_info.json")
