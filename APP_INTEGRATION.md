@@ -108,12 +108,13 @@ already produced, validates them, and returns plain JSON-able dictionaries with 
 nullability and provenance. `tests/test_app_view_models.py` proves the imports are Streamlit-free in a
 subprocess (`'streamlit' not in sys.modules`) and pins every field below.
 
-Three contracts, `CONTRACT_VERSION = 1`:
+Four contracts, `CONTRACT_VERSION = 3`:
 
 | Builder | Answers | Refuses |
 |---|---|---|
-| `build_run_request(page=…, site=…, history=…, units=…, page_settings=…, run_settings=…, provenance=…, source_sha256=…)` | what this page asked the core to run | an unknown page, a page/run setting key outside that page's declared set, a signal without a unit, series of unequal length, non-numeric or empty series |
+| `build_run_request(page=…, site=…, timestamps=…, history=…, units=…, page_settings=…, page_inputs=…, run_settings=…, provenance=…, source_sha256=…)` | what this page asked the core to run | an unknown page, a page/run setting key outside that page's declared set, structured inputs on a page that has none, a signal without a unit, series of unequal length, non-numeric or empty series |
 | `build_run_result_summary(page=…, result=…, economics=…, planning_run=…, currency=…)` | what the run produced, limited to what the pages display | a dashboard summary without service-equivalent economics or without `grid_first` / the recommended policy in `candidates`; an optimizer summary without a planning run, `run_id`, `manifest_sha256` or `evidence_sha256` |
+| `build_device_flexibility_summary(result=…, metrics=…, reference_metrics=…, currency=…)` | 09's schedule and its two replays | a schedule dict without `schedules` / `critical_power_kw` / `total_power_kw`, or metrics missing the five copied figures |
 | `build_annual_projection(record, currency=…)` | the declared-assumption annual projection | a record that `verify_annual_operating_basis` rejects (digest mismatch, claimed bill, claimed site validation, missing `summary_source`), or one missing `figures` / `basis` |
 
 `to_json(view)` serialises any of them with `sort_keys=True, allow_nan=False`.
@@ -124,7 +125,7 @@ Three contracts, `CONTRACT_VERSION = 1`:
 |---|---|---|---|---|---|---|
 | `schema_version` | int | – | yes | no | `CONTRACT_VERSION` | contract |
 | `request_type` | str | – | yes | no | constant `islandos_run_request` | contract |
-| `page` | str, `customer_dashboard` \| `joint_resource_optimizer` | – | yes | no | page | page discriminator |
+| `page` | str, `customer_dashboard` \| `joint_resource_optimizer` \| `device_flexibility_planner` | – | yes | no | page | page discriminator |
 | `site` | dict | kW, kWh, currency/kWh, SOC as fraction | yes | no | `SiteAssumptions.describe()` + `digest()` | **site-level** (single source: `site_inputs`) |
 | `history.signals` | dict[str, list[float]] | kW per canonical signal | yes | no | the page's forecast input | data, not assumption |
 | `history.units` | dict[str, str] | unit string per signal | yes | no | page | data |
@@ -132,6 +133,7 @@ Three contracts, `CONTRACT_VERSION = 1`:
 | `history.provenance` | str | – | yes | no | page (`Uploaded CSV` / `Demonstration data`) | data provenance |
 | `history.source_sha256` | str, hex | – | yes | yes (`null` when nothing was uploaded) | page | data provenance |
 | `page_settings` | dict | per page | yes (`{}` allowed) | no | page | **page-specific** |
+| `page_inputs` | dict \| null | `task_power_budget_kw` (kW per hour) + `tasks` (objects) | yes / `null` on 05 and 06 | yes | page | **page-specific, structured** |
 | `run_settings` | dict | per page | yes | no | page | **run-specific** |
 | `request_sha256` | str, hex | – | yes | no | SHA-256 of the payload above | contract |
 
@@ -146,6 +148,15 @@ Page-specific and run-specific blocks, per page:
 |---|---|---|
 | `customer_dashboard` (05) | `demand_scale`, `tariff_scale`, `cost_priority` (float, dimensionless) | `currency` (str); `investment` = `baseline_annual_energy_cost`, `proposed_annual_energy_cost`, `annual_incremental_om_cost`, `upfront_capex` (currency/year, currency, currency/year, currency), `project_life_years` (years, int), `discount_rate`, `annual_energy_saving_escalation_rate`, `annual_om_escalation_rate` (fraction/year) |
 | `joint_resource_optimizer` (06) | none (empty mapping, refused if it carries anything) | `currency` (str); `optimizer_settings` = `population_size`, `generations`, `seed` (int); `availability` = `grid_all_hours`, `diesel_all_hours` (bool) |
+| `device_flexibility_planner` (09) | none (its inputs are tasks, not knobs) | `currency` (str) |
+
+09 is the one page whose inputs are objects rather than numbers: three `DeviceTask` records (class, rated
+power, required energy, operating window, critical profile) and a 24-hour residual power budget. Those live
+in `page_inputs` — `task_power_budget_kw` plus `tasks[{task_id, name, load_class, rated_power_kw,
+required_energy_kwh, earliest_start_step, latest_finish_step, min_power_kw, minimum_run_steps,
+interruptible, priority, availability, critical_power_profile_kw}]` — while `page_settings` keeps meaning
+"numeric knobs" and stays empty. `page_inputs` is `null`, not `{}`, on 05 and 06, and a page that has no
+structured inputs refuses one rather than dropping it.
 
 ### 4.2 `run_result_summary`
 
@@ -199,6 +210,11 @@ candidate dictionaries inline. Page 06 builds its request after the availability
 `recommended_policy_label` from the summary, and reads the annual figures, basis and digests from the
 projection (which verifies the record before returning it).
 
+Page 09 builds its request from the same task objects it schedules, hands it to
+`run_device_planner` (schedule → tariff-aware replay → earliest-feasible reference), and renders
+`build_device_flexibility_summary`, which copies — never recomputes — the schedule's critical energy,
+flexible energy, charge and peak, plus the two replays' grid import, cost, critical unmet and shed.
+
 A non-Streamlit client would keep its own site inputs, render the same widgets, call `build_run_request`,
 hand the resulting document to `islandos_core/run_orchestration.py` (`run_customer_dashboard` /
 `run_joint_optimizer`), and render `build_run_result_summary` / `build_annual_projection` — the same
@@ -212,13 +228,15 @@ wording, `AppTest`-based page tests, and every `islandos_ui/*` surface except `n
 
 The view models are built **in-process**, read by the page for its metrics, and also written into the
 page's downloadable JSON under `application_views` — `{request, result}` on 05, `{request, result,
-annual}` on 06, where `annual` is `null` unless the reader declares the equal-days assumption.
+annual}` on 06, where `annual` is `null` unless the reader declares the equal-days assumption, and
+`{request, result, annual: null}` on 09.
 
 A read-only transport now exists for non-Streamlit clients, but **No HTTP surface is deployed**: it is
 `python -m islandos_core.transport`, binds `127.0.0.1` only, has no authentication and no persistence,
 and is not part of the Streamlit deployment. It serves `GET /contracts` (the schema generated by
-`islandos_core.contract_schemas`, committed at `docs/contracts/app_view_models.v2.json`) and `POST /run`
-(replays one `run_request` through `run_orchestration.replay_run_request` and returns its summary). An
+`islandos_core.contract_schemas`, committed at `docs/contracts/app_view_models.v3.json`) and `POST /run`
+(replays one `run_request` through `run_orchestration.replay_run_request` and returns its summary — 05,
+06 or 09, depending on the page discriminator). An
 unsupported or malformed request gets `400` with a readable reason, never a silent default. `GET /contracts`
 alone carries `Access-Control-Allow-Origin: *`, because the schema is a committed public file and a
 static viewer served from another local port must be able to read it; `POST /run` stays same-origin so a
@@ -233,6 +251,26 @@ One React surface does consume the contracts without recomputing them: `frontend
 annual summary, and can display `GET /contracts` field by field. It is a viewer, not a second
 implementation: it formats numbers the Python side already decided.
 
+
+### 4.6 `device_flexibility_summary`
+
+| Field | Type | Unit | Source |
+|---|---|---|---|
+| `schema_version`, `record_type`, `page` | int, str, str | – | contract |
+| `run_id` | null | – | 09 has no canonical run id; identity is `summary_sha256` |
+| `method` | str | – | `DeviceSchedulingResult.method` |
+| `critical_energy_kwh` | float | kWh/24 h | sum of `critical_power_kw` |
+| `flexible_task_energy_kwh` | float | kWh/24 h | sum of non-critical schedule `energy_kwh` |
+| `scheduled_energy_charge` | float | currency/24 h | `total_energy_cost` |
+| `peak_task_demand_kw` | float | kW | max of `total_power_kw` |
+| `grid_import_kwh`, `estimated_energy_cost`, `critical_unmet_load_kwh`, `flexible_load_shed_kwh` | float | kWh / currency / kWh / kWh | tariff-aware replay `summary` |
+| `reference_grid_import_kwh`, `reference_estimated_energy_cost` | float | kWh, currency | earliest-feasible reference `summary` |
+| `currency` | str \| null | – | page |
+| `summary_sha256` | str, hex | – | SHA-256 of the payload |
+
+The 09 demo's own numbers (72 kWh protected, 17 kWh flexible, 13.77 charge, 6.0 kW peak, 103.2 kWh grid
+import, 15.44 cost, 0.00 unmet, 0.00 shed) are asserted in `tests/test_app_view_models.py` and replayed
+through the transport, so a regression in either path fails a test rather than moving a number silently.
 
 ---
 
@@ -251,10 +289,13 @@ implementation: it formats numbers the Python side already decided.
    the dashboard used", because no run id is handed off.
 3. ~~**Data preparation lives inside Streamlit function bodies.**~~ Closed by two steps: config
    construction lives in `site_inputs` (T3), the request/result/annual shapes in `app_view_models`
-   (T4), and the *call order* in `run_orchestration` (T8). Pages 05 and 06 now collect inputs,
+   (T4), and the *call order* in `run_orchestration` (T8). Pages 05, 06 and 09 now collect inputs,
    build their request, call one orchestration function, and render. What remains page-side is
    widget wiring and the presentation of values that already exist.
-4. **No transport for a non-Streamlit front end.** §4.5.
+4. ~~**No transport for a non-Streamlit front end.**~~ Closed: `islandos_core/transport.py` serves
+   `GET /contracts`, `GET /health` and `POST /run` over loopback, and `replay_run_request` covers all
+   three pages. Still open is what §4.5 lists: authentication, a hosted endpoint, a TypeScript package,
+   a JSON Schema validator, and a run store.
 
 Maintenance rules: a new page adds a row to §2; a new cross-page key is registered in §3; a new
 Streamlit-free entry point is added to the bottom row of §1. `tests/test_app_integration_doc.py` guards

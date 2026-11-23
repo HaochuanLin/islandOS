@@ -18,20 +18,29 @@ from islandos_core.app_view_models import (
     ANNUAL_BASIS_FIELDS,
     ANNUAL_PROJECTION_FIELDS,
     CONTRACT_VERSION,
+    DEVICE_SUMMARY_FIELDS,
+    DEVICE_TASK_FIELDS,
     HISTORY_FIELDS,
     PAGE_CUSTOMER_DASHBOARD,
+    PAGE_DEVICE_PLANNER,
+    PAGE_INPUTS_FIELDS,
     PAGE_JOINT_OPTIMIZER,
     REQUEST_FIELDS,
     RESULT_SUMMARY_FIELDS,
     RUN_REQUEST_SITE_FIELDS,
     build_annual_projection,
+    build_device_flexibility_summary,
     build_run_request,
     build_run_result_summary,
     to_json,
 )
+from islandos_core.flexible_tasks import DeviceTask
+from islandos_core.flexible_task_dispatch import attach_device_task_schedule
+from islandos_core.run_orchestration import device_task_payload, run_device_planner
+from islandos_core.site_inputs import device_planner_demo_site
 from islandos_core.annual_operating_basis import annualise_run_summary, verify_annual_operating_basis
 from islandos_core.canonical_run import create_run_manifest
-from islandos_core.energy_system import EnergySystemConfig, dispatch_energy_system
+from islandos_core.energy_system import EnergySystemConfig, EnergySystemInputs, dispatch_energy_system
 from islandos_core.forecast_optimizer_adapter import (
     build_coordination_inputs,
     build_service_equivalent_economics,
@@ -188,6 +197,57 @@ def test_the_view_model_module_needs_no_streamlit():
     assert completed.returncode == 0, completed.stderr
     source = (REPO_ROOT / "islandos_core" / "app_view_models.py").read_text(encoding="utf-8")
     assert "import streamlit" not in source and "from streamlit" not in source
+
+
+DEVICE_HOURS = list(range(24))
+DEVICE_PRICES = [0.09 if h < 6 else 0.25 if 17 <= h <= 21 else 0.16 for h in DEVICE_HOURS]
+DEVICE_BUDGET = [10.0] * 24
+DEVICE_TASKS = [
+    DeviceTask("clinic-critical", "Clinic essential circuits", "critical", 3.0, 72.0,
+               0, 24, interruptible=False, priority=0,
+               critical_power_profile_kw=tuple([3.0] * 24)),
+    DeviceTask("ice-maker", "Ice production", "semi_flexible", 3.0, 9.0,
+               8, 18, minimum_run_steps=3, interruptible=False, priority=10),
+    DeviceTask("water-pump", "Water transfer pumping", "fully_flexible", 2.0, 8.0,
+               0, 24, minimum_run_steps=1, interruptible=True, priority=20),
+]
+DEVICE_LOAD = [8.0] * 24
+DEVICE_PV = [max(0.0, 12.0 * (1.0 - abs(h - 12) / 7.0)) for h in DEVICE_HOURS]
+DEVICE_WIND = [3.0 + 1.5 * ((h % 6) / 5.0) for h in DEVICE_HOURS]
+DEVICE_TIMESTAMPS = tuple(START + timedelta(hours=h) for h in DEVICE_HOURS)
+
+
+def _device_request():
+    return build_run_request(
+        page=PAGE_DEVICE_PLANNER,
+        site=device_planner_demo_site(),
+        timestamps=DEVICE_TIMESTAMPS,
+        history={
+            "pv_generation_kw": DEVICE_PV,
+            "wind_generation_kw": DEVICE_WIND,
+            "load_kw": DEVICE_LOAD,
+            "tariff_per_kwh": DEVICE_PRICES,
+        },
+        units={
+            "pv_generation_kw": "kW", "wind_generation_kw": "kW",
+            "load_kw": "kW", "tariff_per_kwh": "USD/kWh",
+        },
+        page_settings={},
+        run_settings={"currency": "USD"},
+        page_inputs={
+            "task_power_budget_kw": DEVICE_BUDGET,
+            "tasks": [device_task_payload(task) for task in DEVICE_TASKS],
+        },
+        provenance="Synthetic demonstration data",
+    )
+
+
+def _device_outputs():
+    return run_device_planner(
+        tasks=DEVICE_TASKS, prices=DEVICE_PRICES, task_power_budget_kw=DEVICE_BUDGET,
+        pv_generation_kw=DEVICE_PV, wind_generation_kw=DEVICE_WIND, base_load_kw=DEVICE_LOAD,
+        site=device_planner_demo_site(),
+    )
 
 
 def test_every_contract_is_json_serialisable(dashboard_run, optimizer_run):
@@ -453,6 +513,19 @@ def test_the_declared_field_sets_match_what_the_builders_return(dashboard_run, o
     )
     assert tuple(optimizer_summary) == RESULT_SUMMARY_FIELDS
 
+    device_request = _device_request()
+    assert tuple(device_request) == REQUEST_FIELDS
+    assert tuple(device_request["page_inputs"]) == PAGE_INPUTS_FIELDS
+    assert tuple(device_request["page_inputs"]["tasks"][0]) == DEVICE_TASK_FIELDS
+    device_outputs = _device_outputs()
+    device_summary = build_device_flexibility_summary(
+        result=device_outputs["schedule"].to_dict(),
+        metrics=device_outputs["replay"]["summary"],
+        reference_metrics=device_outputs["reference_replay"]["summary"],
+        currency="USD",
+    )
+    assert tuple(device_summary) == DEVICE_SUMMARY_FIELDS
+
     dispatch = optimizer_result["recommendation"]["dispatch"]
     record = annualise_run_summary(
         dispatch["summary"], dispatch_rows=dispatch["rows"], simulated_hours=24,
@@ -487,3 +560,90 @@ def test_the_pages_publish_the_same_views_they_render():
     # the report would NameError on the default path.
     assert optimizer_source.count("annual_view = None") == 1
     assert "annual_view = build_annual_projection(" in optimizer_source
+
+    device_source = (
+        REPO_ROOT / "pages" / "09_Device_Flexibility_Planner.py"
+    ).read_text(encoding="utf-8")
+    assert '"application_views"' in device_source
+    assert '"request": run_request_view' in device_source
+    assert '"result": device_result_view' in device_source
+    assert "run_device_planner(" in device_source
+
+
+def test_pages_without_structured_inputs_carry_a_null_page_inputs():
+    assert _dashboard_request()["page_inputs"] is None
+    assert _optimizer_request()["page_inputs"] is None
+
+
+def test_the_device_request_keeps_knobs_and_structured_inputs_apart():
+    view = _device_request()
+    assert view["page"] == PAGE_DEVICE_PLANNER
+    assert view["page_settings"] == {}
+    assert view["run_settings"] == {"currency": "USD"}
+    # The scalar knob block stays scalar; the task objects live in their own block.
+    assert set(view["page_inputs"]) == set(PAGE_INPUTS_FIELDS)
+    assert len(view["page_inputs"]["task_power_budget_kw"]) == 24
+    assert [task["task_id"] for task in view["page_inputs"]["tasks"]] == [
+        "clinic-critical", "ice-maker", "water-pump",
+    ]
+    for task in view["page_inputs"]["tasks"]:
+        assert set(task) == set(DEVICE_TASK_FIELDS)
+    # Free-form values are refused rather than silently dropped.
+    with pytest.raises(ValueError, match="page_inputs"):
+        build_run_request(
+            page=PAGE_CUSTOMER_DASHBOARD, site=_site(), timestamps=TIMESTAMPS,
+            history=DASHBOARD_HISTORY, units=DASHBOARD_UNITS,
+            page_settings={"demand_scale": 1.0, "tariff_scale": 1.0, "cost_priority": 0.7},
+            run_settings={
+                "currency": "USD",
+                "investment": {
+                    "baseline_annual_energy_cost": 1.0, "proposed_annual_energy_cost": 1.0,
+                    "annual_incremental_om_cost": 0.0, "upfront_capex": 1.0,
+                    "project_life_years": 10.0, "discount_rate": 0.08,
+                    "annual_energy_saving_escalation_rate": 0.0,
+                    "annual_om_escalation_rate": 0.0,
+                },
+            },
+            provenance="Synthetic demonstration data",
+            page_inputs={"task_power_budget_kw": DEVICE_BUDGET,
+                         "tasks": [device_task_payload(t) for t in DEVICE_TASKS]},
+        )
+    with pytest.raises(ValueError, match="requires page_inputs"):
+        build_run_request(
+            page=PAGE_DEVICE_PLANNER, site=device_planner_demo_site(),
+            timestamps=DEVICE_TIMESTAMPS,
+            history={"tariff_per_kwh": DEVICE_PRICES},
+            units={"tariff_per_kwh": "USD/kWh"}, page_settings={},
+            run_settings={"currency": "USD"},
+            provenance="Synthetic demonstration data",
+        )
+
+
+def test_the_device_summary_copies_the_page_schedule_and_never_averages_it():
+    outputs = _device_outputs()
+    schedule = outputs["schedule"]
+    view = build_device_flexibility_summary(
+        result=schedule.to_dict(),
+        metrics=outputs["replay"]["summary"],
+        reference_metrics=outputs["reference_replay"]["summary"],
+        currency="USD",
+    )
+    assert tuple(view) == DEVICE_SUMMARY_FIELDS
+    assert view["page"] == PAGE_DEVICE_PLANNER
+    assert view["method"] == schedule.method
+    assert view["critical_energy_kwh"] == sum(schedule.critical_power_kw)
+    assert view["flexible_task_energy_kwh"] == sum(
+        row.energy_kwh for row in schedule.schedules if row.load_class != "critical"
+    )
+    assert view["scheduled_energy_charge"] == schedule.total_energy_cost
+    assert view["peak_task_demand_kw"] == max(schedule.total_power_kw)
+    metrics = outputs["replay"]["summary"]
+    assert view["grid_import_kwh"] == metrics["grid_import_kwh"]
+    assert view["estimated_energy_cost"] == metrics["estimated_energy_cost"]
+    assert view["critical_unmet_load_kwh"] == metrics["critical_unmet_load_kwh"]
+    # The 09 demo numbers the page has always shown.
+    assert view["critical_energy_kwh"] == 72.0
+    assert view["flexible_task_energy_kwh"] == 17.0
+    assert round(view["scheduled_energy_charge"], 2) == 13.77
+    assert round(view["estimated_energy_cost"], 2) == 15.44
+    assert view["grid_import_kwh"] == pytest.approx(103.15285714)

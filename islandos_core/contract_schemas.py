@@ -1,4 +1,4 @@
-"""A machine-readable description of the three application-facing contracts.
+"""A machine-readable description of the application-facing contracts.
 
 `app_view_models` declares the field names; this module adds, for each field, what it
 carries (unit), whether it can be `null`, and which layer owns it (site / page / run /
@@ -6,8 +6,9 @@ contract). The names are taken from the same constants the builders assert, so a
 builder fails the schema test rather than silently producing a schema that describes a
 shape nobody emits.
 
-Generated file: `docs/contracts/app_view_models.v2.json` (checked by
-`tests/test_contract_schemas.py`; regenerate with `python -m islandos_core.contract_schemas`).
+Generated file: `docs/contracts/app_view_models.v3.json` (checked by
+`tests/test_application_transport.py`; regenerate with
+`python -m islandos_core.contract_schemas`).
 """
 
 from __future__ import annotations
@@ -20,8 +21,12 @@ from .app_view_models import (
     ANNUAL_BASIS_FIELDS,
     ANNUAL_PROJECTION_FIELDS,
     CONTRACT_VERSION,
+    DEVICE_SUMMARY_FIELDS,
+    DEVICE_TASK_FIELDS,
     HISTORY_FIELDS,
     PAGE_CUSTOMER_DASHBOARD,
+    PAGE_DEVICE_PLANNER,
+    PAGE_INPUTS_FIELDS,
     PAGE_JOINT_OPTIMIZER,
     PAGE_SETTING_KEYS,
     REQUEST_FIELDS,
@@ -30,7 +35,7 @@ from .app_view_models import (
     RUN_SETTING_KEYS,
 )
 
-SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "contracts" / "app_view_models.v2.json"
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "contracts" / "app_view_models.v3.json"
 
 # name -> (type, unit, nullable, owner)
 _REQUEST = {
@@ -40,6 +45,7 @@ _REQUEST = {
     "site": ("object", "kW / kWh / currency-per-kWh / SOC fraction", False, "site"),
     "history": ("object", "kW per signal, ISO-8601 timestamps", False, "data"),
     "page_settings": ("object", "per page", False, "page"),
+    "page_inputs": ("object", "per page; null when the page has only numeric knobs", True, "page"),
     "run_settings": ("object", "per page", False, "run"),
     "request_sha256": ("string", "-", False, "contract"),
 }
@@ -111,6 +117,44 @@ _ANNUAL_BASIS = {
     "measured": ("boolean", "-", False, "provenance"),
     "bill": ("boolean", "-", False, "provenance"),
 }
+_PAGE_INPUTS = {
+    "task_power_budget_kw": ("array[number]", "kW", False, "page"),
+    "tasks": ("array[object]", "kW / kWh / steps", False, "page"),
+}
+_DEVICE_TASK = {
+    "task_id": ("string", "-", False, "page"),
+    "name": ("string", "-", False, "page"),
+    "load_class": ("string", "critical / semi_flexible / fully_flexible", False, "page"),
+    "rated_power_kw": ("number", "kW", False, "page"),
+    "required_energy_kwh": ("number", "kWh", False, "page"),
+    "earliest_start_step": ("integer", "step (hour)", False, "page"),
+    "latest_finish_step": ("integer", "step (hour)", False, "page"),
+    "min_power_kw": ("number", "kW", False, "page"),
+    "minimum_run_steps": ("integer", "step (hour)", False, "page"),
+    "interruptible": ("boolean", "-", False, "page"),
+    "priority": ("integer", "order", False, "page"),
+    "availability": ("array[boolean]", "-", True, "page"),
+    "critical_power_profile_kw": ("array[number]", "kW", True, "page"),
+}
+_DEVICE_SUMMARY = {
+    "schema_version": ("integer", "-", False, "contract"),
+    "record_type": ("string", "-", False, "contract"),
+    "page": ("string", "-", False, "page"),
+    "run_id": ("string", "-", True, "run"),
+    "method": ("string", "-", False, "run"),
+    "critical_energy_kwh": ("number", "kWh/24h", False, "run"),
+    "flexible_task_energy_kwh": ("number", "kWh/24h", False, "run"),
+    "scheduled_energy_charge": ("number", "currency/24h", False, "run"),
+    "peak_task_demand_kw": ("number", "kW", False, "run"),
+    "grid_import_kwh": ("number", "kWh/24h", False, "run"),
+    "reference_grid_import_kwh": ("number", "kWh/24h", False, "run"),
+    "estimated_energy_cost": ("number", "currency/24h", False, "run"),
+    "reference_estimated_energy_cost": ("number", "currency/24h", False, "run"),
+    "critical_unmet_load_kwh": ("number", "kWh/24h", False, "run"),
+    "flexible_load_shed_kwh": ("number", "kWh/24h", False, "run"),
+    "currency": ("string", "-", True, "display"),
+    "summary_sha256": ("string", "-", False, "contract"),
+}
 
 
 def _fields(spec_map: dict, names) -> list[dict[str, Any]]:
@@ -137,6 +181,8 @@ def contract_schema() -> dict[str, Any]:
                 "nested": {
                     "site": _fields(_SITE, RUN_REQUEST_SITE_FIELDS),
                     "history": _fields(_HISTORY, HISTORY_FIELDS),
+                    "page_inputs": _fields(_PAGE_INPUTS, PAGE_INPUTS_FIELDS),
+                    "device_tasks": _fields(_DEVICE_TASK, DEVICE_TASK_FIELDS),
                 },
                 "page_settings_keys": {
                     page: list(keys) for page, keys in PAGE_SETTING_KEYS.items()
@@ -146,12 +192,15 @@ def contract_schema() -> dict[str, Any]:
                 },
             },
             "run_result_summary": {"fields": _fields(_RESULT, RESULT_SUMMARY_FIELDS)},
+            "device_flexibility_summary": {
+                "fields": _fields(_DEVICE_SUMMARY, DEVICE_SUMMARY_FIELDS)
+            },
             "annual_projection": {
                 "fields": _fields(_ANNUAL, ANNUAL_PROJECTION_FIELDS),
                 "nested": {"basis": _fields(_ANNUAL_BASIS, ANNUAL_BASIS_FIELDS)},
             },
         },
-        "pages": [PAGE_CUSTOMER_DASHBOARD, PAGE_JOINT_OPTIMIZER],
+        "pages": [PAGE_CUSTOMER_DASHBOARD, PAGE_JOINT_OPTIMIZER, PAGE_DEVICE_PLANNER],
     }
 
 
