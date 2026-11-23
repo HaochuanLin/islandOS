@@ -21,7 +21,7 @@ from typing import Any, Mapping, Sequence
 import uuid
 
 from .app_view_models import build_device_flexibility_summary, build_run_result_summary
-from .canonical_run import create_run_manifest
+from .canonical_run import create_run_manifest, deterministic_run_id
 from .energy_system import EnergySystemConfig, EnergySystemInputs, dispatch_energy_system
 from .flexible_task_dispatch import attach_device_task_schedule
 from .flexible_tasks import DeviceTask, schedule_device_tasks
@@ -35,6 +35,11 @@ from .impact_assessment import assess_energy_policy_impact
 from optimization.energy_system_optimizer import optimize_energy_system, OptimizationWeights
 from .planning_workflow import run_forecast_dispatch
 from .site_inputs import SiteAssumptions
+
+#: A replay has no wall clock to stamp into the manifest, so it pins one. Fixed rather
+#: than "now" because the point of a replay is that the same request reproduces the
+#: same run: the epoch becomes part of the declaration, not a hidden variable.
+REPLAY_CREATED_AT_UTC = "1970-01-01T00:00:00+00:00"
 
 
 def run_customer_dashboard(
@@ -145,9 +150,19 @@ def _timestamps_from_request(request: Mapping[str, Any]) -> tuple[datetime, ...]
 
 
 def _manifest_from_request(
-    request: Mapping[str, Any], config: EnergySystemConfig,
+    request: Mapping[str, Any],
+    config: EnergySystemConfig,
+    *,
+    run_id: str | None = None,
+    created_at_utc: str | None = None,
 ) -> dict:
-    """The manifest the joint optimizer page builds, reconstructed from the request alone."""
+    """The manifest the joint optimizer page builds, reconstructed from the request alone.
+
+    The page mints a fresh uuid and stamps the wall clock, so two page runs over the
+    same inputs are two sessions. A replay has no wall clock and no session: it passes
+    ``run_id`` and ``created_at_utc`` so the same request reproduces the same manifest
+    digest, and therefore the same summary, every time.
+    """
     history_block = request["history"]
     dataset_payload = {
         "timestamps_utc": list(history_block["timestamps_utc"]),
@@ -167,11 +182,11 @@ def _manifest_from_request(
     horizon_hours = 24
     return create_run_manifest(
         project_id="streamlit-joint-resource-workspace",
-        run_id=f"run-{uuid.uuid4().hex}",
+        run_id=run_id or f"run-{uuid.uuid4().hex}",
         site_ref=(
             "customer-uploaded-site" if history_block.get("source_sha256") else "synthetic-demo-site"
         ),
-        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        created_at_utc=created_at_utc or datetime.now(timezone.utc).isoformat(),
         dataset_sha256=dataset_digest,
         dataset_schema_version="canonical-hourly-signals-v1",
         source_type="customer_provided" if history_block.get("source_sha256") else "synthetic",
@@ -321,7 +336,12 @@ def replay_run_request(request: Mapping[str, Any]) -> dict:
 
     if page == "joint_resource_optimizer":
         config = site.to_energy_system_config()
-        manifest = _manifest_from_request(request, config)
+        manifest = _manifest_from_request(
+            request,
+            config,
+            run_id=deterministic_run_id("run", {"request": request}),
+            created_at_utc=REPLAY_CREATED_AT_UTC,
+        )
         availability = request["run_settings"]["availability"]
         outputs = run_joint_optimizer(
             run_manifest=manifest,

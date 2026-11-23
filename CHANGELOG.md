@@ -4,6 +4,16 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **A replayed request now reproduces the same run, not a look-alike.** `replay_run_request` rebuilt the
+  06 manifest with `uuid.uuid4()` and `datetime.now()`, so replaying one saved request twice produced two
+  different `run_id`s and two different manifest digests over identical numbers — a citation into "that
+  run" pointed nowhere. Replay now passes `deterministic_run_id("run", {"request": request})` and a
+  fixed `REPLAY_CREATED_AT_UTC` into `_manifest_from_request`, which took optional `run_id` /
+  `created_at_utc` arguments for exactly this. `tests/test_application_transport.py` replays the same
+  request twice and asserts the summaries are equal, that the ids match, and that changing one run setting
+  changes the id. The pages keep their own uuid + wall-clock manifest, so nothing on screen changes: a
+  replay id identifies the request, not the session that produced it.
+
 - **The TypeScript side now compiles against the contract instead of a copy of it.** `frontend/ApplicationViews.tsx`
   declared its own `Field`/`Contract`/`Schema` shapes, so a renamed or retyped field would have compiled
   cleanly and failed only at runtime. `python -m islandos_core.contract_schemas --typescript` now renders
