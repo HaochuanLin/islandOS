@@ -4,6 +4,19 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The contract now has a standard JSON Schema, not only a description of one.** `docs/contracts/app_view_models.v3.json`
+  said what each field carries, but nothing a stock validator could enforce; "a JSON Schema file" had been
+  on the not-implemented list since the contract was introduced. `python -m islandos_core.contract_schemas
+  --json-schema` now renders `docs/contracts/app_view_models.v3.schema.json` (draft 2020-12) from the same
+  field constants: every object is closed, every declared key is required, `schema_version` is pinned to
+  `3`, and the per-page shapes are `if`/`then` on `page` — 06 carries the dashboard's three settings keys
+  and no `page_inputs`, 09 carries `page_inputs` with its `DeviceTask` array. `jsonschema` was already
+  pinned in `requirements-ci.lock`, so `tests/test_contract_json_schema.py` validates a real built request
+  and its replay result for 05, 06 and 09, and checks that a stray site key, a 09 request without
+  `page_inputs`, a 05 request carrying one, a 06 request missing `availability` and a summary missing
+  `summary_sha256` are all rejected. The long-form file is unchanged and still the human-readable one;
+  nothing at runtime consults the schema.
+
 - **A replayed request now reproduces the same run, not a look-alike.** `replay_run_request` rebuilt the
   06 manifest with `uuid.uuid4()` and `datetime.now()`, so replaying one saved request twice produced two
   different `run_id`s and two different manifest digests over identical numbers — a citation into "that

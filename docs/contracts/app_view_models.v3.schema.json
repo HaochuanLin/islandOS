@@ -1,0 +1,814 @@
+{
+  "$defs": {
+    "annual_projection": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/annual_projection_basis"
+        },
+        "components_inside_annual_energy_cost": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_provenance": {
+          "type": "string"
+        },
+        "definitions": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "figures": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "manifest_sha256": {
+          "type": "string"
+        },
+        "projection_sha256": {
+          "type": "string"
+        },
+        "record_type": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 3,
+          "type": "integer"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "summary_source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "run_id",
+        "manifest_sha256",
+        "data_provenance",
+        "summary_source",
+        "currency",
+        "basis",
+        "figures",
+        "components_inside_annual_energy_cost",
+        "definitions",
+        "scope",
+        "projection_sha256"
+      ],
+      "type": "object"
+    },
+    "annual_projection_basis": {
+      "additionalProperties": false,
+      "properties": {
+        "bill": {
+          "type": "boolean"
+        },
+        "days_equivalent_per_year": {
+          "type": "integer"
+        },
+        "derived_from_run": {
+          "type": "boolean"
+        },
+        "equal_day_assumption": {
+          "type": "string"
+        },
+        "hours_equivalent_per_year": {
+          "type": "integer"
+        },
+        "measured": {
+          "type": "boolean"
+        },
+        "site_validated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "days_equivalent_per_year",
+        "hours_equivalent_per_year",
+        "equal_day_assumption",
+        "derived_from_run",
+        "site_validated",
+        "measured",
+        "bill"
+      ],
+      "type": "object"
+    },
+    "device_flexibility_summary": {
+      "additionalProperties": false,
+      "properties": {
+        "critical_energy_kwh": {
+          "type": "number"
+        },
+        "critical_unmet_load_kwh": {
+          "type": "number"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimated_energy_cost": {
+          "type": "number"
+        },
+        "flexible_load_shed_kwh": {
+          "type": "number"
+        },
+        "flexible_task_energy_kwh": {
+          "type": "number"
+        },
+        "grid_import_kwh": {
+          "type": "number"
+        },
+        "method": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "peak_task_demand_kw": {
+          "type": "number"
+        },
+        "record_type": {
+          "type": "string"
+        },
+        "reference_estimated_energy_cost": {
+          "type": "number"
+        },
+        "reference_grid_import_kwh": {
+          "type": "number"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scheduled_energy_charge": {
+          "type": "number"
+        },
+        "schema_version": {
+          "const": 3,
+          "type": "integer"
+        },
+        "summary_sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "page",
+        "run_id",
+        "method",
+        "critical_energy_kwh",
+        "flexible_task_energy_kwh",
+        "scheduled_energy_charge",
+        "peak_task_demand_kw",
+        "grid_import_kwh",
+        "reference_grid_import_kwh",
+        "estimated_energy_cost",
+        "reference_estimated_energy_cost",
+        "critical_unmet_load_kwh",
+        "flexible_load_shed_kwh",
+        "currency",
+        "summary_sha256"
+      ],
+      "type": "object"
+    },
+    "device_task": {
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "critical_power_profile_kw": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "earliest_start_step": {
+          "type": "integer"
+        },
+        "interruptible": {
+          "type": "boolean"
+        },
+        "latest_finish_step": {
+          "type": "integer"
+        },
+        "load_class": {
+          "type": "string"
+        },
+        "min_power_kw": {
+          "type": "number"
+        },
+        "minimum_run_steps": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "rated_power_kw": {
+          "type": "number"
+        },
+        "required_energy_kwh": {
+          "type": "number"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "name",
+        "load_class",
+        "rated_power_kw",
+        "required_energy_kwh",
+        "earliest_start_step",
+        "latest_finish_step",
+        "min_power_kw",
+        "minimum_run_steps",
+        "interruptible",
+        "priority",
+        "availability",
+        "critical_power_profile_kw"
+      ],
+      "type": "object"
+    },
+    "run_request": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "page": {
+                "const": "customer_dashboard"
+              }
+            },
+            "required": [
+              "page"
+            ]
+          },
+          "then": {
+            "properties": {
+              "page_inputs": {
+                "type": "null"
+              },
+              "page_settings": {
+                "additionalProperties": false,
+                "properties": {
+                  "cost_priority": {},
+                  "demand_scale": {},
+                  "tariff_scale": {}
+                },
+                "required": [
+                  "demand_scale",
+                  "tariff_scale",
+                  "cost_priority"
+                ],
+                "type": "object"
+              },
+              "run_settings": {
+                "additionalProperties": false,
+                "properties": {
+                  "currency": {},
+                  "investment": {}
+                },
+                "required": [
+                  "currency",
+                  "investment"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "page_settings",
+              "run_settings"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "page": {
+                "const": "joint_resource_optimizer"
+              }
+            },
+            "required": [
+              "page"
+            ]
+          },
+          "then": {
+            "properties": {
+              "page_inputs": {
+                "type": "null"
+              },
+              "page_settings": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
+              },
+              "run_settings": {
+                "additionalProperties": false,
+                "properties": {
+                  "availability": {},
+                  "currency": {},
+                  "optimizer_settings": {}
+                },
+                "required": [
+                  "currency",
+                  "optimizer_settings",
+                  "availability"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "page_settings",
+              "run_settings"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "page": {
+                "const": "device_flexibility_planner"
+              }
+            },
+            "required": [
+              "page"
+            ]
+          },
+          "then": {
+            "properties": {
+              "page_inputs": {
+                "$ref": "#/$defs/run_request_page_inputs"
+              },
+              "page_settings": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
+              },
+              "run_settings": {
+                "additionalProperties": false,
+                "properties": {
+                  "currency": {}
+                },
+                "required": [
+                  "currency"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "page_settings",
+              "run_settings",
+              "page_inputs"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "history": {
+          "$ref": "#/$defs/run_request_history"
+        },
+        "page": {
+          "type": "string"
+        },
+        "page_inputs": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page_settings": {
+          "type": "object"
+        },
+        "request_sha256": {
+          "type": "string"
+        },
+        "request_type": {
+          "type": "string"
+        },
+        "run_settings": {
+          "type": "object"
+        },
+        "schema_version": {
+          "const": 3,
+          "type": "integer"
+        },
+        "site": {
+          "$ref": "#/$defs/run_request_site"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_type",
+        "page",
+        "site",
+        "history",
+        "page_settings",
+        "page_inputs",
+        "run_settings",
+        "request_sha256"
+      ],
+      "type": "object"
+    },
+    "run_request_history": {
+      "additionalProperties": false,
+      "properties": {
+        "hour_count": {
+          "type": "integer"
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "signals": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "source_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamps_utc": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "units": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "timestamps_utc",
+        "signals",
+        "units",
+        "hour_count",
+        "provenance",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "run_request_page_inputs": {
+      "additionalProperties": false,
+      "properties": {
+        "task_power_budget_kw": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/device_task"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "task_power_budget_kw",
+        "tasks"
+      ],
+      "type": "object"
+    },
+    "run_request_site": {
+      "additionalProperties": false,
+      "properties": {
+        "battery_capacity_kwh": {
+          "type": "number"
+        },
+        "battery_initial_soc": {
+          "type": "number"
+        },
+        "battery_max_soc": {
+          "type": "number"
+        },
+        "battery_min_soc": {
+          "type": "number"
+        },
+        "battery_power_kw": {
+          "type": "number"
+        },
+        "diesel_rated_kw": {
+          "type": "number"
+        },
+        "diesel_variable_cost_per_kwh": {
+          "type": "number"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "grid_import_limit_kw": {
+          "type": "number"
+        },
+        "pv_rated_kw": {
+          "type": "number"
+        },
+        "wind_rated_kw": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "pv_rated_kw",
+        "wind_rated_kw",
+        "grid_import_limit_kw",
+        "battery_capacity_kwh",
+        "battery_power_kw",
+        "battery_initial_soc",
+        "battery_min_soc",
+        "battery_max_soc",
+        "diesel_rated_kw",
+        "diesel_variable_cost_per_kwh",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "run_result_summary": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_policies": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cost_comparison_valid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_reduction_vs_grid_first": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decision_record_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimated_24h_energy_cost": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grid_first_estimated_24h_energy_cost": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page": {
+          "type": "string"
+        },
+        "physical_audit_passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommended_policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommended_policy_label": {
+          "type": "string"
+        },
+        "record_type": {
+          "type": "string"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "savings_claim_withheld": {
+          "type": "boolean"
+        },
+        "scenarios_audited": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": 3,
+          "type": "integer"
+        },
+        "service_equivalent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary_sha256": {
+          "type": "string"
+        },
+        "unmet_load_kwh": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "page",
+        "recommended_policy",
+        "recommended_policy_label",
+        "estimated_24h_energy_cost",
+        "unmet_load_kwh",
+        "grid_first_estimated_24h_energy_cost",
+        "service_equivalent",
+        "cost_comparison_valid",
+        "cost_reduction_vs_grid_first",
+        "savings_claim_withheld",
+        "candidate_policies",
+        "run_id",
+        "manifest_sha256",
+        "evidence_sha256",
+        "decision_record_status",
+        "physical_audit_passed",
+        "scenarios_audited",
+        "currency",
+        "summary_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://islandos.local/contracts/app_view_models.v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Generated from islandos_core.contract_schemas; do not edit. Run: python -m islandos_core.contract_schemas --json-schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/run_request"
+    },
+    {
+      "$ref": "#/$defs/run_result_summary"
+    },
+    {
+      "$ref": "#/$defs/device_flexibility_summary"
+    },
+    {
+      "$ref": "#/$defs/annual_projection"
+    }
+  ],
+  "title": "IslandOS application view models, contract version 3"
+}

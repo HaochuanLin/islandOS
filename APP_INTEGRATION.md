@@ -261,6 +261,24 @@ support: the same request replays to the same `run_id`, the same manifest digest
 a replay `run_id` identifies the *request*, not the original browser session. The uuid path is untouched
 for the page itself.
 
+Two generated artifacts describe the same fields for different readers:
+
+| File | Reader | Command |
+|---|---|---|
+| `docs/contracts/app_view_models.v3.json` | human / any client needing unit + nullability + owner | `python -m islandos_core.contract_schemas` |
+| `docs/contracts/app_view_models.v3.schema.json` | a standard validator (draft 2020-12) | `python -m islandos_core.contract_schemas --json-schema` |
+| `frontend/src/contracts.ts` | the viewer's TypeScript build | `python -m islandos_core.contract_schemas --typescript` |
+
+The JSON Schema closes every object (`additionalProperties: false`), requires every declared key, pins
+`schema_version` to `3` so a v2 report fails rather than being half-read, and encodes the per-page shapes
+with `if`/`then` on `page`: 06 must carry the dashboard's three settings keys and no `page_inputs`; 09 must
+carry `page_inputs` with its `DeviceTask` array. `tests/test_contract_json_schema.py` validates a real
+built request and its replay result for 05, 06 and 09 through `jsonschema` (already present in
+`requirements-ci.lock`), and asserts that the closed objects reject an extra site key, a 09 request without
+`page_inputs`, a 05 request carrying one, a 06 request missing `availability`, and a summary missing its
+`summary_sha256`. The annual projection is pinned field by field at the same level but has no builder-derived
+document in the unit test — the downloaded 06 report is the artifact that carries it.
+
 Still not implemented: authentication, a hosted/public endpoint, a published TypeScript package, a JSON
 Schema validator dependency, a server-side run store, and any persistence of a request beyond the caller's
 own process.
