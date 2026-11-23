@@ -295,6 +295,13 @@ annual summary, and can display `GET /contracts` field by field. Its prop and pa
 `frontend/src/contracts.ts`, so the viewer compiles against the contract instead of a hand-written copy of
 it. It is a viewer, not a second implementation: it formats numbers the Python side already decided.
 
+Where that surface lives is settled: **it is a local tool, not a third console route.** It has no session,
+no `/api` proxy and no writes; the console carries one read-only footer link to it and nothing else about
+the sign-in flow changed. `frontend/README.md` is the entry point for how to open it, what it shows and
+what it does not (including that a 09 download renders the device schedule and no annual projection).
+Folding it into the console would buy an identity the page has no use for and a route that implies a
+hosted service, so that option is recorded as rejected rather than merely deferred.
+
 
 ### 4.6 `device_flexibility_summary`
 
