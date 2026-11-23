@@ -294,7 +294,9 @@ def test_the_pages_no_longer_construct_configs_themselves():
     assert "SiteAssumptions(" in PAGE_06.read_text(encoding="utf-8")
     assert ".to_energy_system_config()" in PAGE_06.read_text(encoding="utf-8")
     assert "device_planner_demo_site()" in PAGE_09.read_text(encoding="utf-8")
-    assert ".to_energy_system_config()" in PAGE_09.read_text(encoding="utf-8")
+    # 09 hands its site to the orchestration layer, which owns config construction for all
+    # three pages; the page itself must no longer derive one.
+    assert "run_device_planner(" in PAGE_09.read_text(encoding="utf-8")
 
 
 def test_page_specific_settings_survive_the_unification():
@@ -307,9 +309,11 @@ def test_page_specific_settings_survive_the_unification():
     # The optimizer's search knobs stay on its page.
     for name in ("population", "generations", "seed"):
         assert name in page_06, f"{name} disappeared from the joint optimizer"
-    # The planner's tasks and price vector stay on its page.
-    for name in ("schedule_device_tasks", "task_power_budget"):
+    # The planner's tasks and price vector stay on its page; the scheduling call itself
+    # moved to `run_orchestration.run_device_planner` (shared with the replay path).
+    for name in ("DeviceTask(", "task_power_budget", "prices"):
         assert name in page_09, f"{name} disappeared from the planner"
+    assert "DeviceTask(" in page_09 and "schedule_device_tasks(" not in page_09
 
 
 def test_soc_constants_are_the_ones_every_page_passes():

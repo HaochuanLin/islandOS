@@ -1,14 +1,21 @@
 """Customer-facing demo of critical, semi-flexible and fully-flexible loads."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+import json
+
 import pandas as pd
 import streamlit as st
 from islandos_ui.page_header import render_page_header
 
-from islandos_core.energy_system import EnergySystemInputs, dispatch_energy_system
+from islandos_core.app_view_models import (
+    PAGE_DEVICE_PLANNER,
+    build_device_flexibility_summary,
+    build_run_request,
+)
+from islandos_core.flexible_tasks import DeviceTask
+from islandos_core.run_orchestration import device_task_payload, run_device_planner
 from islandos_core.site_inputs import device_planner_demo_site
-from islandos_core.flexible_tasks import DeviceTask, schedule_device_tasks
-from islandos_core.flexible_task_dispatch import attach_device_task_schedule
 
 st.set_page_config(page_title="IslandOS | Device Flexibility", page_icon="⚡", layout="wide")
 st.title("Device-level load flexibility planner")
@@ -43,10 +50,52 @@ tasks = [
 ]
 
 try:
-    schedule = schedule_device_tasks(tasks, prices, task_power_budget)
+    base_load = [8.0] * 24
+    pv = [max(0.0, 12.0 * (1.0 - abs(h - 12) / 7.0)) for h in hours]
+    wind = [3.0 + 1.5 * ((h % 6) / 5.0) for h in hours]
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    timestamps = [start + timedelta(hours=h) for h in hours]
+    site_assumptions = device_planner_demo_site()
+    run_request_view = build_run_request(
+        page=PAGE_DEVICE_PLANNER,
+        site=site_assumptions,
+        timestamps=timestamps,
+        history={
+            "pv_generation_kw": pv,
+            "wind_generation_kw": wind,
+            "load_kw": base_load,
+            "tariff_per_kwh": prices,
+        },
+        units={
+            "pv_generation_kw": "kW",
+            "wind_generation_kw": "kW",
+            "load_kw": "kW",
+            "tariff_per_kwh": "USD/kWh",
+        },
+        page_settings={},
+        run_settings={"currency": "USD"},
+        page_inputs={
+            "task_power_budget_kw": task_power_budget,
+            "tasks": [device_task_payload(task) for task in tasks],
+        },
+        provenance="Synthetic demonstration data",
+    )
+    outputs = run_device_planner(
+        tasks=tasks,
+        prices=prices,
+        task_power_budget_kw=task_power_budget,
+        pv_generation_kw=pv,
+        wind_generation_kw=wind,
+        base_load_kw=base_load,
+        site=site_assumptions,
+    )
 except ValueError as exc:
     st.error(f"Scenario infeasible: {exc}")
     st.stop()
+
+schedule = outputs["schedule"]
+metrics = outputs["replay"]["summary"]
+reference_metrics = outputs["reference_replay"]["summary"]
 
 summary = st.columns(4)
 summary[0].metric("Critical energy protected", f"{sum(schedule.critical_power_kw):.0f} kWh")
@@ -94,31 +143,12 @@ st.line_chart(chart.set_index("Hour")[["Critical", "Semi/fully flexible", "Resid
 st.line_chart(chart.set_index("Hour")[["Tariff"]])
 
 st.subheader("Shared energy-system replay")
-base_load = [8.0] * 24
-pv = [max(0.0, 12.0 * (1.0 - abs(h - 12) / 7.0)) for h in hours]
-wind = [3.0 + 1.5 * ((h % 6) / 5.0) for h in hours]
-energy_inputs = EnergySystemInputs(
-    pv_generation_kw=pv,
-    wind_generation_kw=wind,
-    load_kw=base_load,
-    grid_price_per_kwh=prices,
-    grid_available=[True] * 24,
-    diesel_available=[True] * 24,
-)
-site_assumptions = device_planner_demo_site()
-site_config = site_assumptions.to_energy_system_config()
-integrated_inputs = attach_device_task_schedule(energy_inputs, schedule)
-replay = dispatch_energy_system(integrated_inputs, site_config)
-metrics = replay["summary"]
-
 # Like-for-like reference: same devices, required energy, windows and generation,
 # but place each flexible task at its earliest feasible low-level schedule rather
 # than using the time-varying tariff. This is a transparent reference, not a
 # claimed real-world operating baseline.
-reference_schedule = schedule_device_tasks(tasks, [1.0] * 24, task_power_budget)
-reference_inputs = attach_device_task_schedule(energy_inputs, reference_schedule)
-reference_replay = dispatch_energy_system(reference_inputs, site_config)
-reference_metrics = reference_replay["summary"]
+replay = outputs["replay"]
+reference_replay = outputs["reference_replay"]
 
 st.subheader("Like-for-like operating comparison")
 comparison = pd.DataFrame([
@@ -175,4 +205,21 @@ st.download_button(
     csv.to_csv(index=False).encode("utf-8"),
     file_name="islandos_device_flexibility_demo.csv",
     mime="text/csv",
+)
+
+device_result_view = build_device_flexibility_summary(
+    result=schedule.to_dict(),
+    metrics=metrics,
+    reference_metrics=reference_metrics,
+    currency="USD",
+)
+report = {
+    "page": "device_flexibility_planner",
+    "application_views": {"request": run_request_view, "result": device_result_view, "annual": None},
+}
+st.download_button(
+    "Export application views JSON",
+    json.dumps(report, indent=2, sort_keys=True, allow_nan=False).encode("utf-8"),
+    file_name="islandos_device_flexibility_report.json",
+    mime="application/json",
 )

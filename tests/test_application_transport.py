@@ -11,14 +11,20 @@ from islandos_core.app_view_models import (
     ANNUAL_BASIS_FIELDS,
     ANNUAL_PROJECTION_FIELDS,
     CONTRACT_VERSION,
+    DEVICE_SUMMARY_FIELDS,
+    DEVICE_TASK_FIELDS,
     HISTORY_FIELDS,
+    PAGE_DEVICE_PLANNER,
+    PAGE_INPUTS_FIELDS,
     REQUEST_FIELDS,
     RESULT_SUMMARY_FIELDS,
     RUN_REQUEST_SITE_FIELDS,
     build_run_request,
 )
 from islandos_core.contract_schemas import SCHEMA_PATH, contract_schema, write_schema
-from islandos_core.site_inputs import SiteAssumptions
+from islandos_core.flexible_tasks import DeviceTask
+from islandos_core.run_orchestration import device_task_payload
+from islandos_core.site_inputs import SiteAssumptions, device_planner_demo_site
 from islandos_core.transport import create_server
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -77,6 +83,16 @@ def test_the_schema_names_every_field_the_builders_emit():
     assert [field["name"] for field in schema["contracts"]["run_request"]["nested"]["history"]] == list(
         HISTORY_FIELDS
     )
+    assert [field["name"] for field in schema["contracts"]["run_request"]["nested"]["page_inputs"]] == list(
+        PAGE_INPUTS_FIELDS
+    )
+    assert [field["name"] for field in schema["contracts"]["run_request"]["nested"]["device_tasks"]] == list(
+        DEVICE_TASK_FIELDS
+    )
+    assert [field["name"] for field in schema["contracts"]["device_flexibility_summary"]["fields"]] == list(
+        DEVICE_SUMMARY_FIELDS
+    )
+    assert schema["pages"] == ["customer_dashboard", "joint_resource_optimizer", PAGE_DEVICE_PLANNER]
     assert [field["name"] for field in schema["contracts"]["run_result_summary"]["fields"]] == list(
         RESULT_SUMMARY_FIELDS
     )
@@ -92,6 +108,9 @@ def test_every_field_states_unit_nullability_and_owner():
     blocks.append(schema["contracts"]["run_result_summary"]["fields"])
     blocks.append(schema["contracts"]["annual_projection"]["fields"])
     blocks.append(schema["contracts"]["annual_projection"]["nested"]["basis"])
+    blocks.append(schema["contracts"]["run_request"]["nested"]["page_inputs"])
+    blocks.append(schema["contracts"]["run_request"]["nested"]["device_tasks"])
+    blocks.append(schema["contracts"]["device_flexibility_summary"]["fields"])
     for block in blocks:
         for field in block:
             assert field["unit"], field
@@ -192,6 +211,58 @@ def test_only_the_schema_is_cross_origin_readable():
             assert response.headers["Access-Control-Allow-Origin"] == "*"
         with urlopen(f"{base}/health", timeout=10) as response:
             assert response.headers["Access-Control-Allow-Origin"] is None
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+def test_the_transport_replays_a_device_flexibility_request():
+    stamps = tuple(START + timedelta(hours=h) for h in range(24))
+    prices = [0.09 if h < 6 else 0.25 if 17 <= h <= 21 else 0.16 for h in range(24)]
+    budget = [10.0] * 24
+    tasks = [
+        DeviceTask("clinic-critical", "Clinic essential circuits", "critical", 3.0, 72.0,
+                   0, 24, interruptible=False, priority=0,
+                   critical_power_profile_kw=tuple([3.0] * 24)),
+        DeviceTask("ice-maker", "Ice production", "semi_flexible", 3.0, 9.0,
+                   8, 18, minimum_run_steps=3, interruptible=False, priority=10),
+        DeviceTask("water-pump", "Water transfer pumping", "fully_flexible", 2.0, 8.0,
+                   0, 24, minimum_run_steps=1, interruptible=True, priority=20),
+    ]
+    load = [8.0] * 24
+    pv = [max(0.0, 12.0 * (1.0 - abs(h - 12) / 7.0)) for h in range(24)]
+    wind = [3.0 + 1.5 * ((h % 6) / 5.0) for h in range(24)]
+    request = build_run_request(
+        page=PAGE_DEVICE_PLANNER, site=device_planner_demo_site(), timestamps=stamps,
+        history={"pv_generation_kw": pv, "wind_generation_kw": wind, "load_kw": load,
+                 "tariff_per_kwh": prices},
+        units={"pv_generation_kw": "kW", "wind_generation_kw": "kW", "load_kw": "kW",
+               "tariff_per_kwh": "USD/kWh"},
+        page_settings={}, run_settings={"currency": "USD"},
+        page_inputs={"task_power_budget_kw": budget,
+                     "tasks": [device_task_payload(task) for task in tasks]},
+        provenance="Synthetic demonstration data",
+    )
+    server = create_server(port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        http_request = Request(
+            f"{base}/run", data=json.dumps(request).encode("utf-8"), method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urlopen(http_request, timeout=60) as response:
+            assert response.status == 200
+            payload = json.loads(response.read())
+        assert payload["page"] == PAGE_DEVICE_PLANNER
+        assert payload["annual"] is None
+        result = payload["result"]
+        assert set(result) == set(DEVICE_SUMMARY_FIELDS)
+        assert result["critical_energy_kwh"] == 72.0
+        assert result["flexible_task_energy_kwh"] == 17.0
+        assert round(result["scheduled_energy_charge"], 2) == 13.77
+        assert round(result["estimated_energy_cost"], 2) == 15.44
     finally:
         server.shutdown()
         thread.join(timeout=5)

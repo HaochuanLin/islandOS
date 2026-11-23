@@ -20,9 +20,11 @@ import json
 from typing import Any, Mapping, Sequence
 import uuid
 
-from .app_view_models import build_run_result_summary
+from .app_view_models import build_device_flexibility_summary, build_run_result_summary
 from .canonical_run import create_run_manifest
-from .energy_system import EnergySystemConfig
+from .energy_system import EnergySystemConfig, EnergySystemInputs, dispatch_energy_system
+from .flexible_task_dispatch import attach_device_task_schedule
+from .flexible_tasks import DeviceTask, schedule_device_tasks
 from .forecast_engine import forecast_signals
 from .forecast_optimizer_adapter import (
     build_coordination_inputs,
@@ -196,6 +198,93 @@ def _manifest_from_request(
     )
 
 
+def device_task_payload(task: DeviceTask) -> dict[str, Any]:
+    """One ``DeviceTask`` as the request contract carries it; no validation, no maths."""
+    return {
+        "task_id": task.task_id,
+        "name": task.name,
+        "load_class": task.load_class,
+        "rated_power_kw": float(task.rated_power_kw),
+        "required_energy_kwh": float(task.required_energy_kwh),
+        "earliest_start_step": int(task.earliest_start_step),
+        "latest_finish_step": int(task.latest_finish_step),
+        "min_power_kw": float(task.min_power_kw),
+        "minimum_run_steps": int(task.minimum_run_steps),
+        "interruptible": bool(task.interruptible),
+        "priority": int(task.priority),
+        "availability": list(task.availability) if task.availability is not None else None,
+        "critical_power_profile_kw": (
+            list(task.critical_power_profile_kw)
+            if task.critical_power_profile_kw is not None
+            else None
+        ),
+    }
+
+
+def _task_from_payload(payload: Mapping[str, Any]) -> DeviceTask:
+    availability = payload["availability"]
+    profile = payload["critical_power_profile_kw"]
+    return DeviceTask(
+        task_id=str(payload["task_id"]),
+        name=str(payload["name"]),
+        load_class=str(payload["load_class"]),
+        rated_power_kw=float(payload["rated_power_kw"]),
+        required_energy_kwh=float(payload["required_energy_kwh"]),
+        earliest_start_step=int(payload["earliest_start_step"]),
+        latest_finish_step=int(payload["latest_finish_step"]),
+        min_power_kw=float(payload["min_power_kw"]),
+        minimum_run_steps=int(payload["minimum_run_steps"]),
+        interruptible=bool(payload["interruptible"]),
+        priority=int(payload["priority"]),
+        availability=tuple(bool(x) for x in availability) if availability is not None else None,
+        critical_power_profile_kw=(
+            tuple(float(x) for x in profile) if profile is not None else None
+        ),
+    )
+
+
+def run_device_planner(
+    *,
+    tasks: Sequence[DeviceTask],
+    prices: Sequence[float],
+    task_power_budget_kw: Sequence[float],
+    pv_generation_kw: Sequence[float],
+    wind_generation_kw: Sequence[float],
+    base_load_kw: Sequence[float],
+    site: Any,
+) -> dict:
+    """The device planner's schedule plus its two replays, in the page's own order.
+
+    Nothing is recalculated here beyond what the page always did: reserve critical
+    profiles, schedule the flexible tasks against the tariff, replay the schedule through
+    the shared energy system, then replay an earliest-feasible reference for comparison.
+    """
+    config: EnergySystemConfig = site.to_energy_system_config()
+    schedule = schedule_device_tasks(tasks, prices, task_power_budget_kw)
+    inputs = EnergySystemInputs(
+        pv_generation_kw=list(pv_generation_kw),
+        wind_generation_kw=list(wind_generation_kw),
+        load_kw=list(base_load_kw),
+        grid_price_per_kwh=list(prices),
+        grid_available=[True] * len(prices),
+        diesel_available=[True] * len(prices),
+    )
+    replay = dispatch_energy_system(attach_device_task_schedule(inputs, schedule), config)
+    reference_schedule = schedule_device_tasks(tasks, [1.0] * len(prices), task_power_budget_kw)
+    reference_replay = dispatch_energy_system(
+        attach_device_task_schedule(inputs, reference_schedule), config
+    )
+    return {
+        "site": site,
+        "config": config,
+        "inputs": inputs,
+        "schedule": schedule,
+        "replay": replay,
+        "reference_schedule": reference_schedule,
+        "reference_replay": reference_replay,
+    }
+
+
 def replay_run_request(request: Mapping[str, Any]) -> dict:
     """Replay a `run_request` view with no page and no Streamlit, and return its summary.
 
@@ -251,4 +340,29 @@ def replay_run_request(request: Mapping[str, Any]) -> dict:
         )
         return {"page": page, "result": summary, "annual": None}
 
-    raise ValueError(f"page must be one of customer_dashboard, joint_resource_optimizer; got {page!r}")
+    if page == "device_flexibility_planner":
+        page_inputs = request["page_inputs"]
+        if not isinstance(page_inputs, Mapping):
+            raise ValueError("the device planner request must carry page_inputs")
+        tasks = [_task_from_payload(task) for task in page_inputs["tasks"]]
+        outputs = run_device_planner(
+            tasks=tasks,
+            prices=history["tariff_per_kwh"],
+            task_power_budget_kw=page_inputs["task_power_budget_kw"],
+            pv_generation_kw=history["pv_generation_kw"],
+            wind_generation_kw=history["wind_generation_kw"],
+            base_load_kw=history["load_kw"],
+            site=site,
+        )
+        summary = build_device_flexibility_summary(
+            result=outputs["schedule"].to_dict(),
+            metrics=outputs["replay"]["summary"],
+            reference_metrics=outputs["reference_replay"]["summary"],
+            currency=currency,
+        )
+        return {"page": page, "result": summary, "annual": None}
+
+    raise ValueError(
+        "page must be one of customer_dashboard, joint_resource_optimizer, "
+        f"device_flexibility_planner; got {page!r}"
+    )

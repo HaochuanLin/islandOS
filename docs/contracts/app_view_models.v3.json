@@ -1,0 +1,757 @@
+{
+  "contract_version": 3,
+  "contracts": {
+    "annual_projection": {
+      "fields": [
+        {
+          "name": "schema_version",
+          "nullable": false,
+          "owner": "contract",
+          "type": "integer",
+          "unit": "-"
+        },
+        {
+          "name": "record_type",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "manifest_sha256",
+          "nullable": false,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "data_provenance",
+          "nullable": false,
+          "owner": "provenance",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "summary_source",
+          "nullable": false,
+          "owner": "provenance",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "currency",
+          "nullable": true,
+          "owner": "display",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "basis",
+          "nullable": false,
+          "owner": "run",
+          "type": "object",
+          "unit": "days / hours / flags"
+        },
+        {
+          "name": "figures",
+          "nullable": false,
+          "owner": "run",
+          "type": "object[number]",
+          "unit": "kWh / currency / hours"
+        },
+        {
+          "name": "components_inside_annual_energy_cost",
+          "nullable": false,
+          "owner": "run",
+          "type": "object[number]",
+          "unit": "currency"
+        },
+        {
+          "name": "definitions",
+          "nullable": false,
+          "owner": "contract",
+          "type": "object[object]",
+          "unit": "-"
+        },
+        {
+          "name": "scope",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "projection_sha256",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        }
+      ],
+      "nested": {
+        "basis": [
+          {
+            "name": "days_equivalent_per_year",
+            "nullable": false,
+            "owner": "assumption",
+            "type": "integer",
+            "unit": "days"
+          },
+          {
+            "name": "hours_equivalent_per_year",
+            "nullable": false,
+            "owner": "assumption",
+            "type": "integer",
+            "unit": "hours"
+          },
+          {
+            "name": "equal_day_assumption",
+            "nullable": false,
+            "owner": "assumption",
+            "type": "string",
+            "unit": "-"
+          },
+          {
+            "name": "derived_from_run",
+            "nullable": false,
+            "owner": "provenance",
+            "type": "boolean",
+            "unit": "-"
+          },
+          {
+            "name": "site_validated",
+            "nullable": false,
+            "owner": "provenance",
+            "type": "boolean",
+            "unit": "-"
+          },
+          {
+            "name": "measured",
+            "nullable": false,
+            "owner": "provenance",
+            "type": "boolean",
+            "unit": "-"
+          },
+          {
+            "name": "bill",
+            "nullable": false,
+            "owner": "provenance",
+            "type": "boolean",
+            "unit": "-"
+          }
+        ]
+      }
+    },
+    "device_flexibility_summary": {
+      "fields": [
+        {
+          "name": "schema_version",
+          "nullable": false,
+          "owner": "contract",
+          "type": "integer",
+          "unit": "-"
+        },
+        {
+          "name": "record_type",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "owner": "page",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "run_id",
+          "nullable": true,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "method",
+          "nullable": false,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "critical_energy_kwh",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "flexible_task_energy_kwh",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "scheduled_energy_charge",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "currency/24h"
+        },
+        {
+          "name": "peak_task_demand_kw",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kW"
+        },
+        {
+          "name": "grid_import_kwh",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "reference_grid_import_kwh",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "estimated_energy_cost",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "currency/24h"
+        },
+        {
+          "name": "reference_estimated_energy_cost",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "currency/24h"
+        },
+        {
+          "name": "critical_unmet_load_kwh",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "flexible_load_shed_kwh",
+          "nullable": false,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "currency",
+          "nullable": true,
+          "owner": "display",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "summary_sha256",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        }
+      ]
+    },
+    "run_request": {
+      "fields": [
+        {
+          "name": "schema_version",
+          "nullable": false,
+          "owner": "contract",
+          "type": "integer",
+          "unit": "-"
+        },
+        {
+          "name": "request_type",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "owner": "page",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "site",
+          "nullable": false,
+          "owner": "site",
+          "type": "object",
+          "unit": "kW / kWh / currency-per-kWh / SOC fraction"
+        },
+        {
+          "name": "history",
+          "nullable": false,
+          "owner": "data",
+          "type": "object",
+          "unit": "kW per signal, ISO-8601 timestamps"
+        },
+        {
+          "name": "page_settings",
+          "nullable": false,
+          "owner": "page",
+          "type": "object",
+          "unit": "per page"
+        },
+        {
+          "name": "page_inputs",
+          "nullable": true,
+          "owner": "page",
+          "type": "object",
+          "unit": "per page; null when the page has only numeric knobs"
+        },
+        {
+          "name": "run_settings",
+          "nullable": false,
+          "owner": "run",
+          "type": "object",
+          "unit": "per page"
+        },
+        {
+          "name": "request_sha256",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        }
+      ],
+      "nested": {
+        "device_tasks": [
+          {
+            "name": "task_id",
+            "nullable": false,
+            "owner": "page",
+            "type": "string",
+            "unit": "-"
+          },
+          {
+            "name": "name",
+            "nullable": false,
+            "owner": "page",
+            "type": "string",
+            "unit": "-"
+          },
+          {
+            "name": "load_class",
+            "nullable": false,
+            "owner": "page",
+            "type": "string",
+            "unit": "critical / semi_flexible / fully_flexible"
+          },
+          {
+            "name": "rated_power_kw",
+            "nullable": false,
+            "owner": "page",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "required_energy_kwh",
+            "nullable": false,
+            "owner": "page",
+            "type": "number",
+            "unit": "kWh"
+          },
+          {
+            "name": "earliest_start_step",
+            "nullable": false,
+            "owner": "page",
+            "type": "integer",
+            "unit": "step (hour)"
+          },
+          {
+            "name": "latest_finish_step",
+            "nullable": false,
+            "owner": "page",
+            "type": "integer",
+            "unit": "step (hour)"
+          },
+          {
+            "name": "min_power_kw",
+            "nullable": false,
+            "owner": "page",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "minimum_run_steps",
+            "nullable": false,
+            "owner": "page",
+            "type": "integer",
+            "unit": "step (hour)"
+          },
+          {
+            "name": "interruptible",
+            "nullable": false,
+            "owner": "page",
+            "type": "boolean",
+            "unit": "-"
+          },
+          {
+            "name": "priority",
+            "nullable": false,
+            "owner": "page",
+            "type": "integer",
+            "unit": "order"
+          },
+          {
+            "name": "availability",
+            "nullable": true,
+            "owner": "page",
+            "type": "array[boolean]",
+            "unit": "-"
+          },
+          {
+            "name": "critical_power_profile_kw",
+            "nullable": true,
+            "owner": "page",
+            "type": "array[number]",
+            "unit": "kW"
+          }
+        ],
+        "history": [
+          {
+            "name": "timestamps_utc",
+            "nullable": false,
+            "owner": "data",
+            "type": "array[string]",
+            "unit": "ISO-8601"
+          },
+          {
+            "name": "signals",
+            "nullable": false,
+            "owner": "data",
+            "type": "object[number[]]",
+            "unit": "kW or currency/kWh per signal"
+          },
+          {
+            "name": "units",
+            "nullable": false,
+            "owner": "data",
+            "type": "object[string]",
+            "unit": "-"
+          },
+          {
+            "name": "hour_count",
+            "nullable": false,
+            "owner": "data",
+            "type": "integer",
+            "unit": "hours"
+          },
+          {
+            "name": "provenance",
+            "nullable": false,
+            "owner": "data",
+            "type": "string",
+            "unit": "-"
+          },
+          {
+            "name": "source_sha256",
+            "nullable": true,
+            "owner": "data",
+            "type": "string",
+            "unit": "-"
+          }
+        ],
+        "page_inputs": [
+          {
+            "name": "task_power_budget_kw",
+            "nullable": false,
+            "owner": "page",
+            "type": "array[number]",
+            "unit": "kW"
+          },
+          {
+            "name": "tasks",
+            "nullable": false,
+            "owner": "page",
+            "type": "array[object]",
+            "unit": "kW / kWh / steps"
+          }
+        ],
+        "site": [
+          {
+            "name": "pv_rated_kw",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "wind_rated_kw",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "grid_import_limit_kw",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "battery_capacity_kwh",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "kWh"
+          },
+          {
+            "name": "battery_power_kw",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "battery_initial_soc",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "fraction"
+          },
+          {
+            "name": "battery_min_soc",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "fraction"
+          },
+          {
+            "name": "battery_max_soc",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "fraction"
+          },
+          {
+            "name": "diesel_rated_kw",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "kW"
+          },
+          {
+            "name": "diesel_variable_cost_per_kwh",
+            "nullable": false,
+            "owner": "site",
+            "type": "number",
+            "unit": "currency/kWh"
+          },
+          {
+            "name": "digest",
+            "nullable": false,
+            "owner": "site",
+            "type": "string",
+            "unit": "-"
+          }
+        ]
+      },
+      "page_settings_keys": {
+        "customer_dashboard": [
+          "demand_scale",
+          "tariff_scale",
+          "cost_priority"
+        ],
+        "device_flexibility_planner": [],
+        "joint_resource_optimizer": []
+      },
+      "run_settings_keys": {
+        "customer_dashboard": [
+          "currency",
+          "investment"
+        ],
+        "device_flexibility_planner": [
+          "currency"
+        ],
+        "joint_resource_optimizer": [
+          "currency",
+          "optimizer_settings",
+          "availability"
+        ]
+      }
+    },
+    "run_result_summary": {
+      "fields": [
+        {
+          "name": "schema_version",
+          "nullable": false,
+          "owner": "contract",
+          "type": "integer",
+          "unit": "-"
+        },
+        {
+          "name": "record_type",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "owner": "page",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "recommended_policy",
+          "nullable": true,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "recommended_policy_label",
+          "nullable": false,
+          "owner": "display",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "estimated_24h_energy_cost",
+          "nullable": true,
+          "owner": "run",
+          "type": "number",
+          "unit": "currency/24h"
+        },
+        {
+          "name": "unmet_load_kwh",
+          "nullable": true,
+          "owner": "run",
+          "type": "number",
+          "unit": "kWh/24h"
+        },
+        {
+          "name": "grid_first_estimated_24h_energy_cost",
+          "nullable": true,
+          "owner": "run",
+          "type": "number",
+          "unit": "currency/24h"
+        },
+        {
+          "name": "service_equivalent",
+          "nullable": true,
+          "owner": "run",
+          "type": "boolean",
+          "unit": "-"
+        },
+        {
+          "name": "cost_comparison_valid",
+          "nullable": true,
+          "owner": "run",
+          "type": "boolean",
+          "unit": "-"
+        },
+        {
+          "name": "cost_reduction_vs_grid_first",
+          "nullable": true,
+          "owner": "run",
+          "type": "number",
+          "unit": "currency/24h"
+        },
+        {
+          "name": "savings_claim_withheld",
+          "nullable": false,
+          "owner": "gate",
+          "type": "boolean",
+          "unit": "-"
+        },
+        {
+          "name": "candidate_policies",
+          "nullable": false,
+          "owner": "run",
+          "type": "array[string]",
+          "unit": "-"
+        },
+        {
+          "name": "run_id",
+          "nullable": true,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "manifest_sha256",
+          "nullable": true,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "evidence_sha256",
+          "nullable": true,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "decision_record_status",
+          "nullable": true,
+          "owner": "run",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "physical_audit_passed",
+          "nullable": true,
+          "owner": "run",
+          "type": "boolean",
+          "unit": "-"
+        },
+        {
+          "name": "scenarios_audited",
+          "nullable": true,
+          "owner": "run",
+          "type": "array[string]",
+          "unit": "-"
+        },
+        {
+          "name": "currency",
+          "nullable": true,
+          "owner": "display",
+          "type": "string",
+          "unit": "-"
+        },
+        {
+          "name": "summary_sha256",
+          "nullable": false,
+          "owner": "contract",
+          "type": "string",
+          "unit": "-"
+        }
+      ]
+    }
+  },
+  "pages": [
+    "customer_dashboard",
+    "joint_resource_optimizer",
+    "device_flexibility_planner"
+  ],
+  "request_type": "islandos_run_request"
+}

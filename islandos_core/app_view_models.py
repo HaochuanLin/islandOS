@@ -36,7 +36,7 @@ import hashlib
 import json
 from typing import Any, Mapping, Sequence
 
-CONTRACT_VERSION = 2
+CONTRACT_VERSION = 3
 
 # Every top-level field a view carries, declared once. Builders assemble exactly these
 # keys, and tests fail on any drift, so a client can be written against a stable surface
@@ -48,6 +48,7 @@ REQUEST_FIELDS = (
     "site",
     "history",
     "page_settings",
+    "page_inputs",
     "run_settings",
     "request_sha256",
 )
@@ -115,7 +116,8 @@ ANNUAL_BASIS_FIELDS = (
 
 PAGE_CUSTOMER_DASHBOARD = "customer_dashboard"
 PAGE_JOINT_OPTIMIZER = "joint_resource_optimizer"
-PAGES = (PAGE_CUSTOMER_DASHBOARD, PAGE_JOINT_OPTIMIZER)
+PAGE_DEVICE_PLANNER = "device_flexibility_planner"
+PAGES = (PAGE_CUSTOMER_DASHBOARD, PAGE_JOINT_OPTIMIZER, PAGE_DEVICE_PLANNER)
 
 # What each page is allowed to put in its page-specific / run-specific blocks. A key
 # outside these sets is refused rather than carried through, so the contract cannot
@@ -123,10 +125,12 @@ PAGES = (PAGE_CUSTOMER_DASHBOARD, PAGE_JOINT_OPTIMIZER)
 PAGE_SETTING_KEYS = {
     PAGE_CUSTOMER_DASHBOARD: ("demand_scale", "tariff_scale", "cost_priority"),
     PAGE_JOINT_OPTIMIZER: (),
+    PAGE_DEVICE_PLANNER: (),
 }
 RUN_SETTING_KEYS = {
     PAGE_CUSTOMER_DASHBOARD: ("currency", "investment"),
     PAGE_JOINT_OPTIMIZER: ("currency", "optimizer_settings", "availability"),
+    PAGE_DEVICE_PLANNER: ("currency",),
 }
 INVESTMENT_KEYS = (
     "baseline_annual_energy_cost",
@@ -140,6 +144,46 @@ INVESTMENT_KEYS = (
 )
 OPTIMIZER_SETTING_KEYS = ("population_size", "generations", "seed")
 AVAILABILITY_KEYS = ("grid_all_hours", "diesel_all_hours")
+
+# The device planner is the one page whose inputs are not scalar knobs: its tasks are
+# objects (class, rated power, energy requirement, window, critical profile). Those live
+# in a separate `page_inputs` block so `page_settings` keeps meaning "numeric knobs".
+PAGE_INPUTS_FIELDS = ("task_power_budget_kw", "tasks")
+DEVICE_TASK_FIELDS = (
+    "task_id",
+    "name",
+    "load_class",
+    "rated_power_kw",
+    "required_energy_kwh",
+    "earliest_start_step",
+    "latest_finish_step",
+    "min_power_kw",
+    "minimum_run_steps",
+    "interruptible",
+    "priority",
+    "availability",
+    "critical_power_profile_kw",
+)
+DEVICE_LOAD_CLASSES = ("critical", "semi_flexible", "fully_flexible")
+DEVICE_SUMMARY_FIELDS = (
+    "schema_version",
+    "record_type",
+    "page",
+    "run_id",
+    "method",
+    "critical_energy_kwh",
+    "flexible_task_energy_kwh",
+    "scheduled_energy_charge",
+    "peak_task_demand_kw",
+    "grid_import_kwh",
+    "reference_grid_import_kwh",
+    "estimated_energy_cost",
+    "reference_estimated_energy_cost",
+    "critical_unmet_load_kwh",
+    "flexible_load_shed_kwh",
+    "currency",
+    "summary_sha256",
+)
 
 
 def _require_text(value: object, name: str) -> str:
@@ -164,6 +208,12 @@ def _optional_number(value: object, name: str) -> float | None:
     if value is None:
         return None
     return _require_number(value, name)
+
+
+def _require_int(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an integer")
+    return int(value)
 
 
 def _require_bool(value: object, name: str) -> bool:
@@ -203,6 +253,83 @@ def _check_keys(payload: Mapping[str, Any], expected: Sequence[str], name: str) 
         raise ValueError(f"{name} carries unknown fields: {', '.join(extra)}")
 
 
+def _device_task_payload(task: object, hour_count: int) -> dict[str, Any]:
+    """One device task, as the planner supplies it, validated but not interpreted."""
+    if not isinstance(task, Mapping):
+        raise ValueError("each device task must be a mapping")
+    _check_keys(task, DEVICE_TASK_FIELDS, "device task")
+    load_class = _require_text(task["load_class"], "task.load_class")
+    if load_class not in DEVICE_LOAD_CLASSES:
+        raise ValueError(f"task.load_class must be one of {', '.join(DEVICE_LOAD_CLASSES)}")
+    availability = task["availability"]
+    if availability is not None:
+        if not isinstance(availability, Sequence) or isinstance(availability, (str, bytes)):
+            raise ValueError("task.availability must be a sequence of booleans")
+        if len(availability) != hour_count:
+            raise ValueError("task.availability must share the request horizon")
+    profile = task["critical_power_profile_kw"]
+    if profile is not None:
+        if not isinstance(profile, Sequence) or isinstance(profile, (str, bytes)):
+            raise ValueError("task.critical_power_profile_kw must be a sequence of numbers")
+        if len(profile) != hour_count:
+            raise ValueError("task.critical_power_profile_kw must share the request horizon")
+    return {
+        "task_id": _require_text(task["task_id"], "task.task_id"),
+        "name": _require_text(task["name"], "task.name"),
+        "load_class": load_class,
+        "rated_power_kw": _require_number(task["rated_power_kw"], "task.rated_power_kw"),
+        "required_energy_kwh": _require_number(
+            task["required_energy_kwh"], "task.required_energy_kwh"
+        ),
+        "earliest_start_step": _require_int(task["earliest_start_step"], "task.earliest_start_step"),
+        "latest_finish_step": _require_int(task["latest_finish_step"], "task.latest_finish_step"),
+        "min_power_kw": _require_number(task["min_power_kw"], "task.min_power_kw"),
+        "minimum_run_steps": _require_int(task["minimum_run_steps"], "task.minimum_run_steps"),
+        "interruptible": _require_bool(task["interruptible"], "task.interruptible"),
+        "priority": _require_int(task["priority"], "task.priority"),
+        "availability": [bool(x) for x in availability] if availability is not None else None,
+        "critical_power_profile_kw": (
+            [_require_number(x, "task.critical_power_profile_kw") for x in profile]
+            if profile is not None
+            else None
+        ),
+    }
+
+
+def _page_inputs_payload(page: str, page_inputs: object, hour_count: int) -> dict[str, Any] | None:
+    """The structured page inputs, or ``None`` for pages that have none.
+
+    Only the device planner uses this block today. A page without structured inputs must
+    pass ``None`` rather than ``{}``, so "no inputs" and "an empty payload" stay
+    distinguishable.
+    """
+    if page != PAGE_DEVICE_PLANNER:
+        if page_inputs is not None:
+            raise ValueError(f"page_inputs is only supported for {PAGE_DEVICE_PLANNER}")
+        return None
+    if not isinstance(page_inputs, Mapping):
+        raise ValueError("the device planner requires page_inputs")
+    _check_keys(page_inputs, PAGE_INPUTS_FIELDS, "page_inputs")
+    budget = page_inputs["task_power_budget_kw"]
+    if not isinstance(budget, Sequence) or isinstance(budget, (str, bytes)):
+        raise ValueError("page_inputs.task_power_budget_kw must be a sequence of numbers")
+    if len(budget) != hour_count:
+        raise ValueError("page_inputs.task_power_budget_kw must share the request horizon")
+    tasks = page_inputs["tasks"]
+    if not isinstance(tasks, Sequence) or isinstance(tasks, (str, bytes)) or not tasks:
+        raise ValueError("page_inputs.tasks must hold at least one task")
+    payload = {
+        "task_power_budget_kw": [
+            _require_number(value, "task_power_budget_kw") for value in budget
+        ],
+        "tasks": [_device_task_payload(task, hour_count) for task in tasks],
+    }
+    task_ids = [task["task_id"] for task in payload["tasks"]]
+    if len(task_ids) != len(set(task_ids)):
+        raise ValueError("page_inputs.tasks must have unique task_id values")
+    return payload
+
+
 def _site_payload(site: object) -> dict[str, Any]:
     describe = getattr(site, "describe", None)
     digest = getattr(site, "digest", None)
@@ -225,6 +352,7 @@ def build_run_request(
     run_settings: Mapping[str, Any],
     provenance: str,
     source_sha256: str | None = None,
+    page_inputs: Mapping[str, Any] | None = None,
 ) -> dict:
     """The request a page sent to the core, in a form another front end can replay.
 
@@ -240,7 +368,7 @@ def build_run_request(
     _check_keys(run_settings, RUN_SETTING_KEYS[page], "run_settings")
     if page == PAGE_CUSTOMER_DASHBOARD:
         _check_keys(run_settings["investment"], INVESTMENT_KEYS, "run_settings.investment")
-    else:
+    elif page == PAGE_JOINT_OPTIMIZER:
         _check_keys(
             run_settings["optimizer_settings"], OPTIMIZER_SETTING_KEYS,
             "run_settings.optimizer_settings",
@@ -289,7 +417,7 @@ def build_run_request(
         for name in INVESTMENT_KEYS:
             investment[name] = _require_number(investment[name], f"investment.{name}")
         run_payload["investment"] = investment
-    else:
+    elif page == PAGE_JOINT_OPTIMIZER:
         optimizer = dict(run_payload["optimizer_settings"])
         for name in ("population_size", "generations", "seed"):
             optimizer[name] = _require_number(optimizer[name], f"optimizer_settings.{name}")
@@ -298,6 +426,9 @@ def build_run_request(
         for name in AVAILABILITY_KEYS:
             availability[name] = _require_bool(availability[name], f"availability.{name}")
         run_payload["availability"] = availability
+
+    hour_count = len(next(iter(series.values())))
+    inputs_payload = _page_inputs_payload(page, page_inputs, hour_count)
 
     payload = {
         "schema_version": CONTRACT_VERSION,
@@ -308,11 +439,12 @@ def build_run_request(
             "timestamps_utc": stamps,
             "signals": series,
             "units": {name: str(units[name]) for name in series},
-            "hour_count": len(next(iter(series.values()))),
+            "hour_count": hour_count,
             "provenance": _require_text(provenance, "provenance"),
             "source_sha256": _optional_text(source_sha256, "source_sha256"),
         },
         "page_settings": settings_payload,
+        "page_inputs": inputs_payload,
         "run_settings": run_payload,
     }
     if tuple(payload) != REQUEST_FIELDS[:-1]:
@@ -512,6 +644,77 @@ def build_annual_projection(record: Mapping[str, Any], *, currency: str | None =
         raise AssertionError(f"annual projection fields drifted: {sorted(payload)}")
     if tuple(payload["basis"]) != ANNUAL_BASIS_FIELDS:
         raise AssertionError(f"annual basis fields drifted: {sorted(payload['basis'])}")
+    return payload
+
+
+def build_device_flexibility_summary(
+    *,
+    result: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    reference_metrics: Mapping[str, Any],
+    currency: str | None = None,
+) -> dict:
+    """The device planner's schedule, described without recomputing anything.
+
+    ``result`` is ``DeviceSchedulingResult.to_dict()``; ``metrics`` and
+    ``reference_metrics`` are the ``summary`` blocks of the tariff-aware replay and its
+    earliest-feasible reference. Every number here is copied from one of the three.
+    """
+    if not isinstance(result, Mapping):
+        raise ValueError("result must be DeviceSchedulingResult.to_dict()")
+    if not isinstance(metrics, Mapping) or not isinstance(reference_metrics, Mapping):
+        raise ValueError("device planner metrics must be mappings")
+    schedules = result.get("schedules")
+    if not isinstance(schedules, Sequence) or isinstance(schedules, (str, bytes)):
+        raise ValueError("result.schedules must be a sequence")
+    critical_power = result.get("critical_power_kw")
+    total_power = result.get("total_power_kw")
+    if not isinstance(critical_power, Sequence) or not isinstance(total_power, Sequence):
+        raise ValueError("result must carry critical_power_kw and total_power_kw")
+    if not critical_power or not total_power:
+        raise ValueError("result power series must not be empty")
+    flexible_energy = sum(
+        _require_number(row.get("energy_kwh"), "schedule.energy_kwh")
+        for row in schedules
+        if isinstance(row, Mapping) and row.get("load_class") != "critical"
+    )
+    payload = {
+        "schema_version": CONTRACT_VERSION,
+        "record_type": "islandos_device_flexibility_summary",
+        "page": PAGE_DEVICE_PLANNER,
+        "run_id": None,
+        "method": _require_text(result.get("method"), "result.method"),
+        "critical_energy_kwh": sum(
+            _require_number(value, "critical_power_kw") for value in critical_power
+        ),
+        "flexible_task_energy_kwh": flexible_energy,
+        "scheduled_energy_charge": _require_number(
+            result.get("total_energy_cost"), "result.total_energy_cost"
+        ),
+        "peak_task_demand_kw": max(
+            _require_number(value, "total_power_kw") for value in total_power
+        ),
+        "grid_import_kwh": _require_number(metrics.get("grid_import_kwh"), "grid_import_kwh"),
+        "reference_grid_import_kwh": _require_number(
+            reference_metrics.get("grid_import_kwh"), "reference_grid_import_kwh"
+        ),
+        "estimated_energy_cost": _require_number(
+            metrics.get("estimated_energy_cost"), "estimated_energy_cost"
+        ),
+        "reference_estimated_energy_cost": _require_number(
+            reference_metrics.get("estimated_energy_cost"), "reference_estimated_energy_cost"
+        ),
+        "critical_unmet_load_kwh": _require_number(
+            metrics.get("critical_unmet_load_kwh"), "critical_unmet_load_kwh"
+        ),
+        "flexible_load_shed_kwh": _require_number(
+            metrics.get("flexible_load_shed_kwh"), "flexible_load_shed_kwh"
+        ),
+        "currency": _optional_text(currency, "currency"),
+    }
+    if tuple(payload) != DEVICE_SUMMARY_FIELDS[:-1]:
+        raise AssertionError(f"device summary fields drifted: {sorted(payload)}")
+    payload["summary_sha256"] = _digest(payload)
     return payload
 
 
