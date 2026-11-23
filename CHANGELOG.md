@@ -4,6 +4,25 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The hosted app now hands its stamp over as a download, so the commit is proved from bytes rather than a
+  seven-character caption.** The two entries below established that Community Cloud never serves
+  `/app/static/build_info.json`, and settled for reading `build 46d145a (git)` off the sidebar. That is a
+  narrower claim than it looks: seven characters cannot be a full commit, and the line is the app's caption,
+  not its document. `app.py` now offers **Download build stamp (JSON)** in the sidebar, built from
+  `build_info.serialise_stamp()` — the same function that writes the file, so the bytes cannot drift. The
+  check reads the static file first, then clicks that button inside the same headless session that warms the
+  app, and validates the downloaded document with the same rules as the file; `stamp.source` records
+  `static` or `download`, and an unreadable download is reported as a download failure, never promoted to a
+  stamp. The sidebar line remains the last resort, so the previous entry's behaviour is preserved rather
+  than replaced. Verified end to end on a local server in both configurations: with static serving off, the
+  three pages return the shell, the download captures 260 B naming `46d145a60c…`, `commit.assertion` is
+  `match`, `stamp.source` is `download`, `verdict = ok`, exit 0; with it on, `stamp.source` is `static` and
+  the verdict is still `ok`. Tests: 1496 passed, 4 skipped (full suite), including
+  `test_the_file_and_the_download_are_the_same_bytes`, an AppTest assertion that the sidebar renders the
+  button, and five cases covering download-proved, download-mismatch, download-missing-then-line,
+  unreadable-download and static-preferred. `APP_INTEGRATION.md` §7.1–§7.5 updated; §7.4 still says the
+  static file and the download are never compared byte for byte.
+
 - **"Which commit is the hosted app running?" is now a claim with evidence, not a blank.** `APP_INTEGRATION.md`
   said the deployed commit could not be shown from outside. Half of that was measured rather than assumed: on
   2026-11-23 every route on `islandos.streamlit.app` — a page, `/_stcore/health`, an invented path — answered

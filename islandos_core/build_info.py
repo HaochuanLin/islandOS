@@ -168,6 +168,16 @@ def stamp_path(repo_root: Path | str | None = None) -> Path:
     return root / STAMP_RELATIVE_PATH
 
 
+def serialise_stamp(stamp: Mapping[str, object]) -> bytes:
+    """The exact bytes of the published stamp.
+
+    One place decides the bytes: the static file, the sidebar's download button and
+    the check that reads either of them must agree, or a reader gets two documents
+    claiming to be the same record.
+    """
+    return (json.dumps(dict(stamp), indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 def write_stamp(stamp: Mapping[str, object], path: Path | str | None = None) -> Path:
     """Write ``stamp`` atomically and return the path written.
 
@@ -178,9 +188,7 @@ def write_stamp(stamp: Mapping[str, object], path: Path | str | None = None) -> 
     target = Path(path) if path is not None else stamp_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(target.name + ".tmp")
-    temporary.write_text(
-        json.dumps(dict(stamp), indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    temporary.write_bytes(serialise_stamp(stamp))
     os.replace(temporary, target)
     return target
 

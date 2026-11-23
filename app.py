@@ -121,4 +121,20 @@ navigation.run()
 
 with st.sidebar:
     st.divider()
-    st.caption(build_info.caption(deployment_stamp()))
+    stamp = deployment_stamp()
+    st.caption(build_info.caption(stamp))
+    # Static file serving is not guaranteed on Community Cloud (it serves repository
+    # files, not files a session writes), so the same bytes are also handed to the
+    # reader here. scripts/check_deployment.py falls back to this download when
+    # /app/static/build_info.json answers with the front-end shell.
+    st.download_button(
+        "Download build stamp (JSON)",
+        data=build_info.serialise_stamp(stamp),
+        file_name=build_info.STAMP_FILENAME,
+        mime="application/json",
+        key="download_build_stamp",
+        help=(
+            "The deployment's own stamp: commit, how it was resolved, and when it was read. "
+            "Same bytes as /app/static/build_info.json where that route is served."
+        ),
+    )
