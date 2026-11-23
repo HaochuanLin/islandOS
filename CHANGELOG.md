@@ -30,6 +30,17 @@ Notable project changes are recorded here. This is a research prototype; version
   fetched through the route (`/` 200, `assets/application-views-*.js` 200). No new endpoint beyond these two
   reads, no writes, no change to `/contracts` or `/run`.
 
+- **The synthetic window behind 06's annual figure is now a parameter, not the wall clock.** The page
+  built its default 168-hour history inside its body from `datetime.now(timezone.utc)`, with PV and wind
+  ripple keyed to the row index; the same code at 14:00 UTC projected `7,709.55 USD/year` and at 02:00 UTC
+  `5,332.57`, while `186,150 kWh` stayed unchanged. `islandos_core/demo_site_history.py` now holds the
+  same numbers verbatim and takes `anchor_utc` as an argument; the page still passes "now", so no visible
+  value moves (AppTest at the same hour: `186,150 kWh / 5,281.63 / 0.00 / 0 h` before and after).
+  `tests/test_demo_site_history.py` pins the properties: the same anchor reproduces the same window, every
+  24-hour block carries `510 kWh` of load, anchors 02 and 14 differ in PV but not in daily load or the
+  24-point tariff total, and the builder never reads a clock. This makes the input declarable; it does not
+  add a UI control to pin it.
+
 - **The contract now has a standard JSON Schema, not only a description of one.** `docs/contracts/app_view_models.v3.json`
   said what each field carries, but nothing a stock validator could enforce; "a JSON Schema file" had been
   on the not-implemented list since the contract was introduced. `python -m islandos_core.contract_schemas
