@@ -74,7 +74,8 @@ all that page can do from `file://`; start the transport if you also want the sc
     reader declares the equal-days assumption).
 - **The contract itself.** "Load contracts" reads `GET /contracts` and prints `run_request`,
   `run_result_summary`, `device_flexibility_summary` and `annual_projection` field by field with type,
-  unit, nullability and owner.
+  unit, nullability and owner. The tables are built from the response's own keys in its own order, so a
+  contract added to `/contracts` shows up without a code change.
 - Nothing else. There is no report browser, no history, no search.
 
 ## What it does not do
@@ -126,14 +127,14 @@ The transport test serves a temporary build, checks the HTML/JS content types, r
 after `npm run dev` and follow the footer link; the target is `application-views.html` from the same
 build.
 
-Measured on `ddc4c58` from a clean worktree, transport on `--port 8799`:
+Measured on `a5ef3df` from a clean worktree, transport on `--port 8799`:
 
 | Check | Result |
 |---|---|
-| `npm run build` | 35 modules transformed; `dist/application-views.html` 0.67 kB; `assets/application-views-*.js` 9.09 kB |
+| `npm run build` | 35 modules transformed; `dist/application-views.html` 0.67 kB; `assets/application-views-*.js` 8.83 kB |
 | `GET /` | 200, 672 B |
 | `GET /application-views.html` | 200, 672 B, identical to `/` |
-| `GET /assets/application-views-*.js` | 200, 9 088 B |
+| `GET /assets/application-views-*.js` | 200, 8 832 B |
 | `GET /contracts` | 200, 10 902 B |
 | `GET /index.html` | 404 |
 | `GET /assets/../index.html` | 404 |
