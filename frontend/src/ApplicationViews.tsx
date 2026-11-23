@@ -342,13 +342,9 @@ function App() {
 
       {schema ? (
         <>
-          <FieldTable title="run_request" fields={schema.contracts.run_request.fields} />
-          <FieldTable title="run_result_summary" fields={schema.contracts.run_result_summary.fields} />
-          <FieldTable
-            title="device_flexibility_summary"
-            fields={schema.contracts.device_flexibility_summary.fields}
-          />
-          <FieldTable title="annual_projection" fields={schema.contracts.annual_projection.fields} />
+          {Object.entries(schema.contracts).map(([name, body]) => (
+            <FieldTable key={name} title={name} fields={body.fields} />
+          ))}
         </>
       ) : null}
     </main>
