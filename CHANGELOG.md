@@ -13,11 +13,14 @@ Notable project changes are recorded here. This is a research prototype; version
   generated artifacts → `contracts.ts` and the viewer → tests → this document and this file); a
   copy-paste checklist; and the rule that old version files stay. The number now has one source:
   `SCHEMA_PATH` was the last literal `app_view_models.v3.json` and is now derived from
-  `CONTRACT_VERSION`, and the generated `frontend/src/contracts.ts` header states the version it was
-  rendered from. `tests/test_contract_versioning.py` fails unless the long table's `contract_version`,
+  `CONTRACT_VERSION`, the JSON Schema's `$id` is its own file name rather than a second spelling of
+  it, and the generated `frontend/src/contracts.ts` header states the version it was rendered from.
+  `tests/test_contract_versioning.py` fails unless the long table's `contract_version`,
   the JSON Schema's `$id` and its per-object `schema_version` consts, and the TypeScript header all
   name `CONTRACT_VERSION`; it is also parametrised over each single-artifact edit, so the "only changed
-  one place" case is proven to fail rather than assumed. Verified two ways: raising `CONTRACT_VERSION`
+  one place" case is proven to fail rather than assumed, and it fails on any file under
+  `docs/contracts` naming a version above the constant, so a rolled-back bump cannot leave a v4
+  artifact behind. Verified two ways: raising `CONTRACT_VERSION`
   to `4` alone failed on the missing regenerated files, and copying the v3 artifacts under v4 names
   failed naming all three stale versions; both passed again after reverting. Repeating the first case
   on the pull request, where only `CONTRACT_VERSION` moved, turned the `Python unit tests` gate red

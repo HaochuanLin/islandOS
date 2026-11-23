@@ -42,6 +42,13 @@ COMMANDS = {
     JSON_SCHEMA: "python -m islandos_core.contract_schemas --json-schema",
 }
 
+# The two artifact families, so a missing file is reported against the set that should hold it.
+_ARTIFACT_NAME = {
+    LONG_FORM: re.compile(r"app_view_models\.v\d+\.json$"),
+    JSON_SCHEMA: re.compile(r"app_view_models\.v\d+\.schema\.json$"),
+}
+_NEWER_ARTIFACT = re.compile(r"app_view_models\.v(\d+)(\.schema)?\.json$")
+
 
 def _long_form_version(document: dict) -> int | None:
     value = document.get("contract_version")
@@ -96,13 +103,26 @@ def version_mismatches(
 
 def _read_artifact(path: Path, label: str) -> dict:
     if not path.exists():
-        siblings = sorted(p.name for p in path.parent.glob("app_view_models.v*.json"))
+        pattern = _ARTIFACT_NAME.get(label)
+        siblings = sorted(p.name for p in path.parent.glob("app_view_models.v*"))
+        if pattern is not None:
+            siblings = [name for name in siblings if pattern.match(name)]
         pytest.fail(
             f"{label}: {path.name} does not exist; docs/contracts holds "
-            f"{', '.join(siblings) or 'no contract file'}. "
+            f"{', '.join(siblings) or 'no file of that kind'}. "
             f"A bumped CONTRACT_VERSION must be followed by {COMMANDS.get(label, 'regeneration')}."
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _artifacts_newer_than_current(contracts_dir: Path, current: int) -> list[str]:
+    """Files naming a version above the constant: a rolled-back bump leaves them behind."""
+    newer: list[str] = []
+    for candidate in sorted(contracts_dir.glob("app_view_models.v*")):
+        match = _NEWER_ARTIFACT.search(candidate.name)
+        if match and int(match.group(1)) > current:
+            newer.append(candidate.name)
+    return newer
 
 
 def test_the_committed_artifacts_are_one_contract_at_one_version():
@@ -118,6 +138,10 @@ def test_the_committed_artifacts_are_one_contract_at_one_version():
     schema = contract_schema()
     assert long_form == schema
 
+    # The `$id` is the file's own name, so an artifact cannot claim one identity and sit under
+    # another.
+    assert json_document["$id"].endswith("/" + JSON_SCHEMA_PATH.name), json_document["$id"]
+
     # Both renderers read that same dict: the fields they emit are the fields declared there.
     assert json_schema()["$defs"]["run_request"]["required"] == [
         field["name"] for field in schema["contracts"]["run_request"]["fields"]
@@ -129,6 +153,16 @@ def test_the_committed_artifacts_are_one_contract_at_one_version():
 def test_the_generated_paths_carry_the_constant_not_a_copy():
     assert SCHEMA_PATH.name == f"app_view_models.v{CONTRACT_VERSION}.json"
     assert JSON_SCHEMA_PATH.name == f"app_view_models.v{CONTRACT_VERSION}.schema.json"
+
+
+def test_no_artifact_names_a_version_above_the_contract():
+    """A bump that was regenerated and then rolled back leaves a file nothing points at."""
+    newer = _artifacts_newer_than_current(SCHEMA_PATH.parent, CONTRACT_VERSION)
+    assert not newer, (
+        f"docs/contracts holds artifacts newer than CONTRACT_VERSION={CONTRACT_VERSION}: "
+        f"{', '.join(newer)}. Rolling a bump back means deleting the files it wrote, or keeping "
+        "the constant at the version those files name."
+    )
 
 
 @pytest.mark.parametrize("artifact", [LONG_FORM, JSON_SCHEMA, TYPESCRIPT])

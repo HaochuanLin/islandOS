@@ -396,6 +396,9 @@ pull request, so no new workflow is needed.
 - [ ] §4.1–§4.6 tables, the §4.5 artifact table and this section's file names updated; `CHANGELOG.md`
       bullet added.
 - [ ] The previous version's files left in place, not rewritten or deleted.
+- [ ] If the bump is rolled back, the files it wrote are deleted with it: the gate fails on any
+      file naming a version above `CONTRACT_VERSION`, so a reverted bump cannot leave a v4 artifact
+      behind.
 
 #### Old versions
 
