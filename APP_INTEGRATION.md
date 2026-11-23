@@ -267,7 +267,7 @@ support: the same request replays to the same `run_id`, the same manifest digest
 a replay `run_id` identifies the *request*, not the original browser session. The uuid path is untouched
 for the page itself.
 
-Two generated artifacts describe the same fields for different readers:
+Three generated artifacts describe the same fields for different readers:
 
 | File | Reader | Command |
 |---|---|---|

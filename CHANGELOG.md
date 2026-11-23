@@ -19,8 +19,10 @@ Notable project changes are recorded here. This is a research prototype; version
   name `CONTRACT_VERSION`; it is also parametrised over each single-artifact edit, so the "only changed
   one place" case is proven to fail rather than assumed. Verified two ways: raising `CONTRACT_VERSION`
   to `4` alone failed on the missing regenerated files, and copying the v3 artifacts under v4 names
-  failed naming all three stale versions; both passed again after reverting. No runtime, schema or
-  page change.
+  failed naming all three stale versions; both passed again after reverting. Repeating the first case
+  on the pull request, where only `CONTRACT_VERSION` moved, turned the `Python unit tests` gate red
+  (#1334) and the revert restored it (#1335), so the failure is the test's, not a local accident.
+  No runtime, schema or page change.
 
 - **The viewer is now a local tool, and the question is closed rather than deferred.** After the landing
   route (`GET /`), the open item was whether `frontend/application-views.html` is a local tool or a third
