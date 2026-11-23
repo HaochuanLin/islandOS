@@ -9,10 +9,13 @@ that does not exist.
 """
 
 from pathlib import Path
+import re
+import sys
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 DOC = REPO_ROOT / "APP_INTEGRATION.md"
 SESSION = REPO_ROOT / "islandos_core" / "session_dataset.py"
 PAGES = sorted((REPO_ROOT / "pages").glob("*.py"))
@@ -82,3 +85,18 @@ def test_the_document_does_not_promise_a_transport_that_does_not_exist():
     # And nothing in the repository claims to serve one.
     for candidate in ("islandos_api", "api_server", "openapi.json"):
         assert not (REPO_ROOT / candidate).exists(), f"{candidate} exists but the document says it does not"
+
+
+def test_the_deployment_section_matches_the_check_that_implements_it():
+    text = _doc()
+    section = text[text.index("## 6.") :]
+    assert "scripts/check_deployment.py" in section
+    assert "static/build_info.json" in section
+    assert "islandos_core.build_info" in section
+    assert (REPO_ROOT / "islandos_core" / "build_info.py").exists()
+    # Every exit code the script can return must be documented, and no more.
+    import check_deployment
+
+    for code in sorted(set(check_deployment.EXIT_CODES.values())):
+        assert re.search(rf"(?m)^\| {code} \|", section), f"§6 does not document exit code {code}"
+    assert "not proved" in section.lower()

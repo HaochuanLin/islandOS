@@ -224,3 +224,5 @@ node_modules/
 frontend/dist/
 *.tsbuildinfo
 
+# Build stamp written by app.py at start-up (served at /app/static/build_info.json)
+static/build_info.json
