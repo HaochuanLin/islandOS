@@ -4,6 +4,19 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The sidebar's download is now looked for until it appears, so a slow render no longer costs the full-hash
+  stamp.** `Locator.count()` answers on the spot and never waits, while the sidebar draws its caption before
+  the button beneath it, so a check that had just read the caption could find nothing there. Measured
+  2026-11-23: the same command captured the download (261 bytes, 40-character sha, `commit.basis=stamp`) at
+  13:24 and reported `not-found` at 13:47, falling back to the seven-character line as `commit.basis=rendered`.
+  Both runs said `ok` and exited 0, so the downgrade was only visible by reading the report — which is the
+  reason to remove the race rather than document it. `capture_stamp_download` now polls `count()` for up to
+  `STAMP_DOWNLOAD_WAIT_SECONDS` (five seconds) before calling the button absent, and the absent case says how
+  long it waited; a button that is already there pays nothing, so the cost lands only on the failure path.
+  `tests/test_check_deployment.py` fakes the three cases (already there, appears on the fourth look, never
+  appears) without a browser. Verified live after the change: `verdict=ok`, `basis=stamp`,
+  `reported=dbd45b2a4e8c…`, download 261 bytes.
+
 - **The default demo clock is frozen at 2026-11-22 14:00 UTC, so a default page reports one number.**
   Pages 05 and 06 used to pass `now.date()` and `now.hour` into the synthetic window; because the PV/wind
   ripple is keyed to the row index, the same code reported anywhere between `4,548.68` and `8,631.34`

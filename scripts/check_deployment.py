@@ -88,6 +88,16 @@ so ``STAMP_PATH`` answers with the front-end shell there. The download is the ro
 that works on both a self-hosted server and Community Cloud; it is read through the
 same headless session that warms the app."""
 
+STAMP_DOWNLOAD_WAIT_SECONDS = 5.0
+"""How long to keep looking for that button before calling it absent.
+
+A sidebar renders progressively, and the button is drawn after the caption the
+check has just read, so a single ``count()`` can legitimately find nothing. Five
+seconds is several times one render step, is spent only when the button is
+missing, and keeps "not yet" from being reported as "never" — the failure that
+cost a full-hash stamp and dropped the check to a seven-character caption."""
+
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0 Safari/537.36"
@@ -454,6 +464,24 @@ def _poll_sidebar(frame: object, timeout: float) -> tuple[str, str | None, bool]
         time.sleep(0.5)
 
 
+def _poll_for_button(button: object, timeout: float) -> bool:
+    """Look for the sidebar button until it is there or the wait runs out.
+
+    ``Locator.count()`` answers on the spot and never waits, so a single look races
+    the render: the app draws the caption before the download button that follows
+    it, and a check that has just read the caption can find the button missing.
+    Measured 2026-11-23: the same command captured the download at 13:24 and found
+    nothing at 13:47, and a single look has no way to tell "not yet" from "never".
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if button.count():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.1)
+
+
 def capture_stamp_download(frame: object, session: object, timeout: float = 20.0) -> dict:
     """Click the sidebar's download button and read the bytes it hands over.
 
@@ -464,14 +492,18 @@ def capture_stamp_download(frame: object, session: object, timeout: float = 20.0
     """
     result: dict = {
         "state": "not-found",
-        "reason": "no button labelled " + repr(STAMP_DOWNLOAD_LABEL),
+        "reason": (
+            "no button labelled "
+            + repr(STAMP_DOWNLOAD_LABEL)
+            + f" after {STAMP_DOWNLOAD_WAIT_SECONDS:g}s of waiting"
+        ),
         "file_name": None,
         "bytes": None,
         "document": None,
     }
     try:
         button = frame.get_by_role("button", name=STAMP_DOWNLOAD_LABEL).first
-        if not button.count():
+        if not _poll_for_button(button, STAMP_DOWNLOAD_WAIT_SECONDS):
             return result
         with session.expect_download(timeout=timeout * 1000) as download_info:
             button.click()

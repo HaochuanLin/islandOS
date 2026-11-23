@@ -577,7 +577,10 @@ build line, and writes a JSON report with `--report`. The commit is taken from w
 strongest first: the stamp served at `/app/static/build_info.json` (40 characters); failing that, the
 sidebar's download of the same document (40 characters); failing that, the rendered `build` line (seven
 characters, compared as a prefix of `--expect-commit`). `stamp.source` says `static` or `download`, and
-`commit.basis` says `stamp` or `rendered`. Exit codes:
+`commit.basis` says `stamp` or `rendered`. The download button is looked for for up to five seconds before
+it is called absent: `Locator.count()` answers on the spot and never waits, while the sidebar draws its
+caption before the button below it, so a single look can report a missing button when it is only late. Exit
+codes:
 
 | Code | Meaning |
 |---|---|

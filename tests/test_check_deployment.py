@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -482,6 +483,108 @@ class DownloadStampTests(unittest.TestCase):
                 warm_runner=self.warm(build_line=f"build {SHA[:7]} (environment)"),
             )
         self.assertEqual(report["verdict"], "render_mismatch")
+
+
+class _LateButton:
+    """A sidebar button that answers only after a few lookups, like a slow render."""
+
+    def __init__(self, looks_before_visible: int) -> None:
+        self._remaining = looks_before_visible
+        self.clicks = 0
+
+    def count(self) -> int:
+        if self._remaining > 0:
+            self._remaining -= 1
+            return 0
+        return 1
+
+    def click(self) -> None:
+        self.clicks += 1
+
+
+class _Locator:
+    def __init__(self, first: object) -> None:
+        self.first = first
+
+
+class _Frame:
+    def __init__(self, button: object) -> None:
+        self._button = button
+
+    def get_by_role(self, role: str, name: str | None = None) -> _Locator:
+        return _Locator(self._button)
+
+
+class _Download:
+    suggested_filename = "build_info.json"
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def path(self) -> str:
+        return self._path
+
+
+class _Expectation:
+    def __init__(self, download: _Download) -> None:
+        self.value = download
+
+    def __enter__(self) -> "_Expectation":
+        return self
+
+    def __exit__(self, *error: object) -> bool:
+        return False
+
+
+class _Session:
+    def __init__(self, download: _Download) -> None:
+        self._download = download
+
+    def expect_download(self, timeout: float | None = None) -> _Expectation:
+        return _Expectation(self._download)
+
+
+class StampDownloadCaptureTests(unittest.TestCase):
+    """The download used to be looked for once, which raced the sidebar render."""
+
+    def _download_at(self, path: Path) -> _Download:
+        path.write_text(json.dumps(STAMP), encoding="utf-8")
+        return _Download(str(path))
+
+    def test_a_button_that_is_already_there_is_clicked_without_a_wait(self):
+        button = _LateButton(looks_before_visible=0)
+        with tempfile.TemporaryDirectory() as directory:
+            started = time.monotonic()
+            result = check.capture_stamp_download(
+                _Frame(button), _Session(self._download_at(Path(directory) / "build_info.json"))
+            )
+            elapsed = time.monotonic() - started
+        self.assertEqual(result["state"], "captured")
+        self.assertEqual(button.clicks, 1)
+        self.assertLess(elapsed, 0.1, "a visible button must not pay the wait")
+
+    def test_a_button_that_needs_a_look_or_two_is_still_captured(self):
+        button = _LateButton(looks_before_visible=3)
+        with tempfile.TemporaryDirectory() as directory:
+            download = self._download_at(Path(directory) / "build_info.json")
+            with mock.patch.object(check, "STAMP_DOWNLOAD_WAIT_SECONDS", 1.0):
+                result = check.capture_stamp_download(_Frame(button), _Session(download))
+        self.assertEqual(result["state"], "captured")
+        self.assertEqual(result["document"]["source_commit"], SHA)
+        self.assertEqual(button.clicks, 1)
+
+    def test_a_button_that_never_appears_costs_the_wait_and_says_so(self):
+        button = _LateButton(looks_before_visible=10**6)
+        with tempfile.TemporaryDirectory() as directory:
+            download = self._download_at(Path(directory) / "build_info.json")
+            with mock.patch.object(check, "STAMP_DOWNLOAD_WAIT_SECONDS", 0.3):
+                started = time.monotonic()
+                result = check.capture_stamp_download(_Frame(button), _Session(download))
+                elapsed = time.monotonic() - started
+        self.assertEqual(result["state"], "not-found")
+        self.assertIn("waiting", result["reason"])
+        self.assertEqual(button.clicks, 0, "no click without a button")
+        self.assertGreaterEqual(elapsed, 0.3, "the wait is bounded, not skipped")
 
 
 class VerdictOrderTests(unittest.TestCase):
