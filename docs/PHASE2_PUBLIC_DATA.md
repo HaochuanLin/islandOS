@@ -29,7 +29,7 @@ OPSD's published field documentation specifies UTC timestamps and names the unde
 
 The total-wind field is preferred when present. If it is absent, the adapter uses the onshore generation field and records the exact source column. It does not add onshore and offshore values together, avoiding accidental double counting.
 
-Use a region code such as `AT` or `DE` only when the corresponding columns exist in the downloaded file. Some regions do not publish every signal. Select a smaller `required_signals` tuple when needed. Water demand is not present in this source and is not synthesized.
+Use a region code only when the corresponding columns exist in the downloaded file. In the 2020-10-06 package, `AT` identifies Austria's country-level fields. `DE_LU` identifies the Germany-Luxembourg bidding-zone fields (including load, solar, wind, and day-ahead price); it must not be described as a Germany-wide national aggregate. The `DE` country-level fields have a different coverage and should not be assumed to provide all four signals. Some regions do not publish every signal. Select a smaller `required_signals` tuple when needed. Water demand is not present in this source and is not synthesized.
 
 ## Data-quality contract
 
@@ -95,6 +95,12 @@ The canonical path selects its candidate using the same rolling-validation horiz
 For the canonical prediction-service report, `--horizon` also sets one final chronological holdout: the last N observations are removed before model selection, rolling-origin candidate evaluation, and empirical error-band calibration. Every registered canonical candidate is now forecast from the same pre-holdout history and scored on the exact same final timestamps. The report exposes `holdout_candidate_evaluations.models`, including model/version, whether it was selected by the training-only process, per-candidate MAE/RMSE/signed bias/WAPE, and timestamped forecast values. Candidate output failures are recorded under `excluded_candidates`. The actual holdout values are used only to calculate these scores; they cannot affect candidate forecasts or selection. The existing `holdout_metrics` field remains the selected model's score for compatibility. At least 72 training observations plus N holdout observations are required. This is a single historical holdout, not repeated validation across seasons, sites, or operating regimes, and the same-block comparison is descriptive rather than a deployment promotion gate. The legacy forecast report remains a separate evaluation path; do not conflate its metrics with the canonical final-holdout scores.
 
 Running the CLI on a real downloaded OPSD file is required before claiming public-data backtest results. The first verified GitHub-hosted Austria run is recorded in [OPSD_AT_BACKTEST_2026-11-21.md](OPSD_AT_BACKTEST_2026-11-21.md). It is public historical regional aggregate evidence only; it is not site validation, deployment evidence, or a customer-savings claim. Synthetic adapter/CLI tests continue to verify software behavior only.
+
+## Cross-region benchmark configuration
+
+The Phase 2 GitHub Actions backtest now runs separate jobs for `AT` and `DE_LU` against the same versioned source package. Each job independently selects its longest contiguous hourly window with all four requested signals present and valid, then applies the same forecast horizons and evaluation protocol. Artifacts and metrics remain region-specific; they are not pooled.
+
+The two regions have different geographic meanings: AT is an Austria country-level series, while DE_LU is the Germany-Luxembourg bidding-zone series. This is a public regional benchmark comparison, not a comparison of customer facilities. The matrix configuration and synthetic adapter test do not themselves establish that the second region's full-data backtest succeeded; that claim requires a completed workflow run and inspection of its artifact.
 
 ## Attribution
 
