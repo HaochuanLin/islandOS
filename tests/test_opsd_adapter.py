@@ -56,6 +56,46 @@ class TestOPSDAdapter(unittest.TestCase):
         self.assertEqual(len(result.data_sha256), 64)
         self.assertLess(result.history["price"][0], 0.0)
 
+    def test_loads_de_lu_bidding_zone_signals_with_exact_source_mapping(self):
+        columns = [
+            "utc_timestamp",
+            "DE_LU_load_actual_entsoe_transparency",
+            "DE_LU_solar_generation_actual",
+            "DE_LU_wind_generation_actual",
+            "DE_LU_price_day_ahead",
+        ]
+        temp = tempfile.NamedTemporaryFile(
+            mode="w", newline="", encoding="utf-8", suffix=".csv", delete=False
+        )
+        self.addCleanup(lambda: Path(temp.name).unlink(missing_ok=True))
+        writer = csv.DictWriter(temp, fieldnames=columns)
+        writer.writeheader()
+        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        for index in range(12):
+            writer.writerow({
+                "utc_timestamp": (start + timedelta(hours=index)).strftime("%Y-%m-%dT%H%M%SZ"),
+                "DE_LU_load_actual_entsoe_transparency": str(1000.0 + index),
+                "DE_LU_solar_generation_actual": str(float(index)),
+                "DE_LU_wind_generation_actual": str(500.0 + index),
+                "DE_LU_price_day_ahead": str(-10.0 if index == 0 else 50.0),
+            })
+        temp.close()
+
+        result = load_opsd_singleindex_csv(temp.name, "DE_LU")
+
+        self.assertEqual(result.region_code, "DE_LU")
+        self.assertEqual(result.source_columns, {
+            "load": "DE_LU_load_actual_entsoe_transparency",
+            "solar": "DE_LU_solar_generation_actual",
+            "wind": "DE_LU_wind_generation_actual",
+            "price": "DE_LU_price_day_ahead",
+        })
+        self.assertEqual(result.units, {
+            "load": "MW", "solar": "MW", "wind": "MW", "price": "EUR/MWh",
+        })
+        self.assertEqual(result.history["wind"][0], 500.0)
+        self.assertEqual(result.history["price"][0], -10.0)
+
     def test_records_exact_source_file_hash_and_normalized_history_hash(self):
         path = self.write_csv(self.make_rows(12))
         expected_file_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
