@@ -24,7 +24,7 @@ from islandos_core.app_view_models import (
 )
 from islandos_core.contract_schemas import SCHEMA_PATH, contract_schema, write_schema
 from islandos_core.flexible_tasks import DeviceTask
-from islandos_core.run_orchestration import device_task_payload
+from islandos_core.run_orchestration import device_task_payload, replay_run_request
 from islandos_core.site_inputs import SiteAssumptions, device_planner_demo_site
 from islandos_core.transport import create_server
 
@@ -157,7 +157,7 @@ def test_the_transport_serves_the_schema_and_runs_a_request():
         thread.join(timeout=5)
 
 
-def test_the_transport_replays_a_joint_optimizer_request():
+def _joint_request():
     optimizer_history = {
         "pv_power_kw": HISTORY["pv_power"], "wind_power_kw": HISTORY["wind_power"],
         "load_kw": HISTORY["essential_load"], "tariff_per_kwh": HISTORY["electricity_price"],
@@ -171,7 +171,7 @@ def test_the_transport_replays_a_joint_optimizer_request():
         battery_initial_soc=0.60, battery_min_soc=0.10, battery_max_soc=0.95,
         diesel_rated_kw=10.0, diesel_variable_cost_per_kwh=0.30,
     )
-    request = build_run_request(
+    return build_run_request(
         page="joint_resource_optimizer", site=site, timestamps=TIMESTAMPS,
         history=optimizer_history, units=optimizer_units, page_settings={},
         run_settings={
@@ -181,6 +181,10 @@ def test_the_transport_replays_a_joint_optimizer_request():
         },
         provenance="Synthetic demonstration data", source_sha256=None,
     )
+
+
+def test_the_transport_replays_a_joint_optimizer_request():
+    request = _joint_request()
     server = create_server(port=0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -368,3 +372,16 @@ def test_the_transport_refuses_an_invalid_request_with_400():
     finally:
         server.shutdown()
         thread.join(timeout=5)
+
+
+def test_the_same_joint_request_replays_to_the_same_run():
+    """A replay has no session: same request must mean same run id and same numbers."""
+    request = _joint_request()
+    first = replay_run_request(request)
+    second = replay_run_request(json.loads(json.dumps(request)))
+    assert first["result"] == second["result"]
+    assert first["result"]["run_id"] == second["result"]["run_id"]
+    assert first["result"]["run_id"].startswith("run-")
+    assert first["result"]["run_id"] != replay_run_request(
+        {**request, "run_settings": {**request["run_settings"], "currency": "EUR"}}
+    )["result"]["run_id"]

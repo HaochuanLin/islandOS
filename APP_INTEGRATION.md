@@ -253,6 +253,14 @@ committed because the browser build needs it, and `tests/test_contract_typescrip
 committed file equals `typescript_source()` byte for byte, so a renamed field cannot reach the viewer
 unnoticed. It is not a published npm package.
 
+Replay identity: the page's own 06 run mints a uuid and stamps the wall clock, so two page runs over the
+same inputs are two sessions. A replay has neither, so `replay_run_request` passes
+`deterministic_run_id("run", {"request": request})` and a fixed `REPLAY_CREATED_AT_UTC`
+(`1970-01-01T00:00:00+00:00`) into the manifest. The consequence is the claim the contract can actually
+support: the same request replays to the same `run_id`, the same manifest digest and the same numbers, and
+a replay `run_id` identifies the *request*, not the original browser session. The uuid path is untouched
+for the page itself.
+
 Still not implemented: authentication, a hosted/public endpoint, a published TypeScript package, a JSON
 Schema validator dependency, a server-side run store, and any persistence of a request beyond the caller's
 own process.
