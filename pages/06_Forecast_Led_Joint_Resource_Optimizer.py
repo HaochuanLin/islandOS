@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -30,7 +29,7 @@ from islandos_core.app_view_models import (
     build_run_request,
     build_run_result_summary,
 )
-from islandos_core.canonical_run import create_run_manifest
+from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.demo_site_history import (
     build_synthetic_site_history,
     demo_anchor_for_hour,
@@ -203,10 +202,34 @@ try:
     site_configuration_digest = hashlib.sha256(
         json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     ).hexdigest()
-    created_at = datetime.now(timezone.utc)
+    # The run's identity is derived from the inputs that define it, not from the wall clock.
+    # A page that reruns on every widget change would otherwise mint a new uuid on every
+    # keystroke, so two downloads of the same pinned window would carry different digests
+    # and a reader could not tell whether they hold the same record. The manifest's
+    # created_at is the window the run speaks for (the demo anchor for synthetic data, the
+    # last history hour for an uploaded CSV), not the moment the page was opened.
+    created_at = demo_anchor if shared_payload is None else timestamps[-1]
+    run_id = deterministic_run_id(
+        "run",
+        {
+            "dataset_sha256": dataset_digest,
+            "site_configuration_sha256": site_configuration_digest,
+            "window_end_utc": created_at.isoformat(),
+            "currency": currency,
+            "optimizer_settings": {
+                "population_size": int(population),
+                "generations": int(generations),
+                "seed": int(seed),
+            },
+            "availability": {
+                "grid_all_hours": bool(all(grid_available)),
+                "diesel_all_hours": bool(all(diesel_available)),
+            },
+        },
+    )
     run_manifest = create_run_manifest(
         project_id="streamlit-joint-resource-workspace",
-        run_id=f"run-{uuid.uuid4().hex}",
+        run_id=run_id,
         site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
         created_at_utc=created_at.isoformat(),
         dataset_sha256=dataset_digest,
