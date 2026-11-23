@@ -146,3 +146,18 @@ Anything not supported must be listed as a model gap. Do not imply that a featur
 IslandOS should recommend the lowest-lifecycle-cost design that satisfies the declared critical-load and water-service reliability target, while minimizing routine diesel. If zero routine diesel is infeasible or uneconomic, report the minimum achievable routine diesel and the binding physical constraints rather than forcing a zero result.
 
 No numeric diesel-saving, zero-diesel, payback, or investment claim is valid until the relevant experiments complete and their assumptions, outputs, and reliability results are reviewed.
+
+
+## 11. Verified current-code capability audit (2026-11-23)
+
+Inspected `optimization/milp_dispatch_optimizer.py` and `islandos_core/energy_system.py` on `main` before proposing implementation. Current verified constraints:
+
+- The MILP reference solver is capped at 168 timesteps; it cannot yet run an 8,760-hour annual optimization in one solve.
+- It supports a minimum terminal battery SOC, battery charge/discharge power and efficiency constraints, but explicitly rejects battery configurations using cycle-life capacity-fade settings.
+- It supports one aggregate flexible load with a fixed energy budget and availability window. It explicitly rejects inputs that distinguish critical and flexible load series.
+- It supports joint RO production and water-tank inventory constraints, including a terminal water inventory minimum.
+- The energy-system model can represent a piecewise-linear diesel fuel-rate curve, but the MILP solver explicitly rejects nonlinear diesel fuel curves. The existing diesel sweep therefore uses the simplified constant L/kWh assumption.
+- The inspected MILP does not include investment/capacity-expansion decision variables or CAPEX/lifecycle-cost optimization.
+- The inspected MILP does not yet implement a distinct emergency-only diesel policy/state machine; diesel is a dispatchable balancing resource subject to availability and generator constraints.
+
+Implementation consequence: do not start the annual zero-diesel or investment optimization by simply extending the current 168-hour sweep. First modularize/validate the dispatch formulation for rolling-horizon or annual operation, add explicit critical-load and emergency-reserve semantics, and introduce capacity planning/lifecycle economics as a separate layer. Keep annual chronological simulation and investment optimization distinct if a single monolithic MILP is computationally inappropriate.
