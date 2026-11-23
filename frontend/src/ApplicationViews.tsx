@@ -18,6 +18,17 @@ type Views = {
 
 const TRANSPORT = "http://127.0.0.1:8765";
 
+/**
+ * Where `/contracts` lives. When the transport serves this page, its own origin is the only one that
+ * can answer, so `--port 8799` works without editing this file. Under `npm run dev` / `preview` and
+ * from `file://` the page is not on the transport, so keep the documented default.
+ */
+function transportBases(): string[] {
+  const here = window.location.origin;
+  const sameOrigin = /^http/.test(here) && here !== TRANSPORT ? here : null;
+  return sameOrigin ? [sameOrigin, TRANSPORT] : [TRANSPORT];
+}
+
 function readViews(payload: unknown): Views {
   if (!payload || typeof payload !== "object") throw new Error("The file is not a JSON object.");
   const record = payload as Record<string, unknown>;
@@ -37,7 +48,15 @@ function readViews(payload: unknown): Views {
 }
 
 function format(value: number | null | undefined, digits: number): string {
-  return value === null || value === undefined ? "—" : Number(value).toFixed(digits);
+  if (value === null || value === undefined) return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "—";
+}
+
+function formatCount(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString() : "—";
 }
 
 function FieldTable({ title, fields }: { title: string; fields: ContractField[] }) {
@@ -84,18 +103,25 @@ function App() {
 
   async function loadContracts() {
     setStatus("loading");
-    try {
-      const response = await fetch(`${TRANSPORT}/contracts`);
-      if (!response.ok) throw new Error(`transport answered ${response.status}`);
-      setSchema((await response.json()) as ContractSchema);
-      setStatus("contracts loaded");
-    } catch (reason) {
-      setStatus("contracts unavailable");
-      setError(
-        `Could not reach ${TRANSPORT}/contracts. Start it with "python -m islandos_core.transport". ` +
-          String(reason),
-      );
+    const bases = transportBases();
+    let lastReason: unknown = null;
+    for (const base of bases) {
+      try {
+        const response = await fetch(`${base}/contracts`);
+        if (!response.ok) throw new Error(`${base}/contracts answered ${response.status}`);
+        setSchema((await response.json()) as ContractSchema);
+        setError(null);
+        setStatus("contracts loaded");
+        return;
+      } catch (reason) {
+        lastReason = reason;
+      }
     }
+    setStatus("contracts unavailable");
+    setError(
+      `Could not read /contracts from ${bases.join(" or ")}. Start it with ` +
+        `"python -m islandos_core.transport" and reload. ${String(lastReason)}`,
+    );
   }
 
   async function loadReport(event: ChangeEvent<HTMLInputElement>) {
@@ -133,7 +159,7 @@ function App() {
           <h1>Contract viewer</h1>
         </div>
         <div className="top-actions">
-          <span className="api-status">
+          <span className="api-status" aria-live="polite">
             <span className={schema ? "dot good" : "dot"} />
             {status}
           </span>
@@ -163,8 +189,17 @@ function App() {
           </div>
           <span className="tag">{views ? "VIEWS LOADED" : "NO FILE"}</span>
         </div>
-        <input type="file" accept="application/json,.json" onChange={loadReport} />
-        {error ? <p className="error">{error}</p> : null}
+        <input
+          type="file"
+          accept="application/json,.json"
+          aria-label="Report JSON file"
+          onChange={loadReport}
+        />
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>
 
       {request ? (
@@ -286,19 +321,19 @@ function App() {
           <div className="metric-grid">
             <article className="metric">
               <span>Annual load energy</span>
-              <strong>{Number(figures.annual_load_energy_kwh).toLocaleString()} kWh</strong>
+              <strong>{formatCount(figures.annual_load_energy_kwh)} kWh</strong>
             </article>
             <article className="metric">
               <span>Annual energy cost</span>
-              <strong>{Number(figures.annual_energy_cost).toFixed(2)}</strong>
+              <strong>{format(figures.annual_energy_cost, 2)}</strong>
             </article>
             <article className="metric">
               <span>Equipment operating cost</span>
-              <strong>{Number(figures.annual_equipment_operating_cost).toFixed(2)}</strong>
+              <strong>{format(figures.annual_equipment_operating_cost, 2)}</strong>
             </article>
             <article className="metric">
               <span>Diesel run hours</span>
-              <strong>{Number(figures.annual_diesel_run_hours).toFixed(0)} h</strong>
+              <strong>{format(figures.annual_diesel_run_hours, 0)} h</strong>
             </article>
           </div>
           <p>{String(annual.scope ?? "")}</p>
@@ -309,6 +344,10 @@ function App() {
         <>
           <FieldTable title="run_request" fields={schema.contracts.run_request.fields} />
           <FieldTable title="run_result_summary" fields={schema.contracts.run_result_summary.fields} />
+          <FieldTable
+            title="device_flexibility_summary"
+            fields={schema.contracts.device_flexibility_summary.fields}
+          />
           <FieldTable title="annual_projection" fields={schema.contracts.annual_projection.fields} />
         </>
       ) : null}
