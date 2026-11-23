@@ -8,6 +8,7 @@ from islandos_core.session_dataset import (
     SESSION_DATASET_KEY,
     clear_session_dataset,
     get_session_dataset,
+    read_session_dataset,
     store_session_dataset,
 )
 
@@ -55,4 +56,31 @@ def test_clear_session_dataset_removes_only_handoff_record():
     clear_session_dataset(state)
 
     assert get_session_dataset(state) is None
+    assert state == {"keep": "value"}
+
+
+def test_read_session_dataset_returns_the_verified_record():
+    state = {}
+    store_session_dataset(
+        state, file_name="site.csv", payload=b"csv", source_type="customer_provided"
+    )
+
+    record, error = read_session_dataset(state)
+
+    assert error is None
+    assert record is not None and record["payload"] == b"csv"
+
+
+def test_read_session_dataset_discards_a_tampered_record():
+    state = {"keep": "value"}
+    store_session_dataset(
+        state, file_name="site.csv", payload=b"original", source_type="customer_provided"
+    )
+    state[SESSION_DATASET_KEY]["payload"] = b"modified"
+
+    record, error = read_session_dataset(state)
+
+    assert record is None
+    assert "SHA-256" in error
+    assert SESSION_DATASET_KEY not in state
     assert state == {"keep": "value"}

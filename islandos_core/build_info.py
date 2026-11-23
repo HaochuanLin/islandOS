@@ -25,6 +25,9 @@ import json
 import os
 import re
 import subprocess
+import tempfile
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
@@ -55,6 +58,11 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 _SHORT_LENGTH = 7
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+_WRITE_LOCK = threading.Lock()
+"""Serialise the rename, not the write: Windows refuses a replace while another
+thread is renaming the same target. The lock is per process, which is the unit
+that runs one Streamlit app; a second process still has its own temporary."""
 
 
 def normalise_commit(value: object) -> str | None:
@@ -187,9 +195,30 @@ def write_stamp(stamp: Mapping[str, object], path: Path | str | None = None) -> 
     """
     target = Path(path) if path is not None else stamp_path()
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(target.name + ".tmp")
-    temporary.write_bytes(serialise_stamp(stamp))
-    os.replace(temporary, target)
+    # A fixed ".tmp" name lets two writers truncate each other's buffer before
+    # either renames it, so each write gets its own temporary in the same
+    # directory: ``os.replace`` is atomic only when the source is private.
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=target.name + ".", suffix=".tmp", dir=str(target.parent)
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(serialise_stamp(stamp))
+        with _WRITE_LOCK:
+            for attempt in range(5):
+                try:
+                    os.replace(temporary_name, target)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.01)
+    except BaseException:
+        try:
+            os.unlink(temporary_name)
+        except OSError:
+            pass
+        raise
     return target
 
 
