@@ -454,6 +454,23 @@ def _poll_sidebar(frame: object, timeout: float) -> tuple[str, str | None, bool]
         time.sleep(0.5)
 
 
+def find_stamp_button(frame: object, timeout: float = 10.0, interval: float = 0.25) -> object | None:
+    """Wait for the sidebar's download button, which mounts after its caption.
+
+    Streamlit renders the build line before the button beside it, and a read taken
+    between the two sees no button at all. Polling keeps that race from downgrading
+    a byte-level stamp to the seven characters in the sidebar text.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        button = frame.get_by_role("button", name=STAMP_DOWNLOAD_LABEL).first
+        if button.count():
+            return button
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(interval)
+
+
 def capture_stamp_download(frame: object, session: object, timeout: float = 20.0) -> dict:
     """Click the sidebar's download button and read the bytes it hands over.
 
@@ -470,8 +487,13 @@ def capture_stamp_download(frame: object, session: object, timeout: float = 20.0
         "document": None,
     }
     try:
-        button = frame.get_by_role("button", name=STAMP_DOWNLOAD_LABEL).first
-        if not button.count():
+        button = find_stamp_button(frame, timeout=min(10.0, timeout))
+        if button is None:
+            result["reason"] = (
+                "no button labelled "
+                + repr(STAMP_DOWNLOAD_LABEL)
+                + f" within {min(10.0, timeout):g}s"
+            )
             return result
         with session.expect_download(timeout=timeout * 1000) as download_info:
             button.click()

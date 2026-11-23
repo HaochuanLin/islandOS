@@ -484,6 +484,66 @@ class DownloadStampTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "render_mismatch")
 
 
+class StampButtonTests(unittest.TestCase):
+    """The download button mounts after its caption; the read must wait for it."""
+
+    class Button:
+        def __init__(self):
+            self.clicks = 0
+
+        def count(self):
+            return 1
+
+        def click(self):
+            self.clicks += 1
+
+    class Frame:
+        def __init__(self, appear_after):
+            self.appear_after = appear_after
+            self.reads = 0
+            self.button = StampButtonTests.Button()
+
+        def get_by_role(self, role, name):
+            self.reads += 1
+            visible = self.reads >= self.appear_after
+            return StampButtonTests.Locator(self.button, visible)
+
+    class Locator:
+        def __init__(self, button, visible):
+            self.button = button
+            self.visible = visible
+
+        @property
+        def first(self):
+            return self
+
+        def count(self):
+            return 1 if self.visible else 0
+
+    def test_a_button_that_mounts_late_is_still_found(self):
+        frame = self.Frame(appear_after=3)
+        with mock.patch.object(check.time, "sleep") as sleep:
+            button = check.find_stamp_button(frame, timeout=10.0, interval=0.01)
+        self.assertIsNotNone(button)
+        self.assertEqual(frame.reads, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_a_button_that_never_mounts_gives_up_at_the_deadline(self):
+        frame = self.Frame(appear_after=99)
+        with mock.patch.object(check.time, "sleep"):
+            button = check.find_stamp_button(frame, timeout=0.0, interval=0.01)
+        self.assertIsNone(button)
+        self.assertEqual(frame.reads, 1)
+
+    def test_a_missing_button_reports_how_long_it_waited(self):
+        frame = self.Frame(appear_after=99)
+        with mock.patch.object(check.time, "sleep"):
+            result = check.capture_stamp_download(frame, session=object(), timeout=0.0)
+        self.assertEqual(result["state"], "not-found")
+        self.assertIn("within 0s", result["reason"])
+        self.assertEqual(frame.button.clicks, 0)
+
+
 class VerdictOrderTests(unittest.TestCase):
     def test_a_broken_page_is_named_before_a_missing_stamp(self):
         routes = routes_with_stamp(pages={"/page-a": (404, "text/plain", b"missing")})
