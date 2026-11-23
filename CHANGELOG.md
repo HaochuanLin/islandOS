@@ -22,6 +22,20 @@ Notable project changes are recorded here. This is a research prototype; version
   failed naming all three stale versions; both passed again after reverting. No runtime, schema or
   page change.
 
+- **The viewer is now a local tool, and the question is closed rather than deferred.** After the landing
+  route (`GET /`), the open item was whether `frontend/application-views.html` is a local tool or a third
+  console page. It is a local tool: it reads a downloaded report and `GET /contracts` on loopback, holds
+  no session, has no `/api` proxy, and writes nothing. Option B — folding it into the console — is
+  recorded as rejected, because it would add session plumbing and an auth-shaped error path to a page that
+  never uses identity, and a route implies a hosted service this is not. The single entry is a read-only
+  footer link in the console (`Contract viewer (read only) ↗`); sign-in is unchanged. `frontend/README.md`
+  now states how to open it (one build + one transport command, or the footer link), what it shows, and
+  what it does not: **the viewer does not compute and does not write**. The same pass made the 09 branch
+  of the page honest — a `device_flexibility_planner` download renders its device schedule summary
+  (critical/flexible energy, peak task demand, charge, earliest-feasible reference) instead of reading
+  05/06-only fields, and `frontend/src/ApplicationViews.tsx` was expanded from one minified line into
+  readable JSX without changing what any number means.
+
 - **The viewer now has a landing route: one command, one origin.** `frontend/application-views.html` could
   only be opened from the Vite dev server or from disk, and from disk its `/contracts` fetch was a
   cross-origin request — the reason `GET /contracts` still carries `Access-Control-Allow-Origin: *`.
