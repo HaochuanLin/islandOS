@@ -3,9 +3,11 @@
 # the build stamp is written (islandos_core/build_info.py). It is only usable
 # self-hosted. Streamlit Community Cloud does not serve that route — measured
 # 2026-11-23: /app/static/build_info.json answered with the same front-end shell
-# after the app was restarted, while the sidebar caption named the commit — so
-# on Cloud the commit is read from the sidebar line, not from this file. See
-# APP_INTEGRATION.md §7.1–§7.3 before expecting a served stamp.
+# after the app was restarted, while the sidebar rendered "build <sha> (git)" —
+# so on Cloud the commit is read from the sidebar instead: the JSON download
+# beside the caption when one is offered, otherwise the caption line itself,
+# never this file. See APP_INTEGRATION.md §7.1–§7.3 before expecting a stamp
+# served from here.
 [server]
 enableStaticServing = true
 

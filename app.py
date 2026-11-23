@@ -43,13 +43,15 @@ st.set_page_config(
 
 @st.cache_data(ttl=300, show_spinner=False)
 def deployment_stamp() -> dict:
-    """The build stamp for this deployment, also published as a static file.
+    """The build stamp for this deployment, written to ``static/build_info.json``.
 
-    ``/app/static/build_info.json`` is the only route on the hosted app that
-    returns the app's own data instead of the front-end shell, so it is what
-    ``scripts/check_deployment.py`` reads. The write is best-effort: a read-only
-    deployment still renders the page, and the sidebar line is then the only
-    place the stamp appears.
+    A self-hosted run serves that file at ``/app/static/build_info.json``;
+    Community Cloud answers that route with the front-end shell, so the sidebar
+    renders the same stamp as a caption plus a JSON download, and
+    ``scripts/check_deployment.py`` reads the file where it is served and the
+    download where it is not. The write is best-effort: a read-only deployment
+    still renders the page, and the stamp still reaches the reader through the
+    sidebar.
     """
     stamp = build_info.build_stamp()
     try:
