@@ -7,10 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
-import uuid
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
@@ -31,7 +29,11 @@ from islandos_core.app_view_models import (
     build_run_request,
     build_run_result_summary,
 )
-from islandos_core.canonical_run import create_run_manifest
+from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
+from islandos_core.demo_site_history import (
+    build_synthetic_site_history,
+    demo_anchor_for_hour,
+)
 from islandos_core.annual_operating_basis import (
     annualise_run_summary,
     verify_annual_operating_basis,
@@ -55,6 +57,8 @@ st.info(
     "This page performs offline planning only: it does not connect to live telemetry or write commands to equipment."
 )
 
+now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
 with st.sidebar:
     st.subheader("Site and asset assumptions")
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
@@ -75,8 +79,22 @@ with st.sidebar:
     population = st.slider("Search population", 4, 40, 12, 4)
     generations = st.slider("Search generations", 1, 20, 5)
     seed = st.number_input("Reproducible search seed", min_value=0, value=20261113, step=1)
+    st.divider()
+    st.subheader("Demo clock")
+    demo_date = st.date_input(
+        "Demo date (UTC)", value=now.date(), key="demo_date_joint_optimizer",
+        help="The date the synthetic window ends on. Defaults to today.",
+    )
+    demo_hour = st.slider(
+        "Demo clock (UTC hour)", 0, 23, now.hour, key="demo_clock_hour_joint_optimizer",
+        help=(
+            "Pins the synthetic default history to this UTC hour so a recorded annual "
+            "figure can be reproduced. It has no effect on an uploaded CSV."
+        ),
+    )
+    st.caption("Synthetic default only; an uploaded CSV carries its own timestamps.")
 
-now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+demo_anchor = demo_anchor_for_hour(now, int(demo_hour), demo_date=demo_date)
 source = "Synthetic demonstration data"
 shared_payload = None
 shared_name = "session-shared CSV"
@@ -98,19 +116,26 @@ if shared_payload is not None:
     source = f"{prefix} CSV: {site.source_name} (not independently verified)"
     source_hash = site.source_sha256
 else:
-    timestamps = [now - timedelta(hours=167 - i) for i in range(168)]
-    values = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
-    for i, stamp in enumerate(timestamps):
-        hour = stamp.hour
-        solar = max(0.0, 30.0 * math.sin(math.pi * (hour - 6) / 12.0))
-        values["pv_power"].append(min(pv_capacity, solar * (0.86 + 0.08 * math.sin(i * 0.17))))
-        values["wind_power"].append(min(wind_capacity, 8.0 + 3.0 * math.sin(i * 0.21 + 0.7)))
-        values["essential_load"].append(20.0 + 4.0 * (hour in range(17, 23)) + 2.0 * (hour in range(7, 10)))
-        values["electricity_price"].append(0.08 if hour < 6 else 0.27 if hour in range(17, 22) else 0.16)
+    # The default window is synthetic and its anchor is the demo clock, not the
+    # wall clock; the builder takes that anchor as an argument so a test can pin it.
+    synthetic = build_synthetic_site_history(
+        demo_anchor, pv_rated_kw=float(pv_capacity), wind_rated_kw=float(wind_capacity)
+    )
+    timestamps = list(synthetic.timestamps)
+    values = {
+        "pv_power": list(synthetic.pv_power_kw),
+        "wind_power": list(synthetic.wind_power_kw),
+        "essential_load": list(synthetic.load_kw),
+        "electricity_price": list(synthetic.tariff_per_kwh),
+    }
     source_hash = None
 
 st.caption(f"Data provenance: {source}")
-st.caption(f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} ({len(timestamps)} hourly rows)")
+demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
+st.caption(
+    f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} "
+    f"({len(timestamps)} hourly rows){demo_note}"
+)
 
 signal_history = {
     "pv_power_kw": values["pv_power"],
@@ -177,10 +202,34 @@ try:
     site_configuration_digest = hashlib.sha256(
         json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     ).hexdigest()
-    created_at = datetime.now(timezone.utc)
+    # The run's identity is derived from the inputs that define it, not from the wall clock.
+    # A page that reruns on every widget change would otherwise mint a new uuid on every
+    # keystroke, so two downloads of the same pinned window would carry different digests
+    # and a reader could not tell whether they hold the same record. The manifest's
+    # created_at is the window the run speaks for (the demo anchor for synthetic data, the
+    # last history hour for an uploaded CSV), not the moment the page was opened.
+    created_at = demo_anchor if shared_payload is None else timestamps[-1]
+    run_id = deterministic_run_id(
+        "run",
+        {
+            "dataset_sha256": dataset_digest,
+            "site_configuration_sha256": site_configuration_digest,
+            "window_end_utc": created_at.isoformat(),
+            "currency": currency,
+            "optimizer_settings": {
+                "population_size": int(population),
+                "generations": int(generations),
+                "seed": int(seed),
+            },
+            "availability": {
+                "grid_all_hours": bool(all(grid_available)),
+                "diesel_all_hours": bool(all(diesel_available)),
+            },
+        },
+    )
     run_manifest = create_run_manifest(
         project_id="streamlit-joint-resource-workspace",
-        run_id=f"run-{uuid.uuid4().hex}",
+        run_id=run_id,
         site_ref="customer-uploaded-site" if shared_payload is not None else "synthetic-demo-site",
         created_at_utc=created_at.isoformat(),
         dataset_sha256=dataset_digest,
@@ -367,6 +416,15 @@ try:
             a2.metric(f"Annual energy cost ({currency})", f"{figures['annual_energy_cost']:,.2f}")
             a3.metric(f"Annual equipment operating cost ({currency})", f"{figures['annual_equipment_operating_cost']:,.2f}")
             a4.metric("Annual diesel run hours", f"{figures['annual_diesel_run_hours']:,.0f} h")
+            st.caption(
+                f"This projection belongs to the {target_timestamps[0].isoformat()} → "
+                f"{target_timestamps[-1].isoformat()} window."
+                + (
+                    f" Demo clock pin {int(demo_hour):02d}:00 UTC; a different hour projects "
+                    "a different day and a different annual cost."
+                    if shared_payload is None else ""
+                )
+            )
             st.caption(
                 f"Assumption: {annual_view['basis']['days_equivalent_per_year']} simulated day(s) per year "
                 f"({annual_view['basis']['hours_equivalent_per_year']} hours), each standing for the "
