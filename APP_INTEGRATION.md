@@ -355,7 +355,45 @@ these three.
 
 ---
 
-## 6. What "deployed" can and cannot prove
+## 6. The demo clock: why two runs disagree, and how to get a number back
+
+Pages 05 and 06 both open on a synthetic 168-hour history. Until this change that history was anchored to
+`datetime.now(timezone.utc)`, and the PV/wind ripple is keyed to the row index, so opening the page one
+hour later moves the 24-hour day across the ripple. The load total stays the same; the projected cost
+does not. That is why the same 06 page was recorded at `7,709.55 USD/year` and later at `5,332.57` with
+no formula change.
+
+Both pages now carry a **Demo clock** in the sidebar:
+
+- `Demo date (UTC)` defaults to today, `Demo clock (UTC hour)` defaults to the current UTC hour. The
+  defaults reproduce the old live behaviour exactly; neither control freezes anything.
+- The controls only touch the synthetic default. An uploaded CSV supplies its own timestamps, and the
+  clock is ignored.
+- 06's annual caption names the 24-hour window the projection belongs to, and the history caption names
+  the pin. 05's history caption names the pin too.
+- The pinned window enters the run request as `history.timestamps_utc`, so a downloaded report carries
+  the timestamps a replay needs. No contract field was added and the schema version did not move.
+
+**06 is a function of the hour.** Its generator has no weekday term, so pinning `14` gives
+`7,709.55` and pinning `2` gives `5,332.57` on any date, with `186,150 kWh` unchanged. Pin the date only
+to make the printed window stable.
+
+**05 is a function of the date and the hour.** Its load formula carries `1.2 * (day < 5)`, so the
+weekday mix inside the 168-hour window matters. Pinning `2026-11-22 14:00Z` reproduces the recorded
+`17.93 USD` (`17.931016` before rounding). On `2026-11-23` the same hour gives `19.91`, not because the
+code moved but because the window now contains a different set of weekdays; a scan of 2026-11-09…30
+shows `17.931016` on the dates whose window matches (11-15, 11-22, 11-29) and other values elsewhere.
+This is why the demo clock carries a date as well as an hour, and why `tests/test_demo_clock.py` pins
+both before asserting the recorded figure.
+
+What this proves: a recorded demo number can be reproduced from the controls, and the difference between
+two recorded runs is a difference of input window, not of formula. What it does not prove: that the demo
+figure is a property of the site. It is still synthetic, still unvalidated, and still moves if the
+defaults are left live.
+
+---
+
+## 7. What "deployed" can and cannot prove
 
 The deployed artifact is the Streamlit Community Cloud app that builds from `main`:
 
@@ -363,9 +401,12 @@ The deployed artifact is the Streamlit Community Cloud app that builds from `mai
 - `https://islandos.streamlit.app/Forecast_Led_Joint_Resource_Optimizer`
 - `https://islandos.streamlit.app/Device_Flexibility_Planner`
 
-**Can be shown from outside:** each page URL answers, the app renders the same numbers the tests pin, and
-the report a page lets you download states `schema_version: 3` and carries `application_views` with the
-contract's key set — which a stock validator checks against `docs/contracts/app_view_models.v3.schema.json`.
+**Can be shown from outside:** each page URL answers, the app renders the numbers its inputs imply — for
+05 and 06 that includes the Demo clock date and hour, which default to "today, now" — and the report a
+page lets you download states `schema_version: 3` and carries `application_views` with the contract's
+key set — which a stock validator checks against `docs/contracts/app_view_models.v3.schema.json`.
+A recorded demo figure is reproducible only together with the pin that produced it; the unpinned default
+is live and changes with the calendar.
 `.github/workflows/hosted-app-health.yml` checks reachability on a schedule.
 
 **Cannot be shown from outside:** which commit the deployment is running. The public page does not expose a

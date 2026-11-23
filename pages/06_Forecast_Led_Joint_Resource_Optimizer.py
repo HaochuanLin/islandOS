@@ -31,7 +31,10 @@ from islandos_core.app_view_models import (
     build_run_result_summary,
 )
 from islandos_core.canonical_run import create_run_manifest
-from islandos_core.demo_site_history import build_synthetic_site_history
+from islandos_core.demo_site_history import (
+    build_synthetic_site_history,
+    demo_anchor_for_hour,
+)
 from islandos_core.annual_operating_basis import (
     annualise_run_summary,
     verify_annual_operating_basis,
@@ -55,6 +58,8 @@ st.info(
     "This page performs offline planning only: it does not connect to live telemetry or write commands to equipment."
 )
 
+now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
 with st.sidebar:
     st.subheader("Site and asset assumptions")
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
@@ -75,8 +80,22 @@ with st.sidebar:
     population = st.slider("Search population", 4, 40, 12, 4)
     generations = st.slider("Search generations", 1, 20, 5)
     seed = st.number_input("Reproducible search seed", min_value=0, value=20261113, step=1)
+    st.divider()
+    st.subheader("Demo clock")
+    demo_date = st.date_input(
+        "Demo date (UTC)", value=now.date(), key="demo_date_joint_optimizer",
+        help="The date the synthetic window ends on. Defaults to today.",
+    )
+    demo_hour = st.slider(
+        "Demo clock (UTC hour)", 0, 23, now.hour, key="demo_clock_hour_joint_optimizer",
+        help=(
+            "Pins the synthetic default history to this UTC hour so a recorded annual "
+            "figure can be reproduced. It has no effect on an uploaded CSV."
+        ),
+    )
+    st.caption("Synthetic default only; an uploaded CSV carries its own timestamps.")
 
-now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+demo_anchor = demo_anchor_for_hour(now, int(demo_hour), demo_date=demo_date)
 source = "Synthetic demonstration data"
 shared_payload = None
 shared_name = "session-shared CSV"
@@ -98,10 +117,10 @@ if shared_payload is not None:
     source = f"{prefix} CSV: {site.source_name} (not independently verified)"
     source_hash = site.source_sha256
 else:
-    # The default window is synthetic and its anchor is the run hour; the builder
-    # takes that anchor as an argument so a caller (or a test) can pin it.
+    # The default window is synthetic and its anchor is the demo clock, not the
+    # wall clock; the builder takes that anchor as an argument so a test can pin it.
     synthetic = build_synthetic_site_history(
-        now, pv_rated_kw=float(pv_capacity), wind_rated_kw=float(wind_capacity)
+        demo_anchor, pv_rated_kw=float(pv_capacity), wind_rated_kw=float(wind_capacity)
     )
     timestamps = list(synthetic.timestamps)
     values = {
@@ -113,7 +132,11 @@ else:
     source_hash = None
 
 st.caption(f"Data provenance: {source}")
-st.caption(f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} ({len(timestamps)} hourly rows)")
+demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
+st.caption(
+    f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} "
+    f"({len(timestamps)} hourly rows){demo_note}"
+)
 
 signal_history = {
     "pv_power_kw": values["pv_power"],
@@ -370,6 +393,15 @@ try:
             a2.metric(f"Annual energy cost ({currency})", f"{figures['annual_energy_cost']:,.2f}")
             a3.metric(f"Annual equipment operating cost ({currency})", f"{figures['annual_equipment_operating_cost']:,.2f}")
             a4.metric("Annual diesel run hours", f"{figures['annual_diesel_run_hours']:,.0f} h")
+            st.caption(
+                f"This projection belongs to the {target_timestamps[0].isoformat()} → "
+                f"{target_timestamps[-1].isoformat()} window."
+                + (
+                    f" Demo clock pin {int(demo_hour):02d}:00 UTC; a different hour projects "
+                    "a different day and a different annual cost."
+                    if shared_payload is None else ""
+                )
+            )
             st.caption(
                 f"Assumption: {annual_view['basis']['days_equivalent_per_year']} simulated day(s) per year "
                 f"({annual_view['basis']['hours_equivalent_per_year']} hours), each standing for the "

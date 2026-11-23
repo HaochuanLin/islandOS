@@ -1,7 +1,7 @@
 """The default window must be a function of its anchor, not of the host clock."""
 
 import ast
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -9,6 +9,7 @@ import pytest
 from islandos_core.demo_site_history import (
     SYNTHETIC_HISTORY_HOURS,
     build_synthetic_site_history,
+    demo_anchor_for_hour,
 )
 
 MODULE = Path(__file__).resolve().parents[1] / "islandos_core" / "demo_site_history.py"
@@ -71,3 +72,47 @@ def test_the_builder_does_not_read_the_wall_clock():
         and node.func.attr in {"now", "utcnow", "today"}
     ]
     assert clock_calls == []
+
+
+def test_the_default_demo_hour_reproduces_the_unpinned_window():
+    now = datetime(2026, 11, 22, 5, 37, tzinfo=timezone.utc)
+    # The pages truncate `now` before building, so passing its own hour must change
+    # nothing: the control is a dial whose default is still the live clock.
+    assert demo_anchor_for_hour(now, now.hour) == now.replace(
+        minute=0, second=0, microsecond=0
+    )
+
+
+def test_a_pinned_hour_is_applied_to_todays_date_without_reading_the_clock():
+    now = datetime(2026, 11, 22, 5, 37, tzinfo=timezone.utc)
+    assert demo_anchor_for_hour(now, 14) == datetime(2026, 11, 22, 14, tzinfo=timezone.utc)
+    # A dial may point at an hour that has not happened today; that is the point of
+    # reproducing a recorded 14:00 window at 05:00.
+    assert demo_anchor_for_hour(now, 2) == datetime(2026, 11, 22, 2, tzinfo=timezone.utc)
+
+
+def test_a_pinned_date_is_used_verbatim():
+    now = datetime(2026, 11, 23, 5, 37, tzinfo=timezone.utc)
+    assert demo_anchor_for_hour(now, 14, demo_date=date(2026, 11, 15)) == datetime(
+        2026, 11, 15, 14, tzinfo=timezone.utc
+    )
+
+
+@pytest.mark.parametrize("hour", [-1, 24, True, 14.5, "14"])
+def test_an_out_of_range_demo_hour_is_refused(hour):
+    with pytest.raises(ValueError, match="0 to 23"):
+        demo_anchor_for_hour(datetime(2026, 11, 22, 5, tzinfo=timezone.utc), hour)
+
+
+def test_a_datetime_is_refused_where_a_date_is_expected():
+    with pytest.raises(ValueError, match="not a datetime"):
+        demo_anchor_for_hour(
+            datetime(2026, 11, 22, 5, tzinfo=timezone.utc),
+            14,
+            demo_date=datetime(2026, 11, 22, 5, tzinfo=timezone.utc),
+        )
+
+
+def test_the_demo_anchor_requires_an_aware_timestamp():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        demo_anchor_for_hour(datetime(2026, 11, 22, 5), 14)

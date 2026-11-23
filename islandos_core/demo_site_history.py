@@ -10,19 +10,53 @@ does not. ``tests`` and the work log both found this the hard way — 7,709.55 a
 
 This module keeps the numbers verbatim and makes the anchor an argument instead of
 an inheritance from the wall clock. It does not decide what the anchor should be:
-the page still passes "now" by default, and a caller that wants a repeatable
-demonstration can pass a fixed hour. Nothing here writes to a device, and nothing
-here is a site measurement.
+the page passes the demo-clock hour (current UTC hour by default), and a reader
+who wants a recorded number back pins that hour. Nothing here writes to a device,
+and nothing here is a site measurement.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import math
 
 #: The page's historical window: seven days of hourly rows ending at the anchor.
 SYNTHETIC_HISTORY_HOURS = 168
+
+
+def demo_anchor_for_hour(
+    now_utc: datetime,
+    demo_hour: int,
+    *,
+    demo_date: date | None = None,
+) -> datetime:
+    """Return ``demo_date`` (today by default) at ``demo_hour`` UTC, truncated to the hour.
+
+    The demo clock is a dial, not a clock: a selected date and hour are applied
+    literally, even when that instant has not happened yet. Passing the defaults
+    (``now_utc.date()`` and ``now_utc.hour``) therefore reproduces the unpinned
+    window exactly, because the pages already truncate ``now`` to the hour.
+
+    Page 05's synthetic load carries a weekday term, so its 24-hour cost depends on
+    the date as well as the hour; page 06 has no weekday term and only needs the hour.
+    The date argument exists so 05 can pin both and still default to live.
+    """
+    if not isinstance(now_utc, datetime):
+        raise ValueError("now_utc must be a datetime")
+    if now_utc.tzinfo is None or now_utc.utcoffset() is None:
+        raise ValueError("now_utc must be timezone-aware")
+    if isinstance(demo_hour, bool) or not isinstance(demo_hour, int):
+        raise ValueError("demo_hour must be an integer from 0 to 23")
+    if not 0 <= demo_hour <= 23:
+        raise ValueError("demo_hour must be an integer from 0 to 23")
+    if demo_date is None:
+        demo_date = now_utc.astimezone(timezone.utc).date()
+    if isinstance(demo_date, datetime) or not isinstance(demo_date, date):
+        raise ValueError("demo_date must be a date, not a datetime")
+    return datetime(
+        demo_date.year, demo_date.month, demo_date.day, demo_hour, tzinfo=timezone.utc
+    )
 
 
 @dataclass(frozen=True)
