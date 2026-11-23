@@ -4,6 +4,19 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **The default demo clock is frozen at 2026-11-22 14:00 UTC, so a default page reports one number.**
+  Pages 05 and 06 used to pass `now.date()` and `now.hour` into the synthetic window; because the PV/wind
+  ripple is keyed to the row index, the same code reported anywhere between `4,548.68` and `8,631.34`
+  depending on when it was opened, with the `186,150 kWh` annual energy unchanged. The defaults now come
+  from `islandos_core/demo_clock_defaults.py` — a new module on purpose: a running Streamlit process keeps
+  imported modules in `sys.modules`, so editing `demo_site_history.py` would not take effect until a
+  restart, while a new module is imported fresh. Both controls stay adjustable; moving either one
+  reproduces another window. Uploaded CSVs are untouched: they carry their own timestamps and the demo
+  clock is ignored on that branch. Default screen now reads `7,709.55` on 06 and `17.93 USD` on 05 at any
+  hour; `tests/test_demo_clock.py` asserts both the widget defaults and those numbers, alongside the
+  existing pins at 14:00Z and 02:00Z. `APP_INTEGRATION.md` §6 records the new default and why the constant
+  lives in its own module.
+
 - **The hosted app now hands its stamp over as a download, so the commit is proved from bytes rather than a
   seven-character caption.** The two entries below established that Community Cloud never serves
   `/app/static/build_info.json`, and settled for reading `build 46d145a (git)` off the sidebar. That is a

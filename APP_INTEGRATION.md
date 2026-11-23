@@ -451,10 +451,15 @@ hour later moves the 24-hour day across the ripple. The load total stays the sam
 does not. That is why the same 06 page was recorded at `7,709.55 USD/year` and later at `5,332.57` with
 no formula change.
 
-Both pages now carry a **Demo clock** in the sidebar:
+Both pages now carry a **Demo clock** in the sidebar, and its default position is frozen:
 
-- `Demo date (UTC)` defaults to today, `Demo clock (UTC hour)` defaults to the current UTC hour. The
-  defaults reproduce the old live behaviour exactly; neither control freezes anything.
+- `Demo date (UTC)` defaults to **2026-11-22** and `Demo clock (UTC hour)` to **14** — the window the
+  recorded `7,709.55` was measured at. Both controls stay adjustable, so another hour is one move away.
+  The constants live in `islandos_core/demo_clock_defaults.py` (a new module, so a running Streamlit
+  process imports it fresh rather than keeping a cached copy of an edited one).
+- Because the default no longer follows the wall clock, the default screen reports one number: `7,709.55`
+  on 06 and `17.93 USD` on 05, at any time of day. The previous behaviour — the same code reporting a
+  different figure depending on the hour it was opened — is what the range `4,548.68–8,631.34` recorded.
 - The controls only touch the synthetic default. An uploaded CSV supplies its own timestamps, and the
   clock is ignored.
 - 06's annual caption names the 24-hour window the projection belongs to, and the history caption names
@@ -476,8 +481,9 @@ both before asserting the recorded figure.
 
 What this proves: a recorded demo number can be reproduced from the controls, and the difference between
 two recorded runs is a difference of input window, not of formula. What it does not prove: that the demo
-figure is a property of the site. It is still synthetic, still unvalidated, and still moves if the
-defaults are left live.
+figure is a property of the site. It is still synthetic, still unvalidated; the default is now fixed so it
+no longer drifts with the wall clock, but the number remains a property of the synthetic window, not of a
+real site.
 
 ---
 

@@ -31,6 +31,7 @@ from islandos_core.site_inputs import (
 from islandos_core.app_view_models import build_run_request, build_run_result_summary
 from islandos_core.customer_dashboard import parse_customer_history_csv
 from islandos_core.demo_site_history import demo_anchor_for_hour
+from islandos_core.demo_clock_defaults import DEMO_CLOCK_DEFAULT_DATE, DEMO_CLOCK_DEFAULT_HOUR
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.session_dataset import clear_session_dataset, get_session_dataset
 from islandos_core.forecast_engine import forecast_signals
@@ -95,20 +96,24 @@ with st.sidebar:
     st.divider()
     st.subheader("Demo clock")
     demo_date = st.date_input(
-        "Demo date (UTC)", value=now.date(), key="demo_date_dashboard",
+        "Demo date (UTC)", value=DEMO_CLOCK_DEFAULT_DATE, key="demo_date_dashboard",
         help=(
-            "The date the synthetic window ends on. Defaults to today. The load "
-            "formula carries a weekday term, so the date matters here as well as the hour."
+            "The date the synthetic window ends on. Defaults to 2026-11-22, frozen so "
+            "the default screen is reproducible; the load formula carries a weekday "
+            "term, so the date matters here as well as the hour."
         ),
     )
     demo_hour = st.slider(
-        "Demo clock (UTC hour)", 0, 23, now.hour, key="demo_clock_hour_dashboard",
+        "Demo clock (UTC hour)", 0, 23, DEMO_CLOCK_DEFAULT_HOUR, key="demo_clock_hour_dashboard",
         help=(
             "Pins the synthetic default history to this UTC hour so a recorded cost "
             "can be reproduced. It has no effect on an uploaded CSV."
         ),
     )
-    st.caption("Synthetic default only; an uploaded CSV carries its own timestamps.")
+    st.caption(
+        "Synthetic default only, frozen at 2026-11-22 14:00 UTC; move either control "
+        "to reproduce another hour. An uploaded CSV carries its own timestamps."
+    )
     st.divider()
     st.subheader("Investment assumptions")
     st.caption(
