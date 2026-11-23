@@ -245,14 +245,23 @@ alone carries `Access-Control-Allow-Origin: *`, because the schema is a committe
 static viewer served from another local port must be able to read it; `POST /run` stays same-origin so a
 page the user happens to have open cannot drive a replay on their machine.
 
-Still not implemented: authentication, a hosted/public endpoint, a TypeScript package, a JSON Schema
-validator dependency, a server-side run store, and any persistence of a request beyond the caller's own
-process.
+The field list has a second consumer besides the JSON file: `python -m
+islandos_core.contract_schemas --typescript` renders `frontend/src/contracts.ts` from the same
+`contract_schema()` dict (`ContractField`, `ContractSchema`, `RunRequest`, `RunResultSummary`,
+`AnnualProjection`, `DeviceTask`, …; each property keeps its `type · unit · owner` comment). The file is
+committed because the browser build needs it, and `tests/test_contract_typescript.py` fails unless the
+committed file equals `typescript_source()` byte for byte, so a renamed field cannot reach the viewer
+unnoticed. It is not a published npm package.
+
+Still not implemented: authentication, a hosted/public endpoint, a published TypeScript package, a JSON
+Schema validator dependency, a server-side run store, and any persistence of a request beyond the caller's
+own process.
 
 One React surface does consume the contracts without recomputing them: `frontend/application-views.html`
 (second Vite entry) loads a downloaded report's `application_views` block, renders request, result and
-annual summary, and can display `GET /contracts` field by field. It is a viewer, not a second
-implementation: it formats numbers the Python side already decided.
+annual summary, and can display `GET /contracts` field by field. Its prop and payload types come from
+`frontend/src/contracts.ts`, so the viewer compiles against the contract instead of a hand-written copy of
+it. It is a viewer, not a second implementation: it formats numbers the Python side already decided.
 
 
 ### 4.6 `device_flexibility_summary`
