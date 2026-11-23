@@ -126,7 +126,7 @@ function App() {
   const summary = planner ? null : (result as RunResultSummary | undefined);
 
   return (
-    <main>
+    <main className="viewer">
       <header className="topbar">
         <div>
           <p className="eyebrow">APPLICATION VIEWS · READ ONLY</p>
