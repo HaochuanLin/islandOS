@@ -14,12 +14,6 @@ on:
       - "islandos_core/forecast_validation.py"
       - "tests/test_forecast_validation.py"
   workflow_dispatch:
-    inputs:
-      region:
-        description: OPSD country/control-area code
-        required: true
-        default: AT
-        type: string
 
 permissions:
   contents: read
@@ -30,10 +24,15 @@ concurrency:
 
 jobs:
   opsd-backtest:
+    name: OPSD public backtest (${{ matrix.region }})
+    strategy:
+      fail-fast: false
+      matrix:
+        region: [AT, DE_LU]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      OPSD_REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || 'AT' }}
+      OPSD_REGION: ${{ matrix.region }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
