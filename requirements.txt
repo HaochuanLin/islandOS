@@ -1,3 +1,4 @@
+# Deploy refresh for the six-decimal history hash (2026-11-24).
 # Deploy refresh after the shared page-history merge (2026-11-24).
 # Reproducible default runtime dependencies for local installs.
 # Keep the exact pins in requirements-runtime.lock; CI verifies lock coverage.
