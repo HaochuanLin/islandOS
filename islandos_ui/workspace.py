@@ -136,12 +136,18 @@ with st.sidebar:
         use_container_width=True,
     )
     st.download_button(
-        "⬇ Download 7-day synthetic forecast CSV",
+        "⬇ Download site-history CSV (canonical columns)",
         data=synthetic_forecast_history_csv(),
         file_name="islandos_synthetic_forecast_demo.csv",
         mime="text/csv",
-        help="168 hourly UTC rows using the canonical forecast input columns. Synthetic demonstration data, not measured site data.",
         use_container_width=True,
+    )
+    # Plain caption, not st.help: in the narrow sidebar a hover tooltip renders on
+    # top of the button and swallows the click (measured 2026-11-24).
+    st.caption(
+        "Synthetic demonstration data, not measured site data. The site-history file "
+        "uses the five canonical columns the customer views accept; the energy–water "
+        "template is header plus one row for the workspace pages."
     )
 
 # Section tabs sit in the main column so the sidebar keeps a single menu of

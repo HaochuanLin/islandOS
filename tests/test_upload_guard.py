@@ -39,7 +39,7 @@ def test_unknown_detail_still_gives_a_next_action():
 @pytest.mark.parametrize("relative_path", HANDLERS)
 def test_handlers_use_the_shared_panel(relative_path: str):
     source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-    assert "from islandos_ui.upload_guard import reject_upload" in source
+    assert "from islandos_ui.upload_guard import" in source
     assert "reject_upload(" in source
 
 

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
-from islandos_ui.upload_guard import reject_upload
+from islandos_ui.upload_guard import offer_schema_conformant_csv, reject_upload
 from islandos_ui.page_header import render_page_header
 from islandos_ui.decision_record_panel import render_decision_record
 
@@ -122,6 +122,7 @@ if shared_payload is not None:
         site = parse_customer_history_csv(shared_payload, source_name=shared_name)
     except ValueError as exc:
         reject_upload("Site history CSV", exc)
+        offer_schema_conformant_csv()
         st.stop()
     timestamps = list(site.timestamps_utc)
     values = {name: list(series) for name, series in site.signals.items()}
