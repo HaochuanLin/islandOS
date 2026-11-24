@@ -12,6 +12,15 @@ from __future__ import annotations
 
 import streamlit as st
 
+from islandos_ui.upload_recovery import offer_schema_conformant_csv
+
+__all__ = [
+    "fix_hint",
+    "rejection_message",
+    "reject_upload",
+    "offer_schema_conformant_csv",
+]
+
 _FIX_HINTS = (
     ("missing required columns", "Add the missing columns using the documented header names; do not rename or drop existing ones."),
     ("timestamp", "Use ISO-8601 timestamps with an explicit timezone (for example 2026-01-01T00:00:00Z), one row per interval, in non-decreasing order."),
@@ -47,34 +56,4 @@ def rejection_message(label: str, detail: str) -> str:
 def reject_upload(label: str, detail: str) -> None:
     """Render a rejection panel. Callers must stop; this only reports."""
     st.error(rejection_message(label, str(detail)))
-
-
-def offer_schema_conformant_csv() -> None:
-    """After a rejection, hand the reader a file that does satisfy the schema.
-
-    Measured 2026-11-24: the demo offers three CSV downloads with near-identical
-    labels, and only the canonical "site history" one loads into the customer
-    pages. Uploading the other template is refused correctly — but the refusal
-    named the columns without naming a file that has them, which is a dead end
-    for a reader who does not write Python. Offering the demo's own canonical
-    file here turns that dead end into one click.
-    """
-    from islandos_core.customer_dashboard import REQUIRED_CUSTOMER_COLUMNS
-    from islandos_core.demo_datasets import synthetic_forecast_history_csv
-
-    st.caption(
-        "A file that loads without changes uses exactly these columns: "
-        + ", ".join(f"`{name}`" for name in REQUIRED_CUSTOMER_COLUMNS)
-        + ". The demo's canonical site-history CSV already has them."
-    )
-    st.download_button(
-        "⬇ Download a site-history CSV this page accepts",
-        data=synthetic_forecast_history_csv(),
-        file_name="islandos_site_history_canonical.csv",
-        mime="text/csv",
-        help=(
-            "168 hourly synthetic rows in the canonical customer columns. Upload it "
-            "unchanged to see this page work end to end."
-        ),
-    )
 
