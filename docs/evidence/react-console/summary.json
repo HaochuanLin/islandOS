@@ -1,0 +1,35 @@
+{
+  "run": "2026-11-24",
+  "surface": "React operations console, local Vite dev server",
+  "result": "pass",
+  "checks": {
+    "invitation_pending": {
+      "role": "viewer",
+      "expiry_days": 7,
+      "token_hash_matches_ui": true,
+      "duplicate_rejected": true,
+      "accepted_role": "viewer"
+    },
+    "role_and_input": {
+      "analyst_change_persisted": true,
+      "invalid_email_browser_blocked": true,
+      "invalid_email_api_status": 400,
+      "invalid_role_api_status": 400
+    },
+    "telemetry": {
+      "initial_state": "NO DATA",
+      "final_state": "VALIDATED RECORD",
+      "renewable_surplus_kw": 12.5,
+      "water_demand_m3": 3.2,
+      "cooling_demand_kw_th": 18.0,
+      "source": "acceptance-harness",
+      "physical_write_performed": false
+    },
+    "error_banner": false,
+    "page_errors": 0
+  },
+  "known_gaps": [
+    "No pending-invitation list in the console at acceptance time.",
+    "Invitation result did not echo the invitee email and role."
+  ]
+}
