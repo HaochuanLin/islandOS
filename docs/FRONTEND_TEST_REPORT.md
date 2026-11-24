@@ -211,9 +211,42 @@ created through the API. The database and server were removed afterwards.
   `UNREAD NOTIFICATIONS 1`, the owner member row, the **Inverter derate** activity item, and
   `LATEST TELEMETRY — No validated record` / `No telemetry received`. The API indicator was
   `online` and no error banner appeared.
-- Not covered: invitation acceptance, role mutation, telemetry ingestion, sign-out/revocation in
-  the browser, MFA/SSO, production TLS and multi-user isolation. The React console remains a local
-  reference surface, not the judged public demo.
+- Not covered: invitation acceptance, role mutation, telemetry ingestion, MFA/SSO, production TLS and
+  multi-user isolation. Sign-out and server-side revocation in the browser were the gap this run left
+  open; the 2026-11-24 pass below closes it. The React console remains a local reference surface, not
+  the judged public demo.
+
+### Sign-out and server-side revocation
+
+A second pass on 2026-11-24 used the same method: disposable local SQLite database, temporary owner
+tenant, one site and one unread **Inverter derate** notification created through the API, page 07 at
+1280×960, services and database removed afterwards.
+
+- **The first attempt failed.** The `Sign out` click returned `404 not found`; the page then showed
+  "Signed out locally, but server-side revocation could not be confirmed", and the browser session row
+  was still in the database afterwards, so the token stayed valid. Cause: the logout route was
+  registered on `do_GET` only, while page 07 signs out with `POST /api/v1/auth/logout`.
+  `frontend/src/api.ts` had been relying on its GET default, so the two clients disagreed about the verb.
+- **Fix.** The route now answers `POST /api/v1/auth/logout`; `GET` on the same path no longer mutates
+  session state (it returns `404`). `frontend/src/api.ts` sends the POST explicitly, and
+  `tests/test_service_api_logout_route.py` covers both verbs (POST revokes and the token then fails
+  with `401`; GET leaves the session usable).
+- **Page 07 after the fix.** `Mark as read` on **Inverter derate** removed the button and left the card
+  in place; the API reported `read_at = 2026-11-24T12:17:10Z` and `unread_only=true` returned 0 items.
+  The `Sign out` click then produced `Signed out. The current server-side session was revoked.` above
+  the restored Email/Password form, and the sidebar role/tenant lines disappeared.
+- **Server side.** Before the click the session table held the browser token and one API token; after
+  it exactly the browser row was gone, an `auth.logout` audit event was written for that session id,
+  and the other session stayed valid — revocation is per-session, not per-user.
+- **Token revocation at API level.** `GET /api/v1/members` → `200`, `POST /api/v1/auth/logout` →
+  `{"revoked": true}`, reuse of the same bearer → `401` "session is invalid or expired".
+- **Checks on this branch.** `python -m pytest -q` with the single-thread BLAS settings →
+  `1530 passed, 4 skipped, 589 subtests passed`; `npm run build` in `frontend/` → build completed.
+
+Screenshots from the patched run (`docs/evidence/page-07-signout/`): `01-signed-out.png` (prerequisite
+form), `02-signed-in.png` (owner view with member table), `03-inbox-before-read.png`,
+`04-after-mark-read.png`, `05-after-sign-out.png`; `00-pre-fix-signout-failed.png` records the failed
+`404` attempt before the fix.
 
 ## 6. Acceptance statement
 

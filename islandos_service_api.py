@@ -543,9 +543,6 @@ def make_handler(store, allow_registration=False):
                                             "mode": "single_host_reference", "device_write_enabled": False})
             try:
                 who = self.principal()
-                if path == "/api/v1/auth/logout":
-                    token = self.headers.get("Authorization", "")[7:]
-                    return self.send_json(200, store.revoke_session(token, who))
                 if path == "/api/v1/sites":
                     return self.send_json(200, {"sites": store.list_sites(who)})
                 if path == "/api/v1/members":
@@ -595,6 +592,9 @@ def make_handler(store, allow_registration=False):
                     )
                     return self.send_json(201, result)
                 who = self.principal()
+                if path == "/api/v1/auth/logout":
+                    token = self.headers.get("Authorization", "")[7:]
+                    return self.send_json(200, store.revoke_session(token, who))
                 if path == "/api/v1/sites":
                     result = store.create_site(who, body.get("name"), body.get("timezone"))
                     return self.send_json(201, result)
