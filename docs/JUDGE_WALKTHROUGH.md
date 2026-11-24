@@ -12,6 +12,12 @@ not part of the judged demo.
   customer pages rendered without exceptions; the device page's application-views JSON downloaded
   as `islandos_device_flexibility_report.json` (7,429 bytes, `schema_version: 3`).
 
+**Boundary to say once:** 05, 06 and 09 are three independent page-level demonstrations. They share
+contracts and vocabulary, but no single `run_id` or manifest spans all three, and 09 does not consume
+05/06 outputs. Do not call the menu one end-to-end pipeline. 05 and 06 now do share one synthetic
+history at the same demo clock, and print the same `Shared history SHA-256`; that is an input
+consistency fix, not a shared execution chain.
+
 ## Five-minute route
 
 ### 0:00–0:30 — Open on the Workspace
@@ -33,14 +39,14 @@ Open **Decision dashboard**. The default is synthetic; the page says so twice (b
 Read the Decision snapshot:
 
 - Recommended policy: **Battery First**
-- Estimated 24 h energy cost: **17.93 USD**
+- Estimated 24 h energy cost: **24.52 USD**
 - Unmet energy: **0.00 kWh**
-- Modeled cost difference vs grid-first: **18.37 USD**
+- Modeled cost difference vs grid-first: **10.55 USD**
 
 Then say:
 
 > "This is a bounded two-policy comparison under identical service, not a global optimum and not a
-> measured saving. The 18.37 USD is the modeled gap between two dispatch priorities."
+> measured saving. The 10.55 USD is the modeled gap between two dispatch priorities."
 
 Point at **Service equivalence: Passed** and **Independent dispatch audit: Passed**. Explain that the
 investment screen below is a separate customer-entered annual screen, not an annualisation of this
@@ -48,7 +54,7 @@ investment screen below is a separate customer-entered annual screen, not an ann
 annual energy saving 32,825 USD. The page labels those bills/O&M/CAPEX as synthetic demonstration
 figures.
 
-Do not call the NPV or payback a customer quote. Do not turn 18.37 USD into "annual savings".
+Do not call the NPV or payback a customer quote. Do not turn 10.55 USD into "annual savings".
 
 ### 1:45–3:00 — Joint resource optimizer
 
@@ -118,7 +124,7 @@ to type the URL.
 ## Judge questions and short answers
 
 **"Are these measured savings?"**
-No. They are modeled screening results under declared assumptions. The dashboard's 18.37 USD is a
+No. They are modeled screening results under declared assumptions. The dashboard's 10.55 USD is a
 24-hour policy gap under identical service, not a bill or a guaranteed saving. The annual screen is
 customer-entered, synthetic demonstration figures.
 

@@ -457,8 +457,8 @@ Both pages now carry a **Demo clock** in the sidebar, and its default position i
   recorded `7,709.55` was measured at. Both controls stay adjustable, so another hour is one move away.
   The constants live in `islandos_core/demo_clock_defaults.py` (a new module, so a running Streamlit
   process imports it fresh rather than keeping a cached copy of an edited one).
-- Because the default no longer follows the wall clock, the default screen reports one number: `7,709.55`
-  on 06 and `17.93 USD` on 05, at any time of day. The previous behaviour — the same code reporting a
+- Because the default no longer follows the wall clock, the default screen reports one number at any
+  time of day: `7,709.55` on 06 and `24.52 USD` on 05. The previous behaviour — the same code reporting a
   different figure depending on the hour it was opened — is what the range `4,548.68–8,631.34` recorded.
 - The controls only touch the synthetic default. An uploaded CSV supplies its own timestamps, and the
   clock is ignored.
@@ -471,13 +471,15 @@ Both pages now carry a **Demo clock** in the sidebar, and its default position i
 `7,709.55` and pinning `2` gives `5,332.57` on any date, with `186,150 kWh` unchanged. Pin the date only
 to make the printed window stable.
 
-**05 is a function of the date and the hour.** Its load formula carries `1.2 * (day < 5)`, so the
-weekday mix inside the 168-hour window matters. Pinning `2026-11-22 14:00Z` reproduces the recorded
-`17.93 USD` (`17.931016` before rounding). On `2026-11-23` the same hour gives `19.91`, not because the
-code moved but because the window now contains a different set of weekdays; a scan of 2026-11-09…30
-shows `17.931016` on the dates whose window matches (11-15, 11-22, 11-29) and other values elsewhere.
-This is why the demo clock carries a date as well as an hour, and why `tests/test_demo_clock.py` pins
-both before asserting the recorded figure.
+**05 now starts from 06's canonical window.** The base series is
+`islandos_core.demo_site_history.build_synthetic_site_history` at the nominal site (40 kW PV, 20 kW
+wind); page 05 then applies its two customer controls, `demand_scale` to load and `tariff_scale` to
+price. At `1.0/1.0` the timestamps and the four signal arrays are identical to 06's default, and both
+pages print the same `Shared history SHA-256`. Pinning `2026-11-22 14:00Z` gives `24.52 USD`
+(`7,709.55 USD/year` on 06 is unchanged). A different date still moves the renewable phase because the
+PV/wind ripple is keyed to the row index; the date no longer changes a weekday load term, because 05 no
+longer has one. `tests/test_demo_clock.py` asserts the pinned cost and the shared hash; the unit
+identity is in `tests/test_demo_site_history.py`.
 
 What this proves: a recorded demo number can be reproduced from the controls, and the difference between
 two recorded runs is a difference of input window, not of formula. What it does not prove: that the demo

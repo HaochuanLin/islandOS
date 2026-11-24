@@ -4,6 +4,16 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **05 and 06 now share one synthetic input at the same demo clock.**
+  05 used its own inline 168-hour PV/wind/load/tariff loop, so the same nominal site produced a
+  different history and hash on each page. 05 now calls
+  `build_customer_site_history`, which starts from 06's `build_synthetic_site_history` at 40 kW PV /
+  20 kW wind and then applies 05's `demand_scale` and `tariff_scale`. At `1.0/1.0` the timestamps and
+  four signal arrays are identical, both pages print the same `Shared history SHA-256`, and 05's pinned
+  24-hour cost is `24.52 USD` instead of `17.93`. 06's `7,709.55 USD/year` and `186,150 kWh` are
+  unchanged. `tests/test_demo_site_history.py` covers the wrapper and hash;
+  `tests/test_demo_clock.py` compares the two pages' captions.
+
 - **A broken session dataset no longer replaces page 05 or 06 with a stack trace.**
   `get_session_dataset` fails closed when the record fails its SHA-256 check, but both pages called it
   outside a handler, so a stale or tampered record took the whole surface down. `read_session_dataset`
@@ -39,9 +49,9 @@ Notable project changes are recorded here. This is a research prototype; version
   imported modules in `sys.modules`, so editing `demo_site_history.py` would not take effect until a
   restart, while a new module is imported fresh. Both controls stay adjustable; moving either one
   reproduces another window. Uploaded CSVs are untouched: they carry their own timestamps and the demo
-  clock is ignored on that branch. Default screen now reads `7,709.55` on 06 and `17.93 USD` on 05 at any
-  hour; `tests/test_demo_clock.py` asserts both the widget defaults and those numbers, alongside the
-  existing pins at 14:00Z and 02:00Z. `APP_INTEGRATION.md` §6 records the new default and why the constant
+  clock is ignored on that branch. Before the shared-history change, the default screen read
+  `7,709.55` on 06 and `17.93 USD` on 05 at any hour; `tests/test_demo_clock.py` asserts the widget
+  defaults, the current pinned numbers and the shared hash. `APP_INTEGRATION.md` §6 records the new default and why the constant
   lives in its own module.
 
 - **The hosted app now hands its stamp over as a download, so the commit is proved from bytes rather than a

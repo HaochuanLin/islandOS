@@ -5,11 +5,10 @@ measured customer savings, a site-validated forecast, or equipment commands.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from dataclasses import asdict
 import hashlib
 import json
-import math
 
 import pandas as pd
 import streamlit as st
@@ -31,7 +30,11 @@ from islandos_core.site_inputs import (
 )
 from islandos_core.app_view_models import build_run_request, build_run_result_summary
 from islandos_core.customer_dashboard import parse_customer_history_csv
-from islandos_core.demo_site_history import demo_anchor_for_hour
+from islandos_core.demo_site_history import (
+    build_customer_site_history,
+    canonical_history_sha256,
+    demo_anchor_for_hour,
+)
 from islandos_core.demo_clock_defaults import DEMO_CLOCK_DEFAULT_DATE, DEMO_CLOCK_DEFAULT_HOUR
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.session_dataset import clear_session_dataset, read_session_dataset
@@ -156,6 +159,7 @@ with st.sidebar:
 demo_anchor = demo_anchor_for_hour(now, int(demo_hour), demo_date=demo_date)
 history = {"pv_power": [], "wind_power": [], "essential_load": [], "electricity_price": []}
 source_sha256 = None
+history_sha256 = None
 source_label = "Synthetic demonstration data"
 shared_payload = None
 shared_name = "session-shared CSV"
@@ -171,6 +175,7 @@ if shared_payload is not None:
         history_stamps = list(uploaded.timestamps_utc)
         history = {name: list(values) for name, values in uploaded.signals.items()}
         source_sha256 = uploaded.source_sha256
+        history_sha256 = uploaded.source_sha256
         prefix = "User-uploaded" if site_csv is not None else "Session-shared"
         source_label = f"{prefix}: {uploaded.source_name} (not independently verified)"
     except ValueError as exc:
@@ -178,21 +183,28 @@ if shared_payload is not None:
         offer_schema_conformant_csv()
         st.stop()
 else:
-    history_stamps = [demo_anchor - timedelta(hours=168 - index) for index in range(168)]
-    for index, stamp in enumerate(history_stamps):
-        hour = stamp.hour
-        day = stamp.weekday()
-        solar = max(0.0, 34.0 * math.sin(math.pi * (hour - 6) / 12.0))
-        pv = solar * (0.82 + 0.12 * math.sin(index * 0.31))
-        wind = 7.0 + 3.0 * (0.5 + 0.5 * math.sin(index * 0.23 + 0.8))
-        load = (21.0 + 4.0 * (hour in range(17, 23)) + 2.0 * (hour in range(7, 10))
-                + 1.2 * (day < 5)) * demand_scale
-        tariff = (0.09 if hour < 6 else 0.29 if hour in range(17, 22) else 0.17)
-        tariff *= tariff_scale * (1.0 + 0.04 * math.sin(index * 0.11))
-        history["pv_power"].append(round(max(0.0, pv), 3))
-        history["wind_power"].append(round(max(0.0, wind), 3))
-        history["essential_load"].append(round(load, 3))
-        history["electricity_price"].append(round(tariff, 4))
+    # Same canonical generator and nominal site as page 06. The two customer
+    # controls are applied after generation; at their defaults the timestamps
+    # and four arrays are identical to page 06, so the history hash matches.
+    synthetic = build_customer_site_history(
+        demo_anchor,
+        demand_scale=float(demand_scale),
+        tariff_scale=float(tariff_scale),
+    )
+    history_stamps = list(synthetic.timestamps)
+    history = {
+        "pv_power": list(synthetic.pv_power_kw),
+        "wind_power": list(synthetic.wind_power_kw),
+        "essential_load": list(synthetic.load_kw),
+        "electricity_price": list(synthetic.tariff_per_kwh),
+    }
+    history_sha256 = canonical_history_sha256(
+        timestamps=synthetic.timestamps,
+        pv_power_kw=synthetic.pv_power_kw,
+        wind_power_kw=synthetic.wind_power_kw,
+        load_kw=synthetic.load_kw,
+        tariff_per_kwh=synthetic.tariff_per_kwh,
+    )
 
 demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
 st.caption(
@@ -200,6 +212,7 @@ st.caption(
     f"({len(history_stamps)} hourly rows){demo_note}"
 )
 st.caption(f"Input provenance: {source_label}")
+st.caption(f"Shared history SHA-256: {history_sha256}")
 
 units = {
     "pv_power": "kW",
@@ -456,16 +469,7 @@ try:
         )
         # The annual figures cite this run; they are never derived from it. Build the
         # manifest from the same inputs the screen was computed on, then bind.
-        annual_dataset_digest = source_sha256 or hashlib.sha256(
-            json.dumps(
-                {
-                    "timestamps_utc": [stamp.isoformat() for stamp in history_stamps],
-                    "signals": history,
-                    "units": units,
-                },
-                sort_keys=True, separators=(",", ":"), allow_nan=False,
-            ).encode("utf-8")
-        ).hexdigest()
+        annual_dataset_digest = history_sha256
         annual_config_digest = hashlib.sha256(
             json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
         ).hexdigest()

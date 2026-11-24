@@ -33,6 +33,7 @@ from islandos_core.app_view_models import (
 from islandos_core.canonical_run import create_run_manifest, deterministic_run_id
 from islandos_core.demo_site_history import (
     build_synthetic_site_history,
+    canonical_history_sha256,
     demo_anchor_for_hour,
 )
 from islandos_core.demo_clock_defaults import DEMO_CLOCK_DEFAULT_DATE, DEMO_CLOCK_DEFAULT_HOUR
@@ -130,6 +131,7 @@ if shared_payload is not None:
     prefix = "Customer-uploaded" if upload is not None else "Session-shared"
     source = f"{prefix} CSV: {site.source_name} (not independently verified)"
     source_hash = site.source_sha256
+    history_sha256 = site.source_sha256
 else:
     # The default window is synthetic and its anchor is the demo clock, not the
     # wall clock; the builder takes that anchor as an argument so a test can pin it.
@@ -144,8 +146,16 @@ else:
         "electricity_price": list(synthetic.tariff_per_kwh),
     }
     source_hash = None
+    history_sha256 = canonical_history_sha256(
+        timestamps=synthetic.timestamps,
+        pv_power_kw=synthetic.pv_power_kw,
+        wind_power_kw=synthetic.wind_power_kw,
+        load_kw=synthetic.load_kw,
+        tariff_per_kwh=synthetic.tariff_per_kwh,
+    )
 
 st.caption(f"Data provenance: {source}")
+st.caption(f"Shared history SHA-256: {history_sha256}")
 demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
 st.caption(
     f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} "

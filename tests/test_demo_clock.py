@@ -35,7 +35,7 @@ def test_the_default_clock_is_frozen_on_both_pages():
     assert not app5.exception, [str(error) for error in app5.exception]
     assert app5.date_input(key="demo_date_dashboard").value == date(2026, 11, 22)
     assert app5.slider(key=CLOCK_05).value == 14
-    assert _metric(app5, "Estimated 24h energy cost") == "17.93 USD"
+    assert _metric(app5, "Estimated 24h energy cost") == "24.52 USD"
 
     app6 = AppTest.from_file(str(PAGE_06), default_timeout=180).run()
     assert not app6.exception, [str(error) for error in app6.exception]
@@ -68,19 +68,32 @@ def test_pinning_06_at_14_and_2_reproduces_the_two_recorded_annual_costs():
 def test_pinning_05_at_14_reproduces_the_recorded_24_hour_cost():
     app = AppTest.from_file(str(PAGE_05), default_timeout=180).run()
     assert not app.exception, [str(error) for error in app.exception]
-    # 05's synthetic load carries a weekday term, so the hour alone is not a full pin:
-    # the recorded 17.93 is the window ending Sunday 2026-11-22 at 13:00 UTC,
-    # whose demo anchor (the hour the page would have run) is 14:00.
+    # 05 now uses the same canonical window as 06. At the nominal site and
+    # 1.0/1.0 customer scales, the recorded 24.52 is the page's own result.
     app.date_input(key="demo_date_dashboard").set_value(date(2026, 11, 22))
     app.slider(key=CLOCK_05).set_value(14).run()
     assert not app.exception, [str(error) for error in app.exception]
-    assert _metric(app, "Estimated 24h energy cost") == "17.93 USD"
+    assert _metric(app, "Estimated 24h energy cost") == "24.52 USD"
+
+
+def test_the_two_pages_show_the_same_shared_history_hash():
+    def shared_hash(app: AppTest) -> str:
+        values = [element.value for element in app.caption if "Shared history SHA-256:" in element.value]
+        assert len(values) == 1, [element.value for element in app.caption]
+        return values[0].split("Shared history SHA-256:", 1)[1].strip()
+
+    app5 = AppTest.from_file(str(PAGE_05), default_timeout=180).run()
+    assert not app5.exception, [str(error) for error in app5.exception]
+    app6 = AppTest.from_file(str(PAGE_06), default_timeout=180).run()
+    assert not app6.exception, [str(error) for error in app6.exception]
+    assert shared_hash(app5) == shared_hash(app6)
+    assert len(shared_hash(app5)) == 64
 
 
 def test_the_document_no_longer_implies_the_demo_figures_are_clock_independent():
     text = INTEGRATION_DOC.read_text(encoding="utf-8")
     assert "## 6. The demo clock" in text
-    assert "17.93" in text and "19.91" in text
+    assert "24.52" in text and "Shared history SHA-256" in text
     # The old sentence claimed the deployed app renders "the same numbers the tests pin".
     assert "renders the same numbers the tests pin" not in text
 
