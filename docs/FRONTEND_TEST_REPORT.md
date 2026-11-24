@@ -35,7 +35,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 python -m pytest -q
 ```
 
-Result: **1522 passed, 4 skipped, 589 subtests passed, 69 warnings in 147.31s**.
+Result: **1522 passed, 4 skipped, 589 subtests passed, 69 warnings in 158.26s**.
 
 The single-threaded BLAS variables are part of the command, not an after-the-fact excuse. The first
 full run with default threading failed 13 tests, all in subprocess-heavy tests, with:
@@ -58,19 +58,26 @@ python -m pytest -q tests/test_device_planner_presentation.py \
 
 Result: **39 passed, 16 warnings in 14.53s**.
 
-### React build — passed
+### React build, tests and CI — passed
 
 ```text
 cd frontend
+npm ci
+npm test
 npm run build
 ```
 
-Result: TypeScript and Vite build succeeded; **35 modules transformed**; both HTML entries and their
-assets were produced in `frontend/dist/`.
+Result: `npm ci` installed 69 packages from the committed lockfile; `npm test` ran **6 Node tests**
+(contract-viewer v3 guard and telemetry 404/401/500 behaviour); `npm run build` reported **36 modules
+transformed** and produced both HTML entries and their assets in `frontend/dist/`.
 
-This proves compilation and bundling. It does not prove browser usability, authentication, API
-behaviour, accessibility or deployment. There is still no `package-lock.json`, and CI uses
-`npm install --no-package-lock`; that remains an open P2 (T1 F-06).
+The first lockfile was generated on Windows and omitted `@rollup/rollup-linux-x64-gnu`, so `npm ci`
+passed but `vite build` failed on the Linux runner. The lockfile was regenerated with Linux, Windows
+and macOS optional dependencies; `npm ci`, `npm test` and `npm run build` then passed locally, and
+GitHub check-runs on head `0fd4a06` reported **12/12 success**.
+
+This proves compilation, bundling and the two pure-module behaviours. It does not prove browser
+usability, authentication, API behaviour, accessibility or deployment.
 
 ### Live Streamlit walkthrough — three customer pages verified
 

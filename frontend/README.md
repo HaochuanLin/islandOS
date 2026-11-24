@@ -139,7 +139,9 @@ pytest tests/test_application_transport.py
 ```
 
 The transport test serves a temporary build, checks the HTML/JS content types, refuses
-`assets/../…` traversal, and covers the missing-build `404`. For the console entry, open the console
+`assets/../…` traversal, and covers the missing-build `404`. The lockfile carries the Linux, Windows
+and macOS optional Rollup binaries; a lockfile written only on Windows drops the Linux binary and
+makes `npm ci` succeed while `vite build` fails on the runner. For the console entry, open the console
 after `npm run dev` and follow the footer link; the target is `application-views.html` from the same
 build.
 
