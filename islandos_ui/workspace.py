@@ -202,22 +202,10 @@ if page == "Overview":
             width="stretch",
         )
     with device_col:
-        st.markdown("#### 2 · Schedule equipment")
+        st.markdown("#### 2 · Compare policies and economics")
         st.write(
-            "Protect critical circuits first, then schedule semi-flexible and "
-            "fully-flexible devices within their declared operating windows."
-        )
-        st.page_link(
-            "pages/09_Device_Flexibility_Planner.py",
-            label="Open device flexibility planner",
-            icon="🔌",
-            width="stretch",
-        )
-    with compare_col:
-        st.markdown("#### 3 · Review economics")
-        st.write(
-            "Explore forecast-led operating alternatives and inspect modeled "
-            "cost, reliability and investment assumptions."
+            "Compare operating policies, review reliability and stress results, then "
+            "screen the investment assumptions against the modeled 24-hour result."
         )
         st.page_link(
             "pages/05_Customer_Decision_Dashboard.py",
@@ -225,6 +213,26 @@ if page == "Overview":
             icon="📊",
             width="stretch",
         )
+    with compare_col:
+        st.markdown("#### 3 · Optional device check")
+        st.write(
+            "Test critical, semi-flexible and fully-flexible device scheduling. This "
+            "page uses fixed synthetic site inputs, so it is a separate check rather "
+            "than a continuation of the first two steps."
+        )
+        st.page_link(
+            "pages/09_Device_Flexibility_Planner.py",
+            label="Open device flexibility planner",
+            icon="🔌",
+            width="stretch",
+        )
+
+    st.caption(
+        "Using your own hourly CSV? Start with **Data onboarding & workspace**, inspect "
+        "the file, then use **Use this inspected CSV in Forecast and Decision pages** so "
+        "05 and 06 read the same session-only dataset. If you upload directly on either "
+        "customer page, that page also offers a one-click share with the other view."
+    )
 
     st.divider()
     st.subheader("IslandOS decision workflow")

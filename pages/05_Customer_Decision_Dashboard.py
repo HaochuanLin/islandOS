@@ -15,6 +15,7 @@ import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header
+from islandos_ui.customer_workflow import render_customer_workflow, render_page_upload_handoff
 from islandos_ui.annual_economics_panel import (
     DEMONSTRATION_VALUES,
     annual_inputs_supplied,
@@ -212,6 +213,17 @@ st.caption(
     f"({len(history_stamps)} hourly rows){demo_note}"
 )
 st.caption(f"Input provenance: {source_label}")
+render_customer_workflow(
+    active_page="decision_dashboard",
+    history_sha256=history_sha256,
+    source_label=source_label,
+)
+if site_csv is not None:
+    render_page_upload_handoff(
+        page_key="decision_dashboard",
+        file_name=site_csv.name,
+        payload=site_csv.getvalue(),
+    )
 st.caption(f"Shared history SHA-256: {history_sha256}")
 
 units = {
