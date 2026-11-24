@@ -240,13 +240,20 @@ tenant, one site and one unread **Inverter derate** notification created through
   and the other session stayed valid — revocation is per-session, not per-user.
 - **Token revocation at API level.** `GET /api/v1/members` → `200`, `POST /api/v1/auth/logout` →
   `{"revoked": true}`, reuse of the same bearer → `401` "session is invalid or expired".
+- **React console (Vite dev server, 1440×960).** Its `/api` proxy was pointed at a private API
+  instance on port 8770 because the repo's 8766 was in use by another service. The same owner signed
+  in, `UNREAD NOTIFICATIONS` showed 1, `Mark as read` on **Inverter derate** took it to 0, and
+  `Sign out ↗` returned the console to the Email/Password screen with no error banner. The session
+  table again lost exactly the console session (an `auth.logout` event names it) while the API token's
+  session stayed valid, so the POST route serves both clients.
 - **Checks on this branch.** `python -m pytest -q` with the single-thread BLAS settings →
   `1530 passed, 4 skipped, 589 subtests passed`; `npm run build` in `frontend/` → build completed.
 
-Screenshots from the patched run (`docs/evidence/page-07-signout/`): `01-signed-out.png` (prerequisite
-form), `02-signed-in.png` (owner view with member table), `03-inbox-before-read.png`,
+Screenshots from the patched Streamlit run (`docs/evidence/page-07-signout/`): `01-signed-out.png`
+(prerequisite form), `02-signed-in.png` (owner view with member table), `03-inbox-before-read.png`,
 `04-after-mark-read.png`, `05-after-sign-out.png`; `00-pre-fix-signout-failed.png` records the failed
-`404` attempt before the fix.
+`404` attempt before the fix. The React console pass is in `docs/evidence/react-console-signout/`:
+`01-signed-in.png`, `02-after-mark-read.png`, `03-after-sign-out.png`.
 
 ## 6. Acceptance statement
 
