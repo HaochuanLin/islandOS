@@ -14,7 +14,7 @@ from islandos_core.customer_dashboard import (
     parse_customer_history_csv,
 )
 from islandos_core.demo_datasets import FORECAST_HISTORY_COLUMNS, synthetic_forecast_history_csv
-from islandos_ui.upload_guard import offer_schema_conformant_csv
+from islandos_ui.upload_recovery import offer_schema_conformant_csv
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,6 +44,7 @@ def test_demo_csv_loads_through_the_real_parser():
 def test_recovery_offer_exists_on_both_customer_pages():
     for relative_path in CUSTOMER_PAGES:
         source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "from islandos_ui.upload_recovery import" in source
         assert "offer_schema_conformant_csv" in source
         assert "offer_schema_conformant_csv()" in source
 

@@ -13,7 +13,8 @@ import math
 
 import pandas as pd
 import streamlit as st
-from islandos_ui.upload_guard import offer_schema_conformant_csv, reject_upload
+from islandos_ui.upload_guard import reject_upload
+from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header
 from islandos_ui.annual_economics_panel import (
     DEMONSTRATION_VALUES,
