@@ -110,8 +110,8 @@ The local-only pages are hidden in the hosted demo because they can only work ag
 ISLANDOS_ENABLE_LOCAL_WORKSPACE=1 streamlit run app.py
 
 # customer workspace (needs the loopback reference API)
-streamlit run app.py                       # terminal 1: python -m islandos_service_api
-ISLANDOS_API_BASE_URL=http://127.0.0.1:8000 streamlit run app.py   # terminal 2
+streamlit run app.py                       # terminal 1: python -m islandos_service_api --port 8766
+ISLANDOS_API_BASE_URL=http://127.0.0.1:8766 streamlit run app.py   # terminal 2
 ```
 
 Setting either variable adds the "Local deployment only" group; without them the public menu contains no dead entries. See [local site workspace](docs/SITE_WORKSPACE.md) and [local customer workspace UI](docs/STAGE_E_LOCAL_CUSTOMER_WORKSPACE_UI.md).

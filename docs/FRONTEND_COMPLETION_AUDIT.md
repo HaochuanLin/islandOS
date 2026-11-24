@@ -39,6 +39,26 @@ screening path:
 The React console is a local reference surface, not the competition demo. Its remaining issues are
 P2: telemetry errors are silently converted to "no data", and CI proves only that the bundle compiles.
 
+## T7 closeout status (2026-11-24)
+
+This table is the current state after T2–T7. Section 4 below remains the T1 baseline and is not
+rewritten to hide what was found.
+
+| ID | Finding | T7 status | Evidence |
+|---|---|---|---|
+| F-01 | One local flag exposes the other local page | **Open, local-only** | `app.py` still uses one `local_ui_enabled()` gate; judged public menu unaffected. |
+| F-02 | API port inconsistent (`8000`/`8765`/`8766`) | **Fixed** | Root `README.md` and page 07 now name `8766`; service default is `8766`. |
+| F-03 | Device page cost labels and empty heading | **Fixed** | T5 added USD; T7 renamed the two metrics, merged the empty heading, added the reconciliation caption and a source-level test. |
+| F-04 | Viewer does not check `schema_version` | **Open, documented** | No version gate was added; `frontend/README.md` still describes presence-only checks. |
+| F-05 | React telemetry errors become "no data" | **Open** | No console code changed in T7. |
+| F-06 | Frontend CI is build-only; no lockfile | **Open** | No lockfile or behaviour test added. |
+| F-07 | 52 deprecated `use_container_width` calls | **Open** | No migration performed. |
+| G1–G4 | Module integration high gaps | **Open, out of T7 scope** | Require contract/model/product decisions; recorded in `docs/MODULE_INTEGRATION_AUDIT.md`. |
+
+**Conclusion at T7:** the judged public Streamlit path is ready for a walkthrough; the remaining
+open items are local-only, React-internal, or require a product/contract decision. No open item is
+presented as fixed when it was only documented.
+
 ## 2. Surface inventory
 
 | Surface | Entry point / file | Authentication | Default data | Audit result |
