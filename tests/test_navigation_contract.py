@@ -41,6 +41,7 @@ def test_every_page_file_is_registered_by_the_menu():
 
 def test_local_only_pages_are_gated_by_their_own_predicate():
     source = app_source()
+    assert "from islandos_ui.deployment_gates import" in source
     customer_guard = source.index("if local_customer_workspace_enabled():")
     site_guard = source.index("if local_site_workspace_enabled():")
     assert source.index("pages/07_Local_Customer_Workspace.py") > customer_guard
