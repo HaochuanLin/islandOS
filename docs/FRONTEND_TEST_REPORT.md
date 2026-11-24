@@ -3,6 +3,7 @@
 Date: 2026-11-24
 Branch: `release/frontend-t7`
 Base: `origin/main` at `d4a6139`
+Pull request: **#333** (open, not merged by T7)
 Work: T1–T6 integrated; T7 documentation, one device-page presentation fix, one regression test,
 and the closeout verification.
 
