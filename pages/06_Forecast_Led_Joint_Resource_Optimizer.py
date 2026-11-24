@@ -15,6 +15,7 @@ import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header
+from islandos_ui.customer_workflow import render_customer_workflow, render_page_upload_handoff
 from islandos_ui.decision_record_panel import render_decision_record
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
@@ -155,6 +156,17 @@ else:
     )
 
 st.caption(f"Data provenance: {source}")
+render_customer_workflow(
+    active_page="joint_optimizer",
+    history_sha256=history_sha256,
+    source_label=source,
+)
+if upload is not None:
+    render_page_upload_handoff(
+        page_key="joint_optimizer",
+        file_name=upload.name,
+        payload=upload.getvalue(),
+    )
 st.caption(f"Shared history SHA-256: {history_sha256}")
 demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
 st.caption(

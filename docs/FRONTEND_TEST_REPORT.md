@@ -1,11 +1,15 @@
-# Frontend closeout test report (T7)
+# Frontend test report (T7 closeout and later current-main checks)
 
 Date: 2026-11-24
-Branch: `release/frontend-t7`
-Base: `origin/main` at `d4a6139`
-Pull request: **#333** (open, not merged by T7)
+T7 branch: `release/frontend-t7`
+T7 base: `origin/main` at `d4a6139`
+T7 pull request: **#333** (historical; this branch was not merged and is not in the current open-PR list)
 Work: T1–T6 integrated; T7 documentation, one device-page presentation fix, one regression test,
 and the closeout verification.
+
+The header names the original T7 branch. Later sections in this file record current-main checks
+after PRs #341–#343. For the current application-integration pass, see
+`docs/APPLICATION_INTEGRATION_REPORT.md`.
 
 This report covers what was **actually run** on this branch. It does not claim a browser flow that
 was not exercised, and it does not turn a synthetic result into a measured site result.

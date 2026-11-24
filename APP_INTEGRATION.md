@@ -15,7 +15,7 @@ long-lived server-side store. The public demo runs entirely inside one browser s
 | Layer | Modules | Depends on Streamlit? |
 |---|---|---|
 | Pages (composition) | `app.py`, `pages/*.py` | Yes |
-| Streamlit surfaces | `islandos_ui/workspace.py`, `annual_economics_panel.py`, `decision_record_panel.py`, `page_header.py`, `upload_guard.py` | Yes |
+| Streamlit surfaces | `islandos_ui/workspace.py`, `annual_economics_panel.py`, `decision_record_panel.py`, `page_header.py`, `upload_guard.py`, `customer_workflow.py` | Yes |
 | Streamlit-free UI helper | `islandos_ui/navigation.py` (`page_url_path`) | No |
 | Application-facing view models | `islandos_core/app_view_models.py` | No |
 | Run orchestration | `islandos_core/run_orchestration.py` | No |
@@ -85,6 +85,7 @@ Everything else is page-private:
 | Key | Writer | Meaning |
 |---|---|---|
 | `islandos_result` | `islandos_ui.workspace` | last strategy comparison of the workspace page |
+| `islandos_customer_history_context` | `islandos_ui.customer_workflow` | last history SHA-256 and provenance seen on each customer page; used only to warn that 05 and 06 are not like-for-like, never as a run result |
 | `islandos_optimizer_result` | `islandos_ui.workspace` | last optimizer result of the workspace page |
 | `rolling_lab_signature` / `rolling_lab_results` | `pages/2_Rolling_Horizon_Lab.py` | cache keyed by the current input signature |
 | `islandos_access_token` / `islandos_role` / `islandos_tenant_id` | `pages/07_Local_Customer_Workspace.py` | local deployment sign-in state |
@@ -96,6 +97,13 @@ Everything else is page-private:
 two different `run_id`s and two different `manifest_sha256` values on the two pages, by design: they are
 two separate offline runs over the same history, not one run shown twice. A reader who sees both must not
 conclude that the pages disagree — they were never the same run.
+
+The customer pages now record a presentation-only snapshot of each view's last history SHA-256 and
+provenance in `islandos_customer_history_context`. On the next visit, `islandos_ui.customer_workflow`
+compares the two snapshots and warns when they differ. It does not merge results, create a shared
+run id, or claim that matching input makes the two pages' cost figures interchangeable. The same
+helper also offers a page-local CSV the existing `store_session_dataset` handoff, so an upload on
+05 or 06 can be reused by the other view without returning to Data onboarding.
 
 ---
 
