@@ -59,6 +59,19 @@ reference API). After sign-in, the footer link opens `application-views.html` fr
 The page's `/contracts` read is then cross-origin on loopback, which `GET /contracts` allows on
 purpose. `npm run preview` works the same way.
 
+Which "local reference API" that is, in one place, because this page is where a reader looks for it:
+
+```bash
+python islandos_service_api.py --host 127.0.0.1 --port 8766 --allow-registration   # first owner only
+cd frontend && npm run dev                                                        # 5173, /api -> 8766
+```
+
+`GET /api/v1/health` through the proxy answers `{"status": "ok", "mode": "single_host_reference",
+"device_write_enabled": false}`. Registration is for the controlled bootstrap of the first owner; stop
+the API and restart it without `--allow-registration` afterwards. The port is the API's own default, and
+`vite.config.ts` proxies `/api` to `127.0.0.1:8766` under `dev` and under `preview` alike. The full
+scope, boundaries and production gaps are in `docs/STAGE_6_CUSTOMER_FRONTEND.md`.
+
 **From disk.** Opening `frontend/dist/application-views.html` directly works, but report loading is
 all that page can do from `file://`; start the transport if you also want the schema tables.
 
