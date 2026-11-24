@@ -125,7 +125,7 @@ st.dataframe(
         "Operating intervals": ", ".join(str(v) for v in x.operating_steps),
         "Energy charge (USD)": round(x.energy_cost, 3),
     } for x in schedule.schedules]),
-    use_container_width=True, hide_index=True,
+    width="stretch", hide_index=True,
 )
 
 chart = pd.DataFrame({
@@ -160,7 +160,7 @@ comparison = pd.DataFrame([
     {"Metric": "Flexible load shed (kWh)", "Tariff-aware plan": metrics["flexible_load_shed_kwh"], "Earliest-feasible reference": reference_metrics["flexible_load_shed_kwh"]},
     {"Metric": "Peak grid import (kW)", "Tariff-aware plan": metrics["peak_grid_import_kw"], "Earliest-feasible reference": reference_metrics["peak_grid_import_kw"]},
 ])
-st.dataframe(comparison, use_container_width=True, hide_index=True)
+st.dataframe(comparison, width="stretch", hide_index=True)
 st.caption(
     "Both cases use the same device requirements, time windows, residual task budget, PV/wind profiles and grid limits. "
     "The reference is an earliest-feasible scheduling heuristic, not historical customer operation. "

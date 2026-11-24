@@ -141,7 +141,7 @@ with members_tab:
     try:
         members = api_request("GET", "/api/v1/members").get("members", [])
         if members:
-            st.dataframe(members, use_container_width=True, hide_index=True)
+            st.dataframe(members, width="stretch", hide_index=True)
         else:
             st.info("No member records returned.")
     except RuntimeError as exc:

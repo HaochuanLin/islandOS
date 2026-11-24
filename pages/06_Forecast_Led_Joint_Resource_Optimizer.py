@@ -299,7 +299,7 @@ try:
             "Error-band samples": forecast.interval_calibration_samples,
             "Unit": forecast.unit,
         })
-    st.dataframe(pd.DataFrame(model_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(model_rows), width="stretch", hide_index=True)
     st.caption("Built-in candidates are statistical baselines. Backtest scores describe only the supplied history.")
 
     st.subheader("Recommended joint schedule")
@@ -326,7 +326,7 @@ try:
             "Battery degradation cost": summary.get("battery_degradation_cost"),
         })
     if comparison_rows:
-        st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(comparison_rows), width="stretch", hide_index=True)
     economics = result.get("robust_customer_economics", {})
     if economics.get("cost_comparison_valid"):
         st.metric(
@@ -355,7 +355,7 @@ try:
         st.subheader("Hourly setpoint schedule")
         schedule_frame = pd.DataFrame(schedule_rows)
         st.line_chart(schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"))
-        st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
+        st.dataframe(schedule_frame, width="stretch", hide_index=True)
     else:
         st.caption("Schedule vectors are available in the downloadable audit report.")
 

@@ -41,23 +41,27 @@ P2: telemetry errors are silently converted to "no data", and CI proves only tha
 
 ## T7 closeout status (2026-11-24)
 
-This table is the current state after T2–T7. Section 4 below remains the T1 baseline and is not
-rewritten to hide what was found.
+This table is the current state after T2–T7 and the follow-up fixes on the same branch. Section 4
+below remains the T1 baseline and is not rewritten to hide what was found.
 
-| ID | Finding | T7 status | Evidence |
+| ID | Finding | Current status | Evidence |
 |---|---|---|---|
-| F-01 | One local flag exposes the other local page | **Open, local-only** | `app.py` still uses one `local_ui_enabled()` gate; judged public menu unaffected. |
+| F-01 | One local flag exposes the other local page | **Fixed** | `app.py` registers 07 under `local_customer_workspace_enabled()` and 08 under `local_site_workspace_enabled()`; `tests/test_navigation_contract.py` covers both flags. |
 | F-02 | API port inconsistent (`8000`/`8765`/`8766`) | **Fixed** | Root `README.md` and page 07 now name `8766`; service default is `8766`. |
 | F-03 | Device page cost labels and empty heading | **Fixed** | T5 added USD; T7 renamed the two metrics, merged the empty heading, added the reconciliation caption and a source-level test. |
-| F-04 | Viewer does not check `schema_version` | **Open, documented** | No version gate was added; `frontend/README.md` still describes presence-only checks. |
-| F-05 | React telemetry errors become "no data" | **Open** | No console code changed in T7. |
-| F-06 | Frontend CI is build-only; no lockfile | **Open** | No lockfile or behaviour test added. |
-| F-07 | 52 deprecated `use_container_width` calls | **Open** | No migration performed. |
-| G1–G4 | Module integration high gaps | **Open, out of T7 scope** | Require contract/model/product decisions; recorded in `docs/MODULE_INTEGRATION_AUDIT.md`. |
+| F-04 | Viewer does not check `schema_version` | **Fixed** | `frontend/src/applicationViewsPayload.ts` rejects a request or result whose `schema_version` is not `3`; the Node test covers v2, unversioned and v3. |
+| F-05 | React telemetry errors become "no data" | **Fixed** | `ApiError` carries the HTTP status; `latestTelemetry` returns `null` only for 404, and 401/500 reach the error banner. Node tests cover both paths. |
+| F-06 | Frontend CI is build-only; no lockfile | **Fixed** | `frontend/package-lock.json` is committed; CI uses `npm ci` and runs `npm test` before `npm run build`; the Node behaviour test covers viewer and telemetry contracts. |
+| F-07 | 52 deprecated `use_container_width` calls | **Fixed** | All 52 call sites now use `width="stretch"`; page smoke, header and navigation tests pass, and the deprecation warning is gone. |
+| F-08 | Site workspace create button stayed disabled after consent | **Fixed** | Found during the live 08 check: a form widget cannot enable a button disabled on its own value. The button is now clickable and consent is enforced on submit; `tests/test_local_workspace_creation.py` drives both paths. |
+| G1 | No single replayable end-to-end chain | **Deferred by Phase 1 boundary** | Fixing it requires a new cross-page pipeline and changes the model composition. That conflicts with the no-model-change/read-only boundary; the three page chains remain explicitly separate. |
+| G2 | Replay contract promises annual but returns `None` | **Fixed as documentation boundary** | `islandos_core/transport.py` no longer promises annual replay; the response still returns `annual: None`, which is now the stated contract rather than an omission. |
+| G3 | 05 investment inputs discarded on replay | **Fixed for the eight request fields** | `replay_run_request` now calls the existing evaluator and returns `investment`; `tests/test_application_transport.py` checks it equals the page evaluator. Replacement-year, replacement-cost and residual-value remain page-only because they are not in the v3 request. |
+| G4 | 05 and 06 build different synthetic inputs | **Deferred by Phase 1 boundary** | Unifying them changes recorded demo numbers, which would invalidate the walkthrough and the cited figures. The difference is documented, not hidden. |
 
-**Conclusion at T7:** the judged public Streamlit path is ready for a walkthrough; the remaining
-open items are local-only, React-internal, or require a product/contract decision. No open item is
-presented as fixed when it was only documented.
+**Conclusion after the follow-up:** the judged public Streamlit path is ready for a walkthrough. The
+frontend findings F-01 and F-04–F-07 are fixed. G2 is corrected as a contract boundary, G3 is fixed
+for the request fields, and G1/G4 remain explicit Phase 1 limits rather than being presented as fixed.
 
 ## 2. Surface inventory
 
@@ -69,10 +73,10 @@ presented as fixed when it was only documented.
 | Joint resource optimizer | `pages/06_Forecast_Led_Joint_Resource_Optimizer.py` | None | `build_synthetic_site_history` | Renders; canonical run/manifest/evidence present; annual projection withheld until declared. |
 | Device flexibility planner | `pages/09_Device_Flexibility_Planner.py` | None | Inline synthetic tasks | Renders; CSV and report downloads; presentation issues below. |
 | Rolling horizon lab | `pages/2_Rolling_Horizon_Lab.py` | None | Synthetic rolling-horizon experiment | Registered as experimental; smoke test passes. |
-| Local customer workspace | `pages/07_Local_Customer_Workspace.py` | Loopback API bearer token | Local SQLite service | Gated by `ISLANDOS_API_BASE_URL`; registered together with page 08 (defect F-01). |
-| Local site workspace | `pages/08_Site_Workspace.py` | None | Local SQLite workspace | Gated by `ISLANDOS_ENABLE_LOCAL_WORKSPACE=1`; registered together with page 07 (defect F-01). |
-| React console | `frontend/index.html`, `frontend/src/App.tsx` | Bearer token in component memory | Local API `/api/v1` | Builds; local reference only; no production identity. |
-| Contract viewer | `frontend/application-views.html`, `frontend/src/ApplicationViews.tsx` | None | Downloaded report + `GET /contracts` | Builds; displays report shapes; version check gap (F-04). |
+| Local customer workspace | `pages/07_Local_Customer_Workspace.py` | Loopback API bearer token | Local SQLite service | Gated by its own `ISLANDOS_API_BASE_URL` predicate; not offered when only the site-workspace flag is set. |
+| Local site workspace | `pages/08_Site_Workspace.py` | None | Local SQLite workspace | Gated by its own `ISLANDOS_ENABLE_LOCAL_WORKSPACE=1` predicate; not offered when only the API URL is set. |
+| React console | `frontend/index.html`, `frontend/src/App.tsx` | Bearer token in component memory | Local API `/api/v1` | Builds; local reference only; telemetry 401/500 is surfaced, 404 remains "no data". |
+| Contract viewer | `frontend/application-views.html`, `frontend/src/ApplicationViews.tsx` | None | Downloaded report + `GET /contracts` | Builds; requires request and result `schema_version: 3`. |
 | Local reference API | `islandos_service_api.py` | Login/session token | SQLite | Loopback-only; tests pass; no device writes. |
 | Application transport | `islandos_core/transport.py` | None | Loopback | Serves viewer, contracts, health and `POST /run`; tests pass. |
 

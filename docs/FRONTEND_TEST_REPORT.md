@@ -35,7 +35,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 python -m pytest -q
 ```
 
-Result: **1518 passed, 4 skipped, 589 subtests passed, 69 warnings in 167.02s**.
+Result: **1522 passed, 4 skipped, 589 subtests passed, 69 warnings in 147.31s**.
 
 The single-threaded BLAS variables are part of the command, not an after-the-fact excuse. The first
 full run with default threading failed 13 tests, all in subprocess-heavy tests, with:
@@ -46,7 +46,7 @@ OpenBLAS error: Memory allocation still failed after 10 retries, giving up.
 
 Those 13 were re-run as a subset with the same single-thread settings and **16 passed in 5.87s**.
 They are environment memory failures on this laptop, not frontend or contract failures. The green
-1518-test result above is the one to cite, with the command that produced it.
+1522-test result above is the one to cite, with the command that produced it.
 
 ### Targeted T7 tests — passed
 
@@ -125,29 +125,80 @@ T5 added USD. T7 finished the fix:
 
 The values did not change: 13.77 USD and 15.44 USD are still the model's own outputs.
 
-## 4. Known open items after T7
+## 4. Closeout follow-up
 
-These are documented, not silently fixed:
+The remaining frontend findings were fixed on the same branch:
 
-| ID | Item | Why it remains open |
-|---|---|---|
-| F-01 | One local flag exposes the other local page | Local-only menu; judged public menu is unaffected. Needs a per-page predicate and two tests. |
-| F-04 | Viewer does not check `schema_version` | Requires a product decision: add a gate or narrow `APP_INTEGRATION.md` to match the presence-only viewer. |
-| F-05 | React telemetry errors become "no data" | Console is not the judged demo; needs an API-layer distinction between 404 and failure. |
-| F-06 | CI build-only; no lockfile | Would be a separate T6 follow-up; no lockfile was added. |
-| F-07 | 52 deprecated `use_container_width` calls | Separate UI migration; current Streamlit still renders. |
-| G1–G4 | Module integration high gaps | Contract/model/product decisions recorded in `docs/MODULE_INTEGRATION_AUDIT.md`; out of T7. |
+| ID | Item | Result | Evidence |
+|---|---|---|---|
+| F-01 | One local flag exposed the other local page | Fixed | Per-page predicates in `islandos_ui/navigation.py`; `app.py` registers 07 only with the API URL and 08 only with the workspace flag; 7 navigation tests pass. |
+| F-04 | Viewer did not check `schema_version` | Fixed | `readViews()` rejects a request or result that is not v3; six Node tests cover v2, unversioned and v3 payloads. |
+| F-05 | Telemetry 401/500 looked like "no data" | Fixed | `ApiError` carries the HTTP status; only 404 becomes `null`, other failures reach the error banner; Node tests cover 404, 401 and 500. |
+| F-06 | Frontend CI was build-only | Fixed | `package-lock.json` committed; CI uses `npm ci` and runs `npm test`; viewer and telemetry tests are part of that command. |
+| F-07 | 52 deprecated `use_container_width` calls | Fixed | All 52 now use `width="stretch"`; page smoke, header and navigation tests pass with no `use_container_width` warning. |
+| F-08 | Site workspace create button stayed disabled after consent | Fixed | Found during the live page-08 check; `tests/test_local_workspace_creation.py` drives consent/no-consent creation. |
+| G2 | `POST /run` promised annual evidence but returned `None` | Fixed as a documentation boundary | `transport.py` now states annual evidence is not replayed. |
+| G3 | 05 investment inputs were discarded on replay | Fixed for the eight v3 request fields | `replay_run_request` returns an `investment` block from the existing evaluator; `tests/test_application_transport.py` checks equality. Replacement year, replacement cost and residual value remain page-only. |
+| G1 | No single replayable end-to-end chain | Deferred by Phase 1 boundary | A new cross-page pipeline would change the model composition; not claimed as integrated. |
+| G4 | 05 and 06 use different synthetic inputs | Deferred by Phase 1 boundary | Unifying them changes recorded demo numbers; the difference is documented. |
 
-`F-02` (port mismatch) is fixed in documentation: root README and page 07 now name `8766`, the
-service default. `F-03` (device-page labels and heading) is fixed in this branch. The T1 audit keeps
-its baseline findings and now carries a T7 status table so the two states are not confused.
+`F-02` (port mismatch) and `F-03` (device-page labels and heading) remain fixed from T7.
 
-## 5. Acceptance statement
+## 5. Follow-up verification
+
+```text
+python -m pytest -q tests/test_navigation_contract.py
+-> 7 passed in 0.12s
+
+python -m pytest -q tests/test_ui_smoke_all_pages.py \
+  tests/test_page_headers.py tests/test_navigation_contract.py
+-> 30 passed, 16 warnings in 13.63s
+
+python -m pytest -q tests/test_application_transport.py \
+  tests/test_contract_json_schema.py
+-> 19 passed in 5.01s
+
+python -m pytest -q tests/test_local_workspace_creation.py
+-> 2 passed in 2.19s
+
+cd frontend && npm test
+-> 6 passed
+
+cd frontend && npm run build
+-> 36 modules transformed; both HTML entries built
+```
+
+The 16 warnings in the page run are Pandas 4 `reset_index(inplace=True)` deprecations from Streamlit's
+chart helper. The former `use_container_width` warning is not present.
+
+### Live local-only pages
+
+Three local Streamlit instances were opened with different environment variables:
+
+- only `ISLANDOS_API_BASE_URL=http://127.0.0.1:8766`: the menu showed **Customer workspace (local)**
+  and not **Site workspace (local)**;
+- only `ISLANDOS_ENABLE_LOCAL_WORKSPACE=1`: the menu showed **Site workspace (local)** and not
+  **Customer workspace (local)**;
+- both variables: page 08 opened, a temporary project was created through the real form, and the
+  page then showed the active project, site configuration, equipment register, exports and
+  `Local workspace audit chain: valid · 2 events`.
+
+The live 08 check is what exposed F-08: the old form disabled its submit button on a checkbox value
+that could not change until the form was submitted. The fixed form permits the click and refuses
+the submit when consent is absent.
+
+Page 07 opened its real sign-in form against the loopback API; no credential was entered, so the
+signed-in tenant view is not claimed as exercised.
+
+## 6. Acceptance statement
 
 For the judged public Streamlit path, the branch is ready for the walkthrough in
 `docs/JUDGE_WALKTHROUGH.md`: three customer pages render, the device-page cost distinction is
 explicit, the report download has the v3 contract fields, the full Python suite passes with the
-documented single-thread command, and the React bundle builds.
+documented single-thread command, and the React bundle builds. The local 07/08 pages now appear only
+under their own prerequisites.
 
-The branch does **not** claim production readiness, measured savings, site permission, a completed
-shadow trial, RBAC or device control. The PR is not merged by this task.
+G1 (one cross-page pipeline) and G4 (one shared 05/06 synthetic input) are **not fixed**; they are
+Phase 1 limits recorded in `docs/MODULE_INTEGRATION_AUDIT.md`. The branch does **not** claim
+production readiness, measured savings, site permission, a completed shadow trial, RBAC or device
+control. The PR is not merged by this task.

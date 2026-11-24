@@ -89,7 +89,7 @@ The shortest accurate description is: **05 and 06 are two separate forecast→di
 | Workspace: Microgrid | Ranked candidate results. | Per-m³ whole-system operating cost and incremental cost vs no-RO. | Page arithmetic after `item.to_dict()` (`workspace.py:1250-1269`). | Customer economics table (`workspace.py:1425-1441`). | Candidate CSV (`workspace.py:1442-1448`). | No separate economics validation; division-by-zero returns `None`. | P: accounting indicators, not investment economics. |
 | Workspace: Historical RO baseline | Historical RO CSV plus chemical/variable O&M/maintenance/start/fixed O&M rates. | `reconstruct_historical_ro_cost` report: total cost, cost/m³, water, energy, runtime, start events, breakdown. | `reconstruct_historical_ro_cost` at `workspace.py:1542-1549`. | Metrics and cost breakdown (`workspace.py:1560-1572`). | CSV (`workspace.py:1590-1596`). | `ValueError`/`TypeError`/`UnicodeDecodeError` (`workspace.py:1605`). | Y as a historical baseline; X from forecast/dispatch. |
 
-**Economics gap:** there are four incompatible economic definitions: 05 customer-entered annual investment, 06 equal-day annual operating projection, 09 24 h energy cost, and microgrid per-m³ operating indicators. They cannot be compared without a service-boundary and period adapter. The most consequential implementation gap is that **05’s `run_request` already carries `run_settings.investment`, but `replay_run_request` ignores it** (`run_orchestration.py:320-335`), so the replayable request cannot reproduce the investment screen.
+**Economics gap:** there are four incompatible economic definitions: 05 customer-entered annual investment, 06 equal-day annual operating projection, 09 24 h energy cost, and microgrid per-m³ operating indicators. They cannot be compared without a service-boundary and period adapter. After the T7+ follow-up, `replay_run_request` returns the investment screen for the eight fields already carried by `run_settings.investment`; replacement year, replacement cost and residual value remain page-only because the v3 request does not carry them.
 
 ### 6. RESULTS
 
@@ -106,17 +106,35 @@ The shortest accurate description is: **05 and 06 are two separate forecast→di
 
 ### G1 (High) No single replayable end-to-end chain
 
+**Status after T7+:** deferred by the Phase 1 boundary. A shared chain would require a new orchestration
+that composes the three pages and changes the model composition; the branch is explicitly read-only
+and does not change model assumptions. The three page chains remain separate and are not described as
+one pipeline.
+
 `run_customer_dashboard` (`run_orchestration.py:56-98`), `run_joint_optimizer` (`run_orchestration.py:102-136`), and `run_device_planner` (`run_orchestration.py:261-300`) are three different compositions. No shared `run_id` or manifest spans them. 09 has no forecast/optimizer stage at all. Workspace chains bypass `run_orchestration` entirely. Therefore “INPUT → FORECAST → SIMULATION → OPTIMISATION → ECONOMIC EVALUATION → RESULTS” describes a conceptual sequence, not one implemented pipeline.
 
 ### G2 (High) The replay contract promises annual evidence but returns `annual: None`
 
-`islandos_core/transport.py:6` describes `POST /run` as returning “its summary (+ annual)”. Yet `replay_run_request` returns `{"page": page, "result": summary, "annual": None}` for all three pages (`run_orchestration.py:335`, `361`, `383`). Existing transport tests assert this null behavior (`tests/test_application_transport.py:153-156`, `202-205`, `265-271`). This is not an integration of the annual stage; it is an explicit omission.
+**Status after T7+:** the false promise is removed. `islandos_core/transport.py` now says annual
+evidence is not replayed; `annual: None` is the stated contract, not an omission. Annual projection
+remains a page/06 checkbox outcome and is not part of `POST /run`.
+
+`islandos_core/transport.py:6` described `POST /run` as returning “its summary (+ annual)”. Yet `replay_run_request` returns `{"page": page, "result": summary, "annual": None}` for all three pages (`run_orchestration.py:335`, `361`, `383`). Existing transport tests assert this null behavior (`tests/test_application_transport.py:153-156`, `202-205`, `265-271`). This is not an integration of the annual stage; it is an explicit omission.
 
 ### G3 (High) 05 investment inputs are carried by the request but discarded on replay
 
-05 builds `run_settings.investment` with all eight input fields (`05:239-251`); `app_view_models.build_run_request` validates them against `INVESTMENT_KEYS` (`app_view_models.py:135-144`). `replay_run_request` only passes `cost_priority` and never calls `evaluate_investment_economics` (`run_orchestration.py:320-335`). Consequently the same request replayed outside Streamlit cannot reproduce NPV, payback, cashflows, sensitivity, or the withheld/available state.
+**Status after T7+:** fixed for the eight fields carried by the v3 request. `replay_run_request` calls
+the existing `evaluate_investment_economics` with the same service-equivalence gate and returns an
+`investment` block; `tests/test_application_transport.py` checks it equals the page evaluator.
+Replacement year, replacement cost and residual value are still page-only because they are not in the
+v3 request.
+
+`run_orchestration.py:320-335` only passed `cost_priority` and never called `evaluate_investment_economics` (`05:239-251`, `app_view_models.py:135-144`).
 
 ### G4 (High) 05 and 06 build different synthetic inputs for the same “demo site”
+
+**Status after T7+:** deferred by the Phase 1 boundary. Unifying the two generators would change the
+recorded demo numbers and the walkthrough figures. The difference is documented rather than hidden.
 
 05 has its own 168 h synthetic loop (`05:179-193`), including different PV/wind coefficients and `demand_scale`/`tariff_scale`; 06 uses `build_synthetic_site_history` (`06:61-125`). The two surfaces have different history hashes even with the same clock and nominal site. There is no shared input artifact to compare 05 and 06, and no single raw-history export.
 
@@ -168,7 +186,7 @@ These recommendations deliberately reuse existing functions and objects. They ar
 
 ## What is actually integrated, in one sentence per chain
 
-- **05:** a real CSV/synthetic → forecast → coordinated inputs → bounded two-policy optimization → service-equivalent economics + stress/paired replay → report/operator JSON chain. It is the strongest customer decision chain, but its annual investment is a separate customer-entered calculation and is not replayable.
+- **05:** a real CSV/synthetic → forecast → coordinated inputs → bounded two-policy optimization → service-equivalent economics + stress/paired replay → report/operator JSON chain. It is the strongest customer decision chain; its eight-field annual investment screen is replayable, while replacement year, replacement cost and residual value remain page-only.
 - **06:** a real CSV/synthetic → manifest-bound forecast → seeded joint schedule search → robust 24 h economics → optional equal-day annual projection → JSON audit chain. It is the strongest forecast-to-schedule chain, but annual is checkbox-conditional and `replay_run_request` returns `annual: null`.
 - **09:** a fixed synthetic input → device schedule → shared-simulator replay + reference → 24 h cost summary → CSV/JSON chain. It is fully visible but intentionally isolated; it has no forecast, no real optimizer, and no annual economics.
 - **Workspace Microgrid:** a synthetic 168 h scenario → seasonal-naive forecast → ranked candidates + coordinate search + robustness → per-m³ indicators → CSV chain. It touches all six stages, but it is a toy screening surface without a run manifest or input hash.

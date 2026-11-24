@@ -104,7 +104,7 @@ with st.expander("Input provenance and reproducibility", expanded=False):
     )
     st.code(input_sha256, language=None)
 with st.expander("Preview validated input", expanded=False):
-    st.dataframe(input_frame.head(24), use_container_width=True, hide_index=True)
+    st.dataframe(input_frame.head(24), width="stretch", hide_index=True)
     chart_input = input_frame.set_index("timestamp_utc")
     st.subheader("Available surplus power (kW)")
     st.line_chart(chart_input[["actual_surplus_kw", "forecast_surplus_kw"]])
@@ -113,7 +113,7 @@ with st.expander("Preview validated input", expanded=False):
     st.subheader("Cooling demand (kW thermal)")
     st.line_chart(chart_input[["cooling_demand_kw_th"]])
 
-if st.button("Run four-policy rolling comparison", type="primary", use_container_width=True):
+if st.button("Run four-policy rolling comparison", type="primary", width="stretch"):
     policies = ("rolling", "ro_first", "ice_first", "perfect_information")
     results = {}
     try:
@@ -151,7 +151,7 @@ if results:
         })
     summary = pd.DataFrame(summary_rows)
     st.subheader("Policy comparison")
-    st.dataframe(summary, use_container_width=True, hide_index=True)
+    st.dataframe(summary, width="stretch", hide_index=True)
     summary_export = summary.assign(
         source_type=source_type,
         source_label=source_label,
@@ -172,7 +172,7 @@ if results:
     selected_policy = next(key for key, label in labels.items() if label == selected_label)
     audit = pd.DataFrame(results[selected_policy]["hourly_audit"])
     st.subheader(f"Hourly operating audit — {selected_label}")
-    st.dataframe(audit, use_container_width=True, hide_index=True)
+    st.dataframe(audit, width="stretch", hide_index=True)
     audit_export = audit.assign(
         source_type=source_type,
         source_label=source_label,

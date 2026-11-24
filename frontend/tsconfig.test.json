@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true,
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": false,
+    "outDir": "dist-tests",
+    "rootDir": "src"
+  },
+  "include": ["src/applicationViewsPayload.ts", "src/api.ts"]
+}

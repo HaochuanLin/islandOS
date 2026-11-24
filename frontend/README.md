@@ -102,9 +102,10 @@ Concretely:
 
 - **No writes.** No device command, no file save, no `localStorage`, no server-side state. The report
   file is read in the browser with `File.text()` and is not uploaded anywhere.
-- **No validation of its own.** It checks that `request` and `result` exist, then displays what is
-  there; a file without an `application_views` block is rejected with a readable message rather than
-  guessed at. Field rules and units are owned by the Python contract, not re-implemented here.
+- **One version guard.** It requires `request.schema_version` and `result.schema_version` to be the
+  current `3`; a v2 or unversioned block is rejected with a readable message instead of being
+  half-read. Otherwise it displays what is there. Field rules and units are owned by the Python
+  contract, not re-implemented here.
 - **No console data.** No sites, telemetry, notifications, members or sessions. The viewer opens
   before any sign-in and keeps working after sign-out.
 - **No annual projection for 09.** 09 downloads carry `annual: null`; the page shows the device
@@ -128,8 +129,10 @@ console instead, and the answer above has been reversed by accident.
 ## Verification
 
 ```bash
-cd frontend && npm run build          # tsc -b && vite build; both entries land in dist/
-python -m islandos_core.transport     # from the repository root
+cd frontend && npm ci                # uses the committed package-lock.json
+cd frontend && npm test              # viewer v3 guard + telemetry 404/401/500
+cd frontend && npm run build         # tsc -b && vite build; both entries land in dist/
+python -m islandos_core.transport    # from the repository root
 curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' http://127.0.0.1:8765/
 curl -sS http://127.0.0.1:8765/contracts | head -c 200
 pytest tests/test_application_transport.py
@@ -153,6 +156,9 @@ Measured on `a5ef3df` from a clean worktree, transport on `--port 8799`:
 | `GET /assets/../index.html` | 404 |
 | `pytest` transport + integration doc + contract TS + contract schema | 42 passed |
 | built console bundle | contains `application-views.html` and `Contract viewer`, so the footer link survives the build |
+
+On the T7 closeout branch (2026-11-24), `npm test` reports **6 passed** and `npm run build` reports
+**36 modules transformed** after the viewer payload module and its tests were added.
 
 Loading a real 09 download on that build shows `72.0` / `17.0` / `6.0` / `13.77 USD` against the
 `103.2 kWh · 15.44 USD` earliest-feasible reference, and `Load contracts` fills the `run_request`,

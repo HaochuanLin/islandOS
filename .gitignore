@@ -222,6 +222,7 @@ __marimo__/
 # Node
 node_modules/
 frontend/dist/
+frontend/dist-tests/
 *.tsbuildinfo
 
 # Build stamp written by app.py at start-up (served at /app/static/build_info.json)

@@ -5,32 +5,26 @@ decides which pages exist and how they are grouped, so the menu can be changed
 without touching the workspace logic, and the workspace can grow without adding
 another competing sidebar.
 
-Local-only pages (customer workspace, site workspace) need the loopback
-reference service and a local data directory. They are registered only when the
-local deployment is actually configured — ``ISLANDOS_ENABLE_LOCAL_WORKSPACE=1``
-for the site workspace, or ``ISLANDOS_API_BASE_URL`` for the customer workspace
-— so the public demo never shows entries that can only fail. Both pages keep
-their own guards; this file only decides whether to offer them in the menu.
+Local-only pages (customer workspace, site workspace) need different
+prerequisites. The customer workspace needs the loopback reference service
+(`ISLANDOS_API_BASE_URL`); the site workspace needs the local data directory
+(`ISLANDOS_ENABLE_LOCAL_WORKSPACE=1`). Each page is registered only when its own
+prerequisite is present, so neither can become a dead end for the other. Both
+pages keep their own guards; this file only decides whether to offer them in the
+menu.
 """
 
 from __future__ import annotations
 
-import os
-
 import streamlit as st
 
 from islandos_core import build_info
-from islandos_ui.navigation import page_url_path
+from islandos_ui.navigation import (
+    local_customer_workspace_enabled,
+    local_site_workspace_enabled,
+    page_url_path,
+)
 
-LOCAL_WORKSPACE_FLAG = "ISLANDOS_ENABLE_LOCAL_WORKSPACE"
-LOCAL_API_BASE_URL = "ISLANDOS_API_BASE_URL"
-
-
-def local_ui_enabled() -> bool:
-    """True only when a local deployment is explicitly configured."""
-    workspace_flag = os.environ.get(LOCAL_WORKSPACE_FLAG, "").strip() == "1"
-    api_base_url = os.environ.get(LOCAL_API_BASE_URL, "").strip()
-    return workspace_flag or bool(api_base_url)
 
 
 st.set_page_config(
@@ -100,21 +94,27 @@ def navigation_pages() -> dict:
             ),
         ],
     }
-    if local_ui_enabled():
-        groups["Local deployment only"] = [
+    local_pages = []
+    if local_customer_workspace_enabled():
+        local_pages.append(
             st.Page(
                 "pages/07_Local_Customer_Workspace.py",
                 title="Customer workspace (local)",
                 icon="🗂️",
                 url_path=_url_path("pages/07_Local_Customer_Workspace.py"),
-            ),
+            )
+        )
+    if local_site_workspace_enabled():
+        local_pages.append(
             st.Page(
                 "pages/08_Site_Workspace.py",
                 title="Site workspace (local)",
                 icon="🏗️",
                 url_path=_url_path("pages/08_Site_Workspace.py"),
-            ),
-        ]
+            )
+        )
+    if local_pages:
+        groups["Local deployment only"] = local_pages
     return groups
 
 

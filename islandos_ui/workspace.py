@@ -133,14 +133,14 @@ with st.sidebar:
         data=csv_template_bytes(),
         file_name="islandos_energy_water_template.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )
     st.download_button(
         "⬇ Download site-history CSV (canonical columns)",
         data=synthetic_forecast_history_csv(),
         file_name="islandos_synthetic_forecast_demo.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )
     # Plain caption, not st.help: in the narrow sidebar a hover tooltip renders on
     # top of the button and swallows the click (measured 2026-11-24).
@@ -199,7 +199,7 @@ if page == "Overview":
             "pages/06_Forecast_Led_Joint_Resource_Optimizer.py",
             label="Open joint resource optimizer",
             icon="⚡",
-            use_container_width=True,
+            width="stretch",
         )
     with device_col:
         st.markdown("#### 2 · Schedule equipment")
@@ -211,7 +211,7 @@ if page == "Overview":
             "pages/09_Device_Flexibility_Planner.py",
             label="Open device flexibility planner",
             icon="🔌",
-            use_container_width=True,
+            width="stretch",
         )
     with compare_col:
         st.markdown("#### 3 · Review economics")
@@ -223,7 +223,7 @@ if page == "Overview":
             "pages/05_Customer_Decision_Dashboard.py",
             label="Open decision dashboard",
             icon="📊",
-            use_container_width=True,
+            width="stretch",
         )
 
     st.divider()
@@ -525,7 +525,7 @@ elif page == "Flexible-load cost optimizer":
 
     profile = st.data_editor(
         profile_input,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         num_rows="fixed",
         disabled=["Interval"],
@@ -624,7 +624,7 @@ elif page == "Flexible-load cost optimizer":
                 ["Baseline power (kW)", "Optimized power (kW)"]
             ]
         )
-        st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
+        st.dataframe(schedule_frame, width="stretch", hide_index=True)
         export = schedule_frame.copy()
         export["data_provenance"] = profile_provenance
         export["tariff_source"] = tariff_source
@@ -656,7 +656,7 @@ elif page == "Flexible-load cost optimizer":
             data=export.to_csv(index=False).encode("utf-8-sig"),
             file_name="islandos_flexible_load_cost_comparison.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
         with st.expander("Model assumptions and limitations"):
             st.write(
@@ -735,7 +735,7 @@ elif page == "Strategy simulator":
         "backup_energy_cost_per_kwh": float(diesel_cost) if diesel_cost > 0 else None,
     }
 
-    if st.button("▶ Run strategy comparison", type="primary", use_container_width=True):
+    if st.button("▶ Run strategy comparison", type="primary", width="stretch"):
         try:
             config = Config(
                 ro_rated_power_kw=float(ro_kw),
@@ -798,7 +798,7 @@ elif page == "Strategy simulator":
             "grid_energy_to_ro_kwh", "backup_energy_to_ro_kwh", "grid_energy_cost",
             "direct_diesel_displacement_potential_kwh",
         ]
-        st.dataframe(summaries[display_columns], use_container_width=True, hide_index=True)
+        st.dataframe(summaries[display_columns], width="stretch", hide_index=True)
         st.caption(
             "Direct diesel-displacement potential is reported separately from RO consumption; "
             "this app does not claim that RO operation creates additional diesel savings."
@@ -890,7 +890,7 @@ elif page == "Strategy simulator":
                     "provenance": report.provenance,
                 })
             cost_frame = pd.DataFrame(cost_rows)
-            st.dataframe(cost_frame, use_container_width=True, hide_index=True)
+            st.dataframe(cost_frame, width="stretch", hide_index=True)
             st.download_button(
                 "Download operating-cost comparison (CSV)",
                 data=cost_frame.to_csv(index=False).encode("utf-8-sig"),
@@ -990,7 +990,7 @@ elif page == "Strategy simulator":
                 "ro_power_kw", "water_inventory_before_m3", "remaining_water_inventory_m3"
             ]]
             st.line_chart(chart)
-        st.dataframe(chosen_rows, use_container_width=True, hide_index=True)
+        st.dataframe(chosen_rows, width="stretch", hide_index=True)
         d1, d2 = st.columns(2)
         with d1:
             st.download_button(
@@ -998,7 +998,7 @@ elif page == "Strategy simulator":
                 dataframe_csv(result["summary"], result["provenance"]),
                 file_name="islandos_strategy_summary.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
         with d2:
             st.download_button(
@@ -1006,7 +1006,7 @@ elif page == "Strategy simulator":
                 dataframe_csv(result["detail"], result["provenance"]),
                 file_name="islandos_timestep_audit.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
         st.divider()
         st.subheader("Experimental optimizer — NSGA-II Pareto search")
@@ -1030,7 +1030,7 @@ elif page == "Strategy simulator":
             "seed": 42,
             "optimizer_build": "NSGA2-2OBJ-DIAG-v1",
         })
-        if st.button("Run NSGA-II Pareto optimization", type="primary", use_container_width=True):
+        if st.button("Run NSGA-II Pareto optimization", type="primary", width="stretch"):
             try:
                 # Streamlit reruns the script on every button click. Rebuild the
                 # inputs here instead of relying on local variables created by the
@@ -1134,7 +1134,7 @@ elif page == "Strategy simulator":
                     "unmet_water_demand_m3", "grid_energy_cost", "surplus_energy_to_ro_kwh",
                     "grid_energy_to_ro_kwh", "grid_peak_power_kw", "ro_switch_on_count",
                     "water_spill_m3", "ending_water_inventory_m3",
-                ]], use_container_width=True, hide_index=True)
+                ]], width="stretch", hide_index=True)
                 st.subheader("Automatic quantitative comparison: hybrid vs. fixed alternatives")
                 hybrid = summaries.loc[summaries["strategy"] == "hybrid_surplus_then_off_peak"].iloc[0]
                 def _delta_text(metric_label, metric_key, reference):
@@ -1159,7 +1159,7 @@ elif page == "Strategy simulator":
                     dataframe_csv(pareto_rows, optimizer_result["provenance"]),
                     file_name="islandos_nsga2_pareto_solutions.csv",
                     mime="text/csv",
-                    use_container_width=True,
+                    width="stretch",
                 )
             else:
                 st.warning("No feasible schedule with exactly zero unmet demand was found in this search budget. No Pareto result is reported as feasible. Try more generations/population or review the input and model assumptions.")
@@ -1201,7 +1201,7 @@ elif page == "Microgrid screening":
         st.error("Initial water inventory cannot exceed tank capacity.")
         st.stop()
 
-    if st.button("▶ Generate scenario and compare candidates", type="primary", use_container_width=True):
+    if st.button("▶ Generate scenario and compare candidates", type="primary", width="stretch"):
         import math
 
         # Build a synthetic seven-day observation window, then forecast the
@@ -1288,7 +1288,7 @@ elif page == "Microgrid screening":
         })
         st.line_chart(
             forecast_frame.set_index("hour_ahead"),
-            use_container_width=True,
+            width="stretch",
         )
         st.caption(
             "This is a transparent seasonal-naive benchmark, not a trained model. "
@@ -1309,7 +1309,7 @@ elif page == "Microgrid screening":
         st.subheader("Synthetic historical replay")
         st.dataframe(
             pd.DataFrame(replay_rows).round(3),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.caption(
@@ -1322,7 +1322,7 @@ elif page == "Microgrid screening":
             "water_served_m3", "unmet_water_m3", "operating_cost",
             "emissions_kg", "renewable_curtailed_kwh", "ro_electricity_kwh",
         ]]
-        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.dataframe(display, width="stretch", hide_index=True)
         winner = ranked[0]
         st.subheader("Why this candidate ranked first")
         if winner.feasible:
@@ -1362,13 +1362,13 @@ elif page == "Microgrid screening":
             "Water demand (m³)": demand_series,
             "Water produced (m³)": searched.result.water_produced_m3,
         }).set_index("hour_ahead")
-        st.line_chart(search_schedule_frame, use_container_width=True)
+        st.line_chart(search_schedule_frame, width="stretch")
         st.download_button(
             "Download searched schedule (CSV)",
             data=search_schedule_frame.to_csv().encode("utf-8-sig"),
             file_name="islandos_coordinate_search_schedule.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
         st.subheader("Stress-test robustness")
@@ -1383,7 +1383,7 @@ elif page == "Microgrid screening":
                 "worst_essential_unserved_kwh", "worst_unmet_water_m3",
                 "worst_operating_cost", "worst_emissions_kg",
             ]].round(3),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         stress_detail_rows = []
@@ -1398,7 +1398,7 @@ elif page == "Microgrid screening":
         with st.expander("Inspect scenario-by-scenario results"):
             st.dataframe(
                 stress_detail_frame.round(3),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
             st.download_button(
@@ -1406,7 +1406,7 @@ elif page == "Microgrid screening":
                 data=stress_detail_frame.to_csv(index=False).encode("utf-8-sig"),
                 file_name="islandos_stress_test_audit.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
         with st.expander("Stress scenario assumptions"):
             st.write("- Nominal: unchanged inputs.")
@@ -1435,7 +1435,7 @@ elif page == "Microgrid screening":
                 "whole_system_operating_cost_per_m3_served",
                 "incremental_cost_per_additional_m3_vs_no_ro",
             ]].round(4),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.caption(
@@ -1450,7 +1450,7 @@ elif page == "Microgrid screening":
             data=frame.to_csv(index=False).encode("utf-8-sig"),
             file_name="islandos_microgrid_candidate_screening.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
         with st.expander("Candidate definitions and model limits"):
             st.write("- no_ro: RO power request is zero.")
@@ -1575,7 +1575,7 @@ elif page == "Historical RO baseline":
                 [{"Cost component": name, "Cost": value, "Currency": report.currency}
                  for name, value in report.cost_breakdown.items()]
             )
-            st.dataframe(breakdown, use_container_width=True, hide_index=True)
+            st.dataframe(breakdown, width="stretch", hide_index=True)
             export = {
                 "status": reconstructed["status"],
                 "data_provenance": reconstructed["data_provenance"],
@@ -1598,7 +1598,7 @@ elif page == "Historical RO baseline":
                 data=pd.DataFrame([export]).to_csv(index=False).encode("utf-8-sig"),
                 file_name="islandos_historical_ro_baseline.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
             with st.expander("Limitations and exclusions"):
                 for limitation in reconstructed["limitations"]:
@@ -1658,10 +1658,10 @@ elif page == "Data onboarding & workspace":
             st.caption("Original file SHA-256: " + report.get("artifact", {}).get("sha256", "unavailable"))
             if report.get("column_mappings"):
                 st.subheader("Suggested column mappings")
-                st.dataframe(report["column_mappings"], use_container_width=True, hide_index=True)
+                st.dataframe(report["column_mappings"], width="stretch", hide_index=True)
             if report.get("issues"):
                 st.subheader("Quality findings")
-                st.dataframe(report["issues"], use_container_width=True, hide_index=True)
+                st.dataframe(report["issues"], width="stretch", hide_index=True)
             cols = st.columns(3)
             for column, task in zip(cols, ["exploration", "forecasting", "dispatch_optimization"]):
                 gate = evaluate_task_readiness(report, task)
@@ -1792,7 +1792,7 @@ elif page == "Forecast lab":
             st.metric("Import status", import_report["status"].replace("_", " ").title())
             st.caption(f"{import_report['row_count']} rows · {import_report['error_count']} errors · {import_report['warning_count']} warnings · SHA-256 {import_report['artifact']['sha256'][:16]}…")
             if import_report.get("issues"):
-                st.dataframe(import_report["issues"], use_container_width=True, hide_index=True)
+                st.dataframe(import_report["issues"], width="stretch", hide_index=True)
             mappings = import_report.get("column_mappings", [])
             signals = sorted({item["canonical_field"] for item in mappings})
             if not signals:
@@ -1848,7 +1848,7 @@ else:
             "Whether grid electricity is available (true/false or 1/0)",
             "Water demand during the interval (m³)",
         ],
-    }), use_container_width=True, hide_index=True)
+    }), width="stretch", hide_index=True)
     st.markdown(
         """
         **Optional column**
