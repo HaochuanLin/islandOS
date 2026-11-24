@@ -98,6 +98,34 @@ class TestStageEMemberAndNotificationLifecycle(unittest.TestCase):
                 invitation["invitation_token"], "a-long-enough-password",
             )
 
+    def test_pending_invitation_list_is_token_free_and_owner_only(self):
+        invite = self.store.create_invitation(
+            self.owner, "pending-viewer@example.test", role="viewer", expires_in_seconds=3600,
+        )
+        listed = self.store.list_invitations(self.owner)
+        self.assertEqual(len(listed), 1)
+        self.assertEqual(listed[0]["email"], "pending-viewer@example.test")
+        self.assertEqual(listed[0]["role"], "viewer")
+        self.assertEqual(listed[0]["invitation_id"], invite["invitation_id"])
+        self.assertEqual(listed[0]["expires_at"], invite["expires_at"])
+        # The one-time token is returned only at creation; the read exposes neither
+        # the token nor its hash.
+        self.assertNotIn("invitation_token", listed[0])
+        self.assertNotIn("token_hash", listed[0])
+
+        other_owner = self.principal("pending-other@example.test", "Customer B")
+        self.assertEqual(self.store.list_invitations(other_owner), [])
+
+        self.store.accept_invitation(
+            invite["invitation_token"], "another-correct-horse-password",
+        )
+        self.assertEqual(self.store.list_invitations(self.owner), [])
+        viewer = self.store.authenticate(
+            self.store.login("pending-viewer@example.test", "another-correct-horse-password")["access_token"]
+        )
+        with self.assertRaises(PermissionError):
+            self.store.list_invitations(viewer)
+
     def test_notification_inbox_is_tenant_and_user_scoped(self):
         site = self.store.create_site(self.owner, "North site", "UTC")
         member_invite = self.store.create_invitation(

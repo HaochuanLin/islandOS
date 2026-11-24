@@ -17,6 +17,7 @@ async function call<T>(path: string, token: string, init: RequestInit = {}): Pro
 
 export default function MemberManagement({ token, role }: { token: string; role: string }) {
   const [members, setMembers] = useState<Member[]>([]);
+  const [pending, setPending] = useState<Invitation[]>([]);
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"analyst" | "viewer">("analyst");
   const [invitation, setInvitation] = useState<Invitation | null>(null);
@@ -27,7 +28,13 @@ export default function MemberManagement({ token, role }: { token: string; role:
   const refresh = useCallback(async () => {
     const result = await call<{ members: Member[] }>("/api/v1/members", token);
     setMembers(result.members);
-  }, [token]);
+    if (canManage) {
+      const listed = await call<{ invitations: Invitation[] }>("/api/v1/members/invitations", token);
+      setPending(listed.invitations);
+    } else {
+      setPending([]);
+    }
+  }, [token, canManage]);
 
   useEffect(() => {
     refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not load members"));
@@ -80,13 +87,20 @@ export default function MemberManagement({ token, role }: { token: string; role:
         </div> : <span className="tag">{member.role.toUpperCase()}</span>}
       </div>)}
       {!members.length && <p className="muted">No workspace members were returned by the service.</p>}
+      {canManage && pending.length > 0 && <div className="pending-list">
+        <p className="eyebrow">PENDING INVITATIONS</p>
+        {pending.map((item) => <div className="member-row pending" key={item.invitation_id}>
+          <div><strong>{item.email}</strong><small>Invited as {item.role} · expires {new Date(item.expires_at).toLocaleString()} · not yet accepted</small></div>
+          <span className="tag">PENDING</span>
+        </div>)}
+      </div>}
     </div>
     {canManage && <form className="invite-form" onSubmit={invite}>
       <label>Invite by email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@example.com" required /></label>
       <label>Workspace role<select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "analyst" | "viewer")}><option value="analyst">Analyst</option><option value="viewer">Viewer</option></select></label>
       <button className="primary" disabled={busy || !email.trim()}>{busy ? "Working…" : "Create invitation"}</button>
     </form>}
-    {invitation && <div className="invitation-result"><strong>Invitation created — email was not sent</strong><p>Share this one-time token with the invited person through an approved private channel. It expires {new Date(invitation.expires_at).toLocaleString()}.</p><code>{invitation.invitation_token}</code><button className="outline" type="button" onClick={() => navigator.clipboard?.writeText(invitation.invitation_token)}>Copy token</button></div>}
+    {invitation && <div className="invitation-result"><strong>Invitation created — email was not sent</strong><p className="muted">Invited {invitation.email} as {invitation.role}.</p><p>Share this one-time token with the invited person through an approved private channel. It expires {new Date(invitation.expires_at).toLocaleString()}.</p><code>{invitation.invitation_token}</code><button className="outline" type="button" onClick={() => navigator.clipboard?.writeText(invitation.invitation_token)}>Copy token</button></div>}
     {!canManage && <p className="muted">Your role is read-only for workspace membership. Ask an owner to invite or manage members.</p>}
   </section>;
 }

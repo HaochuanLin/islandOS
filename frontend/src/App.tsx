@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "./api";
 import MemberManagement from "./MemberManagement";
@@ -21,6 +21,12 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState("");
 
   const selectedSite = useMemo(() => sites.find((site) => site.id === siteId) ?? null, [sites, siteId]);
+  // The selected site is read through a ref so `refresh` keeps a stable identity.
+  // Deriving it from state made every selection recreate `refresh`, which re-fired
+  // the session effect and sent a second `telemetry/latest` probe for a brand-new
+  // site (two 404s on the console for an empty site).
+  const siteIdRef = useRef("");
+  useEffect(() => { siteIdRef.current = siteId; }, [siteId]);
 
   useEffect(() => {
     api.health().then((result) => setHealth(result.status === "ok" ? "online" : "unavailable"))
@@ -31,8 +37,10 @@ function App() {
     const [siteResult, notificationResult] = await Promise.all([api.sites(token), api.notifications(token)]);
     setSites(siteResult.sites);
     setNotifications(notificationResult.notifications);
+    const current = siteIdRef.current;
     const nextId = preferredSite && siteResult.sites.some((site) => site.id === preferredSite)
-      ? preferredSite : siteResult.sites.some((site) => site.id === siteId) ? siteId : siteResult.sites[0]?.id ?? "";
+      ? preferredSite : siteResult.sites.some((site) => site.id === current) ? current : siteResult.sites[0]?.id ?? "";
+    siteIdRef.current = nextId;
     setSiteId(nextId);
     if (nextId) {
       try {
@@ -44,7 +52,7 @@ function App() {
       }
     } else setTelemetry(null);
     setLastUpdated(new Date().toLocaleTimeString());
-  }, [siteId]);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
