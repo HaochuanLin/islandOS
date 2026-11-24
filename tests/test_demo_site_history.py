@@ -8,7 +8,9 @@ import pytest
 
 from islandos_core.demo_site_history import (
     SYNTHETIC_HISTORY_HOURS,
+    build_customer_site_history,
     build_synthetic_site_history,
+    canonical_history_sha256,
     demo_anchor_for_hour,
 )
 
@@ -116,3 +118,56 @@ def test_a_datetime_is_refused_where_a_date_is_expected():
 def test_the_demo_anchor_requires_an_aware_timestamp():
     with pytest.raises(ValueError, match="timezone-aware"):
         demo_anchor_for_hour(datetime(2026, 11, 22, 5), 14)
+
+
+def test_customer_wrapper_is_the_joint_default_at_nominal_site():
+    anchor = datetime(2026, 11, 22, 14, tzinfo=timezone.utc)
+    joint = build_synthetic_site_history(anchor, **SITE)
+    customer = build_customer_site_history(anchor, demand_scale=1.0, tariff_scale=1.0)
+    assert customer == joint
+    assert canonical_history_sha256(
+        timestamps=customer.timestamps,
+        pv_power_kw=customer.pv_power_kw,
+        wind_power_kw=customer.wind_power_kw,
+        load_kw=customer.load_kw,
+        tariff_per_kwh=customer.tariff_per_kwh,
+    ) == canonical_history_sha256(
+        timestamps=joint.timestamps,
+        pv_power_kw=joint.pv_power_kw,
+        wind_power_kw=joint.wind_power_kw,
+        load_kw=joint.load_kw,
+        tariff_per_kwh=joint.tariff_per_kwh,
+    )
+
+
+def test_customer_scales_change_load_and_price_but_not_renewables():
+    anchor = datetime(2026, 11, 22, 14, tzinfo=timezone.utc)
+    base = build_synthetic_site_history(anchor, **SITE)
+    scaled = build_customer_site_history(
+        anchor, demand_scale=1.5, tariff_scale=1.2
+    )
+    assert scaled.pv_power_kw == base.pv_power_kw
+    assert scaled.wind_power_kw == base.wind_power_kw
+    assert scaled.load_kw[0] == pytest.approx(base.load_kw[0] * 1.5)
+    assert scaled.tariff_per_kwh[0] == pytest.approx(base.tariff_per_kwh[0] * 1.2)
+
+
+@pytest.mark.parametrize("field,value", [("demand_scale", -1.0), ("tariff_scale", -1.0)])
+def test_customer_scales_refuse_negative_values(field, value):
+    with pytest.raises(ValueError, match="non-negative"):
+        build_customer_site_history(
+            datetime(2026, 11, 22, 14, tzinfo=timezone.utc),
+            **{field: value},
+        )
+
+
+def test_canonical_history_hash_refuses_mismatched_lengths():
+    history = _history(14)
+    with pytest.raises(ValueError, match="same length"):
+        canonical_history_sha256(
+            timestamps=history.timestamps,
+            pv_power_kw=history.pv_power_kw[:-1],
+            wind_power_kw=history.wind_power_kw,
+            load_kw=history.load_kw,
+            tariff_per_kwh=history.tariff_per_kwh,
+        )

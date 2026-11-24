@@ -133,10 +133,17 @@ v3 request.
 
 ### G4 (High) 05 and 06 build different synthetic inputs for the same “demo site”
 
-**Status after T7+:** deferred by the Phase 1 boundary. Unifying the two generators would change the
-recorded demo numbers and the walkthrough figures. The difference is documented rather than hidden.
+**Status after G4 fix:** fixed at the input layer. 05 now calls
+`build_customer_site_history`, which starts from 06's `build_synthetic_site_history` at 40 kW PV /
+20 kW wind and then applies 05's `demand_scale` and `tariff_scale`. At `1.0/1.0` the timestamp list and
+four signal arrays are identical, and both pages print the same `Shared history SHA-256`. 05's pinned
+24-hour cost moves from 17.93 to 24.52 USD (the old inline generator is gone); 06's `7,709.55 USD/year`
+and `186,150 kWh` are unchanged. This is one input generator and one history hash, not a cross-page
+execution chain.
 
-05 has its own 168 h synthetic loop (`05:179-193`), including different PV/wind coefficients and `demand_scale`/`tariff_scale`; 06 uses `build_synthetic_site_history` (`06:61-125`). The two surfaces have different history hashes even with the same clock and nominal site. There is no shared input artifact to compare 05 and 06, and no single raw-history export.
+05 no longer has its own 168 h loop. It uses the 06 builder plus the two customer scales; 06 uses the
+builder directly. The two surfaces now have the same history hash at the nominal site, and an uploaded
+CSV still goes through the one `parse_customer_history_csv` adapter.
 
 ### G5 (Medium) Forecast results are consumed but not fully exported
 

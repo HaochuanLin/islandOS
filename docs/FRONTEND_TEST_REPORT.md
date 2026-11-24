@@ -83,8 +83,8 @@ usability, authentication, API behaviour, accessibility or deployment.
 
 Local run: `http://127.0.0.1:8611`, browser viewport 1280×960, 2026-11-24.
 
-- **Decision dashboard** rendered the Decision snapshot: Battery First, 17.93 USD, 0.00 kWh unmet,
-  18.37 USD modeled difference; service equivalence and dispatch audit both passed.
+- **Decision dashboard** rendered the Decision snapshot: Battery First, 24.52 USD after the shared-history
+  change, 0.00 kWh unmet, 10.55 USD modeled difference; service equivalence and dispatch audit both passed.
 - **Joint resource optimizer** rendered the canonical run/manifest/evidence digests, status
   "ready for human review", "device write not authorized", a four-scenario physical audit and the
   withheld annual basis.
@@ -147,7 +147,7 @@ The remaining frontend findings were fixed on the same branch:
 | G2 | `POST /run` promised annual evidence but returned `None` | Fixed as a documentation boundary | `transport.py` now states annual evidence is not replayed. |
 | G3 | 05 investment inputs were discarded on replay | Fixed for the eight v3 request fields | `replay_run_request` returns an `investment` block from the existing evaluator; `tests/test_application_transport.py` checks equality. Replacement year, replacement cost and residual value remain page-only. |
 | G1 | No single replayable end-to-end chain | Deferred by Phase 1 boundary | A new cross-page pipeline would change the model composition; not claimed as integrated. |
-| G4 | 05 and 06 use different synthetic inputs | Deferred by Phase 1 boundary | Unifying them changes recorded demo numbers; the difference is documented. |
+| G4 | 05 and 06 use different synthetic inputs | Fixed at the input layer | 05 starts from 06's `build_synthetic_site_history` via `build_customer_site_history`; at 1.0/1.0 both pages print the same `Shared history SHA-256`. 05's pinned cost is 24.52 USD; 06's 7,709.55 USD/year is unchanged. |
 
 `F-02` (port mismatch) and `F-03` (device-page labels and heading) remain fixed from T7.
 
@@ -194,8 +194,26 @@ The live 08 check is what exposed F-08: the old form disabled its submit button 
 that could not change until the form was submitted. The fixed form permits the click and refuses
 the submit when consent is absent.
 
-Page 07 opened its real sign-in form against the loopback API; no credential was entered, so the
-signed-in tenant view is not claimed as exercised.
+Page 07 opened its real sign-in form against the loopback API. In the signed-in acceptance run it
+reached the owner view; before this run the signed-in tenant view had not been exercised.
+
+### Signed-in browser acceptance
+
+Run with a disposable local SQLite database, a temporary owner tenant and one site + notification
+created through the API. The database and server were removed afterwards.
+
+- **Page 07 (Streamlit, 1280×960):** the exact Email/Password fields were filled and the primary
+  form submitted. The page then showed `Signed in · role: owner`, the tenant line, the
+  `Organization members` table with the owner, and the `Notification inbox` tab contained
+  **Inverter derate** with severity `warning`, the supplied message and `Mark as read`.
+- **React console (Vite dev server, 1440×960):** the same owner signed in; the console showed
+  `OPERATIONS CONSOLE`, **North microgrid** in the site list, `REGISTERED SITES 1`,
+  `UNREAD NOTIFICATIONS 1`, the owner member row, the **Inverter derate** activity item, and
+  `LATEST TELEMETRY — No validated record` / `No telemetry received`. The API indicator was
+  `online` and no error banner appeared.
+- Not covered: invitation acceptance, role mutation, telemetry ingestion, sign-out/revocation in
+  the browser, MFA/SSO, production TLS and multi-user isolation. The React console remains a local
+  reference surface, not the judged public demo.
 
 ## 6. Acceptance statement
 
@@ -205,7 +223,8 @@ explicit, the report download has the v3 contract fields, the full Python suite 
 documented single-thread command, and the React bundle builds. The local 07/08 pages now appear only
 under their own prerequisites.
 
-G1 (one cross-page pipeline) and G4 (one shared 05/06 synthetic input) are **not fixed**; they are
-Phase 1 limits recorded in `docs/MODULE_INTEGRATION_AUDIT.md`. The branch does **not** claim
-production readiness, measured savings, site permission, a completed shadow trial, RBAC or device
-control. The PR is not merged by this task.
+G1 (one cross-page pipeline) is **not fixed**; it is a Phase 1 limit recorded in
+`docs/MODULE_INTEGRATION_AUDIT.md`, and the walkthrough states that 05/06/09 are three separate
+page-level demonstrations. G4 is fixed at the input layer: 05/06 share the canonical synthetic
+history and hash. The branch does **not** claim production readiness, measured savings, site
+permission, a completed shadow trial, RBAC or device control. The PR is not merged by this task.

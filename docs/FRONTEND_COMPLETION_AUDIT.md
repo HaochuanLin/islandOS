@@ -19,9 +19,10 @@ or test. Where a path was inspected but not executed, the document says so.
 
 The judged Streamlit demo passes its render and contract checks. All public page routes open under
 Streamlit's `AppTest` without exceptions, the contract tests are green, and the React application
-builds. There is no confirmed P0 defect for the public demo path in the checks performed. A live
-browser walkthrough of the demo and a signed-in React console flow are still pending; this audit
-does not claim them.
+builds. There is no confirmed P0 defect for the public demo path in the checks performed. The public
+05/06/09 walkthrough was done in a browser earlier; the signed-in page 07 tenant view and React
+console were exercised on 2026-11-24 with a disposable local tenant and are recorded in
+`docs/FRONTEND_TEST_REPORT.md`.
 
 The remaining problems are concentrated in **local-only setup and presentation**, not in the core
 screening path:
@@ -57,11 +58,13 @@ below remains the T1 baseline and is not rewritten to hide what was found.
 | G1 | No single replayable end-to-end chain | **Deferred by Phase 1 boundary** | Fixing it requires a new cross-page pipeline and changes the model composition. That conflicts with the no-model-change/read-only boundary; the three page chains remain explicitly separate. |
 | G2 | Replay contract promises annual but returns `None` | **Fixed as documentation boundary** | `islandos_core/transport.py` no longer promises annual replay; the response still returns `annual: None`, which is now the stated contract rather than an omission. |
 | G3 | 05 investment inputs discarded on replay | **Fixed for the eight request fields** | `replay_run_request` now calls the existing evaluator and returns `investment`; `tests/test_application_transport.py` checks it equals the page evaluator. Replacement-year, replacement-cost and residual-value remain page-only because they are not in the v3 request. |
-| G4 | 05 and 06 build different synthetic inputs | **Deferred by Phase 1 boundary** | Unifying them changes recorded demo numbers, which would invalidate the walkthrough and the cited figures. The difference is documented, not hidden. |
+| G4 | 05 and 06 build different synthetic inputs | **Fixed at the input layer** | 05 now starts from `build_synthetic_site_history` via `build_customer_site_history` and applies its two scales; at 1.0/1.0 both pages print the same `Shared history SHA-256`. 05's pinned cost becomes 24.52 USD; 06's 7,709.55 USD/year is unchanged. `tests/test_demo_clock.py` compares the two captions. |
 
 **Conclusion after the follow-up:** the judged public Streamlit path is ready for a walkthrough. The
-frontend findings F-01 and F-04–F-07 are fixed. G2 is corrected as a contract boundary, G3 is fixed
-for the request fields, and G1/G4 remain explicit Phase 1 limits rather than being presented as fixed.
+frontend findings F-01 and F-04–F-08 are fixed. G2 is corrected as a contract boundary, G3 is fixed
+for the request fields, and G4 is fixed at the input layer (05/06 share one canonical synthetic
+history and hash; 05's pinned cost is now 24.52 USD). G1 remains an explicit Phase 1 limit: the three
+pages are separate demonstrations, not one execution chain.
 
 ## 2. Surface inventory
 
@@ -75,7 +78,7 @@ for the request fields, and G1/G4 remain explicit Phase 1 limits rather than bei
 | Rolling horizon lab | `pages/2_Rolling_Horizon_Lab.py` | None | Synthetic rolling-horizon experiment | Registered as experimental; smoke test passes. |
 | Local customer workspace | `pages/07_Local_Customer_Workspace.py` | Loopback API bearer token | Local SQLite service | Gated by its own `ISLANDOS_API_BASE_URL` predicate; not offered when only the site-workspace flag is set. |
 | Local site workspace | `pages/08_Site_Workspace.py` | None | Local SQLite workspace | Gated by its own `ISLANDOS_ENABLE_LOCAL_WORKSPACE=1` predicate; not offered when only the API URL is set. |
-| React console | `frontend/index.html`, `frontend/src/App.tsx` | Bearer token in component memory | Local API `/api/v1` | Builds; local reference only; telemetry 401/500 is surfaced, 404 remains "no data". |
+| React console | `frontend/index.html`, `frontend/src/App.tsx` | Bearer token in component memory | Local API `/api/v1` | Browser-verified signed-in owner workspace (site, notification, member, no-telemetry state); local reference only; telemetry 401/500 is surfaced, 404 remains "no data". |
 | Contract viewer | `frontend/application-views.html`, `frontend/src/ApplicationViews.tsx` | None | Downloaded report + `GET /contracts` | Builds; requires request and result `schema_version: 3`. |
 | Local reference API | `islandos_service_api.py` | Login/session token | SQLite | Loopback-only; tests pass; no device writes. |
 | Application transport | `islandos_core/transport.py` | None | Loopback | Serves viewer, contracts, health and `POST /run`; tests pass. |
