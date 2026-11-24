@@ -28,5 +28,31 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      # Guards npm/cli#4828: optional platform binaries can be dropped from a
+      # lockfile regenerated on another OS, and the build then dies with
+      # "Cannot find module @rollup/rollup-linux-x64-gnu" inside `npm run build`
+      # (that is exactly what failed on 0ff8ee0). Check before building, repair
+      # once with the exact version Rollup resolved, and fail here - with a
+      # readable message - only if the repair did not take.
+      - name: Ensure Rollup's Linux x64 binary
+        run: |
+          target="node_modules/@rollup/rollup-linux-x64-gnu"
+          if [ -d "$target" ]; then
+            echo "rollup linux-x64 binary present"
+            exit 0
+          fi
+          if [ ! -f node_modules/rollup/package.json ]; then
+            echo "::error::rollup itself is not installed, so Rollup's platform packages cannot be checked. npm ci did not complete as expected."
+            exit 1
+          fi
+          version="$(node -p "require('./node_modules/rollup/package.json').version")"
+          echo "::warning::missing $target for rollup $version; installing that exact version once"
+          npm install --no-save --no-audit --no-fund "@rollup/rollup-linux-x64-gnu@$version"
+          if [ -d "$target" ]; then
+            echo "rollup linux-x64 binary repaired for $version"
+            exit 0
+          fi
+          echo "::error::rollup $version did not provide @rollup/rollup-linux-x64-gnu, so npm run build would fail. Regenerate frontend/package-lock.json somewhere that keeps every platform binary, or install the matching package explicitly."
+          exit 1
       - run: npm test
       - run: npm run build
