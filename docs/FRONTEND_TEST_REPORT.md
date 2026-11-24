@@ -211,10 +211,10 @@ created through the API. The database and server were removed afterwards.
   `UNREAD NOTIFICATIONS 1`, the owner member row, the **Inverter derate** activity item, and
   `LATEST TELEMETRY — No validated record` / `No telemetry received`. The API indicator was
   `online` and no error banner appeared.
-- Not covered: invitation acceptance, role mutation, telemetry ingestion, MFA/SSO, production TLS and
-  multi-user isolation. Sign-out and server-side revocation in the browser were the gap this run left
-  open; the 2026-11-24 pass below closes it. The React console remains a local reference surface, not
-  the judged public demo.
+- Not covered by this first pass: invitation acceptance, role mutation and telemetry ingestion. The
+  2026-11-24 React console pass below closes those; a separate page 07 pass closes sign-out and
+  server-side revocation. MFA/SSO, production TLS and multi-user isolation remain out of scope.
+  The React console remains a local reference surface, not the judged public demo.
 
 ### Sign-out and server-side revocation
 
@@ -248,6 +248,42 @@ form), `02-signed-in.png` (owner view with member table), `03-inbox-before-read.
 `04-after-mark-read.png`, `05-after-sign-out.png`; `00-pre-fix-signout-failed.png` records the failed
 `404` attempt before the fix.
 
+### React console: invitation, role and telemetry
+
+A third pass on 2026-11-24 ran the React console against an empty disposable SQLite database, the API
+on `127.0.0.1:8766` and Vite on `127.0.0.1:5173`, with Playwright walking from login to a validated
+telemetry record. Result: **4/4 checks passed**, no blocking defect and no page-level exception.
+
+- **Invitation lifecycle.** A Viewer invitation created a pending `invitations` row with role
+  `viewer` and a 7-day expiry; the stored token SHA-256 matched the one-time token shown in the UI.
+  A second invitation to the same email was rejected (`an invitation for this email already exists`),
+  proving the pending row was live. Acceptance removed the row and listed the member as `viewer`.
+- **Roles and invalid input.** The invited role stored as `viewer`; after acceptance, changing it to
+  Analyst persisted. `not-an-email` was blocked by the browser's `type=email` validation
+  (`typeMismatch=true`, zero requests); the API returned 400 for an invalid email and for role `admin`.
+- **Telemetry state.** The empty site first rendered `NO DATA` / `No telemetry received` and `—` in
+  the metric card. A POST of a current timestamp −8 s record returned 202 with
+  `physical_write_performed=false`; after Refresh the panel showed `VALIDATED RECORD`,
+  `12.5 / 3.2 / 18`, and `Source: acceptance-harness`.
+- **Error UI.** `.error-banner` was false at all seven steps and `pageerror` was 0. The 404s on
+  `telemetry/latest` for an empty site are the documented “no data yet” path, mapped to `null` in
+  `frontend/src/api.ts` rather than surfaced as an error.
+
+At acceptance time the console had no pending-invitation list and its invitation result did not echo
+the invitee email and role; those are UI gaps, not test failures. Evidence:
+`docs/evidence/react-console/` (`03-invitation-created.png` has the one-time token redacted;
+`summary.json` carries the result without IDs).
+
+### Public deployment: build 8966540
+
+The public Streamlit app was rechecked after the shared-history hash change. Build stamp is
+`8966540 (git)`. Pages 05 and 06 both show
+`7012014ef720e5802d1ff9147fe439b93d52736f47c538170da46d55b6d2ed70`; page 05 shows `24.52 USD`,
+`0.00 kWh` and `10.55 USD`. Page 06 keeps the annual block withheld by default until the equal-days
+assumption is declared; with it, the pinned figures are `7,709.55 USD/year` and `186,150 kWh`, also
+asserted by the local suite. Page 09 renders with `72 kWh` critical, `17 kWh` flexible and
+`13.77 USD`, with no exception panel. Evidence: `docs/evidence/public-deploy-8966540/`.
+
 ## 6. Acceptance statement
 
 For the judged public Streamlit path, the branch is ready for the walkthrough in
@@ -259,5 +295,6 @@ under their own prerequisites.
 G1 (one cross-page pipeline) is **not fixed**; it is a Phase 1 limit recorded in
 `docs/MODULE_INTEGRATION_AUDIT.md`, and the walkthrough states that 05/06/09 are three separate
 page-level demonstrations. G4 is fixed at the input layer: 05/06 share the canonical synthetic
-history and hash. The branch does **not** claim production readiness, measured savings, site
-permission, a completed shadow trial, RBAC or device control. The PR is not merged by this task.
+history and hash. The G4 input-consistency and stable-hash PRs are merged; the recorded public build
+stamp is `8966540`. The branch does **not** claim production readiness, measured savings, site
+permission, a completed shadow trial, RBAC or device control.
