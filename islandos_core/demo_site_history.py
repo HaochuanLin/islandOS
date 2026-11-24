@@ -161,6 +161,25 @@ def build_customer_site_history(
     )
 
 
+HISTORY_HASH_DECIMALS = 6
+
+
+def _canonical_signal(values: tuple[float, ...]) -> list[float]:
+    """Round signal values to a stable decimal grid before hashing.
+
+    The generator uses ``math.sin`` and arithmetic whose last bits can differ
+    between Python builds or libm implementations. Six decimals preserves every
+    value the pages display while making the same physical series hash the same
+    on Windows and Streamlit Cloud. Negative zero is normalised to zero so it
+    cannot create a second representation of the same value.
+    """
+    rounded = []
+    for value in values:
+        number = round(float(value), HISTORY_HASH_DECIMALS)
+        rounded.append(0.0 if number == 0 else number)
+    return rounded
+
+
 def canonical_history_sha256(
     *,
     timestamps: tuple[datetime, ...],
@@ -171,9 +190,10 @@ def canonical_history_sha256(
 ) -> str:
     """Hash the four signals and their timestamps, independent of page labels.
 
-    Both pages hash the same canonical names and the same unrounded floats.
+    Both pages hash the same canonical names and the same quantised signals.
     Units and currency are deliberately excluded: they are display metadata,
-    not part of the supplied history.
+    not part of the supplied history. Quantisation at six decimals keeps the
+    hash stable across runtimes without changing the values either page uses.
     """
     lengths = {len(timestamps), len(pv_power_kw), len(wind_power_kw), len(load_kw), len(tariff_per_kwh)}
     if len(lengths) != 1:
@@ -181,10 +201,10 @@ def canonical_history_sha256(
     payload = {
         "timestamps_utc": [stamp.isoformat() for stamp in timestamps],
         "signals": {
-            "pv_power_kw": list(pv_power_kw),
-            "wind_power_kw": list(wind_power_kw),
-            "load_kw": list(load_kw),
-            "tariff_per_kwh": list(tariff_per_kwh),
+            "pv_power_kw": _canonical_signal(pv_power_kw),
+            "wind_power_kw": _canonical_signal(wind_power_kw),
+            "load_kw": _canonical_signal(load_kw),
+            "tariff_per_kwh": _canonical_signal(tariff_per_kwh),
         },
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
