@@ -9,23 +9,20 @@ the link alive.
 
 from __future__ import annotations
 
-import os
-from collections.abc import Mapping
+from islandos_ui.deployment_gates import (
+    LOCAL_API_BASE_URL,
+    LOCAL_WORKSPACE_FLAG,
+    local_customer_workspace_enabled,
+    local_site_workspace_enabled,
+)
 
-LOCAL_WORKSPACE_FLAG = "ISLANDOS_ENABLE_LOCAL_WORKSPACE"
-LOCAL_API_BASE_URL = "ISLANDOS_API_BASE_URL"
-
-
-def local_customer_workspace_enabled(environ: Mapping[str, str] | None = None) -> bool:
-    """The customer workspace needs the loopback reference API, nothing else."""
-    env = os.environ if environ is None else environ
-    return bool(env.get(LOCAL_API_BASE_URL, "").strip())
-
-
-def local_site_workspace_enabled(environ: Mapping[str, str] | None = None) -> bool:
-    """The site workspace needs the local data directory flag, nothing else."""
-    env = os.environ if environ is None else environ
-    return env.get(LOCAL_WORKSPACE_FLAG, "").strip() == "1"
+__all__ = [
+    "LOCAL_API_BASE_URL",
+    "LOCAL_WORKSPACE_FLAG",
+    "local_customer_workspace_enabled",
+    "local_site_workspace_enabled",
+    "page_url_path",
+]
 
 
 def page_url_path(page_file: str) -> str:

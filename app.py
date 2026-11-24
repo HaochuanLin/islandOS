@@ -19,11 +19,11 @@ from __future__ import annotations
 import streamlit as st
 
 from islandos_core import build_info
-from islandos_ui.navigation import (
+from islandos_ui.deployment_gates import (
     local_customer_workspace_enabled,
     local_site_workspace_enabled,
-    page_url_path,
 )
+from islandos_ui.navigation import page_url_path
 
 
 
