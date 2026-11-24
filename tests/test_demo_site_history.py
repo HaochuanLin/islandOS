@@ -161,6 +161,52 @@ def test_customer_scales_refuse_negative_values(field, value):
         )
 
 
+def test_canonical_history_hash_ignores_sub_micro_floating_jitter():
+    history = _history(14)
+    base = canonical_history_sha256(
+        timestamps=history.timestamps,
+        pv_power_kw=history.pv_power_kw,
+        wind_power_kw=history.wind_power_kw,
+        load_kw=history.load_kw,
+        tariff_per_kwh=history.tariff_per_kwh,
+    )
+    jittered = canonical_history_sha256(
+        timestamps=history.timestamps,
+        pv_power_kw=tuple(value + 1e-9 for value in history.pv_power_kw),
+        wind_power_kw=tuple(value - 1e-9 for value in history.wind_power_kw),
+        load_kw=tuple(value + 1e-9 for value in history.load_kw),
+        tariff_per_kwh=tuple(value - 1e-9 for value in history.tariff_per_kwh),
+    )
+    assert jittered == base
+
+
+def test_canonical_history_hash_separates_values_on_the_sixth_decimal():
+    stamp = datetime(2026, 11, 22, 14, tzinfo=timezone.utc)
+    common = dict(
+        timestamps=(stamp,),
+        wind_power_kw=(1.0,),
+        load_kw=(1.0,),
+        tariff_per_kwh=(1.0,),
+    )
+    assert canonical_history_sha256(pv_power_kw=(1.0,), **common) != canonical_history_sha256(
+        pv_power_kw=(1.000001,), **common
+    )
+
+
+def test_canonical_history_hash_normalises_negative_zero():
+    stamp = datetime(2026, 11, 22, 14, tzinfo=timezone.utc)
+    common = dict(
+        timestamps=(stamp,),
+        pv_power_kw=(0.0,),
+        wind_power_kw=(0.0,),
+        load_kw=(0.0,),
+        tariff_per_kwh=(0.0,),
+    )
+    assert canonical_history_sha256(**common) == canonical_history_sha256(
+        **{**common, "pv_power_kw": (-0.0,)}
+    )
+
+
 def test_canonical_history_hash_refuses_mismatched_lengths():
     history = _history(14)
     with pytest.raises(ValueError, match="same length"):
@@ -171,3 +217,16 @@ def test_canonical_history_hash_refuses_mismatched_lengths():
             load_kw=history.load_kw,
             tariff_per_kwh=history.tariff_per_kwh,
         )
+
+
+def test_default_history_hash_is_pinned():
+    anchor = datetime(2026, 11, 22, 14, tzinfo=timezone.utc)
+    history = build_customer_site_history(anchor)
+    assert canonical_history_sha256(
+        timestamps=history.timestamps,
+        pv_power_kw=history.pv_power_kw,
+        wind_power_kw=history.wind_power_kw,
+        load_kw=history.load_kw,
+        tariff_per_kwh=history.tariff_per_kwh,
+    ) == "7012014ef720e5802d1ff9147fe439b93d52736f47c538170da46d55b6d2ed70"
+

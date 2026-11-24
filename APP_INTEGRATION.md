@@ -475,7 +475,9 @@ to make the printed window stable.
 `islandos_core.demo_site_history.build_synthetic_site_history` at the nominal site (40 kW PV, 20 kW
 wind); page 05 then applies its two customer controls, `demand_scale` to load and `tariff_scale` to
 price. At `1.0/1.0` the timestamps and the four signal arrays are identical to 06's default, and both
-pages print the same `Shared history SHA-256`. Pinning `2026-11-22 14:00Z` gives `24.52 USD`
+pages print the same `Shared history SHA-256`. The checksum quantises each signal to six decimals
+before hashing, so it is stable across Python and libm runtimes; the model still receives the unrounded
+arrays. Pinning `2026-11-22 14:00Z` gives `24.52 USD`
 (`7,709.55 USD/year` on 06 is unchanged). A different date still moves the renewable phase because the
 PV/wind ripple is keyed to the row index; the date no longer changes a weekday load term, because 05 no
 longer has one. `tests/test_demo_clock.py` asserts the pinned cost and the shared hash; the unit

@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 Notable project changes are recorded here. This is a research prototype; versioned releases are verification bundles, not site-operation approvals.
 
@@ -20,7 +20,9 @@ Notable project changes are recorded here. This is a research prototype; version
   20 kW wind and then applies 05's `demand_scale` and `tariff_scale`. At `1.0/1.0` the timestamps and
   four signal arrays are identical, both pages print the same `Shared history SHA-256`, and 05's pinned
   24-hour cost is `24.52 USD` instead of `17.93`. 06's `7,709.55 USD/year` and `186,150 kWh` are
-  unchanged. `tests/test_demo_site_history.py` covers the wrapper and hash;
+  unchanged. The checksum quantises each signal to six decimals before hashing, so the printed hash is
+  stable across Python and libm runtimes without changing the arrays the models use.
+  `tests/test_demo_site_history.py` covers the wrapper, hash and quantisation;
   `tests/test_demo_clock.py` compares the two pages' captions.
 
 - **A broken session dataset no longer replaces page 05 or 06 with a stack trace.**
