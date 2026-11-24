@@ -16,8 +16,8 @@ Result: **4/4 passed**, no blocking defect, no page-level exception.
 
 Known UI gap at acceptance time: the console had no pending-invitation list, so the pending row was
 verified through the database and the duplicate-invite rejection. The result panel also did not
-echo the invitee email and role. These are product gaps, not test failures. A separate follow-up
-change is tracked outside this evidence set.
+echo the invitee email and role. These are product gaps, not test failures. PR #341 closed both;
+`docs/evidence/react-console-current-main/` records the browser addendum on `main f45308a`.
 
 ## Files
 

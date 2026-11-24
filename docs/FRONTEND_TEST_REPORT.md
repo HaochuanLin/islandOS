@@ -277,9 +277,17 @@ telemetry record. Result: **4/4 checks passed**, no blocking defect and no page-
   `frontend/src/api.ts` rather than surfaced as an error.
 
 At acceptance time the console had no pending-invitation list and its invitation result did not echo
-the invitee email and role; those are UI gaps, not test failures. Evidence:
+the invitee email and role; those were product gaps, not test failures. Evidence:
 `docs/evidence/react-console/` (`03-invitation-created.png` has the one-time token redacted;
 `summary.json` carries the result without IDs).
+
+**Current-main addendum (2026-11-24, `f45308a`).** After #341, the same browser path was repeated
+against the merged console. The Viewer invitation now appears in a `PENDING INVITATIONS` row with
+the email, `Invited as viewer` and `PENDING`; the result panel echoes
+`Invited colleague@example.com as viewer.`. Creating the empty site produced exactly **one**
+`telemetry/latest` request (404 → `null`), not the earlier duplicate probe. The owner invitation
+list was token-free, and the run had no error banner or page exception. Evidence:
+`docs/evidence/react-console-current-main/`; the one-time token is redacted in the screenshot.
 
 ### Public deployment: build 8966540
 

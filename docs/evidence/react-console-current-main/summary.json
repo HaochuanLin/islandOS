@@ -1,0 +1,31 @@
+{
+  "commit": "f45308a",
+  "date": "2026-11-24",
+  "surface": "React console, local Vite and reference API",
+  "result": "pass",
+  "checks": {
+    "pending_invitation": {
+      "visible": true,
+      "role": "viewer",
+      "email_visible": true,
+      "status_label": "PENDING"
+    },
+    "invitation_result": {
+      "email_echoed": true,
+      "role_echoed": true,
+      "token_redacted_in_screenshot": true
+    },
+    "api_invitation_list": {
+      "pending_count": 1,
+      "token_field_present": false,
+      "fields": ["created_at", "email", "expires_at", "invitation_id", "role"]
+    },
+    "site_creation_telemetry_probe": {
+      "request_count": 1,
+      "status": 404,
+      "meaning": "empty site; no telemetry yet"
+    },
+    "error_banner_count": 0,
+    "page_errors": 0
+  }
+}
