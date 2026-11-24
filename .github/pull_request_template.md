@@ -2,6 +2,9 @@
 
 <!-- What user-visible or engineering problem does this change solve? -->
 
+Overlap check: before starting, list the open pull requests and the recent commits on `main` that touch the
+same files. Name any that overlap here, or say `none`.
+
 ## Change summary
 
 - 
