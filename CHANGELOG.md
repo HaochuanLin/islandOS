@@ -4,6 +4,15 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **Sign out in the local customer workspace now revokes the session.**
+  Page 07 and `frontend/src/api.ts` sign out with `POST /api/v1/auth/logout`, but the route was
+  registered on `do_GET` only: the browser got `404 not found`, the page said "server-side revocation
+  could not be confirmed", and the bearer stayed valid until expiry. The route now answers `POST`;
+  `GET` on that path is a plain `404` and deletes nothing. `tests/test_service_api_logout_route.py`
+  covers both verbs (POST revokes, then reuse returns `401`; GET leaves the session usable). Browser
+  evidence for `Mark as read`, `Sign out` and token revocation is in
+  `docs/FRONTEND_TEST_REPORT.md`, "Sign-out and server-side revocation".
+
 - **05 and 06 now share one synthetic input at the same demo clock.**
   05 used its own inline 168-hour PV/wind/load/tariff loop, so the same nominal site produced a
   different history and hash on each page. 05 now calls

@@ -34,7 +34,8 @@ export const api = {
   health: () => request<{ status: string; api_version: string; mode: string; device_write_enabled: boolean }>("/api/v1/health"),
   login: (email: string, password: string) =>
     request<Session>("/api/v1/auth/login", undefined, { method: "POST", body: JSON.stringify({ email, password }) }),
-  logout: (token: string) => request<{ revoked: boolean }>("/api/v1/auth/logout", token),
+  logout: (token: string) =>
+    request<{ revoked: boolean }>("/api/v1/auth/logout", token, { method: "POST", body: "{}" }),
   sites: (token: string) => request<{ sites: Site[] }>("/api/v1/sites", token),
   createSite: (token: string, name: string, timezone: string) =>
     request<Site>("/api/v1/sites", token, { method: "POST", body: JSON.stringify({ name, timezone }) }),
