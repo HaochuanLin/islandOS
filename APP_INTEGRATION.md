@@ -405,10 +405,10 @@ pull request, so no new workflow is needed.
 Old files stay. `docs/contracts/app_view_models.v2.json` is still the only description of the reports
 already downloaded under v2; a bump to v4 adds `v4.json` and `v4.schema.json` and leaves both v3 files
 untouched. Nothing regenerates a previous version, and no test compares it to the current module — that
-is the point: a frozen file describes a frozen shape. A v2 report opened in the viewer or posted to
-`POST /run` is refused with a version error instead of being read halfway, because `schema_version` is a
-`const` in every object of the JSON Schema: the refusal comes from the validator, not from a rule
-someone has to remember. Keeping the old files costs a few kilobytes; deleting them loses the only
+is the point: a frozen file describes a frozen shape. A v2 report opened in the viewer is refused
+with a version error instead of being read halfway: the viewer checks that both `request.schema_version`
+and `result.schema_version` equal `3`, and the JSON Schema pins the same constant for validators and
+`POST /run`. Keeping the old files costs a few kilobytes; deleting them loses the only
 written answer to "what did that cited report contain".
 
 ---

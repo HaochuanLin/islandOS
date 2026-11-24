@@ -26,6 +26,7 @@ from islandos_core.app_view_models import (
 )
 from islandos_core.contract_schemas import SCHEMA_PATH, contract_schema, write_schema
 from islandos_core.flexible_tasks import DeviceTask
+from islandos_core.investment_economics import evaluate_investment_economics
 from islandos_core.run_orchestration import device_task_payload, replay_run_request
 from islandos_core.site_inputs import SiteAssumptions, device_planner_demo_site
 from islandos_core.transport import create_server
@@ -157,6 +158,27 @@ def test_the_transport_serves_the_schema_and_runs_a_request():
     finally:
         server.shutdown()
         thread.join(timeout=5)
+
+
+def test_a_customer_dashboard_replay_returns_the_investment_screen():
+    request = _dashboard_request()
+    payload = replay_run_request(request)
+    entered = request["run_settings"]["investment"]
+    service_equivalent = bool(
+        payload["result"]["service_equivalent"] and payload["result"]["cost_comparison_valid"]
+    )
+    expected = evaluate_investment_economics(
+        baseline_annual_energy_cost=entered["baseline_annual_energy_cost"],
+        proposed_annual_energy_cost=entered["proposed_annual_energy_cost"],
+        annual_incremental_om_cost=entered["annual_incremental_om_cost"],
+        upfront_capex=entered["upfront_capex"],
+        project_life_years=int(entered["project_life_years"]),
+        discount_rate=entered["discount_rate"],
+        annual_energy_saving_escalation_rate=entered["annual_energy_saving_escalation_rate"],
+        annual_om_escalation_rate=entered["annual_om_escalation_rate"],
+        service_equivalent=service_equivalent,
+    ).to_dict()
+    assert payload["investment"] == expected
 
 
 def _joint_request():

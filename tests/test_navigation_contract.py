@@ -18,8 +18,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 APP = REPO_ROOT / "app.py"
 PAGES_DIR = REPO_ROOT / "pages"
 
-LOCAL_ONLY_PAGES = ["pages/07_Local_Customer_Workspace.py", "pages/08_Site_Workspace.py"]
-
 
 def app_source() -> str:
     return APP.read_text(encoding="utf-8")
@@ -41,13 +39,28 @@ def test_every_page_file_is_registered_by_the_menu():
     assert not stale, f"menu points at files that do not exist: {sorted(stale)}"
 
 
-def test_local_only_pages_are_gated_behind_the_local_flag():
+def test_local_only_pages_are_gated_by_their_own_predicate():
     source = app_source()
-    assert "ISLANDOS_ENABLE_LOCAL_WORKSPACE" in source
-    guard = source.index("if local_ui_enabled():")
-    for page in LOCAL_ONLY_PAGES:
-        assert page in source, f"{page} is not registered anywhere in app.py"
-        assert source.index(page) > guard, f"{page} must be registered inside the local-only block"
+    customer_guard = source.index("if local_customer_workspace_enabled():")
+    site_guard = source.index("if local_site_workspace_enabled():")
+    assert source.index("pages/07_Local_Customer_Workspace.py") > customer_guard
+    assert source.index("pages/07_Local_Customer_Workspace.py") < site_guard
+    assert source.index("pages/08_Site_Workspace.py") > site_guard
+
+
+def test_customer_workspace_gate_needs_only_the_api_url():
+    from islandos_ui.navigation import (
+        LOCAL_API_BASE_URL,
+        LOCAL_WORKSPACE_FLAG,
+        local_customer_workspace_enabled,
+        local_site_workspace_enabled,
+    )
+
+    assert local_customer_workspace_enabled({LOCAL_API_BASE_URL: "http://127.0.0.1:8766"})
+    assert not local_customer_workspace_enabled({LOCAL_WORKSPACE_FLAG: "1"})
+
+    assert local_site_workspace_enabled({LOCAL_WORKSPACE_FLAG: "1"})
+    assert not local_site_workspace_enabled({LOCAL_API_BASE_URL: "http://127.0.0.1:8766"})
 
 
 def test_workspace_page_is_the_default():

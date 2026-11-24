@@ -59,6 +59,19 @@ reference API). After sign-in, the footer link opens `application-views.html` fr
 The page's `/contracts` read is then cross-origin on loopback, which `GET /contracts` allows on
 purpose. `npm run preview` works the same way.
 
+Which "local reference API" that is, in one place, because this page is where a reader looks for it:
+
+```bash
+python islandos_service_api.py --host 127.0.0.1 --port 8766 --allow-registration   # first owner only
+cd frontend && npm run dev                                                        # 5173, /api -> 8766
+```
+
+`GET /api/v1/health` through the proxy answers `{"status": "ok", "mode": "single_host_reference",
+"device_write_enabled": false}`. Registration is for the controlled bootstrap of the first owner; stop
+the API and restart it without `--allow-registration` afterwards. The port is the API's own default, and
+`vite.config.ts` proxies `/api` to `127.0.0.1:8766` under `dev` and under `preview` alike. The full
+scope, boundaries and production gaps are in `docs/STAGE_6_CUSTOMER_FRONTEND.md`.
+
 **From disk.** Opening `frontend/dist/application-views.html` directly works, but report loading is
 all that page can do from `file://`; start the transport if you also want the schema tables.
 
@@ -89,9 +102,10 @@ Concretely:
 
 - **No writes.** No device command, no file save, no `localStorage`, no server-side state. The report
   file is read in the browser with `File.text()` and is not uploaded anywhere.
-- **No validation of its own.** It checks that `request` and `result` exist, then displays what is
-  there; a file without an `application_views` block is rejected with a readable message rather than
-  guessed at. Field rules and units are owned by the Python contract, not re-implemented here.
+- **One version guard.** It requires `request.schema_version` and `result.schema_version` to be the
+  current `3`; a v2 or unversioned block is rejected with a readable message instead of being
+  half-read. Otherwise it displays what is there. Field rules and units are owned by the Python
+  contract, not re-implemented here.
 - **No console data.** No sites, telemetry, notifications, members or sessions. The viewer opens
   before any sign-in and keeps working after sign-out.
 - **No annual projection for 09.** 09 downloads carry `annual: null`; the page shows the device
@@ -115,15 +129,19 @@ console instead, and the answer above has been reversed by accident.
 ## Verification
 
 ```bash
-cd frontend && npm run build          # tsc -b && vite build; both entries land in dist/
-python -m islandos_core.transport     # from the repository root
+cd frontend && npm ci                # uses the committed package-lock.json
+cd frontend && npm test              # viewer v3 guard + telemetry 404/401/500
+cd frontend && npm run build         # tsc -b && vite build; both entries land in dist/
+python -m islandos_core.transport    # from the repository root
 curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' http://127.0.0.1:8765/
 curl -sS http://127.0.0.1:8765/contracts | head -c 200
 pytest tests/test_application_transport.py
 ```
 
 The transport test serves a temporary build, checks the HTML/JS content types, refuses
-`assets/../…` traversal, and covers the missing-build `404`. For the console entry, open the console
+`assets/../…` traversal, and covers the missing-build `404`. The lockfile carries the Linux, Windows
+and macOS optional Rollup binaries; a lockfile written only on Windows drops the Linux binary and
+makes `npm ci` succeed while `vite build` fails on the runner. For the console entry, open the console
 after `npm run dev` and follow the footer link; the target is `application-views.html` from the same
 build.
 
@@ -140,6 +158,9 @@ Measured on `a5ef3df` from a clean worktree, transport on `--port 8799`:
 | `GET /assets/../index.html` | 404 |
 | `pytest` transport + integration doc + contract TS + contract schema | 42 passed |
 | built console bundle | contains `application-views.html` and `Contract viewer`, so the footer link survives the build |
+
+On the T7 closeout branch (2026-11-24), `npm test` reports **6 passed** and `npm run build` reports
+**36 modules transformed** after the viewer payload module and its tests were added.
 
 Loading a real 09 download on that build shows `72.0` / `17.0` / `6.0` / `13.77 USD` against the
 `103.2 kWh · 15.44 USD` earliest-feasible reference, and `Load contracts` fills the `run_request`,

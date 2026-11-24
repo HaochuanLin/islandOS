@@ -55,9 +55,14 @@ with st.expander("Create a project", expanded=not bool(projects)):
     with st.form("create_site_project"):
         project_name = st.text_input("Project / site workspace name", max_chars=120)
         consent = st.checkbox("I consent to storing this project name and related configuration locally on this computer.")
-        submitted = st.form_submit_button("Create project", disabled=not consent)
+        # A form widget's change does not rerun the page, so a button disabled on
+        # `not consent` would stay disabled after the box is ticked. Keep the
+        # button clickable and enforce consent when the form is submitted.
+        submitted = st.form_submit_button("Create project")
     if submitted:
-        if not project_name.strip():
+        if not consent:
+            st.error("Confirm local storage consent before creating a project.")
+        elif not project_name.strip():
             st.error("Enter a project name.")
         else:
             import uuid
@@ -167,7 +172,7 @@ if assets:
             "Version": item.get("version"), "Readiness": readiness.get("status"),
             "Can screen": readiness.get("can_screen"),
         })
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, width="stretch", hide_index=True)
     with st.expander("Inspect asset records"):
         for item in assets:
             st.markdown(f"**{item['asset_id']} · v{item['version']}**")
@@ -179,7 +184,7 @@ st.divider()
 st.subheader("Imported datasets")
 imports = list_import_artifacts(db_path, project_id=project_id)
 if imports:
-    st.dataframe(imports, use_container_width=True, hide_index=True)
+    st.dataframe(imports, width="stretch", hide_index=True)
 else:
     st.info("No import metadata is registered yet. Use Data onboarding & workspace to inspect a CSV/XLSX file and register its provenance.")
 

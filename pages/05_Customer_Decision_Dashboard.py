@@ -13,7 +13,7 @@ import math
 
 import pandas as pd
 import streamlit as st
-from islandos_ui.upload_guard import reject_upload
+from islandos_ui.upload_guard import offer_schema_conformant_csv, reject_upload
 from islandos_ui.page_header import render_page_header
 from islandos_ui.annual_economics_panel import (
     DEMONSTRATION_VALUES,
@@ -73,7 +73,7 @@ st.info(
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
-    st.subheader("Scenario assumptions")
+    st.subheader("Inputs and assumptions")
     currency = st.text_input("Currency label", value="USD").strip() or "currency"
     demand_scale = st.slider("Essential load level", 0.6, 1.6, 1.0, 0.05)
     tariff_scale = st.slider("Electricity tariff level", 0.5, 2.0, 1.0, 0.05)
@@ -174,6 +174,7 @@ if shared_payload is not None:
         source_label = f"{prefix}: {uploaded.source_name} (not independently verified)"
     except ValueError as exc:
         reject_upload("Site history CSV", exc)
+        offer_schema_conformant_csv()
         st.stop()
 else:
     history_stamps = [demo_anchor - timedelta(hours=168 - index) for index in range(168)]
@@ -328,10 +329,10 @@ try:
     chart_left, chart_right = st.columns(2)
     with chart_left:
         st.caption("Generation and essential load (kW)")
-        st.line_chart(energy_forecast, use_container_width=True)
+        st.line_chart(energy_forecast, width="stretch")
     with chart_right:
         st.caption(f"Electricity price ({currency}/kWh)")
-        st.line_chart(tariff_forecast, use_container_width=True)
+        st.line_chart(tariff_forecast, width="stretch")
     with st.expander("Forecast model quality and provenance"):
         st.write(f"Forecast history SHA-256: `{bundle.input_history_sha256}`")
         st.write(f"Uploaded file SHA-256: {source_sha256 or 'not applicable — synthetic data'}")
@@ -361,7 +362,7 @@ try:
             "Renewable curtailed (kWh)": summary["renewable_curtailed_kwh"],
             "Physical audit": "Passed" if item["audit"]["passed"] else "Failed",
         })
-    st.dataframe(pd.DataFrame(comparison), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(comparison), width="stretch", hide_index=True)
     st.caption(
         "The optimizer compares two explicit dispatch priorities using the shared "
         "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
@@ -399,7 +400,7 @@ try:
             {"Measure": "Critical unmet load (kWh)", "Grid-first baseline": impact_baseline["critical_unmet_load_kwh"], "Battery-first candidate": impact_candidate["critical_unmet_load_kwh"]},
             {"Measure": "Flexible load shed (kWh)", "Grid-first baseline": impact_baseline["flexible_load_shed_kwh"], "Battery-first candidate": impact_candidate["flexible_load_shed_kwh"]},
         ]),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.caption(
@@ -424,7 +425,7 @@ try:
                 "Estimated cost": summary["estimated_energy_cost"],
                 "Audit": "Passed" if scenario_result["audit"]["passed"] else "Failed",
             })
-    st.dataframe(pd.DataFrame(stress_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(stress_rows), width="stretch", hide_index=True)
     st.caption(
         "Stress cases are deterministic forecast-envelope and grid-outage replays. "
         "No scenario probabilities or joint confidence coverage are assigned."
@@ -562,7 +563,7 @@ try:
             st.bar_chart(sensitivity_frame)
             st.subheader("Annual investment cashflow")
             cashflow_frame = pd.DataFrame(investment.annual_cashflows)
-            st.dataframe(cashflow_frame, use_container_width=True, hide_index=True)
+            st.dataframe(cashflow_frame, width="stretch", hide_index=True)
         investment_report = investment.to_dict()
 
     else:

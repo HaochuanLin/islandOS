@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
-from islandos_ui.upload_guard import reject_upload
+from islandos_ui.upload_guard import offer_schema_conformant_csv, reject_upload
 from islandos_ui.page_header import render_page_header
 from islandos_ui.decision_record_panel import render_decision_record
 
@@ -61,7 +61,7 @@ st.info(
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
-    st.subheader("Site and asset assumptions")
+    st.subheader("Inputs and assumptions")
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
     shared_dataset, dataset_error = read_session_dataset(st.session_state)
@@ -122,6 +122,7 @@ if shared_payload is not None:
         site = parse_customer_history_csv(shared_payload, source_name=shared_name)
     except ValueError as exc:
         reject_upload("Site history CSV", exc)
+        offer_schema_conformant_csv()
         st.stop()
     timestamps = list(site.timestamps_utc)
     values = {name: list(series) for name, series in site.signals.items()}
@@ -298,7 +299,7 @@ try:
             "Error-band samples": forecast.interval_calibration_samples,
             "Unit": forecast.unit,
         })
-    st.dataframe(pd.DataFrame(model_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(model_rows), width="stretch", hide_index=True)
     st.caption("Built-in candidates are statistical baselines. Backtest scores describe only the supplied history.")
 
     st.subheader("Recommended joint schedule")
@@ -325,7 +326,7 @@ try:
             "Battery degradation cost": summary.get("battery_degradation_cost"),
         })
     if comparison_rows:
-        st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(comparison_rows), width="stretch", hide_index=True)
     economics = result.get("robust_customer_economics", {})
     if economics.get("cost_comparison_valid"):
         st.metric(
@@ -354,7 +355,7 @@ try:
         st.subheader("Hourly setpoint schedule")
         schedule_frame = pd.DataFrame(schedule_rows)
         st.line_chart(schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"))
-        st.dataframe(schedule_frame, use_container_width=True, hide_index=True)
+        st.dataframe(schedule_frame, width="stretch", hide_index=True)
     else:
         st.caption("Schedule vectors are available in the downloadable audit report.")
 

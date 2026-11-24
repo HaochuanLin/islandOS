@@ -3,7 +3,7 @@
 Three surfaces, no authentication, no persistence, no writes:
 
 ``GET /contracts``   the machine-readable schema (`contract_schemas.contract_schema()`)
-``POST /run``        replay one `run_request` and return its summary (+ annual)
+``POST /run``        replay one `run_request` and return its summary; annual evidence is not replayed
 ``GET /``            the built contract viewer (`frontend/application-views.html`)
 
 The server binds to 127.0.0.1 by default and is not part of the Streamlit deployment. It

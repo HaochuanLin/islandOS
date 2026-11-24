@@ -1,20 +1,9 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
-import type {
-  AnnualProjection,
-  ContractField,
-  ContractSchema,
-  DeviceFlexibilitySummary,
-  RunRequest,
-  RunResultSummary,
-} from "./contracts";
+import type { ContractField, ContractSchema, DeviceFlexibilitySummary, RunResultSummary } from "./contracts";
+import { readViews } from "./applicationViewsPayload";
+import type { Views } from "./applicationViewsPayload";
 import "./styles.css";
-
-type Views = {
-  request: RunRequest;
-  result: RunResultSummary | DeviceFlexibilitySummary;
-  annual: AnnualProjection | null;
-};
 
 const TRANSPORT = "http://127.0.0.1:8765";
 
@@ -27,24 +16,6 @@ function transportBases(): string[] {
   const here = window.location.origin;
   const sameOrigin = /^http/.test(here) && here !== TRANSPORT ? here : null;
   return sameOrigin ? [sameOrigin, TRANSPORT] : [TRANSPORT];
-}
-
-function readViews(payload: unknown): Views {
-  if (!payload || typeof payload !== "object") throw new Error("The file is not a JSON object.");
-  const record = payload as Record<string, unknown>;
-  const source = record.application_views ?? record;
-  if (!source || typeof source !== "object") {
-    throw new Error("No application_views block: load a report downloaded from page 05, 06 or 09.");
-  }
-  const views = source as Record<string, unknown>;
-  if (!views.request || !views.result) {
-    throw new Error("The block must carry both request and result.");
-  }
-  return {
-    request: views.request as RunRequest,
-    result: views.result as RunResultSummary | DeviceFlexibilitySummary,
-    annual: (views.annual as AnnualProjection | null | undefined) ?? null,
-  };
 }
 
 function format(value: number | null | undefined, digits: number): string {

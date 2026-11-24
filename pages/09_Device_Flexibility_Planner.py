@@ -19,7 +19,7 @@ from islandos_core.site_inputs import device_planner_demo_site
 
 st.set_page_config(page_title="IslandOS | Device Flexibility", page_icon="⚡", layout="wide")
 st.title("Device-level load flexibility planner")
-st.caption("Stage H–J demonstration: protect essential services, then schedule deferrable equipment.")
+st.caption("Demonstration: protect essential services first, then schedule deferrable equipment around the tariff.")
 
 render_page_header(
     question="Which loads can move without breaking essential service?",
@@ -100,7 +100,7 @@ reference_metrics = outputs["reference_replay"]["summary"]
 summary = st.columns(4)
 summary[0].metric("Critical energy protected", f"{sum(schedule.critical_power_kw):.0f} kWh")
 summary[1].metric("Flexible task energy", f"{sum(x.energy_kwh for x in schedule.schedules if x.load_class != 'critical'):.0f} kWh")
-summary[2].metric("Scheduled energy charge", f"{schedule.total_energy_cost:.2f}")
+summary[2].metric("Scheduled task energy charge", f"{schedule.total_energy_cost:.2f} USD")
 summary[3].metric("Peak task demand", f"{max(schedule.total_power_kw):.1f} kW")
 
 rows = []
@@ -111,8 +111,8 @@ for item in schedule.schedules:
             "Device": item.name,
             "Class": item.load_class,
             "Power (kW)": power,
-            "Tariff": prices[hour],
-            "Energy charge": power * prices[hour],
+            "Tariff (USD/kWh)": prices[hour],
+            "Energy charge (USD)": power * prices[hour],
         })
 detail = pd.DataFrame(rows)
 st.subheader("Per-device schedule")
@@ -123,9 +123,9 @@ st.dataframe(
         "Required energy (kWh)": x.energy_requirement_kwh,
         "Scheduled energy (kWh)": x.energy_kwh,
         "Operating intervals": ", ".join(str(v) for v in x.operating_steps),
-        "Energy charge": round(x.energy_cost, 3),
+        "Energy charge (USD)": round(x.energy_cost, 3),
     } for x in schedule.schedules]),
-    use_container_width=True, hide_index=True,
+    width="stretch", hide_index=True,
 )
 
 chart = pd.DataFrame({
@@ -136,13 +136,13 @@ chart = pd.DataFrame({
         for h in hours
     ],
     "Residual task capacity": schedule.residual_power_kw,
-    "Tariff": prices,
+    "Tariff (USD/kWh)": prices,
 })
 st.subheader("Hourly demand and remaining task capacity")
 st.line_chart(chart.set_index("Hour")[["Critical", "Semi/fully flexible", "Residual task capacity"]])
-st.line_chart(chart.set_index("Hour")[["Tariff"]])
+st.line_chart(chart.set_index("Hour")[["Tariff (USD/kWh)"]])
 
-st.subheader("Shared energy-system replay")
+st.subheader("Shared energy-system replay: like-for-like operating comparison")
 # Like-for-like reference: same devices, required energy, windows and generation,
 # but place each flexible task at its earliest feasible low-level schedule rather
 # than using the time-varying tariff. This is a transparent reference, not a
@@ -150,7 +150,6 @@ st.subheader("Shared energy-system replay")
 replay = outputs["replay"]
 reference_replay = outputs["reference_replay"]
 
-st.subheader("Like-for-like operating comparison")
 comparison = pd.DataFrame([
     {"Metric": "Grid import (kWh)", "Tariff-aware plan": metrics["grid_import_kwh"], "Earliest-feasible reference": reference_metrics["grid_import_kwh"]},
     {"Metric": "Modeled energy cost", "Tariff-aware plan": metrics["estimated_energy_cost"], "Earliest-feasible reference": reference_metrics["estimated_energy_cost"]},
@@ -161,7 +160,7 @@ comparison = pd.DataFrame([
     {"Metric": "Flexible load shed (kWh)", "Tariff-aware plan": metrics["flexible_load_shed_kwh"], "Earliest-feasible reference": reference_metrics["flexible_load_shed_kwh"]},
     {"Metric": "Peak grid import (kW)", "Tariff-aware plan": metrics["peak_grid_import_kw"], "Earliest-feasible reference": reference_metrics["peak_grid_import_kw"]},
 ])
-st.dataframe(comparison, use_container_width=True, hide_index=True)
+st.dataframe(comparison, width="stretch", hide_index=True)
 st.caption(
     "Both cases use the same device requirements, time windows, residual task budget, PV/wind profiles and grid limits. "
     "The reference is an earliest-feasible scheduling heuristic, not historical customer operation. "
@@ -170,12 +169,14 @@ st.caption(
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Grid import", f"{metrics['grid_import_kwh']:.1f} kWh")
-c2.metric("Energy cost", f"{metrics['estimated_energy_cost']:.2f}")
+c2.metric("Replayed system energy cost", f"{metrics['estimated_energy_cost']:.2f} USD")
 c3.metric("Critical unmet", f"{metrics['critical_unmet_load_kwh']:.2f} kWh")
 c4.metric("Flexible load shed", f"{metrics['flexible_load_shed_kwh']:.2f} kWh")
 st.caption(
-    "The device schedule is passed into the same chronological PV/wind/battery/grid/diesel energy accounting used by IslandOS. "
-    "This example uses a transparent rule-based dispatch baseline, not a global optimum."
+    "The scheduled-task energy charge above covers only the energy used by the scheduled tasks. "
+    "The replayed system cost here also includes the site's existing load and the shared "
+    "PV/wind/battery/grid/diesel dispatch, so the two totals are deliberately different "
+    "and are not expected to match."
 )
 
 device_power = {

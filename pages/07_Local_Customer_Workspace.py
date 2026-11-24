@@ -29,7 +29,7 @@ LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 if not API_BASE:
     st.warning(
         "Local workspace API is not configured. Set ISLANDOS_API_BASE_URL to a loopback "
-        "address such as http://127.0.0.1:8765, then restart Streamlit."
+        "address such as http://127.0.0.1:8766, then restart Streamlit."
     )
     st.info(
         "The public Streamlit demonstration does not run this local tenant service. "
@@ -141,7 +141,7 @@ with members_tab:
     try:
         members = api_request("GET", "/api/v1/members").get("members", [])
         if members:
-            st.dataframe(members, use_container_width=True, hide_index=True)
+            st.dataframe(members, width="stretch", hide_index=True)
         else:
             st.info("No member records returned.")
     except RuntimeError as exc:

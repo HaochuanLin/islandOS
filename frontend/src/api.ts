@@ -9,6 +9,16 @@ export type Telemetry = {
 };
 export type Session = { access_token: string; token_type: "Bearer"; expires_at: string; tenant_id: string; role: string };
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, token?: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -16,7 +26,7 @@ async function request<T>(path: string, token?: string, init: RequestInit = {}):
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+  if (!response.ok) throw new ApiError(response.status, payload.error || `Request failed (${response.status})`);
   return payload as T;
 }
 
@@ -28,8 +38,14 @@ export const api = {
   sites: (token: string) => request<{ sites: Site[] }>("/api/v1/sites", token),
   createSite: (token: string, name: string, timezone: string) =>
     request<Site>("/api/v1/sites", token, { method: "POST", body: JSON.stringify({ name, timezone }) }),
-  latestTelemetry: (token: string, siteId: string) =>
-    request<Telemetry>(`/api/v1/sites/${encodeURIComponent(siteId)}/telemetry/latest`, token),
+  latestTelemetry: async (token: string, siteId: string): Promise<Telemetry | null> => {
+    try {
+      return await request<Telemetry>(`/api/v1/sites/${encodeURIComponent(siteId)}/telemetry/latest`, token);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
   notifications: (token: string) =>
     request<{ notifications: Notification[] }>("/api/v1/notifications?limit=30", token),
   markRead: (token: string, id: string) =>

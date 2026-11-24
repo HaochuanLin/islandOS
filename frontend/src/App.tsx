@@ -35,8 +35,13 @@ function App() {
       ? preferredSite : siteResult.sites.some((site) => site.id === siteId) ? siteId : siteResult.sites[0]?.id ?? "";
     setSiteId(nextId);
     if (nextId) {
-      try { setTelemetry(await api.latestTelemetry(token, nextId)); }
-      catch (err) { if (err instanceof Error && !err.message.includes("no telemetry")) setTelemetry(null); else setTelemetry(null); }
+      try {
+        setTelemetry(await api.latestTelemetry(token, nextId));
+        setError("");
+      } catch (err) {
+        setTelemetry(null);
+        setError(err instanceof Error ? err.message : "Telemetry refresh failed");
+      }
     } else setTelemetry(null);
     setLastUpdated(new Date().toLocaleTimeString());
   }, [siteId]);
@@ -73,10 +78,10 @@ function App() {
   }
 
   async function selectSite(id: string) {
-    setSiteId(id); setTelemetry(null);
+    setSiteId(id); setTelemetry(null); setError("");
     if (!session || !id) return;
     try { setTelemetry(await api.latestTelemetry(session.access_token, id)); }
-    catch { setTelemetry(null); }
+    catch (err) { setTelemetry(null); setError(err instanceof Error ? err.message : "Telemetry refresh failed"); }
   }
 
   async function markRead(item: Notification) {

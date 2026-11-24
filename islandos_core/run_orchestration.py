@@ -32,6 +32,7 @@ from .forecast_optimizer_adapter import (
     evaluate_forecast_stress_scenarios,
 )
 from .impact_assessment import assess_energy_policy_impact
+from .investment_economics import evaluate_investment_economics
 from optimization.energy_system_optimizer import optimize_energy_system, OptimizationWeights
 from .planning_workflow import run_forecast_dispatch
 from .site_inputs import SiteAssumptions
@@ -300,6 +301,38 @@ def run_device_planner(
     }
 
 
+def _replay_investment(request: Mapping[str, Any], economics: Mapping[str, Any]) -> dict | None:
+    """Replay page 05's customer-entered investment screen, when the request carries it.
+
+    The eight investment fields are already validated by ``build_run_request``. This calls
+    the same evaluator the page calls and passes the same service-equivalence gate. It does
+    not annualise a simulated day: the annual bills are customer-entered inputs, not model
+    outputs.
+    """
+    investment = request["run_settings"].get("investment")
+    if investment is None:
+        return None
+    if not isinstance(investment, Mapping):
+        raise ValueError("run_settings.investment must be an object")
+    service_equivalent = bool(
+        economics.get("service_equivalent") and economics.get("cost_comparison_valid")
+    )
+    result = evaluate_investment_economics(
+        baseline_annual_energy_cost=float(investment["baseline_annual_energy_cost"]),
+        proposed_annual_energy_cost=float(investment["proposed_annual_energy_cost"]),
+        annual_incremental_om_cost=float(investment["annual_incremental_om_cost"]),
+        upfront_capex=float(investment["upfront_capex"]),
+        project_life_years=int(investment["project_life_years"]),
+        discount_rate=float(investment["discount_rate"]),
+        annual_energy_saving_escalation_rate=float(
+            investment["annual_energy_saving_escalation_rate"]
+        ),
+        annual_om_escalation_rate=float(investment["annual_om_escalation_rate"]),
+        service_equivalent=service_equivalent,
+    )
+    return result.to_dict()
+
+
 def replay_run_request(request: Mapping[str, Any]) -> dict:
     """Replay a `run_request` view with no page and no Streamlit, and return its summary.
 
@@ -332,7 +365,12 @@ def replay_run_request(request: Mapping[str, Any]) -> dict:
             page=page, result=outputs["result"], economics=outputs["economics"],
             currency=currency,
         )
-        return {"page": page, "result": summary, "annual": None}
+        return {
+            "page": page,
+            "result": summary,
+            "annual": None,
+            "investment": _replay_investment(request, outputs["economics"]),
+        }
 
     if page == "joint_resource_optimizer":
         config = site.to_energy_system_config()
