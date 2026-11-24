@@ -368,6 +368,28 @@ class IslandOSStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_invitations(self, principal):
+        """Pending invitations for this tenant, without the one-time token.
+
+        The console could create an invitation but never show it again, so a reader
+        had no way to confirm who was invited, in which role, or whether it had been
+        accepted. The raw token stays out of this read: it is returned once, at
+        creation, and only its SHA-256 is stored.
+        """
+        if principal["role"] != "owner":
+            raise PermissionError("owner role required")
+        with self.session() as db:
+            rows = db.execute(
+                "SELECT id,email,role,expires_at,created_at FROM invitations "
+                "WHERE tenant_id=? AND expires_at>? ORDER BY created_at",
+                (principal["tenant_id"], _utcnow()),
+            ).fetchall()
+        return [
+            {"invitation_id": row["id"], "email": row["email"], "role": row["role"],
+             "expires_at": row["expires_at"], "created_at": row["created_at"]}
+            for row in rows
+        ]
+
     def update_member_role(self, principal, user_id, role):
         if principal["role"] != "owner":
             raise PermissionError("owner role required")
@@ -547,6 +569,8 @@ def make_handler(store, allow_registration=False):
                     return self.send_json(200, {"sites": store.list_sites(who)})
                 if path == "/api/v1/members":
                     return self.send_json(200, {"members": store.list_members(who)})
+                if path == "/api/v1/members/invitations":
+                    return self.send_json(200, {"invitations": store.list_invitations(who)})
                 if path == "/api/v1/notifications":
                     query = parse_qs(parsed.query)
                     unread_value = query.get("unread_only", ["false"])[0].lower()
@@ -568,7 +592,8 @@ def make_handler(store, allow_registration=False):
                     return self.send_json(200 if result else 404, result or {"error": "no telemetry"})
                 return self.send_json(404, {"error": "not found"})
             except PermissionError as exc:
-                return self.send_json(401, {"error": str(exc)})
+                return self.send_json(403 if "role required" in str(exc) else 401,
+                                      {"error": str(exc)})
             except LookupError as exc:
                 return self.send_json(404, {"error": str(exc)})
             except ValueError as exc:
