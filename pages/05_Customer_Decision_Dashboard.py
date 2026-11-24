@@ -73,7 +73,7 @@ st.info(
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
-    st.subheader("Scenario assumptions")
+    st.subheader("Inputs and assumptions")
     currency = st.text_input("Currency label", value="USD").strip() or "currency"
     demand_scale = st.slider("Essential load level", 0.6, 1.6, 1.0, 0.05)
     tariff_scale = st.slider("Electricity tariff level", 0.5, 2.0, 1.0, 0.05)

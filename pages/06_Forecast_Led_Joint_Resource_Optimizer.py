@@ -61,7 +61,7 @@ st.info(
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
-    st.subheader("Site and asset assumptions")
+    st.subheader("Inputs and assumptions")
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
     shared_dataset, dataset_error = read_session_dataset(st.session_state)
