@@ -412,7 +412,10 @@ def test_the_same_joint_request_replays_to_the_same_run():
     assert first["result"]["run_id"] == second["result"]["run_id"]
     assert first["result"]["run_id"] == canonical_manifest["run_id"]
     assert first["result"]["manifest_sha256"] == canonical_manifest["manifest_sha256"]
-    assert canonical_manifest["created_at_utc"] == request["history"]["timestamps_utc"][-1]
+    expected_created_at = datetime.fromisoformat(
+        request["history"]["timestamps_utc"][-1].replace("Z", "+00:00")
+    ).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    assert canonical_manifest["created_at_utc"] == expected_created_at
     assert first["result"]["run_id"].startswith("run-")
     assert first["result"]["run_id"] != replay_run_request(
         {**request, "run_settings": {**request["run_settings"], "currency": "EUR"}}
