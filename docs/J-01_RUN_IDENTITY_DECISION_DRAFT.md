@@ -34,7 +34,7 @@ The following observations were checked against the repository `main` branch at 
 
 ### View models
 
-`islandos_core/app_view_models.py` includes `run_id` in the joint-optimizer result summary. The customer dashboard summary path currently sets `run_id`, `manifest_sha256` and `evidence_sha256` to null. The summary schema is therefore not yet a fully unified cross-page run envelope.
+`islandos_core/app_view_models.py` includes `run_id` in the joint-optimizer result summary. The customer dashboard summary path currently sets `run_id`, `manifest_sha256` and `evidence_sha256` to null. The summary schema is therefore not yet a fully unified cross-page run envelope. The request contract is shared across all three pages, but the run identity/result summary is not consistently populated.
 
 ### Persistence
 
@@ -44,7 +44,7 @@ The current persistence key is compatible with unique execution IDs within a pro
 
 ### Page 09
 
-`pages/09_Device_Flexibility_Planner.py` builds a typed request view with `build_run_request` and calls `run_device_planner`. Its visible report includes request/result application views, but the page itself does not currently expose a canonical `run_id` or canonical run manifest in the inspected code. It is a synthetic demonstration with fixed in-page inputs. Therefore Page 09 needs an explicit identity lifecycle decision; do not assume its current request view already supplies one.
+`pages/09_Device_Flexibility_Planner.py` builds a typed request view with `build_run_request` and calls `run_device_planner`. Its visible report includes request/result application views, but the page itself does not currently expose a canonical `run_id` or canonical run manifest in the inspected code. It is a synthetic demonstration with fixed in-page inputs. The shared `build_run_request` contract already recognises `PAGE_DEVICE_PLANNER` and carries page-specific `page_inputs`, but `build_device_flexibility_summary` currently emits `run_id: None`. Therefore Page 09 has request-shape support but not a populated run identity in its result summary; it needs an explicit identity lifecycle decision.
 
 ## 3. Proposed identity model (for approval)
 
