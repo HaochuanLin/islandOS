@@ -287,6 +287,66 @@ class IslandOSStore:
                         "site", site_id, {"cascade_deleted_telemetry": True})
         return {"deleted": True, "site_id": site_id}
 
+    def export_tenant(self, principal):
+        """Return every row this tenant owns as JSON, without credential material."""
+        if principal["role"] != "owner":
+            raise PermissionError("owner role required")
+        tenant_id = principal["tenant_id"]
+        with self._lock, self.session() as db:
+            schema_version = db.execute("PRAGMA user_version").fetchone()[0]
+            tenant = db.execute(
+                "SELECT id,name,created_at FROM tenants WHERE id=?", (tenant_id,)
+            ).fetchone()
+            if tenant is None:
+                raise LookupError("tenant not found")
+            members = db.execute(
+                "SELECT id,email,role,created_at FROM users WHERE tenant_id=? ORDER BY created_at",
+                (tenant_id,),
+            ).fetchall()
+            sites = db.execute(
+                "SELECT id,name,timezone,created_at FROM sites WHERE tenant_id=? ORDER BY name",
+                (tenant_id,),
+            ).fetchall()
+            telemetry = db.execute(
+                "SELECT site_id,timestamp_utc,received_at_utc,values_json,source FROM telemetry "
+                "WHERE tenant_id=? ORDER BY site_id,timestamp_utc",
+                (tenant_id,),
+            ).fetchall()
+            audit = db.execute(
+                "SELECT id,user_id,action,resource_type,resource_id,created_at,details_json "
+                "FROM audit_events WHERE tenant_id=? ORDER BY id",
+                (tenant_id,),
+            ).fetchall()
+            invitations = db.execute(
+                "SELECT id,email,role,expires_at,created_at,created_by FROM invitations "
+                "WHERE tenant_id=? ORDER BY created_at",
+                (tenant_id,),
+            ).fetchall()
+            self._audit(db, tenant_id, principal["user_id"], "tenant.export", "tenant",
+                        tenant_id, {"sites": len(sites), "telemetry": len(telemetry)})
+        return {
+            "schema_version": schema_version,
+            "exported_at": _utcnow(),
+            "tenant": dict(tenant),
+            "members": [dict(row) for row in members],
+            "sites": [dict(row) for row in sites],
+            "telemetry": [
+                {"site_id": row["site_id"], "timestamp_utc": row["timestamp_utc"],
+                 "received_at_utc": row["received_at_utc"],
+                 "values": json.loads(row["values_json"]), "source": row["source"]}
+                for row in telemetry
+            ],
+            "audit_events": [
+                {"id": row["id"], "user_id": row["user_id"], "action": row["action"],
+                 "resource_type": row["resource_type"], "resource_id": row["resource_id"],
+                 "created_at": row["created_at"],
+                 "details": json.loads(row["details_json"])}
+                for row in audit
+            ],
+            "invitations": [dict(row) for row in invitations],
+            "physical_write_performed": False,
+        }
+
 
     def create_invitation(self, principal, email, role="analyst", expires_in_seconds=604800):
         if principal["role"] != "owner":
@@ -565,6 +625,8 @@ def make_handler(store, allow_registration=False):
                                             "mode": "single_host_reference", "device_write_enabled": False})
             try:
                 who = self.principal()
+                if path == "/api/v1/export":
+                    return self.send_json(200, store.export_tenant(who))
                 if path == "/api/v1/sites":
                     return self.send_json(200, {"sites": store.list_sites(who)})
                 if path == "/api/v1/members":

@@ -58,6 +58,18 @@ python scripts/backup_service_db.py
 
 Limits that remain: backups sit on the same disk as the database, so they cover a bad migration or a mistaken delete, not disk loss; there is no schedule, no retention policy, and no off-machine copy. The API exposes no export route for tenants, sites, telemetry or audit events — the CSV downloads in the repository belong to the Streamlit workspace, not to the console. That is a gap, not a feature.
 
+## Tenant export and audit retention
+
+`GET /api/v1/export` returns one tenant's rows as a single JSON object: tenant, members (id, email, role, created_at), sites, telemetry (parsed values), invitations and audit events, plus `schema_version`, `exported_at` and `physical_write_performed: false`. Only an `owner` may call it; `analyst` and `viewer` receive 403, and a caller without a bearer token receives 401. The payload is built from `WHERE tenant_id = ?` queries only, so one tenant's export never contains another tenant's rows. Password hashes, salts, session token hashes and invitation token hashes are never included. The call records a `tenant.export` audit event with the exported site and telemetry counts, so an export leaves a trail.
+
+```powershell
+curl.exe -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8766/api/v1/export
+```
+
+Audit retention decision: audit events are kept indefinitely inside the same database as tenant data; there is no purge job, no rotation, no retention window and no export-to-append-only sink. An owner can copy them out through `/api/v1/export`, but nothing ships them off the machine, so a deleted or corrupted file loses the trail with the data. Retention, offsite shipping and an independent audit store stay open items rather than claimed behaviour.
+
+The route is asserted by `tests/test_service_api_export.py`: owner 200 with the tenant's rows, analyst and viewer 403, no token 401, and two tenants whose exports never contain each other's sites.
+
 ## Security and deployment boundary
 
 - The browser keeps the bearer token in component memory only; a page reload requires a new sign-in.
