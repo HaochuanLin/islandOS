@@ -393,7 +393,7 @@ def replay_run_request(request: Mapping[str, Any]) -> dict:
 
     if page == "joint_resource_optimizer":
         config = site.to_energy_system_config()
-        manifest = build_joint_optimizer_manifest(request).to_dict()
+        manifest = build_joint_optimizer_manifest(request)
         availability = request["run_settings"]["availability"]
         outputs = run_joint_optimizer(
             run_manifest=manifest,
