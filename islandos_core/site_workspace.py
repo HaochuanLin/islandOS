@@ -551,8 +551,6 @@ def import_project_package(
                 raise AuditIntegrityError("package source file does not match its registered import metadata")
 
     prepared_run_records = package.get("run_records", [])
-    if prepared_run_records and consent_to_import_run_records is not True:
-        raise WorkspaceStoreError("explicit consent is required before importing saved run results")
     for record in prepared_run_records:
         if not isinstance(record, dict):
             raise WorkspaceStoreError("package contains an invalid run record")
@@ -681,7 +679,7 @@ def import_project_package(
         ))
 
     imported_run_records = []
-    for record in prepared_run_records:
+    for record in (prepared_run_records if consent_to_import_run_records is True else []):
         retain_request = consent_to_retain_run_requests is True and record.get("request_payload") is not None
         created = record.get("created_at")
         timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
@@ -710,6 +708,7 @@ def import_project_package(
                 "package_sha256": package_digest,
                 "source_audit_event_count": len(package.get("audit_events", [])),
                 "run_record_count": len(imported_run_records),
+                "run_record_count_skipped": len(prepared_run_records) - len(imported_run_records),
                 "replayable_run_record_count": sum(item["replayable"] for item in imported_run_records),
                 "retained_source_count": sum(
                     1 for old_id in source_payloads if old_id in artifact_ids
@@ -727,6 +726,7 @@ def import_project_package(
         "import_artifacts_imported": len(artifact_ids),
         "run_manifests_imported": len(imported_runs),
         "run_records_imported": len(imported_run_records),
+        "run_records_skipped": len(prepared_run_records) - len(imported_run_records),
         "replayable_run_records_imported": sum(item["replayable"] for item in imported_run_records),
         "source_files_retained": sum(
             1 for old_id in source_payloads if old_id in artifact_ids
