@@ -49,6 +49,23 @@ tasks = [
                0, 24, minimum_run_steps=1, interruptible=True, priority=20),
 ]
 
+NO_PARTIAL_OUTPUT = (
+    "No partial schedule is shown; nothing is written to equipment."
+)
+
+
+def _stop_with_reason(headline: str, exc: BaseException, hint: str) -> None:
+    """Turn a planner failure into a readable page error, then stop the page."""
+    st.error(f"{headline}: {exc}. {hint}")
+    st.caption(NO_PARTIAL_OUTPUT)
+    st.stop()
+
+
+# Two boundaries, because the two failure families deserve different advice.
+# (1) The scenario itself cannot be evaluated: task constraints, windows, budgets
+#     or tariff/power-profile shapes do not line up. DeviceTask and the scheduler
+#     raise ValueError; horizon mismatches can surface as ArithmeticError or
+#     IndexError, and malformed page values as TypeError.
 try:
     base_load = [8.0] * 24
     pv = [max(0.0, 12.0 * (1.0 - abs(h - 12) / 7.0)) for h in hours]
@@ -89,13 +106,26 @@ try:
         base_load_kw=base_load,
         site=site_assumptions,
     )
-except ValueError as exc:
-    st.error(f"Scenario infeasible: {exc}")
-    st.stop()
+except (ValueError, TypeError, ArithmeticError, IndexError) as exc:
+    _stop_with_reason(
+        "Device scenario could not be evaluated",
+        exc,
+        "Adjust the task window, power budget or tariff and rerun.",
+    )
 
-schedule = outputs["schedule"]
-metrics = outputs["replay"]["summary"]
-reference_metrics = outputs["reference_replay"]["summary"]
+# (2) Planning finished but the result does not carry what this page renders:
+#     a missing key or an unexpected result shape. Never render a partial view
+#     from a half-formed planner result.
+try:
+    schedule = outputs["schedule"]
+    metrics = outputs["replay"]["summary"]
+    reference_metrics = outputs["reference_replay"]["summary"]
+except (KeyError, TypeError, ArithmeticError, IndexError) as exc:
+    _stop_with_reason(
+        "Device planner returned an incomplete schedule",
+        exc,
+        "No partial schedule is shown.",
+    )
 
 summary = st.columns(4)
 summary[0].metric("Critical energy protected", f"{sum(schedule.critical_power_kw):.0f} kWh")
