@@ -390,6 +390,7 @@ def test_existing_schema_1_0_workspace_migrates_without_losing_history(tmp_path)
         output_summary={"preserved": True}, actor_id="local-user", created_at=NOW,
     )
     with sqlite3.connect(db) as connection:
+        connection.execute("DROP TABLE run_records")
         connection.execute(
             "UPDATE workspace_meta SET value='1.0' WHERE key='schema_version'"
         )
