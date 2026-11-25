@@ -896,6 +896,8 @@ try:
         file_name="islandos_customer_decision_report.json",
         mime="application/json",
     )
-except (ValueError, KeyError, TypeError) as exc:
+except (ValueError, KeyError, TypeError, ArithmeticError, IndexError) as exc:
     st.error(f"Could not build the decision dashboard: {exc}")
     st.caption("Check the scenario assumptions and the forecast/optimizer input contracts.")
+    st.caption("No partial decision result is shown; nothing is written to equipment.")
+    st.stop()
