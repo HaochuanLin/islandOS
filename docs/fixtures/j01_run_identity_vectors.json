@@ -1,0 +1,89 @@
+{
+  "schema": "j01-input-group-vectors-v1",
+  "canonical_json": "json.dumps(value, sort_keys=true, separators=(',', ':'), ensure_ascii=false, allow_nan=false), UTF-8",
+  "note": "P1a vectors, recomputed by the implementation in feat/j01-input-group-identity-2026-11-25. Site digests are intentionally absent because they are not part of an input group.",
+  "history": {
+    "timestamps_utc": [
+      "2026-01-01T00:00:00+00:00",
+      "2026-01-01T01:00:00+00:00",
+      "2026-01-01T02:00:00+00:00"
+    ],
+    "signals": {
+      "pv_power_kw": [0.0, 1.5, 4.25],
+      "wind_power_kw": [2.0, 2.5, 3.0],
+      "load_kw": [10.0, 12.5, 11.0],
+      "tariff_per_kwh": [0.20, 0.25, 0.30]
+    },
+    "hour_count": 3
+  },
+  "expected": {
+    "history_sha256": "db13539cb15d68101bfdb28ad106c6fc2f36e249200f62c07056c7ebe0884d70",
+    "units_sha256": "f9649c8dc9775e90525e1e7d2f97916619144fea84b40b42dd7e7467f3b7cc04",
+    "input_group_sha256": "3a993a72953b9348e62f72919a129d4dcfc1cddd6fd68ed9c4a03ef401b49761",
+    "input_group_id": "ig-3a993a72953b9348"
+  },
+  "cases": [
+    {
+      "name": "usd_base",
+      "units": {
+        "pv_power_kw": "kW",
+        "wind_power_kw": "kW",
+        "load_kw": "kW",
+        "tariff_per_kwh": "USD/kWh"
+      },
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "USD/kWh is normalized to currency/kWh"
+    },
+    {
+      "name": "cny_same_physical_history",
+      "units": {
+        "pv_power_kw": "kW",
+        "wind_power_kw": "kW",
+        "load_kw": "kW",
+        "tariff_per_kwh": "CNY/kWh"
+      },
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "currency code belongs to run settings, not input group identity"
+    },
+    {
+      "name": "page05_aliases",
+      "signals": {
+        "pv_power": [0.0, 1.5, 4.25],
+        "wind_power": [2.0, 2.5, 3.0],
+        "essential_load": [10.0, 12.5, 11.0],
+        "electricity_price": [0.20, 0.25, 0.30]
+      },
+      "units": {
+        "pv_power": "kW",
+        "wind_power": "kW",
+        "essential_load": "kW",
+        "electricity_price": "USD/kWh"
+      },
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "Page 05 display names map to the same physical signals as Page 06"
+    },
+    {
+      "name": "load_unit_mw",
+      "units": {
+        "pv_power_kw": "kW",
+        "wind_power_kw": "kW",
+        "load_kw": "MW",
+        "tariff_per_kwh": "USD/kWh"
+      },
+      "expected_units_sha256": "0e5bc21808cc40054909e5feb8a1605fe9e1ecf09b10d35018be71748db56e03",
+      "expected_input_group_sha256": "180f52a578a52b954025f9d31a7fcd26cf25db243dba5461bfde006558d7334a",
+      "expected_input_group_id": "ig-180f52a578a52b95",
+      "assertion": "physical unit change creates a new input group"
+    },
+    {
+      "name": "row_order_reversed",
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "timestamps and signals reversed together keep the same sorted history"
+    },
+    {
+      "name": "equivalent_timezone_offset",
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "2026-01-01T01:00+01:00 is the same UTC instant as 2026-01-01T00:00Z"
+    }
+  ]
+}
