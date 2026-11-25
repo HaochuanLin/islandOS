@@ -667,36 +667,19 @@ def list_run_records(db_path: str | Path, *, project_id: str) -> list[dict[str, 
     if not isinstance(project_id, str) or not project_id.strip():
         raise WorkspaceStoreError("project_id is required")
     with _connect(db_path) as connection:
-        rows = connection.execute(
-            """SELECT project_id, run_id, page, record_schema_version, created_at, actor_id,
-                      request_sha256, request_metadata_json, request_metadata_sha256, result_sha256,
-                      canonical_manifest_sha256, history_sha256, input_fingerprint_sha256,
-                      retention_mode
-               FROM run_records WHERE project_id=? ORDER BY created_at DESC, run_id""",
+        keys = connection.execute(
+            "SELECT run_id FROM run_records WHERE project_id=? ORDER BY created_at DESC, run_id",
             (project_id,),
         ).fetchall()
     results = []
-    for row in rows:
-        try:
-            metadata = json.loads(row["request_metadata_json"])
-        except json.JSONDecodeError as exc:
-            raise AuditIntegrityError("stored request metadata is not valid JSON") from exc
-        if _hash(row["request_metadata_json"]) != row["request_metadata_sha256"]:
-            raise AuditIntegrityError("stored request metadata hash does not match its contents")
-        if not isinstance(metadata, dict):
-            raise AuditIntegrityError("stored request metadata must be a JSON object")
-        results.append({
-            "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
-            "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
-            "actor_id": row["actor_id"], "request_sha256": row["request_sha256"],
-            "request_metadata": metadata, "request_metadata_sha256": row["request_metadata_sha256"], "result_sha256": row["result_sha256"],
-            "canonical_manifest_sha256": row["canonical_manifest_sha256"],
-            "history_sha256": row["history_sha256"],
-            "input_fingerprint_sha256": row["input_fingerprint_sha256"],
-            "retention_mode": row["retention_mode"],
-            "replayable": row["retention_mode"] == "retained_full_request",
-        })
+    for row in keys:
+        record = get_run_record(db_path, project_id=project_id, run_id=row["run_id"])
+        record.pop("request_payload", None)
+        record.pop("result", None)
+        record.pop("canonical_manifest", None)
+        results.append(record)
     return results
+
 
 def record_operator_override(
     db_path: str | Path,
