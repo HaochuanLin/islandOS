@@ -635,7 +635,7 @@ def record_run_record(
              request_sha256, request_metadata_json, request_metadata_sha256, request_payload_json, request_payload_sha256,
              result_json, result_sha256, canonical_manifest_json, canonical_manifest_sha256,
              history_sha256, input_fingerprint_sha256, retention_mode)
-            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 project_id, run_id, page, timestamp, actor_id.strip(),
                 software_version.strip() if software_version else None,
