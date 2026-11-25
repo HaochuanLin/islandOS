@@ -14,7 +14,9 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
-from islandos_ui.page_header import render_page_header
+from islandos_ui.page_header import render_page_header, render_page_title
+from islandos_ui.streamlit_theme import apply_theme
+from islandos_ui.table import render_table
 from islandos_ui.customer_workflow import (
     build_input_fingerprint,
     render_customer_workflow,
@@ -61,8 +63,12 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Customer decision dashboard")
-st.caption("Forecast → compare operating policies → review cost and reliability trade-offs")
+apply_theme()
+render_page_title(
+    "IslandOS · customer decision brief",
+    "Customer decision dashboard",
+    "Forecast → compare operating policies → review cost and reliability trade-offs.",
+)
 
 render_page_header(
     question="Given a site's history, what does the forecast imply for the cost and reliability trade-off?",
@@ -449,7 +455,7 @@ try:
             "Renewable curtailed (kWh)": summary["renewable_curtailed_kwh"],
             "Physical audit": "Passed" if item["audit"]["passed"] else "Failed",
         })
-    st.dataframe(pd.DataFrame(comparison), width="stretch", hide_index=True)
+    render_table(pd.DataFrame(comparison))
     st.caption(
         "The optimizer compares two explicit dispatch priorities using the shared "
         "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
@@ -538,7 +544,7 @@ try:
                     column = column * 100.0
                 detail_frame[label] = column.to_numpy()
         with st.expander("Hourly dispatch detail (hourly rows)"):
-            st.dataframe(detail_frame, width="stretch", hide_index=True)
+            render_table(detail_frame)
 
     st.subheader("Paired customer-impact evidence")
     impact_baseline = paired_impact["baseline_metrics"]
@@ -563,7 +569,7 @@ try:
         "Passed" if impact_audit["passed"] else "Failed",
     )
     impact_cols[3].metric("Net customer value", "Not calculated")
-    st.dataframe(
+    render_table(
         pd.DataFrame([
             {"Measure": "Estimated energy cost", "Grid-first baseline": impact_baseline["estimated_energy_cost"], "Battery-first candidate": impact_candidate["estimated_energy_cost"]},
             {"Measure": "Grid import (kWh)", "Grid-first baseline": impact_baseline["grid_import_kwh"], "Battery-first candidate": impact_candidate["grid_import_kwh"]},
@@ -572,8 +578,6 @@ try:
             {"Measure": "Critical unmet load (kWh)", "Grid-first baseline": impact_baseline["critical_unmet_load_kwh"], "Battery-first candidate": impact_candidate["critical_unmet_load_kwh"]},
             {"Measure": "Flexible load shed (kWh)", "Grid-first baseline": impact_baseline["flexible_load_shed_kwh"], "Battery-first candidate": impact_candidate["flexible_load_shed_kwh"]},
         ]),
-        width="stretch",
-        hide_index=True,
     )
     st.caption(
         "This is a separate, same-input 24-hour grid-first vs battery-first evidence comparison. "
@@ -597,7 +601,7 @@ try:
                 "Estimated cost": summary["estimated_energy_cost"],
                 "Audit": "Passed" if scenario_result["audit"]["passed"] else "Failed",
             })
-    st.dataframe(pd.DataFrame(stress_rows), width="stretch", hide_index=True)
+    render_table(pd.DataFrame(stress_rows))
     st.caption(
         "Stress cases are deterministic forecast-envelope and grid-outage replays. "
         "No scenario probabilities or joint confidence coverage are assigned."
@@ -726,7 +730,7 @@ try:
             st.bar_chart(sensitivity_frame)
             st.subheader("Annual investment cashflow")
             cashflow_frame = pd.DataFrame(investment.annual_cashflows)
-            st.dataframe(cashflow_frame, width="stretch", hide_index=True)
+            render_table(cashflow_frame)
         investment_report = investment.to_dict()
 
     else:

@@ -13,3 +13,23 @@ enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2F6F6A"
+backgroundColor = "#F4F1E8"
+secondaryBackgroundColor = "#E9E3D4"
+textColor = "#122923"
+font = "sans serif"
+headingFont = "serif"
+borderColor = "#D8D1C0"
+dataframeBorderColor = "#D8D1C0"
+dataframeHeaderBackgroundColor = "#E9E3D4"
+chartCategoricalColors = [
+  "#2F6F6A",
+  "#A9793F",
+  "#122923",
+  "#5E9E91",
+  "#8C6A4F",
+  "#6E8A80",
+]

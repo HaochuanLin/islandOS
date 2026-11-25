@@ -6,7 +6,9 @@ import json
 
 import pandas as pd
 import streamlit as st
-from islandos_ui.page_header import render_page_header
+from islandos_ui.page_header import render_page_header, render_page_title
+from islandos_ui.streamlit_theme import apply_theme
+from islandos_ui.table import render_table
 
 from islandos_core.app_view_models import (
     PAGE_DEVICE_PLANNER,
@@ -18,8 +20,12 @@ from islandos_core.run_orchestration import device_task_payload, run_device_plan
 from islandos_core.site_inputs import device_planner_demo_site
 
 st.set_page_config(page_title="IslandOS | Device Flexibility", page_icon="⚡", layout="wide")
-st.title("Device-level load flexibility planner")
-st.caption("Demonstration: protect essential services first, then schedule deferrable equipment around the tariff.")
+apply_theme()
+render_page_title(
+    "IslandOS · customer flexibility brief",
+    "Device-level load flexibility planner",
+    "Protect essential services first, then schedule deferrable equipment around the tariff.",
+)
 
 render_page_header(
     question="Which loads can move without breaking essential service?",
@@ -146,7 +152,7 @@ for item in schedule.schedules:
         })
 detail = pd.DataFrame(rows)
 st.subheader("Per-device schedule")
-st.dataframe(
+render_table(
     pd.DataFrame([{
         "Device": x.name,
         "Load class": x.load_class.replace("_", " ").title(),
@@ -155,7 +161,6 @@ st.dataframe(
         "Operating intervals": ", ".join(str(v) for v in x.operating_steps),
         "Energy charge (USD)": round(x.energy_cost, 3),
     } for x in schedule.schedules]),
-    width="stretch", hide_index=True,
 )
 
 chart = pd.DataFrame({
@@ -190,7 +195,7 @@ comparison = pd.DataFrame([
     {"Metric": "Flexible load shed (kWh)", "Tariff-aware plan": metrics["flexible_load_shed_kwh"], "Earliest-feasible reference": reference_metrics["flexible_load_shed_kwh"]},
     {"Metric": "Peak grid import (kW)", "Tariff-aware plan": metrics["peak_grid_import_kw"], "Earliest-feasible reference": reference_metrics["peak_grid_import_kw"]},
 ])
-st.dataframe(comparison, width="stretch", hide_index=True)
+render_table(comparison)
 st.caption(
     "Both cases use the same device requirements, time windows, residual task budget, PV/wind profiles and grid limits. "
     "The reference is an earliest-feasible scheduling heuristic, not historical customer operation. "

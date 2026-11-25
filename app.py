@@ -24,6 +24,7 @@ from islandos_ui.deployment_gates import (
     local_site_workspace_enabled,
 )
 from islandos_ui.navigation import page_url_path
+from islandos_ui.streamlit_theme import apply_theme
 
 
 
@@ -120,6 +121,13 @@ def navigation_pages() -> dict:
 
 navigation = st.navigation(navigation_pages())
 navigation.run()
+
+# The theme is installed after the page runs because Streamlit renders the
+# selected page into the main area and discards elements emitted before
+# ``navigation.run()``.  It is a stylesheet only, so running it last applies the
+# same palette, type scale and sidebar treatment to every page and keeps the
+# public pages visually identical to the React console.
+apply_theme()
 
 with st.sidebar:
     st.divider()

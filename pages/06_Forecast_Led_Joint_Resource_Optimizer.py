@@ -14,7 +14,9 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
-from islandos_ui.page_header import render_page_header
+from islandos_ui.page_header import render_page_header, render_page_title
+from islandos_ui.streamlit_theme import apply_theme
+from islandos_ui.table import render_table
 from islandos_ui.customer_workflow import (
     build_input_fingerprint,
     render_customer_workflow,
@@ -50,8 +52,12 @@ from islandos_core.run_orchestration import run_joint_optimizer
 
 
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
-st.title("Forecast-led joint resource optimizer")
-st.caption("One pipeline: site history → model selection → aligned forecasts → battery/diesel schedule search")
+apply_theme()
+render_page_title(
+    "IslandOS · joint resource brief",
+    "Forecast-led joint resource optimizer",
+    "One pipeline: site history → model selection → aligned forecasts → battery/diesel schedule search.",
+)
 
 render_page_header(
     question="What battery and diesel schedule follows from aligned forecasts for this site?",
@@ -383,7 +389,7 @@ try:
             "Error-band samples": forecast.interval_calibration_samples,
             "Unit": forecast.unit,
         })
-    st.dataframe(pd.DataFrame(model_rows), width="stretch", hide_index=True)
+    render_table(pd.DataFrame(model_rows))
     st.caption("Built-in candidates are statistical baselines. Backtest scores describe only the supplied history.")
 
     st.subheader("Forecast points and intervals")
@@ -415,7 +421,7 @@ try:
             "and not a live measurement."
         )
         with st.expander("Forecast point table and interval metadata", expanded=False):
-            st.dataframe(points_frame.reset_index(), width="stretch", hide_index=True)
+            render_table(points_frame.reset_index())
             st.caption(
                 f"Model: {selected_forecast.model_id}@{selected_forecast.model_version} · "
                 f"Unit: {selected_forecast.unit} · "
@@ -448,7 +454,7 @@ try:
             "Battery degradation cost": summary.get("battery_degradation_cost"),
         })
     if comparison_rows:
-        st.dataframe(pd.DataFrame(comparison_rows), width="stretch", hide_index=True)
+        render_table(pd.DataFrame(comparison_rows))
     economics = result.get("robust_customer_economics", {})
     if economics.get("cost_comparison_valid"):
         st.metric(
@@ -477,7 +483,7 @@ try:
         st.subheader("Hourly setpoint schedule")
         schedule_frame = pd.DataFrame(schedule_rows)
         st.line_chart(schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"))
-        st.dataframe(schedule_frame, width="stretch", hide_index=True)
+        render_table(schedule_frame)
     else:
         st.caption("Schedule vectors are available in the downloadable audit report.")
 

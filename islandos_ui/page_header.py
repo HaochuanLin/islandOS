@@ -8,21 +8,43 @@ cannot quietly grow a different tone or drop the limitations line.
 
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
 
-def render_page_header(question: str, data: str, conclusions: str, limits: str) -> None:
-    """Render the four-part header. Keep every argument to one short sentence."""
-    st.markdown(
-        f"""
-        <div style="border-left:3px solid #2f6f6a;padding:0.35rem 0 0.35rem 0.9rem;margin:0 0 1rem 0;">
-          <div style="font-size:0.9rem;line-height:1.6;">
-            <b>Answers:</b> {question}<br/>
-            <b>Data:</b> {data}<br/>
-            <b>You can conclude:</b> {conclusions}<br/>
-            <b>Limits:</b> {limits}
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def render_page_title(kicker: str, title: str, dek: str) -> None:
+    """Render the display heading in the shared IslandOS type scale.
+
+    ``kicker`` is the small all-caps line above the title, ``title`` is the H1,
+    and ``dek`` is the one-sentence orientation line.  All three are escaped
+    because they are written as HTML rather than through Streamlit's own title
+    widget, which keeps the type scale independent of Streamlit's defaults.
+    """
+    st.html(
+        '<section class="ios-hero">'
+        f'<p class="ios-kicker">{escape(kicker)}</p>'
+        f"<h1>{escape(title)}</h1>"
+        f'<p class="ios-hero__dek">{escape(dek)}</p>'
+        "</section>"
     )
+
+
+def render_page_header(question: str, data: str, conclusions: str, limits: str) -> None:
+    """Render the four-part brief. Keep every argument to one short sentence."""
+    items = (
+        ("Answers", question),
+        ("Data", data),
+        ("You can conclude", conclusions),
+        ("Limits", limits),
+    )
+    cells = "".join(
+        (
+            '<div class="ios-brief__item">'
+            f'<span class="ios-brief__label">{escape(label)}</span>'
+            f'<p class="ios-brief__text">{escape(value)}</p>'
+            "</div>"
+        )
+        for label, value in items
+    )
+    st.html(f'<aside class="ios-brief" aria-label="Page brief">{cells}</aside>')

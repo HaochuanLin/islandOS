@@ -1,0 +1,819 @@
+/* IslandOS customer surfaces — warm paper, deep sea, tidal green.
+ *
+ * Two jobs:
+ *   1. make the customer pages legible from a projector;
+ *   2. make them feel like the same product as the React operations console.
+ *
+ * Type scale (desktop): hero 56px / section 32px / body 17px / table 17px /
+ * sidebar nav 16px.  Nothing that carries meaning is below 13px.
+ */
+
+:root {
+  --ios-paper: #f4f1e8;
+  --ios-paper-deep: #ece7da;
+  --ios-surface: #fffcf4;
+  --ios-ink: #122923;
+  --ios-ink-soft: #3d5149;
+  --ios-muted: #5d6e66;
+  --ios-line: #d8d1c0;
+  --ios-line-soft: #e8e1d2;
+  --ios-sea: #2f6f6a;
+  --ios-sea-bright: #5e9e91;
+  --ios-sea-pale: #e4efe7;
+  --ios-deep: #0b2a26;
+  --ios-deep-2: #10332e;
+  --ios-gold: #a9793f;
+  --ios-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --ios-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  font-size: 16px;
+}
+
+html,
+body,
+[data-testid="stAppViewContainer"],
+[data-testid="stApp"] {
+  background: var(--ios-paper) !important;
+  color: var(--ios-ink) !important;
+  font-family: var(--ios-sans) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(circle at 88% 4%, rgba(94, 158, 145, 0.10), transparent 26rem),
+    linear-gradient(180deg, #f7f4ec 0%, var(--ios-paper) 34rem) !important;
+}
+
+/* Keep the app chrome out of the way without removing Streamlit's controls. */
+[data-testid="stHeader"] {
+  background: rgba(247, 244, 236, 0.92) !important;
+  border-bottom: 1px solid rgba(216, 209, 192, 0.65);
+  backdrop-filter: blur(10px);
+}
+
+[data-testid="stMain"] {
+  background: transparent !important;
+}
+
+[data-testid="stMainBlockContainer"] {
+  box-sizing: border-box;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 4.6rem 3.5rem 5rem !important;
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, var(--ios-deep) 0%, #09231f 100%) !important;
+  border-right: 1px solid #1d4039;
+  box-shadow: 12px 0 40px rgba(12, 42, 38, 0.08);
+  width: 21.5rem !important;
+  min-width: 21.5rem !important;
+  max-width: 21.5rem !important;
+}
+
+[data-testid="stSidebarContent"] {
+  padding: 0.85rem 1.15rem 2rem !important;
+}
+
+body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
+  content: "ISLANDOS\A CLIENT OPERATIONS";
+  display: block;
+  margin: 0.2rem 0.35rem 1rem;
+  padding: 0.15rem 0.25rem 1rem;
+  border-bottom: 1px solid #285149;
+  color: #f7f3e7;
+  font-family: var(--ios-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  line-height: 1.12;
+  white-space: pre-line;
+}
+
+[data-testid="stSidebarNav"] a,
+[data-testid="stSidebarNav"] a p {
+  color: #dfeae4 !important;
+  font-size: 1rem !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+}
+
+[data-testid="stSidebarNav"] a {
+  padding: 0.62rem 0.7rem !important;
+  border-radius: 10px !important;
+  margin: 0.08rem 0 !important;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+/* Streamlit's default nav clips long page names.  The customer pages have
+ * deliberately descriptive names and the menu is wide enough for them, so
+ * allow a second line instead of an ellipsis. */
+[data-testid="stSidebar"] [data-testid="stSidebarNav"] a p {
+  font-size: 1rem !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+[data-testid="stSidebarNav"] a > div,
+[data-testid="stSidebarNav"] a span {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+[data-testid="stSidebarNav"] a:hover {
+  background: #154039 !important;
+  color: #ffffff !important;
+}
+
+[data-testid="stSidebarNav"] a[aria-current="page"] {
+  background: #19473f !important;
+  box-shadow: inset 3px 0 0 var(--ios-sea-bright);
+  color: #ffffff !important;
+}
+
+[data-testid="stSidebarNav"] a[aria-current="page"] p {
+  color: #ffffff !important;
+  font-weight: 650 !important;
+}
+
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+  color: #f7f3e7 !important;
+  font-family: var(--ios-serif) !important;
+  font-size: 1.55rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  margin-top: 1.35rem !important;
+  border-top: 0 !important;
+}
+
+/* Streamlit puts the visible heading text in a child span, so the dark
+ * global heading colour would otherwise win over the sidebar heading. */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2 span,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 span {
+  color: #f7f3e7 !important;
+  border-top: 0 !important;
+}
+
+[data-testid="stSidebar"] hr {
+  border-color: #2b5048 !important;
+  margin: 1.25rem 0 1.1rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  color: #d8e5df !important;
+  font-size: 0.95rem !important;
+  line-height: 1.55 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] label p {
+  color: #edf4f0 !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  color: #9fb7ae !important;
+}
+
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] textarea {
+  font-size: 1rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stNumberInput"] input,
+[data-testid="stSidebar"] [data-testid="stTextInput"] input {
+  background: #123a34 !important;
+  color: #ffffff !important;
+  border-color: #315a51 !important;
+  min-height: 2.85rem;
+}
+
+[data-testid="stSidebar"] [data-testid="stNumberInput"] button {
+  background: #173f38 !important;
+  color: #e9f1ed !important;
+  border-color: #315a51 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSlider"] [data-testid="stTickBar"] {
+  color: #9fb7ae !important;
+  font-size: 0.82rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSliderThumbValue"],
+[data-testid="stSidebar"] [data-testid="stSliderThumbValue"] p {
+  color: #f7f3e7 !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] {
+  background: #123a34 !important;
+  border: 1px solid #315a51 !important;
+  border-radius: 10px;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] p,
+[data-testid="stSidebar"] [data-testid="stFileUploader"] small {
+  color: #d8e5df !important;
+  font-size: 0.95rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button {
+  background: #1d4c43 !important;
+  border: 1px solid #5b8b7e !important;
+  color: #ffffff !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button p,
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button span {
+  color: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stDownloadButton"] button {
+  background: #1d4c43 !important;
+  border: 1px solid #5b8b7e !important;
+  color: #ffffff !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stDownloadButton"] button p,
+[data-testid="stSidebar"] [data-testid="stDownloadButton"] button span,
+[data-testid="stSidebar"] [data-testid="stDownloadButton"] button svg {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+}
+
+/* --------------------------------------------------------------- hero area */
+
+.ios-hero {
+  position: relative;
+  margin: 0 0 1.55rem;
+  padding: 0 0 1.5rem;
+  border-bottom: 1px solid var(--ios-line);
+}
+
+.ios-hero::after {
+  content: "";
+  display: block;
+  width: 4.5rem;
+  height: 3px;
+  margin-top: 1.25rem;
+  background: var(--ios-sea);
+}
+
+.ios-kicker {
+  margin: 0 0 0.7rem;
+  color: var(--ios-gold);
+  font-family: var(--ios-sans);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.ios-hero h1 {
+  max-width: none;
+  margin: 0 !important;
+  color: var(--ios-ink) !important;
+  font-family: var(--ios-serif) !important;
+  font-size: clamp(2.85rem, 3.35vw, 3.55rem) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.04 !important;
+}
+
+.ios-hero__dek {
+  max-width: 78ch;
+  margin: 1rem 0 0 !important;
+  color: var(--ios-muted) !important;
+  font-size: 1.12rem !important;
+  line-height: 1.62 !important;
+}
+
+/* Fallback for screens that still call st.title directly. */
+[data-testid="stHeading"] h1,
+[data-testid="stMarkdownContainer"] h1 {
+  color: var(--ios-ink) !important;
+  font-family: var(--ios-serif) !important;
+  font-size: clamp(2.75rem, 3.2vw, 3.35rem) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.06 !important;
+  margin: 0 0 0.75rem !important;
+}
+
+/* The workspace landing page has its own dark hero block.  The global heading
+ * colour must not turn its copy into dark-on-dark. */
+.hero h1 {
+  color: #ffffff !important;
+}
+
+.hero p,
+.hero .stMarkdownContainer p {
+  color: #e0f2f1 !important;
+}
+
+/* --------------------------------------------------------------- brief card */
+
+.ios-brief {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 2.1rem;
+  margin: 0 0 1.6rem;
+  padding: 1.15rem 1.35rem 1.25rem;
+  background: var(--ios-surface);
+  border: 1px solid var(--ios-line);
+  border-left: 5px solid var(--ios-sea);
+  border-radius: 0 14px 14px 0;
+  box-shadow: 0 1px 0 rgba(18, 41, 35, 0.04);
+}
+
+.ios-brief__item {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--ios-line-soft);
+}
+
+.ios-brief__item:last-child,
+.ios-brief__item:nth-last-child(2) {
+  border-bottom: 0;
+}
+
+.ios-brief__label {
+  display: block;
+  margin: 0 0 0.22rem;
+  color: var(--ios-sea);
+  font-family: var(--ios-sans);
+  font-size: 0.71rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.ios-brief__text {
+  margin: 0;
+  color: var(--ios-ink-soft);
+  font-size: 1.08rem;
+  line-height: 1.58;
+}
+
+/* ------------------------------------------------------------------ body */
+
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] blockquote p {
+  color: var(--ios-ink-soft);
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+
+[data-testid="stMarkdownContainer"] strong,
+[data-testid="stMarkdownContainer"] b {
+  color: var(--ios-ink);
+  font-weight: 650;
+}
+
+[data-testid="stMarkdownContainer"] a {
+  color: var(--ios-sea);
+  text-decoration-color: rgba(47, 111, 106, 0.35);
+  text-underline-offset: 0.16em;
+}
+
+[data-testid="stCaptionContainer"] p {
+  color: var(--ios-muted) !important;
+  font-size: 1.01rem !important;
+  line-height: 1.62 !important;
+}
+
+[data-testid="stCaptionContainer"] {
+  margin-top: 0.3rem;
+}
+
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stHeading"] h2 {
+  margin: 2.55rem 0 0.85rem !important;
+  padding-top: 1.35rem;
+  border-top: 1px solid var(--ios-line);
+  color: var(--ios-ink) !important;
+  font-family: var(--ios-serif) !important;
+  font-size: clamp(1.75rem, 2.15vw, 2.15rem) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.018em !important;
+  line-height: 1.16 !important;
+}
+
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stHeading"] h3 {
+  margin: 1.7rem 0 0.55rem !important;
+  color: var(--ios-ink) !important;
+  font-family: var(--ios-serif) !important;
+  font-size: 1.42rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.25 !important;
+}
+
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stHeading"] h4 {
+  color: var(--ios-ink) !important;
+  font-size: 1.12rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+
+/* ------------------------------------------------------------------ alerts */
+
+[data-testid="stAlert"] {
+  margin: 0.7rem 0 1.35rem;
+  padding: 0.15rem 0.25rem !important;
+  background: var(--ios-sea-pale) !important;
+  border: 1px solid #c6d8ca !important;
+  border-left: 5px solid var(--ios-sea) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 0 rgba(18, 41, 35, 0.035);
+}
+
+[data-testid="stAlertContainer"] {
+  background: var(--ios-sea-pale) !important;
+  border-radius: 10px !important;
+}
+
+[data-testid="stAlertContentInfo"],
+[data-testid="stAlertContentInfo"] p {
+  color: #224039 !important;
+  font-size: 1.06rem !important;
+  line-height: 1.62 !important;
+}
+
+[data-testid="stAlertContentSuccess"] p {
+  color: #25462f !important;
+  font-size: 1.02rem !important;
+  line-height: 1.62 !important;
+}
+
+[data-testid="stAlertContentWarning"] p,
+[data-testid="stAlertContentError"] p {
+  font-size: 1.02rem !important;
+  line-height: 1.62 !important;
+}
+
+/* ----------------------------------------------------------------- metrics */
+
+[data-testid="stMetric"] {
+  min-height: 8.3rem;
+  padding: 1.05rem 1.15rem !important;
+  background: var(--ios-surface);
+  border: 1px solid var(--ios-line);
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(18, 41, 35, 0.045);
+}
+
+[data-testid="stMetricLabel"] p {
+  margin: 0 !important;
+  color: var(--ios-muted) !important;
+  font-size: 0.84rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.07em !important;
+  line-height: 1.35 !important;
+  text-transform: uppercase;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] > div,
+[data-testid="stMetricLabel"] span {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+[data-testid="stMetricValue"] {
+  margin-top: 0.55rem !important;
+  color: var(--ios-ink) !important;
+  font-family: var(--ios-serif) !important;
+  font-size: 2.55rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.05 !important;
+}
+
+[data-testid="stMetricDelta"] {
+  font-size: 0.92rem !important;
+}
+
+[data-testid="stHorizontalBlock"] {
+  gap: 1rem !important;
+}
+
+/* ------------------------------------------------------------------- tables */
+
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
+  margin: 0.45rem 0 1.25rem;
+  background: var(--ios-surface) !important;
+  border: 1px solid var(--ios-line) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(18, 41, 35, 0.035);
+}
+
+[data-testid="stTable"] {
+  padding: 0.2rem 0.35rem 0.35rem;
+  max-height: 34rem;
+  overflow: auto !important;
+}
+
+[data-testid="stTable"] table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  color: var(--ios-ink-soft) !important;
+  font-size: 1.06rem !important;
+  line-height: 1.45 !important;
+}
+
+[data-testid="stTable"] thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.78rem 0.85rem !important;
+  background: #e9e3d4 !important;
+  color: #31463e !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ios-line) !important;
+  font-family: var(--ios-sans) !important;
+  font-size: 0.93rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.045em;
+  line-height: 1.3 !important;
+  text-align: left !important;
+  text-transform: uppercase;
+  white-space: normal !important;
+}
+
+[data-testid="stTable"] tbody td {
+  padding: 0.8rem 0.85rem !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ios-line-soft) !important;
+  font-size: 1.04rem !important;
+  line-height: 1.45 !important;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+[data-testid="stTable"] tbody tr:nth-child(even) td {
+  background: #faf7ef !important;
+}
+
+[data-testid="stTable"] tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+/* The canvas-backed dataframe is retained only for long audit tables.  Its
+ * HTML mirror can still be styled, and row_height is raised in-page. */
+[data-testid="stDataFrame"] {
+  font-size: 1rem !important;
+}
+
+[data-testid="stDataFrame"] table {
+  font-size: 1rem !important;
+}
+
+/* ---------------------------------------------------------------- expanders */
+
+[data-testid="stExpander"] {
+  margin: 0.55rem 0 1.25rem;
+  background: var(--ios-surface);
+  border: 1px solid var(--ios-line) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+[data-testid="stExpander"] summary {
+  padding: 0.9rem 1.05rem !important;
+}
+
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span {
+  color: var(--ios-ink) !important;
+  font-size: 1.03rem !important;
+  font-weight: 600 !important;
+  line-height: 1.45 !important;
+}
+
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+  padding: 0.2rem 1.1rem 1.05rem !important;
+}
+
+/* ------------------------------------------------------------------- charts */
+
+[data-testid="stVegaLiteChart"] {
+  margin: 0.5rem 0 1.1rem;
+  padding: 0.85rem 0.8rem 0.35rem;
+  background: var(--ios-surface);
+  border: 1px solid var(--ios-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+[data-testid="stVegaLiteChart"] svg text {
+  font-size: 13.5px !important;
+}
+
+[data-testid="stVegaLiteChart"] .vega-bindings label {
+  color: var(--ios-ink-soft) !important;
+  font-size: 1rem !important;
+}
+
+/* -------------------------------------------------------------------- tabs */
+
+[data-testid="stTabs"] [role="tab"] {
+  font-size: 1.02rem !important;
+  font-weight: 600 !important;
+}
+
+[data-testid="stTabs"] [role="tabpanel"] {
+  font-size: 1.03rem !important;
+}
+
+/* ---------------------------------------------------------- forms / buttons */
+
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] label {
+  color: var(--ios-ink-soft) !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.45 !important;
+}
+
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
+  font-size: 1rem !important;
+  min-height: 2.8rem;
+}
+
+[data-testid="stButton"] button,
+[data-testid="stDownloadButton"] button,
+[data-testid="stFormSubmitButton"] button {
+  min-height: 2.7rem;
+  padding: 0.45rem 1rem !important;
+  border-radius: 10px !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+}
+
+[data-testid="stButton"] button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"] {
+  background: var(--ios-sea) !important;
+  border-color: var(--ios-sea) !important;
+  color: #ffffff !important;
+}
+
+[data-testid="stButton"] button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
+  background: #275d58 !important;
+  border-color: #275d58 !important;
+}
+
+[data-testid="stCheckbox"] label p,
+[data-testid="stToggle"] label p {
+  font-size: 1rem !important;
+  color: var(--ios-ink-soft) !important;
+}
+
+[data-testid="stRadio"] label p {
+  font-size: 1.02rem !important;
+}
+
+/* --------------------------------------------------------------- code / foot */
+
+[data-testid="stCodeBlock"] code,
+[data-testid="stCodeBlock"] pre {
+  font-size: 0.95rem !important;
+}
+
+[data-testid="stMarkdownContainer"] code {
+  background: #eee8da;
+  border-radius: 4px;
+  color: #385049;
+  font-size: 0.95em;
+  padding: 0.1em 0.28em;
+}
+
+/* --------------------------------------------------------------- responsive */
+
+@media (max-width: 1180px) {
+  [data-testid="stMainBlockContainer"] {
+    padding: 4rem 2.3rem 4.5rem !important;
+  }
+
+  [data-testid="stSidebar"] {
+    width: 19rem !important;
+    min-width: 19rem !important;
+    max-width: 19rem !important;
+  }
+
+  .ios-brief {
+    gap: 0 1.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  [data-testid="stMainBlockContainer"] {
+    padding: 3.6rem 1.3rem 3.8rem !important;
+  }
+
+  [data-testid="stSidebar"] {
+    width: 17.5rem !important;
+    min-width: 17.5rem !important;
+    max-width: 17.5rem !important;
+  }
+
+  .ios-hero h1 {
+    font-size: clamp(2.4rem, 7vw, 3rem) !important;
+    max-width: none;
+  }
+
+  .ios-hero__dek {
+    font-size: 1.05rem !important;
+  }
+
+  .ios-brief {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 1rem 1.05rem 1.1rem;
+    border-radius: 0 12px 12px 0;
+  }
+
+  .ios-brief__item {
+    border-bottom: 1px solid var(--ios-line-soft);
+  }
+
+  .ios-brief__item:last-child {
+    border-bottom: 0;
+  }
+
+  [data-testid="stMetric"] {
+    min-height: 7rem;
+  }
+
+  [data-testid="stMetricValue"] {
+    font-size: 2.1rem !important;
+  }
+
+  [data-testid="stTable"] table {
+    font-size: 1rem !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .ios-kicker {
+    letter-spacing: 0.1em;
+  }
+
+  .ios-hero h1 {
+    font-size: 2.15rem !important;
+  }
+
+  [data-testid="stMetricValue"] {
+    font-size: 1.95rem !important;
+  }
+
+  [data-testid="stTable"] thead th,
+  [data-testid="stTable"] tbody td {
+    padding: 0.65rem 0.6rem !important;
+  }
+}
+
+@media print {
+  [data-testid="stSidebar"],
+  [data-testid="stHeader"] {
+    display: none !important;
+  }
+
+  [data-testid="stMainBlockContainer"] {
+    max-width: none;
+    padding: 0 !important;
+  }
+}
