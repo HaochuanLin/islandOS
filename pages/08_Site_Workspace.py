@@ -30,9 +30,12 @@ from islandos_core.workspace_store import (
     save_asset_record,
     verify_audit_chain,
 )
+from islandos_ui.project_context_selector import (
+    on_project_selector_widget_change,
+    sync_project_selector_widget_state,
+)
 from islandos_ui.workspace_project_context import (
     clear_active_project,
-    get_active_project_id,
     set_active_project,
 )
 
@@ -85,26 +88,24 @@ with st.expander("Create a project", expanded=not bool(projects)):
 
 projects = list_projects(db_path)
 if not projects:
+    clear_active_project(st.session_state)
     st.info("Create a project to begin. A project is a local container for one site's configuration, equipment and data provenance.")
     st.stop()
 
 labels = {f"{item['display_name']} · {item['project_id']}": item["project_id"] for item in projects}
 no_project_label = "— No project selected —"
-active_project_id = get_active_project_id(st.session_state)
-if active_project_id is not None and active_project_id not in labels.values():
-    clear_active_project(st.session_state)
-    active_project_id = None
-options = [no_project_label, *labels]
-default_index = 0
-if active_project_id is not None:
-    default_index = next(
-        (index for index, label in enumerate(options) if labels.get(label) == active_project_id),
-        0,
-    )
+project_selector_key = "project_context_site_workspace"
+sync_project_selector_widget_state(
+    st.session_state,
+    widget_key=project_selector_key,
+    labels=labels,
+)
 selected_label = st.selectbox(
     "Active project",
-    options,
-    index=default_index,
+    [no_project_label, *labels],
+    key=project_selector_key,
+    on_change=on_project_selector_widget_change,
+    args=(project_selector_key, labels),
     help="Selection is shared with Pages 05/06; it does not grant persistence consent.",
 )
 if selected_label == no_project_label:
