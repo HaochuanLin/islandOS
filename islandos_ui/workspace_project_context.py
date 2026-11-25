@@ -6,6 +6,7 @@ remain available when the Workspace is disabled or no project is selected.
 """
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -53,7 +54,7 @@ def load_workspace_projects(
 
     try:
         read_only_uri = db_path.resolve().as_uri() + "?mode=ro"
-        with sqlite3.connect(read_only_uri, uri=True) as connection:
+        with closing(sqlite3.connect(read_only_uri, uri=True)) as connection:
             connection.row_factory = sqlite3.Row
             rows = connection.execute(
                 "SELECT project_id, display_name FROM projects ORDER BY created_at, project_id"
