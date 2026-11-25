@@ -14,6 +14,23 @@ The console currently supports:
 
 ## Run locally
 
+One command starts both loopback services, waits for the API health check, and records the PIDs:
+
+```powershell
+.\scripts\start_console.ps1        # API 127.0.0.1:8766, console 127.0.0.1:5173
+.\scripts\start_console.ps1 -Stop  # stop both
+```
+
+Registration stays closed by default. A new environment needs one bootstrap window; stop and restart without the flag afterwards:
+
+```powershell
+.\scripts\start_console.ps1 -BootstrapRegistration
+```
+
+The console's `/api` proxy follows `-ApiPort` through the `ISLANDOS_API_TARGET` environment variable read by `vite.config.ts`; without it the default stays `http://127.0.0.1:8766`.
+
+The manual equivalent remains:
+
 1. Start the local reference API: `python islandos_service_api.py --host 127.0.0.1 --port 8766`.
 2. Create the initial owner through the controlled bootstrap procedure described by the API operator; registration is disabled by default.
 3. In `frontend/`, run `npm install`, then `npm run dev`.
