@@ -120,7 +120,7 @@ a {
 .brand-wordmark span {
   margin-top: 4px;
   color: var(--muted-2);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -270,14 +270,14 @@ a {
 
 .story-principles strong {
   color: #e7f2ee;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .story-principles span {
   margin-top: 3px;
   color: #9eb7b2;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -293,7 +293,7 @@ a {
   gap: 12px;
   margin: 34px 0 0;
   color: #8ea8a3;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   letter-spacing: 1.25px;
   text-transform: uppercase;
@@ -341,7 +341,7 @@ a {
 .login-heading p {
   margin: 0 0 30px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -359,7 +359,7 @@ a {
 .add-site label,
 .invite-form label {
   color: #435a60;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.2px;
 }
@@ -451,7 +451,7 @@ a {
 .login-form-wrap .full {
   min-height: 48px;
   margin-top: 4px;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .error {
@@ -482,13 +482,13 @@ a {
 
 .access-note strong {
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .access-note span {
   margin-top: 3px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -499,7 +499,7 @@ a {
 .login-foot {
   margin: 24px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -507,7 +507,7 @@ a {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: 288px minmax(0, 1fr);
   min-height: 100vh;
   background: var(--paper);
 }
@@ -567,7 +567,7 @@ a {
   justify-content: space-between;
   padding: 0 9px 9px;
   color: #89a19e;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: 1.4px;
   text-transform: uppercase;
@@ -581,7 +581,7 @@ a {
   border-radius: 999px;
   background: rgba(217, 239, 233, 0.08);
   color: #b9d0cb;
-  font-size: 11.5px;
+  font-size: 12.5px;
   letter-spacing: 0;
 }
 
@@ -615,14 +615,14 @@ a {
 
 .tenant-card strong {
   color: #eaf5f1;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .tenant-card small,
 .user-line small {
   margin-top: 3px;
   color: #8ea7a2;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .site-block {
@@ -645,7 +645,7 @@ a {
   background: transparent;
   color: #b7cbc6;
   text-align: left;
-  font-size: 13px;
+  font-size: 14px;
   transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
@@ -676,7 +676,7 @@ a {
   margin: 4px 0 0;
   padding: 0 10px;
   color: #8ba39f;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -690,7 +690,7 @@ a {
 
 .add-site label {
   color: #a9bdb9;
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .add-site input {
@@ -698,7 +698,7 @@ a {
   border-color: rgba(171, 205, 199, 0.18);
   background: rgba(6, 24, 33, 0.38);
   color: #eef6f3;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .add-site input::placeholder {
@@ -749,13 +749,13 @@ a {
   border-radius: 50%;
   background: #d8ebe5;
   color: #0b3a42;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .user-line strong {
   color: #e7f2ee;
-  font-size: 13px;
+  font-size: 14px;
   text-transform: capitalize;
 }
 
@@ -767,7 +767,7 @@ a {
   padding: 4px 0;
   background: transparent;
   color: #9db6b1;
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .logout:hover {
@@ -825,7 +825,7 @@ a {
   padding: 7px 12px;
   background: #edf6f1;
   color: #35655c;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.2px;
   text-transform: uppercase;
@@ -838,7 +838,7 @@ a {
 .refresh-button {
   min-height: 34px;
   padding: 7px 12px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .notice {
@@ -1362,9 +1362,9 @@ a {
 /* ---------- Contract viewer ---------- */
 
 .viewer {
-  width: min(100%, 1360px);
+  width: min(100%, 1440px);
   margin: 0 auto;
-  padding: 36px clamp(20px, 5vw, 52px) 44px;
+  padding: 36px clamp(20px, 4vw, 48px) 44px;
 }
 
 .viewer-anatomy {
@@ -1390,7 +1390,7 @@ a {
   max-width: 34ch;
   margin: 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -1422,7 +1422,7 @@ a {
 
 .viewer-anatomy li > span {
   color: var(--seal);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -1435,14 +1435,14 @@ a {
 .viewer-anatomy strong {
   margin-bottom: 3px;
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
 }
 
 .viewer-anatomy small {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -1474,13 +1474,13 @@ a {
 .schema-index-head p {
   margin: 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
 .schema-index-meta {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   letter-spacing: 0.06em;
   text-align: right;
@@ -1521,7 +1521,7 @@ a {
 
 .schema-index-list strong {
   min-width: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -1529,7 +1529,7 @@ a {
 
 .schema-index-list small {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.4;
 }
 
@@ -1573,7 +1573,7 @@ a {
   display: block;
   margin-bottom: 6px;
   color: #718282;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.7px;
   text-transform: uppercase;
@@ -1596,7 +1596,7 @@ a {
   padding: 14px;
   background: #f8faf7;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .viewer input[type="file"]::file-selector-button {
@@ -1621,16 +1621,16 @@ a {
   width: 100%;
   border-collapse: collapse;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
 .viewer thead th {
-  padding: 11px 12px;
+  padding: 11px 10px;
   border-bottom: 1px solid var(--line);
   background: #f4f7f4;
   color: #576b6d;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.6px;
   text-align: left;
@@ -1638,7 +1638,7 @@ a {
 }
 
 .viewer tbody td {
-  padding: 11px 12px;
+  padding: 11px 10px;
   border-bottom: 1px solid #edf1ee;
   color: #344e54;
 }
@@ -1664,7 +1664,7 @@ a {
   }
 
   .app-shell {
-    grid-template-columns: 232px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
   }
 
   .content-grid {
