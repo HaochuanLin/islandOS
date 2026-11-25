@@ -299,6 +299,11 @@ def initialize_workspace(
             "SELECT value FROM workspace_meta WHERE key='schema_version'"
         ).fetchone()
         if schema_row and schema_row["value"] == "1.0":
+            audit_before_migration = verify_audit_chain(db_path)
+            if not audit_before_migration["valid"]:
+                raise AuditIntegrityError(
+                    f"workspace audit chain is invalid at sequence {audit_before_migration['failed_sequence']}"
+                )
             connection.execute(
                 "UPDATE workspace_meta SET value=? WHERE key='schema_version'",
                 (SCHEMA_VERSION,),
