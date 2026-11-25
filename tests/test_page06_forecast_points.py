@@ -43,5 +43,5 @@ def test_page_renders_forecast_points_and_keeps_model_table():
     assert signal_box.options, "forecast signal selectbox must list at least one signal"
     assert signal_box.value in {"load_kw", "pv_power_kw", "tariff_per_kwh", "wind_power_kw"}
 
-    assert len(app.dataframe) >= 2, "expected prediction metrics plus point-by-point table"
+    assert len(app.table) >= 2, "expected prediction metrics plus point-by-point table"
     assert any("Inputs and assumptions used by this run" in element.label for element in app.expander)

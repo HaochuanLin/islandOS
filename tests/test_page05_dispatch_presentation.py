@@ -45,7 +45,7 @@ def _markdown_text(app: AppTest) -> str:
 
 
 def _dispatch_table(app: AppTest):
-    for frame in app.dataframe:
+    for frame in app.table:
         columns = list(getattr(frame.value, "columns", []))
         if "Hour" in columns and "Grid import (kW)" in columns:
             return frame.value
