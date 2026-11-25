@@ -14,6 +14,9 @@ from islandos_core.workspace_store import (
     list_import_artifacts,
     list_audit_events,
     record_import_artifact,
+    record_run_record,
+    get_run_record,
+    list_run_records,
     record_operator_override,
     save_asset_record,
     list_asset_records,
@@ -275,3 +278,142 @@ def test_asset_registry_detects_readiness_snapshot_tampering(tmp_path):
         connection.execute("UPDATE asset_record_versions SET readiness_json='{}'")
     with pytest.raises(AuditIntegrityError, match="readiness snapshot mismatch"):
         list_asset_records(db, project_id="site-01")
+
+
+def test_run_record_persists_result_without_retaining_full_request_by_default(tmp_path):
+    db = ready_project(tmp_path)
+    record = record_run_record(
+        db, project_id="site-01", run_id="canonical-run-01", page="06",
+        request_sha256=DIGEST,
+        request_metadata={"history_start": "2026-11-01T00:00:00Z", "row_count": 24},
+        result={"grid_cost": 12.5, "unmet_load_kwh": 0},
+        actor_id="local-user", consent_to_store_result=True, created_at=NOW,
+    )
+    assert record["retention_mode"] == "metadata_only"
+    assert record["replayable"] is False
+    assert record["request_payload"] is None
+    listed = list_run_records(db, project_id="site-01")
+    assert len(listed) == 1
+    assert "request_payload" not in listed[0]
+    restored = get_run_record(db, project_id="site-01", run_id="canonical-run-01")
+    assert restored["result"] == {"grid_cost": 12.5, "unmet_load_kwh": 0}
+    assert restored["replayable"] is False
+    assert verify_audit_chain(db)["valid"] is True
+
+
+def test_run_record_requires_separate_opt_in_for_full_request_retention(tmp_path):
+    db = ready_project(tmp_path)
+    payload = {"history": {"timestamps_utc": ["2026-11-01T00:00:00Z"], "signals": {"load_kw": [5]}}}
+    args = dict(
+        db_path=db, project_id="site-01", run_id="canonical-run-02", page="06",
+        request_sha256=DIGEST, request_metadata={"row_count": 1},
+        result={"grid_cost": 1}, actor_id="local-user",
+        consent_to_store_result=True, request_payload=payload, created_at=NOW,
+    )
+    with pytest.raises(WorkspaceStoreError, match="separate explicit consent"):
+        record_run_record(**args)
+    record = record_run_record(**{**args, "consent_to_retain_request": True})
+    assert record["retention_mode"] == "retained_full_request"
+    assert record["replayable"] is True
+    restored = get_run_record(db, project_id="site-01", run_id="canonical-run-02")
+    assert restored["request_payload"] == payload
+    assert restored["request_payload_sha256"] == record["request_payload_sha256"]
+
+
+def test_run_record_requires_result_consent_and_existing_project(tmp_path):
+    db = ready_project(tmp_path)
+    args = dict(
+        db_path=db, project_id="site-01", run_id="canonical-run-03", page="06",
+        request_sha256=DIGEST, request_metadata={}, result={},
+        actor_id="local-user", created_at=NOW,
+    )
+    with pytest.raises(WorkspaceStoreError, match="explicit consent"):
+        record_run_record(**args, consent_to_store_result=False)
+    with pytest.raises(WorkspaceStoreError, match="does not exist"):
+        record_run_record(
+            **{**args, "project_id": "missing-project"},
+            consent_to_store_result=True,
+        )
+
+
+def test_run_record_integrity_and_immutability(tmp_path):
+    db = ready_project(tmp_path)
+    record = record_run_record(
+        db, project_id="site-01", run_id="canonical-run-04", page="06",
+        request_sha256=DIGEST, request_metadata={"row_count": 3},
+        result={"energy_cost": 10}, actor_id="local-user",
+        consent_to_store_result=True, canonical_manifest={"run_id": "canonical-run-04"},
+        created_at=NOW,
+    )
+    with sqlite3.connect(db) as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            connection.execute(
+                "UPDATE run_records SET result_json='{}' WHERE project_id=? AND run_id=?",
+                ("site-01", record["run_id"]),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            connection.execute(
+                "DELETE FROM run_records WHERE project_id=? AND run_id=?",
+                ("site-01", record["run_id"]),
+            )
+        connection.execute("DROP TRIGGER run_records_no_update")
+        connection.execute(
+            "UPDATE run_records SET result_json='{}' WHERE project_id=? AND run_id=?",
+            ("site-01", record["run_id"]),
+        )
+    with pytest.raises(AuditIntegrityError, match="run result hash"):
+        get_run_record(db, project_id="site-01", run_id=record["run_id"])
+
+
+def test_same_canonical_run_id_can_be_saved_in_two_projects(tmp_path):
+    db = ready_project(tmp_path)
+    create_project(
+        db, project_id="site-02", display_name="Second Site",
+        actor_id="local-user", consent_to_store_metadata=True, created_at=NOW,
+    )
+    for project_id in ("site-01", "site-02"):
+        record_run_record(
+            db, project_id=project_id, run_id="same-deterministic-run",
+            page="06", request_sha256=DIGEST, request_metadata={},
+            result={"ok": True}, actor_id="local-user",
+            consent_to_store_result=True, created_at=NOW,
+        )
+    assert len(list_run_records(db, project_id="site-01")) == 1
+    assert len(list_run_records(db, project_id="site-02")) == 1
+
+
+def test_existing_schema_1_0_workspace_migrates_without_losing_history(tmp_path):
+    db = ready_project(tmp_path)
+    original_manifest = create_run_manifest(
+        db, project_id="site-01", input_artifact_hashes=[],
+        configuration={}, model_versions={}, software_version="0.1",
+        output_summary={"preserved": True}, actor_id="local-user", created_at=NOW,
+    )
+    with sqlite3.connect(db) as connection:
+        connection.execute(
+            "UPDATE workspace_meta SET value='1.0' WHERE key='schema_version'"
+        )
+    before = verify_audit_chain(db)["event_count"]
+    initialize_workspace(db, workspace_id="workspace-01", actor_id="local-user", created_at=NOW)
+    with sqlite3.connect(db) as connection:
+        version = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='schema_version'"
+        ).fetchone()[0]
+        run_count = connection.execute("SELECT COUNT(*) FROM run_manifests").fetchone()[0]
+    assert version == "1.1"
+    assert run_count == 1
+    assert get_run_manifest(db, run_id=original_manifest["run_id"])["output_summary"] == {"preserved": True}
+    events = list_audit_events(db)
+    assert any(item["event_type"] == "workspace_schema_migrated" for item in events)
+    assert verify_audit_chain(db)["valid"] is True
+    assert verify_audit_chain(db)["event_count"] == before + 1
+
+
+def test_unknown_future_workspace_schema_fails_closed(tmp_path):
+    db = ready_project(tmp_path)
+    with sqlite3.connect(db) as connection:
+        connection.execute(
+            "UPDATE workspace_meta SET value='99.0' WHERE key='schema_version'"
+        )
+    with pytest.raises(WorkspaceStoreError, match="unsupported workspace schema"):
+        initialize_workspace(db, workspace_id="workspace-01", actor_id="local-user", created_at=NOW)
