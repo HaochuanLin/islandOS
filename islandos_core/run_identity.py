@@ -1,11 +1,9 @@
-"""Canonical, currency-neutral input-group identity for IslandOS runs.
+"""Canonical, deterministic input-group and technical run identity for IslandOS.
 
-P1a deliberately stops at input identity. It does not derive run IDs, read
-environment variables, touch Streamlit, or open a database. The same physical
-history expressed through Page 05 and Page 06 field names must produce the same
-``input_group_id``; a change to the physical unit grid must produce a different
-one. Currency labels are canonicalised to ``currency/kWh`` so USD and CNY do
-not split an otherwise identical input group.
+P1a identifies physical input history independently of page names and currency.
+P1b identifies one reproducible Page 05/06 technical run definition from stable
+settings and model-selection policy. Both functions are pure: no environment
+variables, Streamlit state, database access, wall-clock time, or random IDs.
 """
 from __future__ import annotations
 
@@ -230,6 +228,23 @@ PAGE_SLUGS = {
     "joint_resource_optimizer": "06",
 }
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_INVESTMENT_ONLY_KEYS = {
+    "investment",
+    "investment_assumptions",
+    "baseline_annual_energy_cost",
+    "proposed_annual_energy_cost",
+    "annual_incremental_om_cost",
+    "upfront_capex",
+    "project_life_years",
+    "discount_rate",
+    "annual_energy_saving_escalation_rate",
+    "annual_om_escalation_rate",
+    "replacement_cost",
+    "residual_value",
+    "payback_period",
+    "net_present_value",
+    "internal_rate_of_return",
+}
 
 
 @dataclass(frozen=True)
@@ -313,6 +328,20 @@ def _validate_input_group_identity(
     return input_group.input_group_sha256
 
 
+def _reject_investment_only_fields(value: Any, field: str) -> None:
+    """Keep D6/D7 financial assumptions out of the technical run identity."""
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if key in _INVESTMENT_ONLY_KEYS:
+                raise RunIdentityError(
+                    f"{field}.{key} is investment-only and must use a separate run binding"
+                )
+            _reject_investment_only_fields(nested, f"{field}.{key}")
+    elif isinstance(value, list):
+        for index, nested in enumerate(value):
+            _reject_investment_only_fields(nested, f"{field}[{index}]")
+
+
 def derive_run_id(
     *,
     page: str,
@@ -344,6 +373,10 @@ def derive_run_id(
     normalized_page_inputs = _json_safe_mapping(page_inputs, "page_inputs")
     normalized_run_settings = _json_safe_mapping(run_settings, "run_settings")
     normalized_forecast_settings = _json_safe_mapping(forecast_settings, "forecast_settings")
+    _reject_investment_only_fields(normalized_page_settings, "page_settings")
+    _reject_investment_only_fields(normalized_page_inputs, "page_inputs")
+    _reject_investment_only_fields(normalized_run_settings, "run_settings")
+    _reject_investment_only_fields(normalized_forecast_settings, "forecast_settings")
     currency = normalized_run_settings.get("currency")
     if not isinstance(currency, str) or not currency.strip():
         raise RunIdentityError("run_settings.currency must be a non-empty string")
