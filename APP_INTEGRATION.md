@@ -267,13 +267,13 @@ The viewer has a landing route instead of a second server: `python -m islandos_c
 same-origin. Without a build it answers `404` with `hint: run npm run build in frontend/ first` rather than
 pretending to serve a page.
 
-Replay identity: the page's own 06 run mints a uuid and stamps the wall clock, so two page runs over the
-same inputs are two sessions. A replay has neither, so `replay_run_request` passes
-`deterministic_run_id("run", {"request": request})` and a fixed `REPLAY_CREATED_AT_UTC`
-(`1970-01-01T00:00:00+00:00`) into the manifest. The consequence is the claim the contract can actually
-support: the same request replays to the same `run_id`, the same manifest digest and the same numbers, and
-a replay `run_id` identifies the *request*, not the original browser session. The uuid path is untouched
-for the page itself.
+Replay identity: page 06 and `replay_run_request` now use the same
+`build_joint_optimizer_manifest(request)` builder. It derives the `run_id` from the dataset digest,
+site-configuration digest, end of the history window, currency, optimizer settings and availability.
+The manifest timestamp is the last timestamp in that same request window, not the wall clock. Therefore
+the page and replay produce the same canonical `run_id` and `manifest_sha256` for the same validated
+request. Pages 05 and 09 remain separate workflows with their own identity boundaries; matching input
+does not merge their runs.
 
 Three generated artifacts describe the same fields for different readers:
 
