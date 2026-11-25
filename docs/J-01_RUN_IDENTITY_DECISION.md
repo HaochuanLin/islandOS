@@ -1,7 +1,7 @@
 # J-01 跨页面 Run Identity 产品定义（正式主线）
 
 - 状态：**产品规则 D1-D9 已由负责人确认；PD-1 至 PD-6 据此收敛。数据库字段与错误码仍待 PR #359 作者确认。**
-- 审查基线：`main = aacdbe9`（2026-11-25，IslandOS visual system 修复）；PR #359 head = `94388ed`（未合并）；PR #371 为 Draft（ProjectBinding 增量，未合并）。
+- 审查基线：`main = 645848e`（2026-11-25，IslandOS visual system 修复）；PR #359 head = `94388ed`（未合并）；PR #371 为 Draft（ProjectBinding 增量，未合并）。
 - 主线：**PR #362 是 J-01 正式文档主线。PR #360 是早期 draft，不再扩展为第二套身份契约；二者不得同时作为实现依据。**
 - 范围：页面 05 / 06 / 09 的身份、项目绑定和持久化边界。本轮 P1a 只实现输入组纯函数；P3 只实现项目上下文；不实现 `derive_run_id`，不修改 #359 数据库。
 
