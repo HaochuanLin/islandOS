@@ -207,7 +207,7 @@ def test_pages_share_the_same_binding_surface():
 
     assert "render_optional_project_selector(" in page_05
     assert "render_optional_project_selector(" in page_06
-    assert "get_active_project_id(st.session_state)" in page_08
+    assert "sync_project_selector_widget_state(" in page_08
     assert "set_active_project(st.session_state, project_id)" in page_08
 
 
