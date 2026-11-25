@@ -3,6 +3,14 @@
 Notable project changes are recorded here. This is a research prototype; versioned releases are verification bundles, not site-operation approvals.
 
 ## Unreleased
+- **Page 06 and replay now share the same canonical manifest builder.**
+  The earlier replay change made repeated API replays deterministic, but page 06 still built its
+  manifest through a separate path. That meant a page run and a replay of its request were not
+  guaranteed to share a `run_id` or manifest digest. Both paths now call
+  `build_joint_optimizer_manifest(request)`; the manifest timestamp comes from the last timestamp
+  in the request's history window. A regression test checks the run ID, manifest SHA-256 and
+  timestamp, and a page-wiring test guards the shared call. Pages 05 and 09 remain separate runs.
+
 
 - **Sign out in the local customer workspace now revokes the session.**
   Page 07 and `frontend/src/api.ts` sign out with `POST /api/v1/auth/logout`, but the route was
