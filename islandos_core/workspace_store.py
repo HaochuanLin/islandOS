@@ -23,7 +23,7 @@ from typing import Any, Mapping, Sequence
 from islandos_core.assets import AssetRecord, evaluate_asset_readiness
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_SOURCE_TYPES = {
     "measured", "customer_provided", "public_reanalysis",
@@ -129,6 +129,13 @@ def initialize_workspace(
         raise WorkspaceStoreError("actor_id is required")
     timestamp = _timestamp(created_at)
     with _connect(db_path) as connection:
+        existing_schema = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='schema_version'"
+        ).fetchone() if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_meta'"
+        ).fetchone() else None
+        if existing_schema and existing_schema["value"] not in {"1.0", SCHEMA_VERSION}:
+            raise WorkspaceStoreError("unsupported workspace schema version")
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS workspace_meta (
@@ -185,6 +192,38 @@ def initialize_workspace(
                 manifest_json TEXT NOT NULL,
                 manifest_sha256 TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS run_records (
+                project_id TEXT NOT NULL REFERENCES projects(project_id),
+                run_id TEXT NOT NULL,
+                page TEXT NOT NULL,
+                record_schema_version TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                request_sha256 TEXT NOT NULL,
+                request_metadata_json TEXT NOT NULL,
+                request_payload_json TEXT,
+                request_payload_sha256 TEXT,
+                result_json TEXT NOT NULL,
+                result_sha256 TEXT NOT NULL,
+                canonical_manifest_json TEXT,
+                canonical_manifest_sha256 TEXT,
+                history_sha256 TEXT,
+                input_fingerprint_sha256 TEXT,
+                retention_mode TEXT NOT NULL CHECK(retention_mode IN ('metadata_only', 'retained_full_request')),
+                PRIMARY KEY(project_id, run_id),
+                CHECK((request_payload_json IS NULL AND request_payload_sha256 IS NULL AND retention_mode='metadata_only')
+                   OR (request_payload_json IS NOT NULL AND request_payload_sha256 IS NOT NULL AND retention_mode='retained_full_request')),
+                CHECK((canonical_manifest_json IS NULL AND canonical_manifest_sha256 IS NULL)
+                   OR (canonical_manifest_json IS NOT NULL AND canonical_manifest_sha256 IS NOT NULL))
+            );
+            CREATE TRIGGER IF NOT EXISTS run_records_no_update
+            BEFORE UPDATE ON run_records BEGIN
+                SELECT RAISE(ABORT, 'run records are immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS run_records_no_delete
+            BEFORE DELETE ON run_records BEGIN
+                SELECT RAISE(ABORT, 'run records are immutable');
+            END;
             CREATE TABLE IF NOT EXISTS audit_events (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id TEXT NOT NULL UNIQUE,
@@ -230,7 +269,18 @@ def initialize_workspace(
         schema_row = connection.execute(
             "SELECT value FROM workspace_meta WHERE key='schema_version'"
         ).fetchone()
-        if schema_row and schema_row["value"] != SCHEMA_VERSION:
+        if schema_row and schema_row["value"] == "1.0":
+            connection.execute(
+                "UPDATE workspace_meta SET value=? WHERE key='schema_version'",
+                (SCHEMA_VERSION,),
+            )
+            _append_event(
+                connection, actor_id=actor_id, event_type="workspace_schema_migrated",
+                project_id=None,
+                payload={"from_schema_version": "1.0", "to_schema_version": SCHEMA_VERSION},
+                created_at=timestamp,
+            )
+        elif schema_row and schema_row["value"] != SCHEMA_VERSION:
             raise WorkspaceStoreError("unsupported workspace schema version")
         if not connection.execute("SELECT 1 FROM audit_events LIMIT 1").fetchone():
             _append_event(
@@ -465,6 +515,183 @@ def get_run_manifest(db_path: str | Path, *, run_id: str) -> dict[str, Any]:
         raise AuditIntegrityError("stored run manifest hash does not match its contents")
     return {**manifest, "manifest_sha256": row["manifest_sha256"]}
 
+
+
+def record_run_record(
+    db_path: str | Path,
+    *,
+    project_id: str,
+    run_id: str,
+    page: str,
+    request_sha256: str,
+    request_metadata: Mapping[str, Any],
+    result: Mapping[str, Any],
+    actor_id: str,
+    consent_to_store_result: bool,
+    request_payload: Mapping[str, Any] | None = None,
+    consent_to_retain_request: bool = False,
+    canonical_manifest: Mapping[str, Any] | None = None,
+    history_sha256: str | None = None,
+    input_fingerprint_sha256: str | None = None,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Persist an immutable result record; retain full request data only after separate opt-in."""
+    if consent_to_store_result is not True:
+        raise WorkspaceStoreError("explicit consent is required before saving a run result")
+    if not all(isinstance(value, str) and value.strip() for value in (project_id, run_id, page, actor_id)):
+        raise WorkspaceStoreError("project_id, run_id, page, and actor_id are required")
+    for name, digest in (
+        ("request_sha256", request_sha256),
+        ("history_sha256", history_sha256),
+        ("input_fingerprint_sha256", input_fingerprint_sha256),
+    ):
+        if digest is not None and (not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest)):
+            raise WorkspaceStoreError(f"{name} must be a lowercase SHA-256 digest")
+    if not isinstance(request_sha256, str) or not _SHA256_RE.fullmatch(request_sha256):
+        raise WorkspaceStoreError("request_sha256 must be a lowercase SHA-256 digest")
+    if not isinstance(request_metadata, Mapping) or not isinstance(result, Mapping):
+        raise WorkspaceStoreError("request_metadata and result must be mappings")
+    if request_payload is not None and not isinstance(request_payload, Mapping):
+        raise WorkspaceStoreError("request_payload must be a mapping or None")
+    if consent_to_retain_request is not True and request_payload is not None:
+        raise WorkspaceStoreError("separate explicit consent is required before retaining the full request")
+    if consent_to_retain_request is True and request_payload is None:
+        raise WorkspaceStoreError("request_payload is required when full-request retention is enabled")
+    if canonical_manifest is not None and not isinstance(canonical_manifest, Mapping):
+        raise WorkspaceStoreError("canonical_manifest must be a mapping or None")
+    timestamp = _timestamp(created_at)
+    metadata_json = _json(dict(request_metadata))
+    result_json = _json(dict(result))
+    payload_json = _json(dict(request_payload)) if request_payload is not None else None
+    manifest_json = _json(dict(canonical_manifest)) if canonical_manifest is not None else None
+    payload_hash = _hash(payload_json) if payload_json is not None else None
+    result_hash = _hash(result_json)
+    manifest_hash = _hash(manifest_json) if manifest_json is not None else None
+    retention_mode = "retained_full_request" if payload_json is not None else "metadata_only"
+    with _connect(db_path) as connection:
+        if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
+            raise WorkspaceStoreError("project_id does not exist")
+        connection.execute(
+            """INSERT INTO run_records
+            (project_id, run_id, page, record_schema_version, created_at, actor_id,
+             request_sha256, request_metadata_json, request_payload_json, request_payload_sha256,
+             result_json, result_sha256, canonical_manifest_json, canonical_manifest_sha256,
+             history_sha256, input_fingerprint_sha256, retention_mode)
+            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                project_id, run_id, page, timestamp, actor_id.strip(), request_sha256,
+                metadata_json, payload_json, payload_hash, result_json, result_hash,
+                manifest_json, manifest_hash, history_sha256, input_fingerprint_sha256,
+                retention_mode,
+            ),
+        )
+        _append_event(
+            connection, actor_id=actor_id, event_type="run_record_created",
+            project_id=project_id,
+            payload={
+                "run_id": run_id, "page": page, "request_sha256": request_sha256,
+                "result_sha256": result_hash, "retention_mode": retention_mode,
+                "canonical_manifest_sha256": manifest_hash,
+            },
+            created_at=timestamp,
+        )
+    return {
+        "project_id": project_id, "run_id": run_id, "page": page,
+        "record_schema_version": "1.0", "created_at": timestamp,
+        "actor_id": actor_id.strip(), "request_sha256": request_sha256,
+        "request_metadata": json.loads(metadata_json),
+        "request_payload": json.loads(payload_json) if payload_json is not None else None,
+        "request_payload_sha256": payload_hash,
+        "result": json.loads(result_json), "result_sha256": result_hash,
+        "canonical_manifest": json.loads(manifest_json) if manifest_json is not None else None,
+        "canonical_manifest_sha256": manifest_hash,
+        "history_sha256": history_sha256,
+        "input_fingerprint_sha256": input_fingerprint_sha256,
+        "retention_mode": retention_mode,
+        "replayable": payload_json is not None,
+    }
+
+
+def get_run_record(db_path: str | Path, *, project_id: str, run_id: str) -> dict[str, Any]:
+    """Read one run record and verify every stored content digest."""
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT * FROM run_records WHERE project_id=? AND run_id=?",
+            (project_id, run_id),
+        ).fetchone()
+    if row is None:
+        raise WorkspaceStoreError("run record does not exist")
+    for json_field, hash_field, label in (
+        ("request_metadata_json", None, "request metadata"),
+        ("result_json", "result_sha256", "run result"),
+        ("request_payload_json", "request_payload_sha256", "retained request"),
+        ("canonical_manifest_json", "canonical_manifest_sha256", "canonical manifest"),
+    ):
+        raw = row[json_field]
+        if raw is None:
+            if hash_field and row[hash_field] is not None:
+                raise AuditIntegrityError(f"{label} hash exists without stored content")
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise AuditIntegrityError(f"stored {label} is not valid JSON") from exc
+        if hash_field and _hash(raw) != row[hash_field]:
+            raise AuditIntegrityError(f"stored {label} hash does not match its contents")
+        if not isinstance(parsed, dict):
+            raise AuditIntegrityError(f"stored {label} must be a JSON object")
+    metadata = json.loads(row["request_metadata_json"])
+    result = json.loads(row["result_json"])
+    request_payload = json.loads(row["request_payload_json"]) if row["request_payload_json"] is not None else None
+    manifest = json.loads(row["canonical_manifest_json"]) if row["canonical_manifest_json"] is not None else None
+    return {
+        "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
+        "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
+        "actor_id": row["actor_id"], "request_sha256": row["request_sha256"],
+        "request_metadata": metadata, "request_payload": request_payload,
+        "request_payload_sha256": row["request_payload_sha256"],
+        "result": result, "result_sha256": row["result_sha256"],
+        "canonical_manifest": manifest, "canonical_manifest_sha256": row["canonical_manifest_sha256"],
+        "history_sha256": row["history_sha256"],
+        "input_fingerprint_sha256": row["input_fingerprint_sha256"],
+        "retention_mode": row["retention_mode"],
+        "replayable": request_payload is not None,
+    }
+
+
+def list_run_records(db_path: str | Path, *, project_id: str) -> list[dict[str, Any]]:
+    """List run history without returning retained full request payloads."""
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise WorkspaceStoreError("project_id is required")
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            """SELECT project_id, run_id, page, record_schema_version, created_at, actor_id,
+                      request_sha256, request_metadata_json, result_sha256,
+                      canonical_manifest_sha256, history_sha256, input_fingerprint_sha256,
+                      retention_mode
+               FROM run_records WHERE project_id=? ORDER BY created_at DESC, run_id""",
+            (project_id,),
+        ).fetchall()
+    results = []
+    for row in rows:
+        try:
+            metadata = json.loads(row["request_metadata_json"])
+        except json.JSONDecodeError as exc:
+            raise AuditIntegrityError("stored request metadata is not valid JSON") from exc
+        if not isinstance(metadata, dict):
+            raise AuditIntegrityError("stored request metadata must be a JSON object")
+        results.append({
+            "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
+            "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
+            "actor_id": row["actor_id"], "request_sha256": row["request_sha256"],
+            "request_metadata": metadata, "result_sha256": row["result_sha256"],
+            "canonical_manifest_sha256": row["canonical_manifest_sha256"],
+            "history_sha256": row["history_sha256"],
+            "input_fingerprint_sha256": row["input_fingerprint_sha256"],
+            "retention_mode": row["retention_mode"],
+            "replayable": row["retention_mode"] == "retained_full_request",
+        })
+    return results
 
 def record_operator_override(
     db_path: str | Path,
