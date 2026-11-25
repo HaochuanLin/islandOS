@@ -99,7 +99,9 @@ assert verify_audit_chain(db)["valid"]
 
 ## Important limitations and next steps
 
-- No raw customer data is retained by the store.
+- Raw customer history is not retained by default. The store can retain a full
+  validated request only after separate explicit opt-in; source files have
+  their own independent retention opt-in.
 - Atomic whole-workspace SQLite backup and restore are implemented with
   SQLite integrity checks, audit-chain verification, SHA-256 output, and
   explicit overwrite opt-in. These functions back up workspace metadata,
