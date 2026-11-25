@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
+from collections.abc import Mapping
 from typing import Any, MutableMapping
 
 import streamlit as st
@@ -38,10 +40,133 @@ PAGE_META = {
 }
 
 
-def _valid_history_sha(value: Any) -> str:
+def _valid_text(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("history_sha256 must be a non-empty string")
+        raise ValueError(f"{field_name} must be a non-empty string")
     return value.strip()
+
+
+def _valid_history_sha(value: Any) -> str:
+    return _valid_text(value, "history_sha256")
+
+
+def _valid_site_digest(value: Any) -> str:
+    return _valid_text(value, "site_digest")
+
+
+def _valid_hour_count(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("hour_count must be a positive integer")
+    return value
+
+
+def _valid_units(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping) or not value:
+        raise ValueError("units must be a non-empty mapping")
+    normalized: dict[str, str] = {}
+    for signal, unit in value.items():
+        signal_name = _valid_text(signal, "units signal")
+        unit_name = _valid_text(unit, f"units[{signal_name}]")
+        normalized[signal_name] = unit_name
+    return normalized
+
+
+def _valid_page_settings(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError("page_settings must be a mapping")
+    try:
+        settings = dict(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"page_settings must be a plain mapping: {exc}") from exc
+    try:
+        json.dumps(
+            settings,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"page_settings must be JSON-serializable: {exc}") from exc
+    return settings
+
+
+def build_input_fingerprint(
+    *,
+    page: str,
+    history_sha256: str,
+    site_digest: str,
+    units: Mapping[str, str],
+    hour_count: int,
+    currency: str,
+    page_settings: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build a stable identity for one customer page's complete input.
+
+    ``fingerprint_sha256`` covers the inputs 05 and 06 genuinely share: history,
+    site configuration, signal units, window length and currency.  The page-level
+    settings are stored and hashed separately because the two pages do not expose
+    the same knobs; folding them into the shared digest would turn every
+    cross-page comparison into a false mismatch.
+    """
+    if page not in PAGE_META:
+        raise ValueError(f"unknown customer page: {page}")
+    shared_payload = {
+        "history_sha256": _valid_history_sha(history_sha256),
+        "site_digest": _valid_site_digest(site_digest),
+        "units": _valid_units(units),
+        "hour_count": _valid_hour_count(hour_count),
+        "currency": _valid_text(currency, "currency"),
+    }
+    settings = _valid_page_settings(page_settings)
+    shared_canonical = json.dumps(
+        shared_payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    settings_canonical = json.dumps(
+        settings,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    return {
+        "page": page,
+        **shared_payload,
+        "page_settings": settings,
+        "page_settings_sha256": hashlib.sha256(
+            settings_canonical.encode("utf-8")
+        ).hexdigest(),
+        "fingerprint_sha256": hashlib.sha256(
+            shared_canonical.encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def compare_input_fingerprints(
+    previous: Mapping[str, Any] | None,
+    current: Mapping[str, Any] | None,
+) -> str:
+    """Return ``no_previous``, ``match`` or ``mismatch`` for two fingerprints."""
+    if not isinstance(previous, Mapping) or not isinstance(current, Mapping):
+        return "no_previous"
+    if not previous.get("fingerprint_sha256") and isinstance(
+        previous.get("fingerprint"), Mapping
+    ):
+        previous = previous["fingerprint"]
+    previous_digest = previous.get("fingerprint_sha256")
+    current_digest = current.get("fingerprint_sha256")
+    if (
+        not isinstance(previous_digest, str)
+        or not previous_digest
+        or not isinstance(current_digest, str)
+        or not current_digest
+    ):
+        return "no_previous"
+    return "match" if hmac.compare_digest(previous_digest, current_digest) else "mismatch"
 
 
 def record_history_context(
@@ -50,7 +175,8 @@ def record_history_context(
     page: str,
     history_sha256: str,
     source_label: str,
-) -> dict[str, str] | None:
+    fingerprint: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Record this page's input identity and return the other page's last record."""
     if page not in PAGE_META:
         raise ValueError(f"unknown customer page: {page}")
@@ -60,16 +186,38 @@ def record_history_context(
         contexts = {}
     other = PAGE_META[page]["other"]
     previous = contexts.get(other)
-    contexts[page] = {
+    record: dict[str, Any] = {
         "history_sha256": digest,
         "source_label": str(source_label),
     }
+    if fingerprint is not None:
+        if not isinstance(fingerprint, Mapping):
+            raise ValueError("fingerprint must be a mapping")
+        fingerprint_digest = fingerprint.get("fingerprint_sha256")
+        if not isinstance(fingerprint_digest, str) or not fingerprint_digest.strip():
+            raise ValueError("fingerprint must contain a non-empty fingerprint_sha256")
+        fingerprint_page = fingerprint.get("page")
+        if fingerprint_page is not None and fingerprint_page != page:
+            raise ValueError(
+                f"fingerprint page {fingerprint_page!r} does not match {page!r}"
+            )
+        stored_fingerprint = dict(fingerprint)
+        stored_fingerprint["fingerprint_sha256"] = fingerprint_digest.strip()
+        record["fingerprint"] = stored_fingerprint
+    contexts[page] = record
     session_state[HISTORY_CONTEXT_KEY] = contexts
     return previous if isinstance(previous, dict) else None
 
 
-def compare_history_context(previous: dict[str, Any] | None, history_sha256: str) -> str:
+def compare_history_context(
+    previous: dict[str, Any] | None,
+    history_sha256: str,
+    *,
+    fingerprint: Mapping[str, Any] | None = None,
+) -> str:
     """Return ``no_previous``, ``match`` or ``mismatch`` for the other page."""
+    if fingerprint is not None:
+        return compare_input_fingerprints(previous, fingerprint)
     digest = _valid_history_sha(history_sha256)
     if not previous:
         return "no_previous"
@@ -85,6 +233,7 @@ def render_customer_workflow(
     history_sha256: str,
     source_label: str,
     session_state: MutableMapping[str, Any] | None = None,
+    fingerprint: Mapping[str, Any] | None = None,
 ) -> None:
     """Render a compact step/next-step note and the cross-page input check."""
     if active_page not in PAGE_META:
@@ -95,31 +244,58 @@ def render_customer_workflow(
         page=active_page,
         history_sha256=history_sha256,
         source_label=source_label,
+        fingerprint=fingerprint,
     )
-    relation = compare_history_context(previous, history_sha256)
+    relation = compare_history_context(
+        previous,
+        history_sha256,
+        fingerprint=fingerprint,
+    )
     other = PAGE_META[meta["other"]]
 
     with st.container(border=True):
         st.caption(f"CUSTOMER DECISION PATH · STEP {meta['step']} OF 3")
         st.markdown(f"**{meta['title']}**")
         if relation == "match":
-            st.caption(
-                f"Input match: the last {other['other_title']} used the same history SHA-256. "
-                "The pages are still separate runs with different optimization and cost "
-                "boundaries; do not compare their cost or saving totals as interchangeable."
-            )
+            if fingerprint is not None:
+                st.caption(
+                    f"Input match: the last {other['other_title']} used the same shared "
+                    "input fingerprint. The pages are still separate runs with different "
+                    "optimization and cost boundaries; do not compare their cost or "
+                    "saving totals as interchangeable."
+                )
+            else:
+                st.caption(
+                    f"Input match: the last {other['other_title']} used the same history "
+                    "SHA-256. The pages are still separate runs with different optimization "
+                    "and cost boundaries; do not compare their cost or saving totals as "
+                    "interchangeable."
+                )
         elif relation == "mismatch":
             prior_source = previous.get("source_label") if previous else "an earlier run"
-            st.warning(
-                f"Input differs from the last {other['other_title']} ({prior_source}). "
-                "The two outputs are not like-for-like. Use the same CSV or restore the "
-                "same demo clock and assumptions before comparing them."
-            )
+            if fingerprint is not None:
+                st.warning(
+                    f"Input fingerprint differs from the last {other['other_title']} "
+                    f"({prior_source}). The two outputs are not like-for-like. Use the same "
+                    "CSV, site assumptions and shared input window before comparing them."
+                )
+            else:
+                st.warning(
+                    f"Input differs from the last {other['other_title']} ({prior_source}). "
+                    "The two outputs are not like-for-like. Use the same CSV or restore the "
+                    "same demo clock and assumptions before comparing them."
+                )
         else:
-            st.caption(
-                f"Input check: open the {other['other_title']} in this browser session to "
-                "compare this page's history SHA-256 with the other view."
-            )
+            if fingerprint is not None:
+                st.caption(
+                    f"Input check: open the {other['other_title']} in this browser session "
+                    "to compare this page's full input fingerprint with the other view."
+                )
+            else:
+                st.caption(
+                    f"Input check: open the {other['other_title']} in this browser session "
+                    "to compare this page's history SHA-256 with the other view."
+                )
         st.markdown(f"[Open the {other['other_title']}](/{other['route']})")
         st.caption(
             "The device flexibility planner is an optional third check with fixed synthetic "
