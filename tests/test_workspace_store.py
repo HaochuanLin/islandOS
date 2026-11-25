@@ -87,6 +87,7 @@ def test_run_manifest_is_reproducible_and_immutable(tmp_path):
     )
     restored = get_run_manifest(db, run_id=manifest["run_id"])
     assert restored == manifest
+    assert manifest["manifest_schema_version"] == "1.0"
     assert verify_audit_chain(db)["valid"] is True
     with sqlite3.connect(db) as connection:
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
