@@ -16,8 +16,8 @@ SQLite library. Streamlit session state is not treated as a customer database.
   model/software version identifiers, random seed, output summary, and the
   human-review/read-only execution boundary.
 - Immutable execution records keyed by `(project_id, run_id)`: workflow/page,
-  request digest and metadata, result JSON and digest, optional canonical
-  manifest, history/input fingerprints, and retention mode.
+  request digest and metadata, result JSON and digest, software/model versions,
+  optional canonical manifest, history/input fingerprints, and retention mode.
 - Append-only audit events with actor, timestamp, event type, payload, previous
   event hash, and current event hash.
 - Reasoned operator-override proposals and independent review events linked by
