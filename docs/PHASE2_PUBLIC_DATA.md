@@ -77,7 +77,8 @@ python examples/phase2_opsd_backtest.py \
   --signals load solar wind price \
   --horizon 24 \
   --rolling-validation \
-  --rolling-horizons 1 6 24 168 \\\n  --max-rolling-folds 168
+  --rolling-horizons 1 6 24 168 \
+  --max-rolling-folds 168
 ```
 
 The JSON report includes the exact source columns, selected region, history window, observation count, source-data digest, baseline comparisons, holdout metrics, and forecast output. It now contains two clearly separated evaluation paths:
