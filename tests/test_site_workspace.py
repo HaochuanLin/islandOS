@@ -256,12 +256,13 @@ def test_project_package_exports_and_imports_run_results_with_separate_request_c
     assert exported["request_payload_omitted_from_export"] is True
 
     destination_db = make_workspace(tmp_path / "destination-run-records")
-    with pytest.raises(WorkspaceStoreError, match="explicit consent"):
-        import_project_package(
-            destination_db, default_package.read_bytes(), actor_id="importer",
-            new_project_id="site-imported", new_project_name="Imported",
-            consent_to_store_metadata=True,
-        )
+    skipped = import_project_package(
+        destination_db, default_package.read_bytes(), actor_id="importer",
+        new_project_id="site-skipped", new_project_name="Imported without run results",
+        consent_to_store_metadata=True,
+    )
+    assert skipped["run_records_imported"] == 0
+    assert skipped["run_records_skipped"] == 1
     imported = import_project_package(
         destination_db, default_package.read_bytes(), actor_id="importer",
         new_project_id="site-imported", new_project_name="Imported",
