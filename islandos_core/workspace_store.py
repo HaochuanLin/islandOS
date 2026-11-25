@@ -605,6 +605,11 @@ def record_run_record(
     with _connect(db_path) as connection:
         if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
             raise WorkspaceStoreError("project_id does not exist")
+        if connection.execute(
+            "SELECT 1 FROM run_records WHERE project_id=? AND run_id=?",
+            (project_id, run_id),
+        ).fetchone():
+            raise WorkspaceStoreError("run record already exists for this project; records are immutable")
         connection.execute(
             """INSERT INTO run_records
             (project_id, run_id, page, record_schema_version, created_at, actor_id,
