@@ -422,6 +422,24 @@ def test_existing_schema_1_0_workspace_migrates_without_losing_history(tmp_path)
     assert verify_audit_chain(db)["event_count"] == before + 1
 
 
+def test_schema_migration_refuses_to_extend_a_tampered_audit_chain(tmp_path):
+    db = ready_project(tmp_path)
+    with sqlite3.connect(db) as connection:
+        connection.execute("DROP TABLE run_records")
+        connection.execute("DROP TRIGGER audit_events_no_update")
+        connection.execute("UPDATE audit_events SET payload_json='{}' WHERE sequence=1")
+        connection.execute(
+            "UPDATE workspace_meta SET value='1.0' WHERE key='schema_version'"
+        )
+    with pytest.raises(AuditIntegrityError, match="audit chain is invalid"):
+        initialize_workspace(db, workspace_id="workspace-01", actor_id="local-user", created_at=NOW)
+    with sqlite3.connect(db) as connection:
+        version = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='schema_version'"
+        ).fetchone()[0]
+    assert version == "1.0"
+
+
 def test_unknown_future_workspace_schema_fails_closed(tmp_path):
     db = ready_project(tmp_path)
     with sqlite3.connect(db) as connection:
