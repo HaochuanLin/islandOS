@@ -1,6 +1,9 @@
 name: OPSD public regional forecast backtest
 
 on:
+  push:
+    branches:
+      - feat/phase2-bounded-rolling-validation
   pull_request:
     branches:
       - main
