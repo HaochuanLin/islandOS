@@ -917,7 +917,7 @@ def _file_sha256(path: str | Path) -> str:
 
 
 def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
-    """Validate SQLite integrity and the append-only audit chain before backup/restore."""
+    """Validate SQLite integrity, stored run hashes, and the append-only audit chain."""
     source = Path(path)
     if not source.is_file():
         raise WorkspaceStoreError("workspace database file does not exist")
@@ -929,22 +929,22 @@ def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
             }
+            if not {"workspace_meta", "projects", "audit_events"}.issubset(tables):
+                raise WorkspaceStoreError("file is not a supported IslandOS workspace database")
+            schema_row = connection.execute(
+                "SELECT value FROM workspace_meta WHERE key='schema_version'"
+            ).fetchone()
+            if schema_row is None or schema_row[0] not in {"1.0", SCHEMA_VERSION}:
+                raise WorkspaceStoreError("workspace database has an unsupported schema version")
+            has_run_records = "run_records" in tables
+            run_keys = connection.execute(
+                "SELECT project_id, run_id FROM run_records ORDER BY project_id, run_id"
+            ).fetchall() if has_run_records else []
         if integrity != "ok":
             raise AuditIntegrityError("workspace SQLite integrity check failed")
-        if not {"workspace_meta", "projects", "audit_events"}.issubset(tables):
-            raise WorkspaceStoreError("file is not a supported IslandOS workspace database")
-        schema_row = connection.execute(
-            "SELECT value FROM workspace_meta WHERE key='schema_version'"
-        ).fetchone()
-        if schema_row is None or schema_row[0] not in {"1.0", SCHEMA_VERSION}:
-            raise WorkspaceStoreError("workspace database has an unsupported schema version")
-        has_run_records = "run_records" in tables
-        run_keys = connection.execute(
-            "SELECT project_id, run_id FROM run_records ORDER BY project_id, run_id"
-        ).fetchall() if has_run_records else []
-        audit = verify_audit_chain(source)
         for project_id, run_id in run_keys:
             get_run_record(source, project_id=project_id, run_id=run_id)
+        audit = verify_audit_chain(source)
     except sqlite3.Error as exc:
         raise WorkspaceStoreError(f"workspace database cannot be opened: {exc}") from exc
     if not audit["valid"]:
