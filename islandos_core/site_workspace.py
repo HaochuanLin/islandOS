@@ -560,18 +560,38 @@ def import_project_package(
             raise WorkspaceStoreError("package run record has an invalid request digest")
         if record.get("record_schema_version") != "1.0":
             raise WorkspaceStoreError("package contains an unsupported run record schema")
+        created_at = record.get("created_at")
+        if not isinstance(created_at, str) or not created_at.strip():
+            raise WorkspaceStoreError("package run record has no creation timestamp")
+        try:
+            parsed_created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise WorkspaceStoreError("package run record has an invalid creation timestamp") from exc
+        if parsed_created_at.tzinfo is None or parsed_created_at.utcoffset() is None:
+            raise WorkspaceStoreError("package run record creation timestamp must include a timezone")
         if not isinstance(record.get("request_metadata"), dict) or not isinstance(record.get("result"), dict):
             raise WorkspaceStoreError("package run record metadata and result must be objects")
         _validate_run_metadata(record["request_metadata"])
-        _validate_run_metadata(record["request_metadata"])
         if record.get("request_metadata_sha256") != _hash(_json(record["request_metadata"])):
             raise AuditIntegrityError("package run request metadata failed SHA-256 verification")
+        software_version = record.get("software_version")
+        if software_version is not None and (not isinstance(software_version, str) or not software_version.strip()):
+            raise WorkspaceStoreError("package run record has an invalid software version")
         model_versions = record.get("model_versions")
         if model_versions is not None:
-            if not isinstance(model_versions, dict) or record.get("model_versions_sha256") != _hash(_json(model_versions)):
+            if (
+                not isinstance(model_versions, dict)
+                or any(not isinstance(key, str) or not key.strip() or not isinstance(value, str) or not value.strip()
+                       for key, value in model_versions.items())
+                or record.get("model_versions_sha256") != _hash(_json(model_versions))
+            ):
                 raise AuditIntegrityError("package model versions failed SHA-256 verification")
         elif record.get("model_versions_sha256") is not None:
             raise AuditIntegrityError("package run record has a model-version hash without model versions")
+        for digest_name in ("history_sha256", "input_fingerprint_sha256"):
+            digest = record.get(digest_name)
+            if digest is not None and (not isinstance(digest, str) or not _SHA256.fullmatch(digest)):
+                raise WorkspaceStoreError(f"package run record has an invalid {digest_name}")
         if record.get("result_sha256") != _hash(_json(record["result"])):
             raise AuditIntegrityError("package run result failed SHA-256 verification")
         request_payload = record.get("request_payload")
