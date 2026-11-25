@@ -18,10 +18,9 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from typing import Any, Mapping, Sequence
-import uuid
 
 from .app_view_models import build_device_flexibility_summary, build_run_result_summary
-from .canonical_run import create_run_manifest, deterministic_run_id
+from .canonical_run import CanonicalRunManifest, create_run_manifest, deterministic_run_id
 from .energy_system import EnergySystemConfig, EnergySystemInputs, dispatch_energy_system
 from .flexible_task_dispatch import attach_device_task_schedule
 from .flexible_tasks import DeviceTask, schedule_device_tasks
@@ -150,20 +149,17 @@ def _timestamps_from_request(request: Mapping[str, Any]) -> tuple[datetime, ...]
     )
 
 
-def _manifest_from_request(
-    request: Mapping[str, Any],
-    config: EnergySystemConfig,
-    *,
-    run_id: str | None = None,
-    created_at_utc: str | None = None,
-) -> dict:
-    """The manifest the joint optimizer page builds, reconstructed from the request alone.
+def build_joint_optimizer_manifest(request: Mapping[str, Any]) -> CanonicalRunManifest:
+    """Build the joint optimizer's canonical manifest from its validated page request.
 
-    The page mints a fresh uuid and stamps the wall clock, so two page runs over the
-    same inputs are two sessions. A replay has no wall clock and no session: it passes
-    ``run_id`` and ``created_at_utc`` so the same request reproduces the same manifest
-    digest, and therefore the same summary, every time.
+    The page and the HTTP replay must use this same builder. In particular, the run ID
+    and manifest timestamp are derived from the request's data window, not from a page
+    session UUID, wall clock, or a replay-only epoch.
     """
+    if not isinstance(request, Mapping) or request.get("page") != "joint_resource_optimizer":
+        raise ValueError("request must be a joint_resource_optimizer run request")
+
+    config = _site_from_request(request).to_energy_system_config()
     history_block = request["history"]
     dataset_payload = {
         "timestamps_utc": list(history_block["timestamps_utc"]),
@@ -178,33 +174,58 @@ def _manifest_from_request(
         json.dumps(asdict(config), sort_keys=True, separators=(",", ":"), allow_nan=False)
         .encode("utf-8")
     ).hexdigest()
-    availability = request["run_settings"]["availability"]
-    optimizer_settings = request["run_settings"]["optimizer_settings"]
-    horizon_hours = 24
+
+    timestamps = _timestamps_from_request(request)
+    if not timestamps:
+        raise ValueError("joint optimizer request must contain a non-empty history window")
+    window_end_utc = timestamps[-1].astimezone(timezone.utc).isoformat()
+
+    run_settings = request["run_settings"]
+    raw_optimizer_settings = run_settings["optimizer_settings"]
+    optimizer_settings = {
+        "population_size": int(raw_optimizer_settings["population_size"]),
+        "generations": int(raw_optimizer_settings["generations"]),
+        "seed": int(raw_optimizer_settings["seed"]),
+    }
+    availability = run_settings["availability"]
+    grid_all_hours = bool(availability["grid_all_hours"])
+    diesel_all_hours = bool(availability["diesel_all_hours"])
+    currency = str(run_settings["currency"])
+
+    run_id = deterministic_run_id(
+        "run",
+        {
+            "dataset_sha256": dataset_digest,
+            "site_configuration_sha256": site_configuration_digest,
+            "window_end_utc": window_end_utc,
+            "currency": currency,
+            "optimizer_settings": optimizer_settings,
+            "availability": {
+                "grid_all_hours": grid_all_hours,
+                "diesel_all_hours": diesel_all_hours,
+            },
+        },
+    )
     return create_run_manifest(
         project_id="streamlit-joint-resource-workspace",
-        run_id=run_id or f"run-{uuid.uuid4().hex}",
+        run_id=run_id,
         site_ref=(
             "customer-uploaded-site" if history_block.get("source_sha256") else "synthetic-demo-site"
         ),
-        created_at_utc=created_at_utc or datetime.now(timezone.utc).isoformat(),
+        created_at_utc=window_end_utc,
         dataset_sha256=dataset_digest,
         dataset_schema_version="canonical-hourly-signals-v1",
         source_type="customer_provided" if history_block.get("source_sha256") else "synthetic",
         site_configuration_version="1",
         site_configuration_sha256=site_configuration_digest,
         required_signals=dict(history_block["units"]),
-        forecast_horizon_hours=horizon_hours,
+        forecast_horizon_hours=24,
         optimizer_id="prediction_resource_dispatch",
         optimizer_version="1",
-        optimizer_settings={
-            "population_size": int(optimizer_settings["population_size"]),
-            "generations": int(optimizer_settings["generations"]),
-            "seed": int(optimizer_settings["seed"]),
-        },
+        optimizer_settings=optimizer_settings,
         scenario_assumptions={
-            "grid_available": [bool(availability["grid_all_hours"])] * horizon_hours,
-            "diesel_available": [bool(availability["diesel_all_hours"])] * horizon_hours,
+            "grid_available": [grid_all_hours] * 24,
+            "diesel_available": [diesel_all_hours] * 24,
         },
         forecast_settings={
             "backtest_horizon": 24,
@@ -374,12 +395,7 @@ def replay_run_request(request: Mapping[str, Any]) -> dict:
 
     if page == "joint_resource_optimizer":
         config = site.to_energy_system_config()
-        manifest = _manifest_from_request(
-            request,
-            config,
-            run_id=deterministic_run_id("run", {"request": request}),
-            created_at_utc=REPLAY_CREATED_AT_UTC,
-        )
+        manifest = build_joint_optimizer_manifest(request).to_dict()
         availability = request["run_settings"]["availability"]
         outputs = run_joint_optimizer(
             run_manifest=manifest,
