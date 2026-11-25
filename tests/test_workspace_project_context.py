@@ -227,3 +227,64 @@ def test_binding_is_not_a_consent_or_write_permission():
     assert not hasattr(binding, "consent_to_store")
     assert not hasattr(binding, "persistence_allowed")
     assert not hasattr(binding, "can_write")
+
+
+def test_project_selector_widget_state_is_refreshed_from_shared_selection():
+    from islandos_ui.project_context_selector import sync_project_selector_widget_state
+
+    labels = {
+        "North site · site-north": "site-north",
+        "South site · site-south": "site-south",
+    }
+    session_state: dict[str, object] = {
+        ACTIVE_PROJECT_SESSION_KEY: "site-south",
+        "page_05_project_selector": "North site · site-north",
+    }
+
+    selected = sync_project_selector_widget_state(
+        session_state,
+        widget_key="page_05_project_selector",
+        labels=labels,
+    )
+
+    assert selected == "South site · site-south"
+    assert session_state["page_05_project_selector"] == selected
+
+
+def test_project_selector_widget_change_updates_shared_selection():
+    from islandos_ui.project_context_selector import apply_project_selector_widget_change
+
+    labels = {
+        "North site · site-north": "site-north",
+        "South site · site-south": "site-south",
+    }
+    session_state: dict[str, object] = {
+        ACTIVE_PROJECT_SESSION_KEY: "site-north",
+        "page_06_project_selector": "South site · site-south",
+    }
+
+    apply_project_selector_widget_change(
+        session_state,
+        widget_key="page_06_project_selector",
+        labels=labels,
+    )
+
+    assert get_active_project_id(session_state) == "site-south"
+
+
+def test_project_selector_clears_stale_shared_selection():
+    from islandos_ui.project_context_selector import sync_project_selector_widget_state
+
+    session_state: dict[str, object] = {
+        ACTIVE_PROJECT_SESSION_KEY: "site-deleted",
+    }
+    labels = {"Current site · site-current": "site-current"}
+
+    selected = sync_project_selector_widget_state(
+        session_state,
+        widget_key="page_05_project_selector",
+        labels=labels,
+    )
+
+    assert selected == "— No project selected —"
+    assert get_active_project_id(session_state) is None
