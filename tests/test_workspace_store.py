@@ -288,8 +288,12 @@ def test_run_record_persists_result_without_retaining_full_request_by_default(tm
         request_sha256=DIGEST,
         request_metadata={"history_start": "2026-11-01T00:00:00Z", "row_count": 24},
         result={"grid_cost": 12.5, "unmet_load_kwh": 0},
-        actor_id="local-user", consent_to_store_result=True, created_at=NOW,
+        actor_id="local-user", consent_to_store_result=True,
+        software_version="0.2.0", model_versions={"forecast": "baseline-v2", "optimizer": "milp-v1"},
+        created_at=NOW,
     )
+    assert record["software_version"] == "0.2.0"
+    assert record["model_versions"] == {"forecast": "baseline-v2", "optimizer": "milp-v1"}
     assert record["retention_mode"] == "metadata_only"
     assert record["replayable"] is False
     assert record["request_payload"] is None
@@ -298,6 +302,8 @@ def test_run_record_persists_result_without_retaining_full_request_by_default(tm
     assert "request_payload" not in listed[0]
     restored = get_run_record(db, project_id="site-01", run_id="canonical-run-01")
     assert restored["result"] == {"grid_cost": 12.5, "unmet_load_kwh": 0}
+    assert restored["software_version"] == "0.2.0"
+    assert restored["model_versions"] == {"forecast": "baseline-v2", "optimizer": "milp-v1"}
     assert restored["replayable"] is False
     assert verify_audit_chain(db)["valid"] is True
 
