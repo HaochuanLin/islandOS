@@ -39,6 +39,16 @@ The product must continue to distinguish separate page workflows. A shared input
 | Page 09 — Device Flexibility Planner | Its result summary has no canonical `run_id`; `summary_sha256` identifies the summary. It uses fixed demonstration inputs and remains an isolated device-planner workflow. | Do not imply it is the next stage of the 05/06 history chain. |
 | `POST /run` replay | The joint-optimizer replay derives a deterministic ID from the request and pins replay time. 05 and 09 return their page-specific summaries; they do not become the 06 run. | A replay identity identifies the replay request, not an original browser session. |
 
+### Additional B1 finding: page 06 and replay do not share the same run-ID derivation
+
+The page 06 code derives its run ID from a specific payload: dataset digest, site-configuration digest, window-end timestamp, currency, optimizer settings and availability (`pages/06_Forecast_Led_Joint_Resource_Optimizer.py`, around the run-manifest construction).
+
+The replay path instead calls `deterministic_run_id("run", {"request": request})` and pins `created_at_utc` to `REPLAY_CREATED_AT_UTC` (`islandos_core/run_orchestration.py::replay_run_request`). These are different identity inputs, and the replay manifest timestamp also differs from the page's window-based timestamp. Therefore page execution and replay are deterministic independently, but the code does not currently establish that they represent the same canonical run or manifest.
+
+The current replay test proves only that replaying the same request twice produces the same replay ID and summary. It does not compare a page-generated run ID/manifest with the replay-generated ID/manifest. The helper docstring in `_manifest_from_request` also says the page mints a fresh UUID and wall-clock timestamp, which no longer matches page 06's current deterministic, window-based implementation.
+
+**B1 acceptance requirement:** define one shared run-identity builder and use it from both page 06 and replay, or explicitly model page execution and replay as different run records linked by the same request fingerprint. Add a regression test that compares the chosen identity semantics across both paths. Do not claim identity equivalence until this test passes.
+
 The merged `#348` change adds `build_input_fingerprint` and `compare_input_fingerprints` in `islandos_ui/customer_workflow.py`. It separates shared-input fields from page-specific settings. The helper is not yet wired into the 05/06 pages on the audited `main`; it must be treated as an input-comparison tool, not a run merger.
 
 ## 4. Persistence: what is and is not stored
@@ -123,7 +133,7 @@ Open frontend PRs were checked for overlap: #350 (page 05), #349 (workspace micr
 
 Start with **B1 + the minimum B2 storage design**, not a new API server:
 
-1. Define the run envelope without forcing 05, 06 and 09 to share one run ID.
+1. Resolve the page-06-versus-replay identity mismatch, then define the run envelope without forcing 05, 06 and 09 to share one run ID.
 2. Decide how the canonical `run_id` and `manifest_sha256` are preserved when a record is written to the local workspace.
 3. Add an immutable run-record persistence operation for the exact validated request and result, with schema version and integrity hashes.
 4. Add list/get/reopen tests before wiring the UI.
