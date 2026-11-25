@@ -30,6 +30,19 @@ function formatCount(value: number | null | undefined): string {
   return Number.isFinite(number) ? number.toLocaleString() : "—";
 }
 
+function annualUnavailableCopy(page: string | undefined): string {
+  switch (page) {
+    case "customer_dashboard":
+      return "This report has no annual projection. The 05 investment screen uses its own entered annual bills, not the 06 operating projection.";
+    case "joint_resource_optimizer":
+      return "The equal-days assumption was not declared for this run, so no annual projection is included.";
+    case "device_flexibility_planner":
+      return "09 is a 24-hour device schedule; it has no annual projection.";
+    default:
+      return "No annual projection is included in this report.";
+  }
+}
+
 function FieldTable({ title, fields }: { title: string; fields: ContractField[] }) {
   return (
     <section className="panel">
@@ -309,7 +322,17 @@ function App() {
           </div>
           <p>{String(annual.scope ?? "")}</p>
         </section>
-      ) : null}
+      ) : (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">ANNUAL PROJECTION</p>
+              <h2>Not included in this report</h2>
+            </div>
+          </div>
+          <p>{annualUnavailableCopy(request?.page)}</p>
+        </section>
+      )}
 
       {schema ? (
         <>
