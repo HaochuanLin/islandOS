@@ -54,6 +54,7 @@ def backup_database(
     try:
         source_connection.backup(destination_connection)
         integrity = destination_connection.execute("PRAGMA integrity_check").fetchone()[0]
+        schema_version = destination_connection.execute("PRAGMA user_version").fetchone()[0]
         tables = {
             row[0]: destination_connection.execute(
                 'SELECT count(*) FROM "%s"' % row[0].replace('"', '""')
@@ -75,6 +76,7 @@ def backup_database(
         "backup_path": str(destination),
         "bytes": destination.stat().st_size,
         "integrity_check": integrity,
+        "schema_version": schema_version,
         "table_rows": tables,
         "source": str(source_path),
         "created_at_utc": stamp,
