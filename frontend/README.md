@@ -66,6 +66,10 @@ python islandos_service_api.py --host 127.0.0.1 --port 8766 --allow-registration
 cd frontend && npm run dev                                                        # 5173, /api -> 8766
 ```
 
+From the repository root, `scripts/start_console.ps1` runs both of those on loopback, waits for the
+health check, and keeps registration closed unless you pass `-BootstrapRegistration`;
+`scripts/start_console.ps1 -Stop` stops both processes, including the Vite child.
+
 `GET /api/v1/health` through the proxy answers `{"status": "ok", "mode": "single_host_reference",
 "device_write_enabled": false}`. Registration is for the controlled bootstrap of the first owner; stop
 the API and restart it without `--allow-registration` afterwards. The port is the API's own default, and
