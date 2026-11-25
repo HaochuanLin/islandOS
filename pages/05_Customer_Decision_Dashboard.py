@@ -15,7 +15,11 @@ import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header
-from islandos_ui.customer_workflow import render_customer_workflow, render_page_upload_handoff
+from islandos_ui.customer_workflow import (
+    build_input_fingerprint,
+    render_customer_workflow,
+    render_page_upload_handoff,
+)
 from islandos_ui.annual_economics_panel import (
     DEMONSTRATION_VALUES,
     annual_inputs_supplied,
@@ -213,11 +217,6 @@ st.caption(
     f"({len(history_stamps)} hourly rows){demo_note}"
 )
 st.caption(f"Input provenance: {source_label}")
-render_customer_workflow(
-    active_page="decision_dashboard",
-    history_sha256=history_sha256,
-    source_label=source_label,
-)
 if site_csv is not None:
     render_page_upload_handoff(
         page_key="decision_dashboard",
@@ -246,6 +245,26 @@ try:
         diesel_rated_kw=0.0,
         diesel_variable_cost_per_kwh=0.0,
     )
+    fingerprint = build_input_fingerprint(
+        page="decision_dashboard",
+        history_sha256=history_sha256,
+        site_digest=site_assumptions.digest(),
+        units=units,
+        hour_count=len(history_stamps),
+        currency=currency,
+        page_settings={
+            "demand_scale": float(demand_scale),
+            "tariff_scale": float(tariff_scale),
+            "cost_priority": float(cost_priority),
+        },
+    )
+    render_customer_workflow(
+        active_page="decision_dashboard",
+        history_sha256=history_sha256,
+        source_label=source_label,
+        fingerprint=fingerprint,
+    )
+    st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
     config = site_assumptions.to_energy_system_config()
     # The request this page acts on, in the shared application-facing shape: the site,
     # the history with its units and provenance, this page's own simulation knobs and the

@@ -15,7 +15,11 @@ import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header
-from islandos_ui.customer_workflow import render_customer_workflow, render_page_upload_handoff
+from islandos_ui.customer_workflow import (
+    build_input_fingerprint,
+    render_customer_workflow,
+    render_page_upload_handoff,
+)
 from islandos_ui.decision_record_panel import render_decision_record
 
 from islandos_core.customer_dashboard import parse_customer_history_csv
@@ -156,11 +160,6 @@ else:
     )
 
 st.caption(f"Data provenance: {source}")
-render_customer_workflow(
-    active_page="joint_optimizer",
-    history_sha256=history_sha256,
-    source_label=source,
-)
 if upload is not None:
     render_page_upload_handoff(
         page_key="joint_optimizer",
@@ -200,6 +199,26 @@ try:
         diesel_rated_kw=float(diesel_capacity),
         diesel_variable_cost_per_kwh=float(diesel_cost),
     )
+    fingerprint = build_input_fingerprint(
+        page="joint_optimizer",
+        history_sha256=history_sha256,
+        site_digest=site_assumptions.digest(),
+        units=signal_units,
+        hour_count=len(timestamps),
+        currency=currency,
+        page_settings={
+            "population": int(population),
+            "generations": int(generations),
+            "seed": int(seed),
+        },
+    )
+    render_customer_workflow(
+        active_page="joint_optimizer",
+        history_sha256=history_sha256,
+        source_label=source,
+        fingerprint=fingerprint,
+    )
+    st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
     config = site_assumptions.to_energy_system_config()
     grid_available = [True] * 24
     diesel_available = [True] * 24
