@@ -4,8 +4,8 @@
  *   1. make the customer pages legible from a projector;
  *   2. make them feel like the same product as the React operations console.
  *
- * Type scale (desktop): hero 56px / section 32px / body 17px / table 17px /
- * sidebar nav 16px.  Nothing that carries meaning is below 13px.
+ * Type scale (desktop): hero 66px / section 42px / body 20px / table 19px /
+ * sidebar nav 18px.  Small labels stay at 14–15px.
  */
 
 :root {
@@ -98,9 +98,9 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stSidebarNav"] a,
 [data-testid="stSidebarNav"] a p {
   color: #dfeae4 !important;
-  font-size: 1rem !important;
+  font-size: 1.1rem !important;
   font-weight: 500 !important;
-  line-height: 1.35 !important;
+  line-height: 1.38 !important;
 }
 
 [data-testid="stSidebarNav"] a {
@@ -114,8 +114,8 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
  * deliberately descriptive names and the menu is wide enough for them, so
  * allow a second line instead of an ellipsis. */
 [data-testid="stSidebar"] [data-testid="stSidebarNav"] a p {
-  font-size: 1rem !important;
-  line-height: 1.3 !important;
+  font-size: 1.1rem !important;
+  line-height: 1.32 !important;
   white-space: normal !important;
   overflow: visible !important;
   text-overflow: clip !important;
@@ -148,7 +148,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stSidebar"] h3 {
   color: #f7f3e7 !important;
   font-family: var(--ios-serif) !important;
-  font-size: 1.55rem !important;
+  font-size: 1.8rem !important;
   font-weight: 600 !important;
   letter-spacing: -0.01em;
   margin-top: 1.35rem !important;
@@ -173,25 +173,25 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
   color: #d8e5df !important;
-  font-size: 0.95rem !important;
-  line-height: 1.55 !important;
+  font-size: 1.05rem !important;
+  line-height: 1.58 !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
 [data-testid="stSidebar"] label p {
   color: #edf4f0 !important;
-  font-size: 1rem !important;
+  font-size: 1.06rem !important;
   font-weight: 600 !important;
   letter-spacing: 0.01em;
 }
 
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
-  color: #9fb7ae !important;
+  color: #bfd0c8 !important;
 }
 
 [data-testid="stSidebar"] input,
 [data-testid="stSidebar"] textarea {
-  font-size: 1rem !important;
+  font-size: 1.06rem !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stNumberInput"] input,
@@ -209,14 +209,14 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 }
 
 [data-testid="stSidebar"] [data-testid="stSlider"] [data-testid="stTickBar"] {
-  color: #9fb7ae !important;
-  font-size: 0.82rem !important;
+  color: #b9ccc4 !important;
+  font-size: 0.95rem !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stSliderThumbValue"],
 [data-testid="stSidebar"] [data-testid="stSliderThumbValue"] p {
   color: #f7f3e7 !important;
-  font-size: 1rem !important;
+  font-size: 1.06rem !important;
   font-weight: 600 !important;
   letter-spacing: 0.01em;
 }
@@ -230,7 +230,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stSidebar"] [data-testid="stFileUploader"] p,
 [data-testid="stSidebar"] [data-testid="stFileUploader"] small {
   color: #d8e5df !important;
-  font-size: 0.95rem !important;
+  font-size: 1.05rem !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stFileUploader"] button {
@@ -242,7 +242,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stSidebar"] [data-testid="stFileUploader"] button p,
 [data-testid="stSidebar"] [data-testid="stFileUploader"] button span {
   color: #ffffff !important;
-  font-size: 1rem !important;
+  font-size: 1.06rem !important;
   font-weight: 600 !important;
 }
 
@@ -257,7 +257,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stSidebar"] [data-testid="stDownloadButton"] button svg {
   color: #ffffff !important;
   fill: #ffffff !important;
-  font-size: 1rem !important;
+  font-size: 1.06rem !important;
   font-weight: 600 !important;
 }
 
@@ -280,12 +280,12 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 }
 
 .ios-kicker {
-  margin: 0 0 0.7rem;
+  margin: 0 0 0.75rem;
   color: var(--ios-gold);
   font-family: var(--ios-sans);
-  font-size: 0.76rem;
+  font-size: 0.92rem;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   line-height: 1.4;
   text-transform: uppercase;
 }
@@ -295,18 +295,18 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   margin: 0 !important;
   color: var(--ios-ink) !important;
   font-family: var(--ios-serif) !important;
-  font-size: clamp(2.85rem, 3.35vw, 3.55rem) !important;
+  font-size: clamp(3.4rem, 4.15vw, 4.4rem) !important;
   font-weight: 600 !important;
-  letter-spacing: -0.025em !important;
-  line-height: 1.04 !important;
+  letter-spacing: -0.028em !important;
+  line-height: 1.02 !important;
 }
 
 .ios-hero__dek {
   max-width: 78ch;
   margin: 1rem 0 0 !important;
   color: var(--ios-muted) !important;
-  font-size: 1.12rem !important;
-  line-height: 1.62 !important;
+  font-size: 1.3rem !important;
+  line-height: 1.58 !important;
 }
 
 /* Fallback for screens that still call st.title directly. */
@@ -314,10 +314,10 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stMarkdownContainer"] h1 {
   color: var(--ios-ink) !important;
   font-family: var(--ios-serif) !important;
-  font-size: clamp(2.75rem, 3.2vw, 3.35rem) !important;
+  font-size: clamp(3.2rem, 3.9vw, 4.2rem) !important;
   font-weight: 600 !important;
   letter-spacing: -0.02em !important;
-  line-height: 1.06 !important;
+  line-height: 1.05 !important;
   margin: 0 0 0.75rem !important;
 }
 
@@ -359,20 +359,20 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 
 .ios-brief__label {
   display: block;
-  margin: 0 0 0.22rem;
+  margin: 0 0 0.28rem;
   color: var(--ios-sea);
   font-family: var(--ios-sans);
-  font-size: 0.71rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .ios-brief__text {
   margin: 0;
   color: var(--ios-ink-soft);
-  font-size: 1.08rem;
-  line-height: 1.58;
+  font-size: 1.22rem;
+  line-height: 1.55;
 }
 
 /* ------------------------------------------------------------------ body */
@@ -381,8 +381,8 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stMarkdownContainer"] li,
 [data-testid="stMarkdownContainer"] blockquote p {
   color: var(--ios-ink-soft);
-  font-size: 1.08rem;
-  line-height: 1.7;
+  font-size: 1.25rem;
+  line-height: 1.68;
 }
 
 [data-testid="stMarkdownContainer"] strong,
@@ -399,12 +399,13 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 
 [data-testid="stCaptionContainer"] p {
   color: var(--ios-muted) !important;
-  font-size: 1.01rem !important;
-  line-height: 1.62 !important;
+  font-size: 1.14rem !important;
+  line-height: 1.6 !important;
 }
 
 [data-testid="stCaptionContainer"] {
   margin-top: 0.3rem;
+  opacity: 1 !important;
 }
 
 [data-testid="stMarkdownContainer"] h2,
@@ -414,18 +415,18 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   border-top: 1px solid var(--ios-line);
   color: var(--ios-ink) !important;
   font-family: var(--ios-serif) !important;
-  font-size: clamp(1.75rem, 2.15vw, 2.15rem) !important;
+  font-size: clamp(2.15rem, 2.6vw, 2.7rem) !important;
   font-weight: 600 !important;
   letter-spacing: -0.018em !important;
-  line-height: 1.16 !important;
+  line-height: 1.15 !important;
 }
 
 [data-testid="stMarkdownContainer"] h3,
 [data-testid="stHeading"] h3 {
-  margin: 1.7rem 0 0.55rem !important;
+  margin: 1.9rem 0 0.6rem !important;
   color: var(--ios-ink) !important;
   font-family: var(--ios-serif) !important;
-  font-size: 1.42rem !important;
+  font-size: 1.75rem !important;
   font-weight: 600 !important;
   letter-spacing: -0.01em !important;
   line-height: 1.25 !important;
@@ -434,7 +435,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stMarkdownContainer"] h4,
 [data-testid="stHeading"] h4 {
   color: var(--ios-ink) !important;
-  font-size: 1.12rem !important;
+  font-size: 1.3rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.01em;
 }
@@ -459,27 +460,27 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stAlertContentInfo"],
 [data-testid="stAlertContentInfo"] p {
   color: #224039 !important;
-  font-size: 1.06rem !important;
-  line-height: 1.62 !important;
+  font-size: 1.2rem !important;
+  line-height: 1.6 !important;
 }
 
 [data-testid="stAlertContentSuccess"] p {
   color: #25462f !important;
-  font-size: 1.02rem !important;
-  line-height: 1.62 !important;
+  font-size: 1.16rem !important;
+  line-height: 1.6 !important;
 }
 
 [data-testid="stAlertContentWarning"] p,
 [data-testid="stAlertContentError"] p {
-  font-size: 1.02rem !important;
-  line-height: 1.62 !important;
+  font-size: 1.16rem !important;
+  line-height: 1.6 !important;
 }
 
 /* ----------------------------------------------------------------- metrics */
 
 [data-testid="stMetric"] {
-  min-height: 8.3rem;
-  padding: 1.05rem 1.15rem !important;
+  min-height: 9.2rem;
+  padding: 1.15rem 1.2rem !important;
   background: var(--ios-surface);
   border: 1px solid var(--ios-line);
   border-radius: 14px;
@@ -489,9 +490,9 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stMetricLabel"] p {
   margin: 0 !important;
   color: var(--ios-muted) !important;
-  font-size: 0.84rem !important;
+  font-size: 0.98rem !important;
   font-weight: 700 !important;
-  letter-spacing: 0.07em !important;
+  letter-spacing: 0.06em !important;
   line-height: 1.35 !important;
   text-transform: uppercase;
   white-space: normal !important;
@@ -508,17 +509,17 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 }
 
 [data-testid="stMetricValue"] {
-  margin-top: 0.55rem !important;
+  margin-top: 0.6rem !important;
   color: var(--ios-ink) !important;
   font-family: var(--ios-serif) !important;
-  font-size: 2.55rem !important;
+  font-size: 3rem !important;
   font-weight: 600 !important;
   letter-spacing: -0.025em !important;
-  line-height: 1.05 !important;
+  line-height: 1.02 !important;
 }
 
 [data-testid="stMetricDelta"] {
-  font-size: 0.92rem !important;
+  font-size: 1.05rem !important;
 }
 
 [data-testid="stHorizontalBlock"] {
@@ -539,7 +540,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 
 [data-testid="stTable"] {
   padding: 0.2rem 0.35rem 0.35rem;
-  max-height: 34rem;
+  max-height: 37rem;
   overflow: auto !important;
 }
 
@@ -547,7 +548,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   width: 100% !important;
   border-collapse: collapse !important;
   color: var(--ios-ink-soft) !important;
-  font-size: 1.06rem !important;
+  font-size: 1.2rem !important;
   line-height: 1.45 !important;
 }
 
@@ -555,15 +556,15 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 0.78rem 0.85rem !important;
+  padding: 0.85rem 0.9rem !important;
   background: #e9e3d4 !important;
   color: #31463e !important;
   border: 0 !important;
   border-bottom: 1px solid var(--ios-line) !important;
   font-family: var(--ios-sans) !important;
-  font-size: 0.93rem !important;
+  font-size: 1.06rem !important;
   font-weight: 700 !important;
-  letter-spacing: 0.045em;
+  letter-spacing: 0.04em;
   line-height: 1.3 !important;
   text-align: left !important;
   text-transform: uppercase;
@@ -571,10 +572,10 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 }
 
 [data-testid="stTable"] tbody td {
-  padding: 0.8rem 0.85rem !important;
+  padding: 0.85rem 0.9rem !important;
   border: 0 !important;
   border-bottom: 1px solid var(--ios-line-soft) !important;
-  font-size: 1.04rem !important;
+  font-size: 1.18rem !important;
   line-height: 1.45 !important;
   vertical-align: top;
   overflow-wrap: anywhere;
@@ -615,7 +616,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stExpander"] summary p,
 [data-testid="stExpander"] summary span {
   color: var(--ios-ink) !important;
-  font-size: 1.03rem !important;
+  font-size: 1.18rem !important;
   font-weight: 600 !important;
   line-height: 1.45 !important;
 }
@@ -636,23 +637,23 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 }
 
 [data-testid="stVegaLiteChart"] svg text {
-  font-size: 13.5px !important;
+  font-size: 16px !important;
 }
 
 [data-testid="stVegaLiteChart"] .vega-bindings label {
   color: var(--ios-ink-soft) !important;
-  font-size: 1rem !important;
+  font-size: 1.1rem !important;
 }
 
 /* -------------------------------------------------------------------- tabs */
 
 [data-testid="stTabs"] [role="tab"] {
-  font-size: 1.02rem !important;
+  font-size: 1.15rem !important;
   font-weight: 600 !important;
 }
 
 [data-testid="stTabs"] [role="tabpanel"] {
-  font-size: 1.03rem !important;
+  font-size: 1.18rem !important;
 }
 
 /* ---------------------------------------------------------- forms / buttons */
@@ -660,7 +661,7 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stWidgetLabel"] p,
 [data-testid="stWidgetLabel"] label {
   color: var(--ios-ink-soft) !important;
-  font-size: 1rem !important;
+  font-size: 1.08rem !important;
   font-weight: 600 !important;
   line-height: 1.45 !important;
 }
@@ -669,17 +670,17 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stNumberInput"] input,
 [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
 [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
-  font-size: 1rem !important;
-  min-height: 2.8rem;
+  font-size: 1.08rem !important;
+  min-height: 2.9rem;
 }
 
 [data-testid="stButton"] button,
 [data-testid="stDownloadButton"] button,
 [data-testid="stFormSubmitButton"] button {
-  min-height: 2.7rem;
-  padding: 0.45rem 1rem !important;
+  min-height: 2.85rem;
+  padding: 0.5rem 1.05rem !important;
   border-radius: 10px !important;
-  font-size: 1rem !important;
+  font-size: 1.08rem !important;
   font-weight: 600 !important;
 }
 
@@ -698,12 +699,12 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 
 [data-testid="stCheckbox"] label p,
 [data-testid="stToggle"] label p {
-  font-size: 1rem !important;
+  font-size: 1.08rem !important;
   color: var(--ios-ink-soft) !important;
 }
 
 [data-testid="stRadio"] label p {
-  font-size: 1.02rem !important;
+  font-size: 1.15rem !important;
 }
 
 /* --------------------------------------------------------------- code / foot */
@@ -751,12 +752,12 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   }
 
   .ios-hero h1 {
-    font-size: clamp(2.4rem, 7vw, 3rem) !important;
+    font-size: clamp(2.7rem, 7.5vw, 3.4rem) !important;
     max-width: none;
   }
 
   .ios-hero__dek {
-    font-size: 1.05rem !important;
+    font-size: 1.18rem !important;
   }
 
   .ios-brief {
@@ -779,11 +780,11 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   }
 
   [data-testid="stMetricValue"] {
-    font-size: 2.1rem !important;
+    font-size: 2.6rem !important;
   }
 
   [data-testid="stTable"] table {
-    font-size: 1rem !important;
+    font-size: 1.12rem !important;
   }
 }
 
@@ -793,11 +794,11 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   }
 
   .ios-hero h1 {
-    font-size: 2.15rem !important;
+    font-size: 2.5rem !important;
   }
 
   [data-testid="stMetricValue"] {
-    font-size: 1.95rem !important;
+    font-size: 2.2rem !important;
   }
 
   [data-testid="stTable"] thead th,
