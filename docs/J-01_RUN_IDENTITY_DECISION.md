@@ -1,85 +1,55 @@
-# J-01 跨页面 Run Identity 产品定义（技术契约草案）
+# J-01 跨页面 Run Identity 产品定义（正式主线）
 
-- 状态：**Proposed Decision，待负责人签署**。本文区分：`已确认方向`（2026-11-25 负责人给定）、`仍待 PR #359 作者确认`（数据库/API 细节）、`仍待产品确认`。
-- 审查基线：`main` = `9615d82`（F-01 文档同步，#358）；PR #359 head = `94388ed`（分支 `feat/persistent-run-records-2026-11-25`，未合并）。
-- 范围：页面 05 / 06 / 09 的 Run Identity；本轮不接入页面、不改模型与经济口径、不合并 PR。
-- 一句话：**两级身份**——`run_id` 标识“一个页面、一次可复现的运行定义”，`input_group_id` 标识“一组可被多个运行共享的数据输入”；同一份数据跨页面只做关联，永不自动合并为一次实验。
+- 状态：**产品规则 D1-D9 已由负责人确认；PD-1 至 PD-6 据此收敛。数据库字段与错误码仍待 PR #359 作者确认。**
+- 审查基线：`main = 702d7c9`（2026-11-25，IslandOS visual system）；PR #359 head = `94388ed`（未合并）；PR #371 head = `1086075`（draft，ProjectBinding 增量，未合并）。
+- 主线：**PR #362 是 J-01 正式文档主线。PR #360 是早期 draft，不再扩展为第二套身份契约；二者不得同时作为实现依据。**
+- 范围：页面 05 / 06 / 09 的身份、项目绑定和持久化边界。本轮 P1a 只实现输入组纯函数；P3 只实现项目上下文；不实现 `derive_run_id`，不修改 #359 数据库。
 
-## 1. 决策状态总表
+一句话：**两级身份**——`input_group_id` 标识“同一份物理输入数据”，`run_id` 标识“一个页面、一次可复现的技术运行定义”；同一输入组跨页面只做关联，永不自动合并为一次实验。
 
-| 编号 | Proposed Decision | 状态 | 兼容性影响 |
-| --- | --- | --- | --- |
-| PD-1 | `input_group_id` 第一版只含 canonical history、units、hour_count | 已确认方向 | 新字段，不改旧记录 |
-| PD-2 | `run_id` 含页面、输入组、站点 digest、页面设置、运行设置、模型/优化器版本 | 已确认方向 | 新格式与旧 id 并存，旧 id 不改写 |
-| PD-3 | 同 `(project_id, run_id)` 成功运行幂等；同 id 不同内容报错，不覆盖 | 已确认方向；具体状态码待 #359 作者确认 | 不改主键；新增分支逻辑 |
-| PD-4 | 失败运行不写不可变成功记录，只写失败审计 | 已确认方向；审计字段待 #359 作者确认 | 不改表；复用 `audit_events` |
-| PD-5 | 05 年度投资绑定先分类参数：投资参数不改 run_id，技术与模型参数才改 | 已确认方向；落地代码未做 | 旧 `run-dashboard-*` 保留为 legacy |
-| PD-6 | 旧 `run_id` 只做兼容映射，不重算、不改写、不删除 | 已确认方向；迁移细节待确认 | 历史记录原样可读 |
+## 1. 决策状态
 
-## 2. 当前真实实现（已由代码验证）
+| 项目 | 状态 |
+| --- | --- |
+| D1-D9 产品规则 | 已确认，见 §2 |
+| PD-1 输入组 | 已收敛；P1a 已实现纯函数与固定向量 |
+| PD-2 run identity | 已收敛为“稳定模型策略身份”；本轮不实现 |
+| PD-3 成功记录幂等 | 已确认方向；状态码/错误体待 #359 作者 |
+| PD-4 失败只进审计 | 已确认方向；payload 待 #359 作者 |
+| PD-5 投资绑定 | 只冻结设计；本轮不建表 |
+| PD-6 旧 id 兼容 | 已确认；不重算、不改写、不删除 |
+| A1-A8 #359 契约 | 建议已整理，见 `J-01_PR359_A1_A8_CONTRACT.md`；未改 #359 |
 
-### 2.1 三层身份并存
+## 2. D1-D9 产品规则（已确认）
 
-| 层 | 代码位置 | 生成方式 | 作用域 | 现状 |
-| --- | --- | --- | --- | --- |
-| Canonical run | `islandos_core/canonical_run.py` | 调用方传入 `run_id`；`deterministic_run_id(prefix, payload)` = `prefix-<sha256(canonical json)[:16]>` | 全局 | 06 使用；05 仅年度绑定使用；不落库 |
-| Workspace run manifest | `workspace_store.py:334` | **随机 `uuid.uuid4()`**，忽略确定性 id | 项目库 `run_manifests` | 仅站点导入流程（`site_workspace.py:602`，页面 08）写入；05/06 不写 |
-| PR #359 run record | `workspace_store.py`（PR 分支） | 调用方传入任意非空 `run_id` | `run_records`，PK `(project_id, run_id)` | 未合并；05/06/09 未接入 |
+| ID | 规则 | 实现影响 |
+| --- | --- | --- |
+| D1 | `unregistered` 永不落库，只允许作为内存上下文。没有真实项目时允许模拟，但不写项目历史。 | `run_records` 只接受真实 `project_id`；无项目不调用写入口；不建假项目 |
+| D2 | 项目选择不是模拟运行的前提。Page 05/06 默认不选择项目，没有项目仍可运行模拟。 | 计算路径不依赖 Workspace；selector 是可选项；持久化另设门禁 |
+| D3 | 真实 `project_id` 只能来自本地 Workspace `projects` 表。不能使用 `streamlit-*` manifest label，不能自动创建项目，不能连接 Customer Console tenant/site。 | Page 08 创建；05/06 只读 lookup；固定 label 仅作 legacy manifest 字段 |
+| D4 | 输入组采用币种中立单位；`tariff_per_kwh` canonical token 为 `currency/kWh`；USD/CNY/GBP 等只进 run settings；05/06 相同物理信号使用相同 canonical name；不确定语义不强行映射；固定向量重算。 | P1a 的 `derive_input_group_id`、alias adapter、units canonicalizer、fixtures |
+| D5 | `run_id` 使用稳定的模型策略身份，不要求在 forecast 前拿到实际 selected model IDs。身份体现 canonical input group、site/config digest、forecast settings、model selection policy ID/version、model catalogue/registry version、optimizer ID/version、影响技术结果的算法组件版本、identity schema version。实际 selected models、指标和结果属于 run evidence。 | `derive_run_id` 设计；Page 06 不需要重排 manifest/forecast；run evidence 另存 |
+| D6 | 完整 `request_sha256` 与技术请求摘要分离；建议命名 `run_request_sha256`。纯财务分析参数不进入技术摘要；会改变设备配置、容量、预测、优化或调度结果的参数必须保留。 | `run_records` 幂等键使用技术摘要；完整请求用于回放/保留同意 |
+| D7 | 投资分析使用独立 append-only `run_bindings`；同一技术 run 可关联多个投资假设；投资参数变化不自动创建新技术 run。当前只冻结设计，不实现数据库表。 | 后续 P5；`run_records` 不加投资列 |
+| D8 | Page 09 暂不进入持久化。不写 `run_records`，不创建 `input_group_id`，保持 `run_id=None`，不伪造 canonical identity。 | Page 09 零持久化；不显示伪造 id |
+| D9 | 统一 session key：`islandos_active_project_id`。Page 08、05、06 使用相同选择机制。默认不选择；每次使用前重新验证；失效选择 fail closed；项目选择不代表持久化权限。 | `workspace_project_context` + `project_context_selector`；P3 实现 |
 
-另有 05 的 `operator_decision_record.recommendation_id = dashboard-<history12>-<policy>`，是人工复核引用，不是运行身份。
-
-### 2.2 页面 05
-
-- `build_run_request(page="customer_dashboard")` 只产出 `request_sha256`，没有 run_id / input_group_id。
-- `build_input_fingerprint(page="decision_dashboard", history_sha256, site_digest, units, hour_count, currency, page_settings)`；`fingerprint_sha256` 含 history、site digest、units、hour_count、currency；`page_settings` 单独摘要，仅存 `st.session_state`。
-- 结果摘要 `run_id="None"`；优化运行与其投资屏引用的运行被明确区分。
-- 年度投资绑定：`deterministic_run_id("run-dashboard", {dataset_sha256, site_configuration_sha256, history_sha256, recommended_policy, weights, project_life_years, currency})`，manifest `project_id="streamlit-customer-decision-dashboard"`。
-
-### 2.3 页面 06
-
-- `deterministic_run_id("run", {dataset_sha256, site_configuration_sha256, window_end_utc, currency, optimizer_settings, availability})`。
-- 上传 CSV 的 `dataset_sha256` 是文件字节 hash，合成数据是 canonical history hash。
-- manifest `project_id="streamlit-joint-resource-workspace"`；结果摘要带 run_id / manifest / evidence。
-- 复算入口 `transport /run` 用 `deterministic_run_id("run", {"request": request})`，与页面路径不同，同一输入两个 id。
-
-### 2.4 页面 09
-
-- 请求有 `request_sha256`；`build_device_flexibility_summary.run_id` 硬编码 `None`；无 manifest、无数据身份。
-
-### 2.5 PR #359（已核对 diff，未合并）
-
-- `run_records`：PK `(project_id, run_id)`，`run_id TEXT NOT NULL` 任意字符串，`input_fingerprint_sha256` / `history_sha256` / canonical manifest 可空，`request_sha256` 必填，`retention_mode` 二选一。
-- 不可变触发器 `run_records_no_update` / `no_delete`；同 `(project_id, run_id)` 第二次写入直接抛 `run record already exists for this project; records are immutable`。
-- 测试允许同一 canonical run 存在两个项目；无 `input_group_id`、无状态、无 attempt。
-- `SCHEMA_VERSION = "1.1"`，已有 1.0→1.1 迁移；`record_run_record` 是唯一写入口。
-
-## 3. 差距清单
-
-| 编号 | 差距 | 证据 | 影响 |
-| --- | --- | --- | --- |
-| G1 | 无跨页面、可持久化输入组 | 05/06 只有会话内指纹；09 无 | 历史无法按同一份数据聚合 |
-| G2 | 指纹混入站点配置 | `build_input_fingerprint` 含 `site_digest`；05 默认柴油 0 kW、06 默认 30 kW | 同 CSV 默认参数下指纹不匹配（实测站点 digest `6d5c96f9…` vs `2bae8a40…`，指纹 `95132eb1…` vs `0fa314c7…`） |
-| G3 | 上传身份是文件字节 | `history_sha256 = source_sha256`；provenance 含文件名 | 同数据重新编码即新身份 |
-| G4 | 05 主运行、09 无 run_id | 结果摘要 `run_id=None` | 无对象可引用/落库 |
-| G5 | run_id payload 不统一 | 06 页面 vs `transport /run`；05 年度绑定另起一套 | 同一运行多入口多个 id |
-| G6 | #359 无幂等/失败语义 | 不可变 + 重复即拒 | 重跑、失败重试无法落库 |
-| G7 | `project_id` 两套含义 | canonical 硬编码 `streamlit-*`；项目库是真实 id | 记录无法归入客户项目 |
-| G8 | 无历史查询接口 | 只有 `get/list_run_records` 级函数 | 页面无法展示相关历史 |
-| G9 | 页面标识三套命名 | 契约 `customer_dashboard`；指纹 `decision_dashboard`；UI 05/06/09 | 请求、指纹、记录无法按同一键关联 |
-
-## 4. Proposed Decision
+## 3. PD-1 至 PD-6
 
 ### PD-1 `input_group_id`：只认数据
 
-**规则（已确认方向）**：
+**规则**：
 
-- 只含：canonical history、units、hour_count。
-- 不含：站点、页面、文件名、币种、运行参数、执行时间、项目。
-- 计算沿用 `canonical_history_sha256`（时间戳 + 四信号，六位小数量化）；units 摘要只覆盖四个 canonical 信号单位；`hour_count` 显式入摘要。
+- canonical 四信号固定为 `pv_power_kw`、`wind_power_kw`、`load_kw`、`tariff_per_kwh`。
+- Page 05 展示名映射：`pv_power`、`wind_power`、`essential_load`、`electricity_price`；Page 06 使用 canonical 名。适配层只改名，不推断语义。
+- `tariff_per_kwh` 单位规范为 `currency/kWh`；`USD/kWh`、`CNY/kWh`、`GBP/kWh` 等归一到同一 token。币种值只进 `run_settings`。
+- 组只含 canonical history、units、`hour_count`；不含站点、页面、文件名、币种、投资参数、执行时间或项目。
+- 时间戳统一转 UTC 后排序；重复时间戳拒绝；输入行顺序不影响组；空值和缺失行不填充。
+- 数值沿用 `canonical_history_sha256` 的六位小数量化；单位变化改变组；历史值或行数变化改变组。
 
 ```
-H = canonical_history_sha256(timestamps, pv_power_kw, wind_power_kw, load_kw, tariff_per_kwh)
-units_sha256 = sha256(canonical_json({pv_power_kw, wind_power_kw, load_kw, tariff_per_kwh 的单位}))
+H = canonical_history_sha256(utc(timestamps), pv, wind, load, tariff)
+units_sha256 = sha256(canonical_json({四个 canonical 名: 归一单位}))
 input_group_sha256 = sha256(canonical_json({
   "schema": "islandos-input-group-v1",
   "history_sha256": H,
@@ -89,224 +59,142 @@ input_group_sha256 = sha256(canonical_json({
 input_group_id = "ig-" + input_group_sha256[:16]
 ```
 
-- 同一数据重新编码/换文件名 → 同组；单位变化 → 不同组；增删行或改数值 → 不同组。
-- 无数据运行 → `null`。
+**固定向量**（实际 P1a 实现重算，见 `docs/fixtures/j01_run_identity_vectors.json`）：
 
-**兼容性影响**：新增字段；旧运行没有该字段，一律视为 `null`，不回填、不推断。
-
-### PD-2 `run_id`：页面内的可复现运行定义
-
-**规则（已确认方向）**：
-
-- 必含：页面标识、`input_group_sha256`（可空）、站点 digest、页面设置、运行设置、模型/优化器版本、page_inputs 摘要。
-- 不含：执行时刻、操作者、项目、文件名、尝试次数、结果。
-- 格式：`run-<05|06|09>-<sha256(canonical json)[:16]>`；页面进摘要，05/06 永不撞 id。
-
-```
-run-identity-sha256 = sha256(canonical_json({
-  "schema": "islandos-run-identity-v1",
-  "page": page,                     # 契约名，不是深链名
-  "input_group_sha256": ...,       # 无组为 null
-  "site_configuration_sha256": ...,
-  "page_settings": {...},
-  "page_inputs_sha256": ...,
-  "run_settings": {...},
-  "model_ids": {...},
-  "optimizer": {"id": ..., "version": ...}
-}))
-run_id = "run-" + page_slug + "-" + run-identity-sha256[:16]
-```
-
-**兼容性影响**：新 id 与旧 `run-<16>` / `run-dashboard-<16>` 不冲突（旧格式无页面段）；旧记录不改写，见 PD-6。
-
-### PD-3 幂等写入
-
-**规则（已确认方向）**：
-
-- 幂等键：`(project_id, run_id)`。
-- 完全相同的重复提交（同 page、同 `request_sha256`、同 `input_group_id`、同 `result_sha256`）：返回已有记录，`idempotent_replay=true`，**不新增记录、不改时间、不改 actor**。
-- 同 `run_id` 但 `page` / `request_sha256` / `input_group_id` 任一不同：明确报错 `run_id_conflict`。
-- 同请求但结果不同：报错 `run_result_conflict`（提示非确定性或代码版本变化），不得静默返回旧结果。
-- 首次保存与重复保存都不得覆盖；不可变触发器保留。
-
-**兼容性影响**：行为从“一律拒绝”变为“200 命中 + 409 冲突”；旧记录不受影响。状态码与错误体待 #359 作者确认。
-
-### PD-4 失败只进审计
-
-**规则（已确认方向）**：
-
-- 失败运行不写 `run_records`（该表无状态且不可变）。
-- 只追加 `audit_events`，事件类型 `run_failed`；payload 含 `run_id`、`page`、`request_sha256`、`input_group_id`（可空）、`error_code`（受控枚举）、`attempt_no`、`occurred_at`；不含请求正文、不含敏感数据。
-- 失败后重试沿用同一 `run_id`；成功时再写成功记录。
-- 重复失败允许多条审计（attempt 递增），不产生成功记录。
-
-**兼容性影响**：无需改表；审计链只追加，不改变已有事件哈希。
-
-### PD-5 05 年度投资绑定：先分类参数
-
-**运行定义参数（变化 → 新 `run_id`）**：
-
-| 类别 | 参数 |
+| 项目 | 值 |
 | --- | --- |
-| 页面 | `page` |
-| 数据 | canonical history、units、hour_count（经 `input_group_sha256`） |
-| 站点 | PV/风电装机、并网限值、电池容量/功率/SOC 边界、柴油额定功率与变动成本 |
-| 页面设置 | 05 的 `demand_scale`、`tariff_scale`、`cost_priority`；09 的任务与预算 |
-| 运行设置 | `currency`、可用性、优化器 population/generations/seed |
-| 模型 | forecast model ids、优化器 id/version、forecast settings |
+| history | `db13539cb15d68101bfdb28ad106c6fc2f36e249200f62c07056c7ebe0884d70` |
+| units（`currency/kWh`） | `f9649c8dc9775e90525e1e7d2f97916619144fea84b40b42dd7e7467f3b7cc04` |
+| input group | `ig-3a993a72953b9348` |
+| 组 sha256 | `3a993a72953b9348e62f72919a129d4dcfc1cddd6fd68ed9c4a03ef401b49761` |
+| 改 `load_kw` 为 `MW` | `ig-180f52a578a52b95` |
 
-**非运行定义参数（变化 → 同一 `run_id`，只换投资绑定摘要）**：
+旧的 `ig-ca9c886e6fb1343c` 依赖 `USD/kWh` 进入单位摘要，已被 D4 取代；不能继续作为固定向量。
 
-`baseline_annual_energy_cost`、`proposed_annual_energy_cost`、`annual_incremental_om_cost`、`upfront_capex`、`project_life_years`、`discount_rate`、两种 escalation、`replacement_year`、`replacement_cost`、`residual_value`。
+### PD-2 `run_id`：页面内的可复现技术运行定义
 
 **规则**：
 
-- 技术运行输出 `run_id`；投资屏输出 `investment_assumptions_sha256`；两者合成 `binding_sha256`。
-- 只改投资参数不生成新运行，也不重跑优化；绑定摘要变化即可追溯。
-- 技术参数变化：新 `run_id` + 新绑定。
-- 现有 `run-dashboard-*` 是把 `project_life_years`、weights 混入运行 id 的旧口径，保留为 legacy，不重算。
+- 必含：page、canonical input group（可空）、site/configuration digest、forecast settings、page settings/inputs、run settings、model selection policy ID/version、model catalogue/registry version、optimizer ID/version、影响技术结果的算法组件版本、identity schema version。
+- **不要求**实际 selected model IDs 进入 `run_id`；selected model IDs、预测指标、执行结果写入 run evidence。
+- 不含：执行时刻、操作者、项目、文件名、尝试次数、结果。
+- 格式：`run-<05|06|09>-<sha256(canonical json)[:16]>`；页面进入摘要。
+- 旧 `run-<16>` 与 `run-dashboard-<16>` 只读兼容，不重算。
 
-**兼容性影响**：旧 JSON 导出中的 `run-dashboard-*` 仍有效；新导出同时带 `run_id`（技术运行）与 `binding_sha256`；不删除旧字段。
+D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再建 manifest”。这样 Page 06 不需要重排计算顺序，也不会把实际 selected IDs 作为身份前置条件。
 
-### PD-6 旧 run_id 迁移
+### PD-3 成功记录幂等
 
-**规则（已确认方向）**：
+- 幂等键：`(project_id, run_id)`。
+- 完全相同的重复提交：返回已有记录，标记 replay；不新增、不改时间、不改 actor。
+- 同 `run_id` 不同技术摘要/page/input group：`run_id_conflict`。
+- 同技术请求不同结果：`run_result_conflict`。
+- 首次保存和重复保存都不覆盖；不可变触发器保留。
+- HTTP 200/201 与响应体由 PR #359 作者确认；本文件不替作者批准。
 
-- 不重算、不改写、不删除任何历史 `run_id` 及其记录。
-- 用显式版本区分：新记录 `identity_schema_version=1`；旧记录缺失即视为 `0`（legacy）。
-- 新格式 `^run-(05|06|09)-[0-9a-f]{16}$`；旧格式 `^run-[0-9a-f]{16}$`、`^run-dashboard-[0-9a-f]{16}$` 继续可查。
-- 只有当旧 id 可由公开公式确定性重算时，才可在新记录 metadata 写 `legacy_run_id` 做提示映射；不保证一一对应，不做批量 backfill。
-- 05 年度绑定旧 manifest 原样保留；新绑定引用技术 run_id，并保留 `legacy_run_id`（若可证明）。
+### PD-4 失败只进审计
 
-**兼容性影响**：读路径同时接受新旧 id；写路径只产生新 id；历史列表按 `project_id + input_group_id` 聚合时，legacy 记录以 `input_group_id=null` 单独展示，不伪造分组。
+- 失败不写 `run_records`，只追加 `audit_events`，事件类型 `run_failed`。
+- payload 至少含：`run_id`、`page`、`run_request_sha256`、`input_group_id`（可空）、受控 `error_code`、`attempt_no`、`occurred_at`。
+- 不含请求正文、原始历史或敏感数据；失败重试沿用同一 `run_id`。
+- 失败审计是否需要真实项目/同意，仍待 #359 作者和负责人确认。
 
-## 5. 生成与传递规则
+### PD-5 投资分析：独立 append-only binding
 
-1. 生成位置：核心层纯函数（建议 `islandos_core/run_identity.py`，由 B-01 落地）；页面不得自行拼 hash。
-2. 顺序：先 `derive_input_group_id`，再 `derive_run_id`。
-3. 请求契约新增 `run_identity` 块；`request_sha256` 仍按现有字段计算，**不含** `run_identity`，避免循环依赖。
-4. 结果摘要新增 `run_id`（05 不再为 null）、`input_group_id`、`input_group_bound`、`identity_schema_version`。
-5. canonical manifest 暂不改 v1 结构；`input_group_id` 存运行记录旁路，避免改变所有 manifest 摘要（待确认是否升 v2）。
-6. 持久化保存 `run_id`、`input_group_id`、`request_sha256`、canonical `history_sha256`、`result_sha256`、`page`、`project_id`；`project_id` 必须是真实项目库 id，未绑定项目时显式 `unregistered`。
+- 技术 run 由 D5 身份定义；投资参数只生成 `investment_assumptions_sha256`。
+- `binding_sha256` 由技术 run 与投资摘要合成；同一技术 run 可关联多个 binding。
+- 投资参数变化不重跑优化、不产生新技术 `run_id`。
+- 设计为独立 append-only 表，建议 PK 至少 `(project_id, run_id, binding_sha256)`；本轮不建表、不改 #359。
+- 旧 `run-dashboard-*` 是把投资参数混入 run id 的 legacy 口径，保留只读，不重算。
 
-### JSON 示例
+### PD-6 旧 id 兼容
 
-请求（05，节选）：
+- 不重算、不改写、不删除历史 `run_id` 与记录。
+- 新记录 `identity_schema_version=1`；旧记录缺失视为 `0`（legacy）。
+- 新格式 `^run-(05|06|09)-[0-9a-f]{16}$`；旧格式继续可查。
+- 旧记录没有 `input_group_id` 时保持 `null`，不补算、不伪造分组。
 
-```json
-{
-  "schema_version": 4,
-  "request_type": "islandos_run_request",
-  "page": "customer_dashboard",
-  "run_identity": {
-    "schema_version": 1,
-    "project_id": "proj-north-microgrid",
-    "run_id": "run-05-1925b948348f5516",
-    "input_group_id": "ig-ca9c886e6fb1343c",
-    "input_group_bound": true
-  },
-  "history": {"hour_count": 168, "provenance": "Customer-uploaded CSV", "source_sha256": "…"},
-  "request_sha256": "…"
-}
-```
+## 4. 当前代码与差距
 
-结果（05，节选）：
+| 事实 | 当前证据 | 影响 |
+| --- | --- | --- |
+| Page 05/06 不写 Workspace | 两页没有 `workspace_store`/`site_workspace` 写入口；身份仍是内存 manifest | 项目选择必须可选；持久化另设门禁 |
+| Page 05 使用短名 | `history` 使用 `pv_power`/`wind_power`/`essential_load`/`electricity_price` | P1a adapter 负责映射到四个物理名 |
+| Page 06 使用物理名 | `signal_history` 直接使用 `*_kw`/`*_per_kwh` | 与 05 共用同一组 |
+| Page 06 先 manifest 后 forecast | 现有 manifest 在 selected models 之前建立 | D5 用模型策略身份，不要求重排 |
+| Page 09 无身份 | summary `run_id=None`，无 manifest | D8 保持零持久化 |
+| #359 项目级不可变 | `run_records` PK `(project_id, run_id)`；重复即拒 | 需 A1-A8 扩展；本轮不改 |
+| #371 只读 lookup | `disabled`/`not_initialized`/`available`/`unavailable`；`resolve_selected_project` 返回 project 或 None | P3 需增加 registered/unregistered/invalid 状态与共享 key |
+| API 契约仍 v3 | `app_view_models.CONTRACT_VERSION = 3`，无 `run_identity` 块 | 身份接入页面/契约是后续步骤 |
 
-```json
-{
-  "record_type": "islandos_run_result_summary",
-  "page": "customer_dashboard",
-  "run_id": "run-05-1925b948348f5516",
-  "input_group_id": "ig-ca9c886e6fb1343c",
-  "input_group_bound": true,
-  "summary_sha256": "…"
-}
-```
+## 5. Page 05/06：选择、模拟、持久化分离
 
-运行记录（PR #359 扩展后，节选）：
+1. **默认不选择项目**。Page 05/06 启动时不自动选第一个项目。
+2. **没有项目仍可模拟**。计算、预测、优化和下载不依赖 Workspace；Workspace disabled 时照常运行。
+3. **选择不等于持久化权限**。`registered` 只说明项目存在；result-storage consent 与 full-request retention consent 另行检查。
+4. **只读刷新**。每次使用选择前重新 `load_workspace_projects`；项目删除/非法 id 返回 `invalid` 并 fail closed，清空选择。
+5. **不自动创建**。lookup 不初始化 DB、不建父目录、不建项目。
+6. **共享 key**。`islandos_active_project_id` 是唯一选择来源；Page 08 创建项目后可设置；05/06 只读取/显示。
 
-```json
-{
-  "project_id": "proj-north-microgrid",
-  "run_id": "run-05-1925b948348f5516",
-  "page": "customer_dashboard",
-  "input_group_id": "ig-ca9c886e6fb1343c",
-  "request_sha256": "…",
-  "result_sha256": "…",
-  "retention_mode": "metadata_only"
-}
-```
+## 6. hosted demo 与 local Workspace 隔离
 
-## 6. 页面 05 / 06 / 09 的用法
+- hosted demo 默认 `ISLANDOS_ENABLE_LOCAL_WORKSPACE` 未设置：P3 返回 `disabled`，不显示项目 selector，不读取本地 DB，不初始化 Workspace。
+- 只有明确 `=1` 的本地部署才读取 `ISLANDOS_WORKSPACE_DB`；数据库不存在返回 `not_initialized`，不得创建。
+- 本地 DB 读取失败返回 `unavailable`，不泄露绝对路径；不得把本地路径写入 hosted demo 日志或页面。
+- 项目元数据、原始历史文件和运行记录都不应进入公共 hosted demo；这是部署边界，不是 UI 偏好。
 
-- **05**：用解析后的历史算组；`run_id` 含 page=05、组、站点、05 页面设置、currency（不含投资参数）。投资屏用同一 `run_id` + `binding_sha256`；展示 `Run`、`Input group`、`Data source`、legacy 标识。
-- **06**：`dataset_sha256` 仍进 manifest，但 run 身份改用 `input_group_sha256`；站点、窗口、optimizer、availability、模型版本进入。复算入口必须同算法。
-- **09**：无历史 → `input_group_id=null`、`input_group_bound=false`；`run_id` 可生成（page=09、任务/预算、站点），待确认是否落库；不得伪造组 id。
+## 7. 三种同意必须独立
 
-## 7. 与 PR #359 的兼容性结论
+| 同意 | 作用 | 不得推导 |
+| --- | --- | --- |
+| 项目元数据存储同意 | Page 08 创建项目/配置时存本地元数据 | 不等于允许保存 run record |
+| result-storage consent | 允许把某次运行结果写入项目历史 | 不等于允许保存完整请求 |
+| full-request retention consent | 允许保留完整请求/历史正文 | 不等于默认开启；metadata-only 是默认 |
 
-**兼容**：PK `(project_id, run_id)`、任意字符串 run_id、同 canonical run 跨项目、可空 fingerprint。
+`ProjectBinding` 不携带任何 consent 字段，也不返回 `can_persist`/`can_write`；持久化层必须单独检查。任何一次同意都不能被另一次同意替代。
 
-**需补（最小改动，详见 `docs/J-01_PR359_IDEMPOTENCY_REVIEW.md`）**：
+## 8. Page 09 零持久化边界
 
-1. `input_group_id` 可空列 + `(project_id, input_group_id, created_at)` 索引。
-2. `record_run_record` 幂等分支：200 命中 / 409 冲突 / 不覆盖；并发用唯一键兜底。
-3. 失败审计函数，复用 `audit_events`，不加状态列、不加失败表。
-4. 保留不可变触发器、PK、retention 约束不变。
+- 保持 `run_id=None`。
+- 不创建 `input_group_id`；没有历史数据，不得伪造组。
+- 不写 `run_records`、不写 `run_manifests`、不写项目历史。
+- 不生成“ephemeral canonical identity”冒充可复现身份；只保留现有 `request_sha256` 与页面摘要。
+- 若未来要进入持久化，必须先单独确认 D8 和 identity contract，不能由 P1a/P3 顺带开启。
 
-以上均属 **仍待 PR #359 作者确认** 的数据库事项，本任务未修改 #359 分支。
+## 9. 接口与固定向量
 
-## 8. B-01 后端接口与字段（摘要）
+- 输入组纯函数已按 `docs/J-01_RUN_IDENTITY_INTERFACE.md` 落地：无 Streamlit、无环境变量、无数据库；只做校验、canonical JSON、SHA-256。
+- `derive_run_id` 仍为设计，本轮不实现；不得把设计签名当成已交付代码。
+- 固定向量只覆盖输入组，由实际实现重算；旧 `USD/kWh` 向量已作废。
+- 时间范围、`hour_count`、输入顺序、空值、数值序列化规则在接口文档与测试中固定。
 
-- `POST /api/v1/projects/{project_id}/runs`：新增 `input_group_id`，幂等 200 / 冲突 409。
-- `GET /api/v1/projects/{project_id}/runs?input_group_id=&page=&limit=`。
-- `GET /api/v1/projects/{project_id}/runs/{run_id}`。
-- `GET /api/v1/projects/{project_id}/input-groups/{input_group_id}`。
-- `POST /api/v1/projects/{project_id}/run-attempts`：失败审计，仅写 `run_failed`。
-- 所有响应增加 `identity_schema_version`、`input_group_id`、`input_group_bound`；不返回请求正文（除非 retention 授权）。
+## 10. PR #359 与 A1-A8
 
-完整字段与错误码见 `J-01_PR359_IDEMPOTENCY_REVIEW.md`。
+本轮不修改 PR #359 分支、不修改数据库。A1-A8 的字段、类型、nullable、索引、幂等、冲突分类、失败 payload、迁移、旧记录兼容与包导入导出建议，见：
 
-## 9. 仍待确认
+- `docs/J-01_PR359_A1_A8_CONTRACT.md`
+- `docs/J-01_PR359_IDEMPOTENCY_REVIEW.md`
 
-**待 PR #359 作者确认（数据库/API）**：
+原则：旧记录不回填虚构 identity，不重写旧 run_id，不复用旧 `run_manifests` 主键，不破坏 audit chain，不改变 consent 含义。
 
-1. 加列是在合并前直接改 CREATE TABLE，还是合并后发 `1.1→1.2` 迁移。
-2. 幂等命中返回 200 还是 201；冲突错误码命名与响应体结构。
-3. 同请求不同结果是否一律 409，还是允许 `result_mismatch` 标记后人工复核。
-4. `retention_mode` 冲突（首次 metadata_only，二次请求 full retention）如何处理；建议 409，不得升级或覆盖。
-5. 失败审计的 `error_code` 枚举与 payload schema；由 core 还是 API 层写。
-6. `legacy_run_id` 放 metadata 还是加列；是否需要按旧 id 查询的 API。
-7. `input_group_id` 的格式校验放在 core 还是 API。
+## 11. 当前实施状态
 
-**待产品/负责人确认**：
+| 工作 | 状态 |
+| --- | --- |
+| #362 J-01 文档 | 本文件与接口/向量已更新；#360 不再扩展 |
+| P1a 输入组 | 独立分支实现；14 项测试通过；未接页面 |
+| P3 ProjectBinding | 独立分支基于 #371；未接持久化；状态与共享 key 测试 |
+| #359 A1-A8 | 仅技术契约建议；未改分支/DB |
+| B-02 年度预测 | 继续暂缓；等待 B-01、正式 run identity、#359 契约、annualisation 规则 |
 
-1. `project_id` 绑定：canonical manifest 的 `streamlit-*` 是否改为真实项目 id；未登录是否允许 `unregistered` 落库。
-2. manifest 是否升 v2 收编 `input_group_id`（当前建议旁路保存）。
-3. 09 是否必须生成并保存 `run_id`，还是只保留 `request_sha256`。
-4. 旧 id 的 UI 呈现文案（legacy 标识、是否允许按旧 id 直接打开）。
+## 12. 兼容性与未决
 
-## 10. 实施顺序
+**兼容**：旧 run id 只读；旧记录 `input_group_id=null`；旧 `run_manifests` 不迁移；旧包继续可导入（待 A6 确认）。
 
-1. 负责人签署 PD-1..PD-6；#359 作者确认 §9 数据库事项。
-2. 核心层落 `derive_input_group_id` / `derive_run_id` 纯函数与固定向量测试（设计见 `J-01_RUN_IDENTITY_INTERFACE.md`）。
-3. B-01 落 `input_group_id` 列、幂等写入、失败审计；不碰页面。
-4. 05/06 先只读展示派生身份，验证与现有指纹/旧 id 的对照；09 保持 null。
-5. 最后再改 `run_identity` 进入请求/结果契约；任何一步都不得改写历史记录。
+**未决（不阻塞 P1a/P3）**：
 
-## 11. 每项决策的兼容性影响
-
-| 决策 | 现有数据 | 旧 API/导出 | 迁移动作 |
-| --- | --- | --- | --- |
-| PD-1 | 旧运行无组字段，保持 null | 响应新增字段，旧客户端可忽略 | 无回填 |
-| PD-2 | 旧 id 原样有效 | 新导出同时给新旧 id | 无重算 |
-| PD-3 | 旧记录只读 | 重复保存行为变为 200/409 | 无 schema 变更 |
-| PD-4 | 旧审计链不变 | 新增 `run_failed` 事件类型 | 无 schema 变更 |
-| PD-5 | 旧 `run-dashboard-*` 保留 | 新导出增加 `binding_sha256` | 旧字段不删 |
-| PD-6 | 历史记录可查 | 读路径兼容两种正则 | 可选 legacy 提示，无 backfill |
-
-## 12. 关联文档
-
-- `docs/J-01_PR359_IDEMPOTENCY_REVIEW.md`：只读兼容性审查与最小改动。
-- `docs/J-01_RUN_IDENTITY_INTERFACE.md`：纯函数签名、校验规则、固定向量。
-- `docs/fixtures/j01_run_identity_vectors.json`：机器可读测试向量。
+1. #359 状态码、错误体、字段名与迁移方式（A1-A8）。
+2. 失败审计是否需要真实项目与独立同意。
+3. `run_bindings` 的最终表结构与保留策略（P5）。
+4. `run_identity` 进入 v4 请求/结果契约的时点。
+5. Page 09 是否永不进入持久化，或另立 identity 规则。

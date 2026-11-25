@@ -1,7 +1,9 @@
 # PR #359 只读兼容性审查：幂等写入、input_group_id、失败审计
 
+> 后续状态：A1-A8 的最终字段、类型、迁移、包兼容建议以 `docs/J-01_PR359_A1_A8_CONTRACT.md` 为准。本文件保留审查过程；其中“identity_schema_version 先放 metadata”的早期建议已被新契约文档取代（推荐列方案，若作者选择 metadata 则作为备选）。
+
 - 审查对象：PR #359 `feat: persist immutable local run records`，head `94388ed`，分支 `feat/persistent-run-records-2026-11-25`。
-- 审查方式：只读 `git show` + 临时 detached worktree（`D:\code\islandOS-pr359-review`，已删除）运行 `tests/test_workspace_store.py`，结果 **22 passed**。
+- 审查方式：只读 `git show` + detached worktree 运行 `tests/test_workspace_store.py` 与 `tests/test_site_workspace.py`，本次复核 **28 passed**。
 - 边界：**未修改、未推送、未评论 #359 分支**；以下是最小改动建议，供 #359 作者与 B-01 决定。
 - 结论：现有表结构与 J-01 的两级身份**基本兼容**，但三处必须补：`input_group_id` 列/索引、幂等分支、失败审计。都不需要改主键、不可变触发器或 retention 约束。
 
@@ -42,7 +44,7 @@ CREATE INDEX IF NOT EXISTS run_records_page
 
 - 不加 `input_group_bound`：由 `input_group_id IS NOT NULL` 推导，避免双字段不一致。
 - 不加 `status` / `failure_reason`：失败不进成功表（PD-4）。
-- 不加 `identity_schema_version` 列：先放 `request_metadata`（见 §4.3）；若后续要索引再升列。
+- `identity_schema_version` 采用 A8 契约文档的列方案；metadata 只作为作者备选，不再作为本文件默认推荐。
 - 不改 PK、不改不可变触发器、不改 retention CHECK。
 
 ### 2.2 若 #359 先合并，再做 1.2 迁移

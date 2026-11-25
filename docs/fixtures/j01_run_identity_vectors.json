@@ -1,7 +1,7 @@
 {
-  "schema": "j01-run-identity-vectors-v1",
+  "schema": "j01-input-group-vectors-v1",
   "canonical_json": "json.dumps(value, sort_keys=true, separators=(',', ':'), ensure_ascii=false, allow_nan=false), UTF-8",
-  "note": "Site digests here are sha256 of literal fixture labels for readability; production passes SiteAssumptions.digest().",
+  "note": "P1a vectors, recomputed by the implementation in feat/j01-input-group-identity-2026-11-25. Site digests are intentionally absent because they are not part of an input group.",
   "history": {
     "timestamps_utc": [
       "2026-01-01T00:00:00+00:00",
@@ -14,112 +14,76 @@
       "load_kw": [10.0, 12.5, 11.0],
       "tariff_per_kwh": [0.20, 0.25, 0.30]
     },
-    "units": {
-      "pv_power_kw": "kW",
-      "wind_power_kw": "kW",
-      "load_kw": "kW",
-      "tariff_per_kwh": "USD/kWh"
-    },
     "hour_count": 3
   },
   "expected": {
     "history_sha256": "db13539cb15d68101bfdb28ad106c6fc2f36e249200f62c07056c7ebe0884d70",
-    "units_sha256": "a03cc9eb750e632ea9fa3f3b942abc0c0c2672f6a833bca6fdf18fe3fda21d23",
-    "input_group_sha256": "ca9c886e6fb1343ccc6fe4dcdca7ab7aa51c4a64986586c7c7a594449e779a7e",
-    "input_group_id": "ig-ca9c886e6fb1343c"
-  },
-  "site_configuration_sha256": {
-    "05": "2eb26336383cd110d964c1297654d4b61a011c125fa2a02e4e2d85e025ea4ab2",
-    "06": "4063d8d5acb192b871a7e11dbc406f8c68c9e2618906c16add2ac1e5ba328f6b",
-    "09": "b03741acda0e2449992cece6168d52021cdf5b264bafb0e243e8cbf737809539"
+    "units_sha256": "f9649c8dc9775e90525e1e7d2f97916619144fea84b40b42dd7e7467f3b7cc04",
+    "input_group_sha256": "3a993a72953b9348e62f72919a129d4dcfc1cddd6fd68ed9c4a03ef401b49761",
+    "input_group_id": "ig-3a993a72953b9348"
   },
   "cases": [
     {
-      "name": "run05_base",
-      "kind": "run",
-      "page": "customer_dashboard",
-      "input_group": "base",
-      "page_settings": {"demand_scale": 1.0, "tariff_scale": 1.0, "cost_priority": 0.7},
-      "page_inputs": {},
-      "run_settings": {"currency": "USD"},
-      "model_ids": {},
-      "optimizer": {"id": "customer_dashboard_policy_comparison", "version": "1"},
-      "expected_run_id": "run-05-1925b948348f5516",
-      "expected_run_identity_sha256": "1925b948348f55163d1d3f64aec37981401898b5c8de6f24e46e438a141da614"
-    },
-    {
-      "name": "run05_demand_scale_1_2",
-      "kind": "run",
-      "page": "customer_dashboard",
-      "input_group": "base",
-      "page_settings": {"demand_scale": 1.2, "tariff_scale": 1.0, "cost_priority": 0.7},
-      "page_inputs": {},
-      "run_settings": {"currency": "USD"},
-      "model_ids": {},
-      "optimizer": {"id": "customer_dashboard_policy_comparison", "version": "1"},
-      "expected_run_id": "run-05-00f3a05c937534c9",
-      "expected_run_identity_sha256": "00f3a05c937534c9f299d87b3fbccab6a59f1020801b16a79e5eaa825df89053",
-      "assertion": "same input_group_id as run05_base, different run_id"
-    },
-    {
-      "name": "run06_base",
-      "kind": "run",
-      "page": "joint_resource_optimizer",
-      "input_group": "base",
-      "page_settings": {},
-      "page_inputs": {},
-      "run_settings": {
-        "currency": "USD",
-        "optimizer_settings": {"population_size": 12, "generations": 5, "seed": 20261113},
-        "availability": {"grid_all_hours": true, "diesel_all_hours": true}
+      "name": "usd_base",
+      "units": {
+        "pv_power_kw": "kW",
+        "wind_power_kw": "kW",
+        "load_kw": "kW",
+        "tariff_per_kwh": "USD/kWh"
       },
-      "model_ids": {
-        "pv_power_kw": "persistence",
-        "wind_power_kw": "persistence",
-        "load_kw": "persistence",
-        "tariff_per_kwh": "persistence"
-      },
-      "optimizer": {"id": "prediction_resource_dispatch", "version": "1"},
-      "expected_run_id": "run-06-172bcc278c85563f",
-      "expected_run_identity_sha256": "172bcc278c85563f183dea38217d26c79d01b32f8ce8bd0edadaedd9cea5be81"
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "USD/kWh is normalized to currency/kWh"
     },
     {
-      "name": "run09_null_group",
-      "kind": "run",
-      "page": "device_flexibility_planner",
-      "input_group": null,
-      "page_settings": {},
-      "page_inputs": {
-        "task_power_budget_kw": 40.0,
-        "tasks": [
-          {
-            "task_id": "laundry",
-            "load_class": "flexible",
-            "rated_power_kw": 2.0,
-            "energy_kwh": 1.4,
-            "window": ["2026-01-01T00:00:00Z", "2026-01-01T03:00:00Z"],
-            "critical": false
-          }
-        ]
+      "name": "cny_same_physical_history",
+      "units": {
+        "pv_power_kw": "kW",
+        "wind_power_kw": "kW",
+        "load_kw": "kW",
+        "tariff_per_kwh": "CNY/kWh"
       },
-      "page_inputs_sha256": "9d05fa7fb6f87b10e9fadf0879d719a2c59c4c4da84966ea1c02d0a95e2caf6d",
-      "run_settings": {"currency": "USD"},
-      "model_ids": {},
-      "optimizer": {"id": "device_flexibility_planner", "version": "1"},
-      "expected_run_id": "run-09-c0eedc90612f9299",
-      "expected_run_identity_sha256": "c0eedc90612f9299d1207bdce7cf995139f394cf46731445c0e04b20e4739e8b",
-      "assertion": "no input group; run id still derives from page, site, page inputs, settings"
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "currency code belongs to run settings, not input group identity"
     },
     {
-      "name": "group_units_load_mw",
-      "kind": "input_group",
-      "units": {"pv_power_kw": "kW", "wind_power_kw": "kW", "load_kw": "MW", "tariff_per_kwh": "USD/kWh"},
-      "expected_units_sha256": "44081d3c176517c57c76d28879a36a08a5113598d3144e3150a6c354fb033f8d",
-      "expected_input_group_sha256": "25a1c78d3cac8d4ed069328fc3b274cdeb003511f6c2847936c6157dc4096cad",
-      "expected_input_group_id": "ig-25a1c78d3cac8d4e",
-      "expected_run05_id": "run-05-1aa503b84f32bd9a",
-      "expected_run05_identity_sha256": "1aa503b84f32bd9a3611782dc999b512caba074c8e8f2dc5ed94a940b8cd3a0d",
-      "assertion": "unit change creates a new group and a new run id"
+      "name": "page05_aliases",
+      "signals": {
+        "pv_power": [0.0, 1.5, 4.25],
+        "wind_power": [2.0, 2.5, 3.0],
+        "essential_load": [10.0, 12.5, 11.0],
+        "electricity_price": [0.20, 0.25, 0.30]
+      },
+      "units": {
+        "pv_power": "kW",
+        "wind_power": "kW",
+        "essential_load": "kW",
+        "electricity_price": "USD/kWh"
+      },
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "Page 05 display names map to the same physical signals as Page 06"
+    },
+    {
+      "name": "load_unit_mw",
+      "units": {
+        "pv_power_kw": "kW",
+        "wind_power_kw": "kW",
+        "load_kw": "MW",
+        "tariff_per_kwh": "USD/kWh"
+      },
+      "expected_units_sha256": "0e5bc21808cc40054909e5feb8a1605fe9e1ecf09b10d35018be71748db56e03",
+      "expected_input_group_sha256": "180f52a578a52b954025f9d31a7fcd26cf25db243dba5461bfde006558d7334a",
+      "expected_input_group_id": "ig-180f52a578a52b95",
+      "assertion": "physical unit change creates a new input group"
+    },
+    {
+      "name": "row_order_reversed",
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "timestamps and signals reversed together keep the same sorted history"
+    },
+    {
+      "name": "equivalent_timezone_offset",
+      "expected_input_group_id": "ig-3a993a72953b9348",
+      "assertion": "2026-01-01T01:00+01:00 is the same UTC instant as 2026-01-01T00:00Z"
     }
   ]
 }
