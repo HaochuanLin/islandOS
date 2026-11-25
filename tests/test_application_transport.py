@@ -418,6 +418,14 @@ def test_the_same_joint_request_replays_to_the_same_run():
         {**request, "run_settings": {**request["run_settings"], "currency": "EUR"}}
     )["result"]["run_id"]
 
+def test_page_06_uses_the_same_manifest_builder_as_replay():
+    source = (REPO_ROOT / "pages" / "06_Forecast_Led_Joint_Resource_Optimizer.py").read_text(
+        encoding="utf-8"
+    )
+    assert "build_joint_optimizer_manifest" in source
+    assert "run_manifest = build_joint_optimizer_manifest(run_request_view)" in source
+
+
 def test_the_transport_serves_the_built_viewer_and_nothing_else(tmp_path, monkeypatch):
     import islandos_core.transport as transport_module
 
