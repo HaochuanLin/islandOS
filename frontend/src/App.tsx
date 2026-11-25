@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "./api";
 import MemberManagement from "./MemberManagement";
+import { canCreateSite } from "./roles";
 import "./workflow.css";
 import type { Notification, Session, Site, Telemetry } from "./api";
 
@@ -120,6 +121,8 @@ function App() {
     <p className="login-foot">IslandOS is a decision-support interface. It does not issue equipment commands.</p>
   </main>;
 
+  const canAddSite = canCreateSite(session.role);
+
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="side-brand"><div className="brand-mark">I</div><div><strong>IslandOS</strong><span>OPERATIONS CONSOLE</span></div></div>
@@ -128,13 +131,13 @@ function App() {
       <div className="side-label site-label">SITES <span>{sites.length}</span></div>
       <div className="site-list">
         {sites.map((site) => <button key={site.id} className={site.id === siteId ? "site-choice active" : "site-choice"} onClick={() => selectSite(site.id)}><span className="site-dot" />{site.name}</button>)}
-        {!sites.length && <p className="empty-small">No sites yet. Add your first site below.</p>}
+        {!sites.length && <p className="empty-small">{canAddSite ? "No sites yet. Add your first site below." : "No sites yet. An owner or analyst adds them."}</p>}
       </div>
-      <form className="add-site" onSubmit={handleCreateSite}>
+      {canAddSite ? <form className="add-site" onSubmit={handleCreateSite}>
         <label>New site<input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="e.g. North microgrid" required maxLength={120} /></label>
         <label>Timezone<input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="UTC or Asia/Tokyo" required maxLength={80} /></label>
         <button className="outline full" disabled={busy || !siteName.trim()}>+ Add site</button>
-      </form>
+      </form> : <p className="empty-small">Viewer role: site creation is restricted to owners and analysts.</p>}
       <div className="sidebar-bottom"><div className="user-line"><div className="avatar">{session.role.slice(0,1).toUpperCase()}</div><div><strong>{session.role}</strong><small>{session.role} access</small></div></div><button className="logout" onClick={handleLogout} disabled={busy}>Sign out ↗</button></div>
     </aside>
 

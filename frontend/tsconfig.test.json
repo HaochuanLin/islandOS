@@ -11,5 +11,5 @@
     "outDir": "dist-tests",
     "rootDir": "src"
   },
-  "include": ["src/applicationViewsPayload.ts", "src/api.ts"]
+  "include": ["src/applicationViewsPayload.ts", "src/api.ts", "src/roles.ts"]
 }
