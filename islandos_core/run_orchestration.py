@@ -173,7 +173,10 @@ def build_joint_optimizer_manifest(request: Mapping[str, Any]) -> CanonicalRunMa
     timestamps = _timestamps_from_request(request)
     if not timestamps:
         raise ValueError("joint optimizer request must contain a non-empty history window")
-    window_end_utc = timestamps[-1].astimezone(timezone.utc).isoformat()
+    window_end = timestamps[-1]
+    if window_end.tzinfo is None or window_end.utcoffset() is None:
+        raise ValueError("joint optimizer history timestamps must be timezone-aware")
+    window_end_utc = window_end.astimezone(timezone.utc).isoformat()
 
     run_settings = request["run_settings"]
     raw_optimizer_settings = run_settings["optimizer_settings"]
