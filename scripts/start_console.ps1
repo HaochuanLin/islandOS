@@ -138,9 +138,11 @@ if (-not $healthy) {
     throw "The reference API did not answer $healthUrl. stderr tail:`n$tail"
 }
 
+$env:ISLANDOS_API_TARGET = "http://127.0.0.1:$ApiPort"
 $consoleProcess = Start-Process -FilePath $npm.Source -ArgumentList "run", "dev", "--", "--port", "$ConsolePort" `
     -WorkingDirectory (Join-Path $repoRoot "frontend") `
     -RedirectStandardOutput $webOut -RedirectStandardError $webErr -WindowStyle Hidden -PassThru
+Remove-Item Env:ISLANDOS_API_TARGET -ErrorAction SilentlyContinue
 
 $record = [ordered]@{
     started_at = (Get-Date).ToString("o")

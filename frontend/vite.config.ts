@@ -1,6 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// The proxy target follows the API port chosen at start-up; 8766 stays the default.
+// scripts/start_console.ps1 sets this variable when -ApiPort is not 8766.
+const apiTarget = process.env.ISLANDOS_API_TARGET ?? "http://127.0.0.1:8766";
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,7 +13,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8766",
+        target: apiTarget,
         changeOrigin: false
       }
     }
