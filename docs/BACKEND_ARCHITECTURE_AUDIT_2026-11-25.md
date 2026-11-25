@@ -83,7 +83,53 @@ The merged `#348` change adds `build_input_fingerprint` and `compare_input_finge
 **B2 design consequence:** persist full request/result evidence only inside an explicitly enabled local workspace after project/actor context and consent are present. Keep the hosted public demo stateless. Treat a missing project, actor or consent as “not persisted”, not as permission to create a hidden project or retain customer data.
 
 
-## 5. Replay and annual evidence
+## 5. Proposed B2 run-record contract
+
+This is an implementation proposal, not an existing capability. It deliberately keeps the current `run_manifests` table for its existing metadata-manifest purpose rather than overloading it with canonical execution payloads.
+
+### Record shape
+
+| Field | Purpose |
+|---|---|
+| `project_id` + `run_id` | Composite identity; the same deterministic run ID may occur in two different local projects |
+| `page` + `record_schema_version` | Identify the workflow and the immutable record format |
+| `request_sha256` | Preserve the original validated request identity |
+| `request_metadata_json` | Site/settings, signal names/units, time range, row count, provenance and source hashes, with history arrays omitted |
+| `request_payload_json` (nullable) | Exact full request only when the user explicitly opts into retaining replay inputs |
+| `request_payload_sha256` (nullable) | Verify the retained exact request |
+| `result_json` + `result_sha256` | Persist the result needed to reopen and inspect the completed run |
+| `canonical_manifest_json` + `manifest_sha256` (nullable) | Preserve the actual canonical manifest where the page produced one |
+| `history_sha256` + `input_fingerprint_sha256` | Link the run to the data and shared-input comparison without merging separate page runs |
+| `input_retention_mode` | Explicitly distinguish `metadata_only`, `retained_source_file` and `retained_full_request` |
+| `actor_id` + `created_at` | Local audit context |
+
+A record without retained inputs is **viewable but not replayable**. A record with a retained source file may be re-importable, but exact replay still depends on parser/version compatibility. A record with the exact validated request retained is replayable against a compatible software/model version. The UI and API must not blur these states.
+
+### Storage operations and safeguards
+
+1. Add a versioned `run_records` table with composite primary key `(project_id, run_id)`; keep it separate from the existing UUID-keyed `run_manifests`.
+2. Require an existing project, a local actor and explicit consent to save the run result. Require a separate explicit opt-in before writing full request/history arrays.
+3. Store only completed immutable records initially. Record failures as audit events rather than updating an immutable row through mutable status transitions.
+4. Add `record_run_record`, `get_run_record`, `list_run_records` and integrity verification. Recompute stored result/request-payload hashes on read.
+5. Add no-update/no-delete triggers and append a `run_record_created` audit event in the same transaction.
+6. Add a real `1.0 → 1.1` migration and tests before changing the schema version. Preserve existing projects, imports, manifests and audit-chain hashes.
+7. Extend project package export/import to include records and source-run provenance; extend backup/restore tests to cover the new table.
+8. Do not connect the public hosted Streamlit demo to this local store. Persistence is available only when the local workspace is enabled and the user has consented.
+
+### B2 acceptance tests
+
+- A new workspace is created at the new schema version; an existing 1.0 workspace migrates without losing data or breaking its audit chain.
+- A future/unsupported schema version fails closed without partial migration.
+- Saving a result without project/actor/consent fails.
+- Metadata-only persistence stores no full history arrays and reports the run as view-only.
+- Full-request retention is impossible without the separate opt-in; when enabled, the exact request hash is verified after close/reopen.
+- Result and manifest hashes are checked on read; update/delete triggers reject mutation.
+- Two projects can store the same deterministic `run_id` without collision.
+- Export/import and backup/restore preserve record integrity and clearly identify imported source-project/run provenance.
+
+---
+
+## 6. Replay and annual evidence
 
 `replay_run_request` currently returns an `annual` field of `None` for 05, 06 and 09. This is an explicit transport boundary, not evidence that annual calculation is missing.
 
@@ -93,7 +139,7 @@ The v3 request contract does not carry that annualisation assumption. Therefore 
 
 Page 05's investment screen is a different economic object: it uses customer-entered annual bills/CAPEX/O&M and a service-equivalence gate. Some replacement/residual inputs remain outside the current v3 request contract. These values must not be merged with Page 06's equal-day operating projection.
 
-## 6. Data and module hand-off
+## 7. Data and module hand-off
 
 - `session_dataset.py` shares the same uploaded file between 05 and 06 only within one Streamlit session.
 - `forecast_contract.py` validates aligned forecast timestamps, units, model IDs and the input-history digest.
@@ -102,7 +148,7 @@ Page 05's investment screen is a different economic object: it uses customer-ent
 - The physical dispatch engine is reused, but 05/06 embed simulation within optimisation and 09 uses its own schedule/replay chain. `simulation_adapter.py` maps simulation rows to screening signals; it is not a shared simulation-result contract.
 - Source classification is not fully aligned: `data_quality.py` accepts `public`, `dataset_provenance.py` accepts `public_reanalysis` and `modeled`, and `workspace_store.py` has its own allowed source-type set. Before broadening imports, define a canonical taxonomy and explicit mappings; do not silently rename provenance.
 
-## 7. API and frontend boundary
+## 8. API and frontend boundary
 
 There are two separate local services and they should remain separate until a deliberate architecture decision says otherwise:
 
@@ -111,7 +157,7 @@ There are two separate local services and they should remain separate until a de
 
 The next backend step is not to merge these servers. First define which service owns planning-run persistence and how a local user/project/site maps to a planning request. No public endpoint, production authentication or device-control capability should be claimed.
 
-## 8. Tests and current repository state
+## 9. Tests and current repository state
 
 Relevant test coverage already exists:
 
@@ -130,7 +176,7 @@ At the audited `main` SHA `17d0ec7757600ac22250bcdc6146a48793d0c0b8`, the latest
 
 Open frontend PRs were checked for overlap: #350 (page 05), #349 (workspace microgrid), #347 (page 06), #346 (React console) and #345 (page 09). Their changed-file lists do not overlap the backend core files proposed for the first persistence implementation. They currently target the previous `7fb7ff7` base, so their merge/rebase state must be checked again before any integration.
 
-## 9. Prioritised backend work
+## 10. Prioritised backend work
 
 | Priority | Work | First concrete deliverable | Depends on |
 |---|---|---|---|
@@ -141,7 +187,7 @@ Open frontend PRs were checked for overlap: #350 (page 05), #349 (workspace micr
 | B5 | Dataset identity and provenance | Canonical source taxonomy, mapping rules, dataset ID/history digest and quality report references. | Data-import path audit |
 | B6 | React/service integration | Document and test local API ownership, user/project/site mapping and error/session contracts without merging the two services prematurely. | B1/B2 and deployment boundary |
 
-## 10. Recommended first implementation
+## 11. Recommended first implementation
 
 Start with **B1 + the minimum B2 storage design**, not a new API server:
 
