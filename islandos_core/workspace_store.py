@@ -201,6 +201,7 @@ def initialize_workspace(
                 actor_id TEXT NOT NULL,
                 request_sha256 TEXT NOT NULL,
                 request_metadata_json TEXT NOT NULL,
+                request_metadata_sha256 TEXT NOT NULL,
                 request_payload_json TEXT,
                 request_payload_sha256 TEXT,
                 result_json TEXT NOT NULL,
@@ -574,13 +575,13 @@ def record_run_record(
         connection.execute(
             """INSERT INTO run_records
             (project_id, run_id, page, record_schema_version, created_at, actor_id,
-             request_sha256, request_metadata_json, request_payload_json, request_payload_sha256,
+             request_sha256, request_metadata_json, request_metadata_sha256, request_payload_json, request_payload_sha256,
              result_json, result_sha256, canonical_manifest_json, canonical_manifest_sha256,
              history_sha256, input_fingerprint_sha256, retention_mode)
-            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 project_id, run_id, page, timestamp, actor_id.strip(), request_sha256,
-                metadata_json, payload_json, payload_hash, result_json, result_hash,
+                metadata_json, _hash(metadata_json), payload_json, payload_hash, result_json, result_hash,
                 manifest_json, manifest_hash, history_sha256, input_fingerprint_sha256,
                 retention_mode,
             ),
@@ -622,7 +623,7 @@ def get_run_record(db_path: str | Path, *, project_id: str, run_id: str) -> dict
     if row is None:
         raise WorkspaceStoreError("run record does not exist")
     for json_field, hash_field, label in (
-        ("request_metadata_json", None, "request metadata"),
+        ("request_metadata_json", "request_metadata_sha256", "request metadata"),
         ("result_json", "result_sha256", "run result"),
         ("request_payload_json", "request_payload_sha256", "retained request"),
         ("canonical_manifest_json", "canonical_manifest_sha256", "canonical manifest"),
@@ -648,6 +649,7 @@ def get_run_record(db_path: str | Path, *, project_id: str, run_id: str) -> dict
         "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
         "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
         "actor_id": row["actor_id"], "request_sha256": row["request_sha256"],
+        "request_metadata_sha256": row["request_metadata_sha256"],
         "request_metadata": metadata, "request_payload": request_payload,
         "request_payload_sha256": row["request_payload_sha256"],
         "result": result, "result_sha256": row["result_sha256"],
@@ -666,7 +668,7 @@ def list_run_records(db_path: str | Path, *, project_id: str) -> list[dict[str, 
     with _connect(db_path) as connection:
         rows = connection.execute(
             """SELECT project_id, run_id, page, record_schema_version, created_at, actor_id,
-                      request_sha256, request_metadata_json, result_sha256,
+                      request_sha256, request_metadata_json, request_metadata_sha256, result_sha256,
                       canonical_manifest_sha256, history_sha256, input_fingerprint_sha256,
                       retention_mode
                FROM run_records WHERE project_id=? ORDER BY created_at DESC, run_id""",
@@ -678,13 +680,15 @@ def list_run_records(db_path: str | Path, *, project_id: str) -> list[dict[str, 
             metadata = json.loads(row["request_metadata_json"])
         except json.JSONDecodeError as exc:
             raise AuditIntegrityError("stored request metadata is not valid JSON") from exc
+        if _hash(row["request_metadata_json"]) != row["request_metadata_sha256"]:
+            raise AuditIntegrityError("stored request metadata hash does not match its contents")
         if not isinstance(metadata, dict):
             raise AuditIntegrityError("stored request metadata must be a JSON object")
         results.append({
             "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
             "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
             "actor_id": row["actor_id"], "request_sha256": row["request_sha256"],
-            "request_metadata": metadata, "result_sha256": row["result_sha256"],
+            "request_metadata": metadata, "request_metadata_sha256": row["request_metadata_sha256"], "result_sha256": row["result_sha256"],
             "canonical_manifest_sha256": row["canonical_manifest_sha256"],
             "history_sha256": row["history_sha256"],
             "input_fingerprint_sha256": row["input_fingerprint_sha256"],
