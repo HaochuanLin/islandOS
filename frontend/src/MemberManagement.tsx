@@ -74,11 +74,11 @@ export default function MemberManagement({ token, role }: { token: string; role:
   }
 
   return <section className="panel member-panel">
-    <div className="panel-head"><div><p className="eyebrow">WORKSPACE ACCESS</p><h2>Team members & invitations</h2></div><span className="tag">{members.length} MEMBERS</span></div>
+    <div className="panel-head"><div><h2>Team &amp; access</h2><p className="panel-copy">People who can view or manage this workspace.</p></div><span className="tag">{members.length} {members.length === 1 ? "member" : "members"}</span></div>
     {error && <p className="error" role="alert">{error}</p>}
     <div className="member-list">
       {members.map((member) => <div className="member-row" key={member.id}>
-        <div><strong>{member.email}</strong><small>{member.role} · Joined {new Date(member.created_at).toLocaleDateString()}</small></div>
+        <div className="member-identity"><span className="member-avatar">{member.email.slice(0, 1).toUpperCase()}</span><div><strong>{member.email}</strong><small>{member.role} · Joined {new Date(member.created_at).toLocaleDateString()}</small></div></div>
         {canManage && member.role !== "owner" ? <div className="member-actions">
           <select aria-label={`Role for ${member.email}`} value={member.role} disabled={busy} onChange={(e) => changeRole(member, e.target.value as "analyst" | "viewer")}>
             <option value="analyst">Analyst</option><option value="viewer">Viewer</option>
@@ -88,10 +88,10 @@ export default function MemberManagement({ token, role }: { token: string; role:
       </div>)}
       {!members.length && <p className="muted">No workspace members were returned by the service.</p>}
       {canManage && pending.length > 0 && <div className="pending-list">
-        <p className="eyebrow">PENDING INVITATIONS</p>
+        <p className="section-note">Pending invitations</p>
         {pending.map((item) => <div className="member-row pending" key={item.invitation_id}>
-          <div><strong>{item.email}</strong><small>Invited as {item.role} · expires {new Date(item.expires_at).toLocaleString()} · not yet accepted</small></div>
-          <span className="tag">PENDING</span>
+          <div className="member-identity"><span className="member-avatar pending-avatar">?</span><div><strong>{item.email}</strong><small>Invited as {item.role} · expires {new Date(item.expires_at).toLocaleString()} · not yet accepted</small></div></div>
+          <span className="tag">Pending</span>
         </div>)}
       </div>}
     </div>
@@ -99,6 +99,7 @@ export default function MemberManagement({ token, role }: { token: string; role:
       <label>Invite by email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@example.com" required /></label>
       <label>Workspace role<select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "analyst" | "viewer")}><option value="analyst">Analyst</option><option value="viewer">Viewer</option></select></label>
       <button className="primary" disabled={busy || !email.trim()}>{busy ? "Working…" : "Create invitation"}</button>
+      <p className="invite-note">The service does not send email. Share the one-time token through a private channel.</p>
     </form>}
     {invitation && <div className="invitation-result"><strong>Invitation created — email was not sent</strong><p className="muted">Invited {invitation.email} as {invitation.role}.</p><p>Share this one-time token with the invited person through an approved private channel. It expires {new Date(invitation.expires_at).toLocaleString()}.</p><code>{invitation.invitation_token}</code><button className="outline" type="button" onClick={() => navigator.clipboard?.writeText(invitation.invitation_token)}>Copy token</button></div>}
     {!canManage && <p className="muted">Your role is read-only for workspace membership. Ask an owner to invite or manage members.</p>}

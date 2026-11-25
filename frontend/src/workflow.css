@@ -1,1 +1,199 @@
-.member-panel{margin:0 0 17px;min-height:0}.member-list{display:grid}.member-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #edf0f2}.member-row strong{display:block;font-size:11px;color:#34495c}.member-row small{display:block;font-size:9px;color:#8996a2;margin-top:4px}.member-actions{display:flex;align-items:center;gap:9px}.member-actions select,.invite-form select,.invite-form input{border:1px solid #dce3e9;border-radius:7px;padding:8px;background:#fff;color:#35495c;font:inherit;font-size:10px}.invite-form{display:flex;align-items:end;gap:10px;flex-wrap:wrap;border-top:1px solid #edf0f2;padding-top:15px;margin-top:14px}.invite-form label{display:grid;gap:6px;color:#637384;font-size:10px;font-weight:700;min-width:190px}.invite-form .primary{padding:9px 13px}.invitation-result{margin-top:14px;background:#f2f7f5;border:1px solid #dcebe4;border-radius:8px;padding:13px}.invitation-result strong{font-size:11px;color:#315d4b}.invitation-result p{font-size:10px;color:#6c7d76;line-height:1.5}.invitation-result code{display:block;overflow-wrap:anywhere;background:#fff;padding:9px;border-radius:6px;font-size:10px;margin:8px 0}.danger-text{color:#ad4a4a}.page-foot .foot-link{color:#477b98;text-decoration:none;font-weight:700}.page-foot .foot-link:hover{text-decoration:underline}
+.member-panel {
+  min-height: 0;
+  margin: 0 0 16px;
+}
+
+.member-panel .panel-head {
+  margin-bottom: 8px;
+}
+
+.member-list {
+  display: grid;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 13px 0;
+  border-bottom: 1px solid #edf1ee;
+}
+
+.member-row:last-child {
+  border-bottom: 0;
+}
+
+.member-identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.member-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #e8f2ed;
+  color: #2f625a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pending-avatar {
+  background: #f3eee2;
+  color: #846733;
+}
+
+.member-row strong {
+  display: block;
+  color: #304b52;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.member-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.member-actions select,
+.invite-form select,
+.invite-form input {
+  min-height: 38px;
+  border: 1px solid #c8d6d5;
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: #fcfdfa;
+  color: #354e54;
+  font: inherit;
+  font-size: 10px;
+}
+
+.member-actions select {
+  width: auto;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.invite-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid #edf1ee;
+}
+
+.invite-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+  color: #5f7376;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.invite-form .primary {
+  min-height: 38px;
+  padding: 8px 13px;
+  font-size: 11px;
+}
+
+.invite-note {
+  max-width: 230px;
+  margin: 0 0 4px auto;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.invitation-result {
+  margin-top: 15px;
+  padding: 13px 14px;
+  border: 1px solid #d5e7df;
+  border-radius: 9px;
+  background: #f2f8f5;
+}
+
+.invitation-result strong {
+  display: block;
+  color: #2e5e52;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.invitation-result p {
+  margin: 5px 0 0;
+  color: #647b74;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.invitation-result code {
+  display: block;
+  margin: 9px 0;
+  padding: 10px;
+  border: 1px solid #e1ebe6;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #294b45;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.danger-text {
+  color: #a64747;
+}
+
+.pending-list {
+  margin-top: 2px;
+}
+
+@media (max-width: 620px) {
+  .member-row {
+    align-items: flex-start;
+  }
+
+  .member-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 7px;
+  }
+
+  .invite-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .invite-form label {
+    min-width: 0;
+  }
+
+  .invite-form .primary {
+    width: 100%;
+  }
+
+  .invite-note {
+    max-width: none;
+    margin-left: 0;
+  }
+}

@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import type { ContractField, ContractSchema, DeviceFlexibilitySummary, RunResultSummary } from "./contracts";
 import { readViews } from "./applicationViewsPayload";
 import type { Views } from "./applicationViewsPayload";
+import Icon from "./Icon";
 import "./styles.css";
 
 const TRANSPORT = "http://127.0.0.1:8765";
@@ -45,36 +46,35 @@ function annualUnavailableCopy(page: string | undefined): string {
 
 function FieldTable({ title, fields }: { title: string; fields: ContractField[] }) {
   return (
-    <section className="panel">
+    <section className="panel" id={`contract-${title}`}>
       <div className="panel-head">
-        <div>
-          <p className="eyebrow">CONTRACT</p>
-          <h2>{title}</h2>
-        </div>
-        <span className="tag">{fields.length} FIELDS</span>
+        <h2>{title}</h2>
+        <span className="tag">{fields.length} fields</span>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Field</th>
-            <th>Type</th>
-            <th>Unit</th>
-            <th>Nullable</th>
-            <th>Owner</th>
-          </tr>
-        </thead>
-        <tbody>
-          {fields.map((field) => (
-            <tr key={field.name}>
-              <td>{field.name}</td>
-              <td>{field.type}</td>
-              <td>{field.unit}</td>
-              <td>{field.nullable ? "yes" : "no"}</td>
-              <td>{field.owner}</td>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Unit</th>
+              <th>Nullable</th>
+              <th>Owner</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {fields.map((field) => (
+              <tr key={field.name}>
+                <td>{field.name}</td>
+                <td>{field.type}</td>
+                <td>{field.unit}</td>
+                <td>{field.nullable ? "yes" : "no"}</td>
+                <td>{field.owner}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -127,6 +127,8 @@ function App() {
   const annual = views?.annual;
   const figures = annual?.figures;
   const basis = annual?.basis;
+  const schemaEntries = schema ? Object.entries(schema.contracts) : [];
+  const schemaFieldCount = schemaEntries.reduce((total, [, body]) => total + body.fields.length, 0);
   // 09's result is a device schedule summary, not a policy summary: different fields, same
   // "display what the Python side already decided" rule.
   const planner =
@@ -139,22 +141,22 @@ function App() {
     <main className="viewer">
       <header className="topbar">
         <div>
-          <p className="eyebrow">APPLICATION VIEWS · READ ONLY</p>
           <h1>Contract viewer</h1>
+          <p className="topbar-meta">Report shapes and schema, read-only.</p>
         </div>
         <div className="top-actions">
-          <span className="api-status" aria-live="polite">
+          <span className="status-pill" aria-live="polite">
             <span className={schema ? "dot good" : "dot"} />
             {status}
           </span>
-          <button className="outline" onClick={loadContracts}>
-            Load contracts
+          <button className="outline refresh-button" onClick={loadContracts}>
+            <Icon name="database" size={15} /> {schema ? "Reload contracts" : "Load contracts"}
           </button>
         </div>
       </header>
 
       <section className="notice">
-        <span className="notice-icon">i</span>
+        <span className="notice-icon"><Icon name="lock" size={17} /></span>
         <div>
           <strong>This page only reads shapes</strong>
           <p>
@@ -167,11 +169,8 @@ function App() {
 
       <section className="panel">
         <div className="panel-head">
-          <div>
-            <p className="eyebrow">INPUT</p>
-            <h2>Load a downloaded report</h2>
-          </div>
-          <span className="tag">{views ? "VIEWS LOADED" : "NO FILE"}</span>
+          <h2>Load a downloaded report</h2>
+          <span className="tag">{views ? "Views loaded" : "No file"}</span>
         </div>
         <input
           type="file"
@@ -186,14 +185,49 @@ function App() {
         ) : null}
       </section>
 
+      {schema ? (
+        <section className="schema-index" aria-label="Contract index">
+          <div className="schema-index-head">
+            <div>
+              <h2>Contract index</h2>
+              <p>Jump to a shape without leaving the page.</p>
+            </div>
+            <span className="schema-index-meta">
+              v{schema.contract_version} · {schemaEntries.length} contracts · {schemaFieldCount} top-level fields
+            </span>
+          </div>
+          <nav className="schema-index-list" aria-label="Contract sections">
+            {schemaEntries.map(([name, body]) => (
+              <a key={name} href={`#contract-${name}`}>
+                <strong>{name}</strong>
+                <small>{body.fields.length} fields</small>
+                <span className="schema-index-arrow" aria-hidden="true"><Icon name="arrow" size={13} /></span>
+              </a>
+            ))}
+          </nav>
+        </section>
+      ) : null}
+
+      {!request && !schema ? (
+        <section className="viewer-anatomy" aria-label="What a report contains">
+          <div className="viewer-anatomy-head">
+            <h2>What a report contains</h2>
+            <p>One downloaded report carries four layers. The viewer reads their shape; it does not execute any of them.</p>
+          </div>
+          <ol>
+            <li><span>01</span><div><strong>Envelope</strong><small>Page, schema version and request identity.</small></div></li>
+            <li><span>02</span><div><strong>Request</strong><small>Site, hourly history and per-page inputs.</small></div></li>
+            <li><span>03</span><div><strong>Result</strong><small>Policy summary or device schedule.</small></div></li>
+            <li><span>04</span><div><strong>Annual</strong><small>Only when the report declares a basis.</small></div></li>
+          </ol>
+        </section>
+      ) : null}
+
       {request ? (
         <section className="panel">
           <div className="panel-head">
-            <div>
-              <p className="eyebrow">REQUEST</p>
-              <h2>{String(request.page)}</h2>
-            </div>
-            <span className="tag">SCHEMA v{String(request.schema_version)}</span>
+            <h2>{String(request.page)}</h2>
+            <span className="tag">Schema v{String(request.schema_version)}</span>
           </div>
           <div className="metric-grid">
             <article className="metric">
@@ -219,10 +253,7 @@ function App() {
       {result ? (
         <section className="panel">
           <div className="panel-head">
-            <div>
-              <p className="eyebrow">{planner ? "DEVICE SCHEDULE SUMMARY" : "RESULT SUMMARY"}</p>
-              <h2>{planner ? String(planner.method) : String(summary?.recommended_policy_label)}</h2>
-            </div>
+            <h2>{planner ? String(planner.method) : String(summary?.recommended_policy_label)}</h2>
             <span className="tag">{planner ? String(planner.page) : String(summary?.page)}</span>
           </div>
           {planner ? (
@@ -274,19 +305,19 @@ function App() {
           )}
           {planner ? (
             <>
-              <p className="eyebrow">EARLIEST-FEASIBLE REFERENCE</p>
+              <p className="detail-label">Earliest-feasible reference</p>
               <p>
                 {format(planner.reference_grid_import_kwh, 1)} kWh ·{" "}
                 {format(planner.reference_estimated_energy_cost, 2)} {String(planner.currency ?? "")} · unmet{" "}
                 {format(planner.critical_unmet_load_kwh, 2)} kWh · shed{" "}
                 {format(planner.flexible_load_shed_kwh, 2)} kWh
               </p>
-              <p className="eyebrow">SUMMARY SHA-256</p>
+              <p className="detail-label">Summary SHA-256</p>
               <p>{String(planner.summary_sha256).slice(0, 12)}</p>
             </>
           ) : (
             <>
-              <p className="eyebrow">RUN ID</p>
+              <p className="detail-label">Run ID</p>
               <p>{String(summary?.run_id ?? "—")}</p>
             </>
           )}
@@ -294,13 +325,10 @@ function App() {
       ) : null}
 
       {annual && figures ? (
-        <section className="panel">
+        <section className="panel" aria-label="ANNUAL PROJECTION">
           <div className="panel-head">
-            <div>
-              <p className="eyebrow">ANNUAL PROJECTION</p>
-              <h2>Declared assumption</h2>
-            </div>
-            <span className="tag">{String(basis?.days_equivalent_per_year ?? "—")} DAYS / YEAR</span>
+            <h2>Annual projection</h2>
+            <span className="tag">{String(basis?.days_equivalent_per_year ?? "—")} days / year</span>
           </div>
           <div className="metric-grid">
             <article className="metric">
@@ -323,12 +351,9 @@ function App() {
           <p>{String(annual.scope ?? "")}</p>
         </section>
       ) : (
-        <section className="panel">
+        <section className="panel" hidden={!request}>
           <div className="panel-head">
-            <div>
-              <p className="eyebrow">ANNUAL PROJECTION</p>
-              <h2>Not included in this report</h2>
-            </div>
+            <h2>Not included in this report</h2>
           </div>
           <p>{annualUnavailableCopy(request?.page)}</p>
         </section>
