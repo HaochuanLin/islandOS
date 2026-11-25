@@ -142,6 +142,14 @@ function App() {
       <header className="topbar"><div><p className="eyebrow">SITE OVERVIEW</p><h1>{selectedSite?.name ?? "Your workspace"}</h1></div><div className="top-actions"><span className="api-status"><span className={health === "online" ? "dot good" : "dot"} />API {health}</span><button className="outline" onClick={() => refresh(session.access_token)} disabled={busy}>↻ Refresh</button></div></header>
       {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError("")}>Dismiss</button></div>}
       <section className="notice"><span className="notice-icon">i</span><div><strong>Read-only decision support</strong><p>Telemetry and recommendations are for operator review. Physical device writes are disabled in this reference service.</p></div></section>
+      <nav className="planning-paths" aria-label="Planning paths">
+        <p>This console is a local reference surface for sites, telemetry and notifications. Planning runs open in the Streamlit demo.</p>
+        <div className="planning-links">
+          <a href="https://islandos.streamlit.app/Customer_Decision_Dashboard" target="_blank" rel="noopener noreferrer">Decision dashboard ↗</a>
+          <a href="https://islandos.streamlit.app/Forecast_Led_Joint_Resource_Optimizer" target="_blank" rel="noopener noreferrer">Joint resource optimizer ↗</a>
+          <a href="https://islandos.streamlit.app/Device_Flexibility_Planner" target="_blank" rel="noopener noreferrer">Device flexibility planner ↗</a>
+        </div>
+      </nav>
       <section className="metric-grid">
         <article className="metric-card"><span className="metric-label">REGISTERED SITES</span><strong>{sites.length}</strong><small>In this workspace</small></article>
         <article className="metric-card"><span className="metric-label">UNREAD NOTIFICATIONS</span><strong>{unread}</strong><small>Requires review</small></article>
