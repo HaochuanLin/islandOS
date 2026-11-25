@@ -38,13 +38,13 @@ The following observations were checked against the repository `main` branch at 
 
 ### Persistence
 
-At the inspected `main` base commit, `workspace_store.py` reports `SCHEMA_VERSION = "1.0"`. PR #359 is still an open, unmerged pull request and adds persistent run records keyed by `(project_id, run_id)`. Its latest observed commit is `94388ed821ad2763cd7452d530c7c2756dd4e218`; the six workflow checks for that commit completed successfully, including Python unit tests. The PR must still be reviewed and merged separately.
+At the inspected `main` base commit, `workspace_store.py` reports `SCHEMA_VERSION = "1.0"`. PR #359 is still an open, unmerged pull request and proposes persistent run records keyed by `(project_id, run_id)`. Its latest observed commit is `94388ed821ad2763cd7452d530c7c2756dd4e218`; all six workflow checks for that commit completed successfully, including Python unit tests. The PR must still be reviewed and merged separately.
 
 The current persistence key is compatible with unique execution IDs within a project. It is not compatible with trying to insert multiple distinct executions under the same deterministic fingerprint unless the storage key or run-ID semantics change.
 
 ### Page 09
 
-The current page implementation and its owning module still need a focused follow-up audit before its run identity can be specified. Do not assume Page 09 has the same run lifecycle as Pages 05 or 06.
+`pages/09_Device_Flexibility_Planner.py` builds a typed request view with `build_run_request` and calls `run_device_planner`. Its visible report includes request/result application views, but the page itself does not currently expose a canonical `run_id` or canonical run manifest in the inspected code. It is a synthetic demonstration with fixed in-page inputs. Therefore Page 09 needs an explicit identity lifecycle decision; do not assume its current request view already supplies one.
 
 ## 3. Proposed identity model (for approval)
 
