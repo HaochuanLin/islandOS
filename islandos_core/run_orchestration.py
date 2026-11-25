@@ -36,11 +36,6 @@ from optimization.energy_system_optimizer import optimize_energy_system, Optimiz
 from .planning_workflow import run_forecast_dispatch
 from .site_inputs import SiteAssumptions
 
-#: A replay has no wall clock to stamp into the manifest, so it pins one. Fixed rather
-#: than "now" because the point of a replay is that the same request reproduces the
-#: same run: the epoch becomes part of the declaration, not a hidden variable.
-REPLAY_CREATED_AT_UTC = "1970-01-01T00:00:00+00:00"
-
 
 def run_customer_dashboard(
     *,
