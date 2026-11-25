@@ -71,6 +71,15 @@ The merged `#348` change adds `build_input_fingerprint` and `compare_input_finge
 
 **Implication:** B2 should add a deliberate run-record layer or a carefully designed extension to the workspace store. It must preserve the canonical run identity and must not silently replace it with a new workspace UUID.
 
+### Additional persistence constraints discovered during the schema review
+
+- The current workspace schema is `1.0`. `initialize_workspace` creates missing tables, records the schema version once, and fails closed when an existing database has a different version. There is no general migration runner in this module. A new run-record table must therefore be accompanied by an explicit, tested migration path; simply changing `SCHEMA_VERSION` would make existing workspaces fail to open.
+- The existing `run_manifests.run_id` is a global primary key and `create_run_manifest` always generates a random UUID. A canonical page run ID is deterministic from run inputs and does not include a workspace/project ID. Persistent execution records should be scoped by `(project_id, run_id)` (or an equivalent composite identity), not assume a deterministic run ID is globally unique across customer projects.
+- `create_run_manifest` requires an existing project. Local workspace creation and metadata retention require explicit consent and are enabled through local-workspace configuration. The public hosted Streamlit demo must not be pointed at a customer's workspace database or source-file directory.
+
+**B2 design consequence:** persist full request/result evidence only inside an explicitly enabled local workspace after project/actor context and consent are present. Keep the hosted public demo stateless. Treat a missing project, actor or consent as “not persisted”, not as permission to create a hidden project or retain customer data.
+
+
 ## 5. Replay and annual evidence
 
 `replay_run_request` currently returns an `annual` field of `None` for 05, 06 and 09. This is an explicit transport boundary, not evidence that annual calculation is missing.
