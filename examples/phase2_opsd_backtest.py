@@ -418,8 +418,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.max_rolling_folds < 2:
-        parser.error("--max-rolling-folds must be at least 2")
+    if args.rolling_validation and args.max_rolling_folds < 2:
+        parser.error("--max-rolling-folds must be at least 2 when rolling validation is enabled")
     dataset = load_opsd_singleindex_csv(
         args.csv,
         args.region,
@@ -440,9 +440,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             "version": dataset.source_version,
             "source_url": dataset.source_url,
             "attribution": dataset.attribution,
+            "evidence_class": "public_historical_regional_aggregate",
+            "measurement_scope": "country_control_area_or_bidding_zone_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
             "region_code": dataset.region_code,
             "source_columns": dict(dataset.source_columns),
             "history_sha256": dataset.data_sha256,
+            "selected_history_sha256": dataset.data_sha256,
             "observations": len(dataset.timestamps),
             "history_start_utc": dataset.timestamps[0].isoformat(),
             "history_end_utc": dataset.timestamps[-1].isoformat(),
