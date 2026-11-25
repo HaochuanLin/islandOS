@@ -804,7 +804,7 @@ a {
 .topbar-meta {
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 15.5px;
 }
 
 .top-actions {
@@ -866,14 +866,14 @@ a {
 .notice strong {
   display: block;
   color: #244f47;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 750;
 }
 
 .notice p {
   margin: 3px 0 0;
   color: #57756e;
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -894,7 +894,7 @@ a {
 .planning-head h2 {
   margin: 0;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 750;
   letter-spacing: -0.01em;
 }
@@ -902,7 +902,7 @@ a {
 .planning-head p {
   margin: 2px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
 }
 
@@ -922,7 +922,7 @@ a {
   padding: 6px 10px;
   background: #ffffff;
   color: #31535c;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
   text-decoration: none;
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
@@ -934,7 +934,7 @@ a {
 
 .planning-links a span {
   color: #849398;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .planning-links a:hover {
@@ -989,7 +989,7 @@ a {
   max-width: 34ch;
   margin: 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -1021,7 +1021,7 @@ a {
 
 .step-no {
   color: var(--seal);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -1030,7 +1030,7 @@ a {
   display: block;
   margin-bottom: 3px;
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -1038,14 +1038,14 @@ a {
 .onboarding-steps div span {
   display: block;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
 .metric-label {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.9px;
   text-transform: uppercase;
@@ -1071,7 +1071,7 @@ a {
 .snapshot-item small {
   display: block;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -1114,7 +1114,7 @@ a {
 .panel-copy {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
@@ -1128,7 +1128,7 @@ a {
   padding: 4px 9px;
   background: #f4f7f4;
   color: #66797a;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.55px;
   text-transform: uppercase;
@@ -1161,7 +1161,7 @@ a {
 
 .empty-state strong {
   color: #39555b;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 750;
 }
 
@@ -1169,7 +1169,7 @@ a {
   max-width: 290px;
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -1191,7 +1191,7 @@ a {
   display: block;
   margin-bottom: 6px;
   color: #708181;
-  font-size: 12px;
+  font-size: 13px;
   text-transform: capitalize;
 }
 
@@ -1210,7 +1210,7 @@ a {
   padding-top: 11px;
   border-top: 1px solid var(--line);
   color: #849393;
-  font-size: 12.5px;
+  font-size: 14px;
 }
 
 .notification-list {
@@ -1263,21 +1263,21 @@ a {
 
 .notification-title strong {
   color: #304b52;
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .notification-title small {
   flex: 0 0 auto;
   color: #8b989a;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
 .notification p {
   margin: 5px 0 0;
   color: #647679;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -1290,7 +1290,7 @@ a {
   padding: 0;
   background: transparent;
   color: var(--sea);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
 }
 
@@ -1310,14 +1310,14 @@ a {
   border-radius: 10px;
   background: #fff2f2;
   color: #9c3939;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .error-banner button {
   border: 0;
   background: transparent;
   color: inherit;
-  font-size: 12px;
+  font-size: 13px;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1328,7 +1328,7 @@ a {
   gap: 20px;
   margin-top: 24px;
   color: #8a9899;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .page-foot .foot-link {
@@ -1344,7 +1344,7 @@ a {
 .section-note {
   margin: 16px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -1353,7 +1353,7 @@ a {
 .detail-label {
   margin: 16px 0 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.6px;
   text-transform: uppercase;
