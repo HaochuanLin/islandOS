@@ -220,3 +220,170 @@ def derive_input_group_id(
         units_sha256=units_sha256,
         hour_count=hour_count,
     )
+# P1b: deterministic technical run identity. This deliberately does not accept
+# selected model IDs or investment-only assumptions; those are run evidence and
+# append-only investment bindings, respectively.
+RUN_IDENTITY_SCHEMA = "islandos-run-identity-v2"
+RUN_IDENTITY_SCHEMA_VERSION = 1
+PAGE_SLUGS = {
+    "customer_dashboard": "05",
+    "joint_resource_optimizer": "06",
+}
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+@dataclass(frozen=True)
+class RunIdentity:
+    """A stable identity for one page's technical run definition."""
+
+    run_id: str
+    run_identity_sha256: str
+    identity_schema_version: int
+    page: str
+    input_group: InputGroupIdentity | None
+
+
+def _validate_json_value(value: Any, field: str) -> Any:
+    """Validate and copy the deliberately narrow JSON-safe value set."""
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise RunIdentityError(f"{field} must contain only finite JSON numbers")
+        return value
+    if isinstance(value, Mapping):
+        copied: dict[str, Any] = {}
+        for key, nested in value.items():
+            if not isinstance(key, str) or not key.strip():
+                raise RunIdentityError(f"{field} mapping keys must be non-empty strings")
+            copied[key] = _validate_json_value(nested, f"{field}.{key}")
+        return copied
+    if isinstance(value, list):
+        return [
+            _validate_json_value(item, f"{field}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    raise RunIdentityError(f"{field} must contain JSON-safe values")
+
+
+def _json_safe_mapping(value: Mapping[str, Any], field: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RunIdentityError(f"{field} must be a mapping")
+    copied = _validate_json_value(value, field)
+    if not isinstance(copied, dict):
+        raise RunIdentityError(f"{field} must be a mapping")
+    return copied
+
+
+def _required_id_version(value: Mapping[str, str], field: str) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"id", "version"}:
+        raise RunIdentityError(f"{field} must contain exactly non-empty id and version")
+    identifier = value.get("id")
+    version = value.get("version")
+    if not isinstance(identifier, str) or not identifier.strip():
+        raise RunIdentityError(f"{field}.id must be a non-empty string")
+    if not isinstance(version, str) or not version.strip():
+        raise RunIdentityError(f"{field}.version must be a non-empty string")
+    return {"id": identifier.strip(), "version": version.strip()}
+
+
+def _validate_input_group_identity(
+    input_group: InputGroupIdentity | None,
+) -> str | None:
+    if input_group is None:
+        return None
+    if not isinstance(input_group, InputGroupIdentity):
+        raise RunIdentityError("input_group must be an InputGroupIdentity or None")
+    for field in ("input_group_sha256", "history_sha256", "units_sha256"):
+        value = getattr(input_group, field)
+        if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
+            raise RunIdentityError(f"input_group.{field} must be a 64-character lowercase SHA-256")
+    if input_group.input_group_id != f"ig-{input_group.input_group_sha256[:16]}":
+        raise RunIdentityError("input_group_id does not match input_group_sha256")
+    if isinstance(input_group.hour_count, bool) or not isinstance(input_group.hour_count, int) or input_group.hour_count < 1:
+        raise RunIdentityError("input_group.hour_count must be a positive integer")
+    if (
+        isinstance(input_group.schema_version, bool)
+        or not isinstance(input_group.schema_version, int)
+        or input_group.schema_version != INPUT_GROUP_SCHEMA_VERSION
+    ):
+        raise RunIdentityError("unsupported input-group schema version")
+    return input_group.input_group_sha256
+
+
+def derive_run_id(
+    *,
+    page: str,
+    input_group: InputGroupIdentity | None,
+    site_configuration_sha256: str,
+    page_settings: Mapping[str, Any],
+    page_inputs: Mapping[str, Any],
+    run_settings: Mapping[str, Any],
+    forecast_settings: Mapping[str, Any],
+    model_selection_policy: Mapping[str, str],
+    model_catalogue_version: str,
+    optimizer: Mapping[str, str],
+    algorithm_versions: Mapping[str, str],
+) -> RunIdentity:
+    """Derive a page-scoped identity from stable technical run assumptions.
+
+    Actual selected model IDs and result metrics are intentionally excluded:
+    the stable selection policy and catalogue version are known before forecast.
+    Investment-only assumptions are not accepted by this interface; they belong
+    in a separate append-only run binding.
+    """
+    if not isinstance(page, str) or page not in PAGE_SLUGS:
+        raise RunIdentityError("unsupported page for persistent run identity")
+    if not isinstance(site_configuration_sha256, str) or not _SHA256_RE.fullmatch(site_configuration_sha256):
+        raise RunIdentityError("site_configuration_sha256 must be a 64-character lowercase SHA-256")
+
+    input_group_sha256 = _validate_input_group_identity(input_group)
+    normalized_page_settings = _json_safe_mapping(page_settings, "page_settings")
+    normalized_page_inputs = _json_safe_mapping(page_inputs, "page_inputs")
+    normalized_run_settings = _json_safe_mapping(run_settings, "run_settings")
+    normalized_forecast_settings = _json_safe_mapping(forecast_settings, "forecast_settings")
+    currency = normalized_run_settings.get("currency")
+    if not isinstance(currency, str) or not currency.strip():
+        raise RunIdentityError("run_settings.currency must be a non-empty string")
+    normalized_run_settings["currency"] = currency.strip()
+
+    normalized_policy = _required_id_version(model_selection_policy, "model_selection_policy")
+    normalized_optimizer = _required_id_version(optimizer, "optimizer")
+    if not isinstance(model_catalogue_version, str) or not model_catalogue_version.strip():
+        raise RunIdentityError("model_catalogue_version must be a non-empty string")
+    if not isinstance(algorithm_versions, Mapping) or not algorithm_versions:
+        raise RunIdentityError("algorithm_versions must be a non-empty string mapping")
+    normalized_algorithm_versions: dict[str, str] = {}
+    for key, value in algorithm_versions.items():
+        if not isinstance(key, str) or not key.strip() or not isinstance(value, str) or not value.strip():
+            raise RunIdentityError("algorithm_versions must be a non-empty string mapping")
+        normalized_key = key.strip()
+        if normalized_key in normalized_algorithm_versions:
+            raise RunIdentityError("algorithm_versions contains duplicate normalized keys")
+        normalized_algorithm_versions[normalized_key] = value.strip()
+
+    page_inputs_sha256 = _sha256(normalized_page_inputs)
+    run_identity_sha256 = _sha256({
+        "schema": RUN_IDENTITY_SCHEMA,
+        "identity_schema_version": RUN_IDENTITY_SCHEMA_VERSION,
+        "page": page,
+        "input_group_sha256": input_group_sha256,
+        "site_configuration_sha256": site_configuration_sha256,
+        "page_settings": normalized_page_settings,
+        "page_inputs_sha256": page_inputs_sha256,
+        "run_settings": normalized_run_settings,
+        "forecast_settings": normalized_forecast_settings,
+        "model_selection_policy": normalized_policy,
+        "model_catalogue_version": model_catalogue_version.strip(),
+        "optimizer": normalized_optimizer,
+        "algorithm_versions": normalized_algorithm_versions,
+    })
+    return RunIdentity(
+        run_id=f"run-{PAGE_SLUGS[page]}-{run_identity_sha256[:16]}",
+        run_identity_sha256=run_identity_sha256,
+        identity_schema_version=RUN_IDENTITY_SCHEMA_VERSION,
+        page=page,
+        input_group=input_group,
+    )
