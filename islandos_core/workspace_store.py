@@ -24,6 +24,7 @@ from islandos_core.assets import AssetRecord, evaluate_asset_readiness
 
 
 SCHEMA_VERSION = "1.1"
+RUN_MANIFEST_SCHEMA_VERSION = "1.0"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_SOURCE_TYPES = {
     "measured", "customer_provided", "public_reanalysis",
@@ -410,7 +411,7 @@ def create_run_manifest(
     timestamp = _timestamp(created_at)
     run_id = str(uuid.uuid4())
     manifest = {
-        "manifest_schema_version": SCHEMA_VERSION,
+        "manifest_schema_version": RUN_MANIFEST_SCHEMA_VERSION,
         "run_id": run_id,
         "project_id": project_id,
         "created_at": timestamp,
