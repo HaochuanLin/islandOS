@@ -651,6 +651,8 @@ try:
         file_name="islandos_joint_resource_schedule.json",
         mime="application/json",
     )
-except (ValueError, KeyError, TypeError) as exc:
+except (ValueError, KeyError, TypeError, ArithmeticError, IndexError) as exc:
     st.error(f"Joint resource scheduling could not run: {exc}")
     st.caption("Check the hourly history, units, forecast horizon, and explicit asset assumptions.")
+    st.caption("No partial schedule is shown; nothing is written to equipment.")
+    st.stop()
