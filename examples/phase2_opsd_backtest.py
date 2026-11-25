@@ -369,7 +369,7 @@ def _canonical_prediction_report(
             "Each requested horizon uses chronological expanding-window blocks and trains only "
             "on observations available before each block. When max_rolling_folds is set, complete "
             "folds are sampled deterministically and evenly with the first and last folds retained. "
-            "Incomplete trailing observations are excluded rather than shortened into a different horizon."
+            "incomplete trailing observations are excluded rather than shortened into a different horizon."
         ),
         "signals": signals,
         "limitations": [
