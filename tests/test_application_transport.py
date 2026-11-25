@@ -418,6 +418,13 @@ def test_the_same_joint_request_replays_to_the_same_run():
         {**request, "run_settings": {**request["run_settings"], "currency": "EUR"}}
     )["result"]["run_id"]
 
+def test_joint_optimizer_manifest_rejects_naive_history_timestamps():
+    request = _joint_request()
+    request["history"]["timestamps_utc"][-1] = "2026-11-04T23:00:00"
+    with pytest.raises(ValueError, match="timezone-aware"):
+        build_joint_optimizer_manifest(request)
+
+
 def test_page_06_uses_the_same_manifest_builder_as_replay():
     source = (REPO_ROOT / "pages" / "06_Forecast_Led_Joint_Resource_Optimizer.py").read_text(
         encoding="utf-8"
