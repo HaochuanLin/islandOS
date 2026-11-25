@@ -328,7 +328,10 @@ try:
     target_timestamps = run_outputs["target_timestamps"]
     result = run_outputs["result"]
     handoff = run_outputs["handoff"]
-    st.caption(f"Canonical run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
+    st.caption(f"Canonical page run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
+    st.caption(
+        "This run id is 06's own canonical run; it is not a cross-page handoff id for 05."
+    )
     render_decision_record(planning_run["decision_record"])
 
     with st.expander("Inputs and assumptions used by this run", expanded=True):
