@@ -377,6 +377,22 @@ def test_run_record_integrity_and_immutability(tmp_path):
         get_run_record(db, project_id="site-01", run_id=record["run_id"])
 
 
+def test_run_record_cannot_be_replaced_within_the_same_project(tmp_path):
+    db = ready_project(tmp_path)
+    args = dict(
+        db_path=db, project_id="site-01", run_id="immutable-run",
+        page="06", request_sha256=DIGEST, request_metadata={},
+        result={"grid_cost": 10}, actor_id="local-user",
+        consent_to_store_result=True, created_at=NOW,
+    )
+    record_run_record(**args)
+    before = verify_audit_chain(db)["event_count"]
+    with pytest.raises(WorkspaceStoreError, match="already exists"):
+        record_run_record(**{**args, "result": {"grid_cost": 999}})
+    assert get_run_record(db, project_id="site-01", run_id="immutable-run")["result"] == {"grid_cost": 10}
+    assert verify_audit_chain(db)["event_count"] == before
+
+
 def test_same_canonical_run_id_can_be_saved_in_two_projects(tmp_path):
     db = ready_project(tmp_path)
     create_project(
