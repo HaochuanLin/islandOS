@@ -216,7 +216,15 @@ jobs:
           provenance = report["data_provenance"]
           assert source_sha256 == window["source_file_sha256"]
           assert provenance["region_code"] == window["region_code"]
+          assert provenance["source_columns"] == window["source_columns"]
+          assert provenance["source"] == "Open Power System Data"
+          assert provenance["version"] == "2020-10-06"
+          assert provenance["evidence_class"] == "public_historical_regional_aggregate"
+          assert provenance["site_telemetry"] is False
+          assert provenance["synthetic"] is False
           assert provenance["observations"] == window["selected_observations"]
+          assert provenance["selected_history_sha256"] == provenance["history_sha256"]
+          assert report["canonical_prediction_service"]["source_data_sha256"] == provenance["selected_history_sha256"]
           expected_start = datetime.fromisoformat(window["start_utc"].replace("Z", "+00:00"))
           expected_end = datetime.fromisoformat(window["end_utc_exclusive"].replace("Z", "+00:00")) - timedelta(hours=1)
           assert datetime.fromisoformat(provenance["history_start_utc"]) == expected_start
