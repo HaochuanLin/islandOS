@@ -563,6 +563,8 @@ def import_project_package(
             raise WorkspaceStoreError("package contains an unsupported run record schema")
         if not isinstance(record.get("request_metadata"), dict) or not isinstance(record.get("result"), dict):
             raise WorkspaceStoreError("package run record metadata and result must be objects")
+        if record.get("request_metadata_sha256") != _hash(_json(record["request_metadata"])):
+            raise AuditIntegrityError("package run request metadata failed SHA-256 verification")
         if record.get("result_sha256") != _hash(_json(record["result"])):
             raise AuditIntegrityError("package run result failed SHA-256 verification")
         request_payload = record.get("request_payload")
@@ -579,6 +581,8 @@ def import_project_package(
             raise AuditIntegrityError("package run record has a manifest hash without manifest content")
         if record.get("retention_mode") not in {"metadata_only", "retained_full_request"}:
             raise WorkspaceStoreError("package run record has an unsupported retention mode")
+        if (request_payload is None) != (record.get("retention_mode") == "metadata_only"):
+            raise WorkspaceStoreError("package run record retention mode does not match its retained request")
 
     import_hashes = {item["sha256"] for item in prepared_imports}
     for item in package.get("run_manifests", []):
