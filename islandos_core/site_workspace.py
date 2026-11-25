@@ -565,8 +565,15 @@ def import_project_package(
         if not isinstance(record.get("request_metadata"), dict) or not isinstance(record.get("result"), dict):
             raise WorkspaceStoreError("package run record metadata and result must be objects")
         _validate_run_metadata(record["request_metadata"])
+        _validate_run_metadata(record["request_metadata"])
         if record.get("request_metadata_sha256") != _hash(_json(record["request_metadata"])):
             raise AuditIntegrityError("package run request metadata failed SHA-256 verification")
+        model_versions = record.get("model_versions")
+        if model_versions is not None:
+            if not isinstance(model_versions, dict) or record.get("model_versions_sha256") != _hash(_json(model_versions)):
+                raise AuditIntegrityError("package model versions failed SHA-256 verification")
+        elif record.get("model_versions_sha256") is not None:
+            raise AuditIntegrityError("package run record has a model-version hash without model versions")
         if record.get("result_sha256") != _hash(_json(record["result"])):
             raise AuditIntegrityError("package run result failed SHA-256 verification")
         request_payload = record.get("request_payload")
@@ -683,6 +690,8 @@ def import_project_package(
             page=record["page"], request_sha256=record["request_sha256"],
             request_metadata=record["request_metadata"], result=record["result"],
             actor_id=actor_id, consent_to_store_result=True,
+            software_version=record.get("software_version"),
+            model_versions=record.get("model_versions"),
             request_payload=record.get("request_payload") if retain_request else None,
             consent_to_retain_request=retain_request,
             canonical_manifest=record.get("canonical_manifest"),
