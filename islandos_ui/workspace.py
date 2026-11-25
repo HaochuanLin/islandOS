@@ -74,6 +74,48 @@ st.markdown(
 )
 
 
+def microgrid_scenario_fingerprint(
+    *,
+    horizon: int,
+    pv_peak: float,
+    wind_mean: float,
+    essential_mean: float,
+    water_demand: float,
+    ro_rating: float,
+    sec: float,
+    tank_capacity: float,
+    initial_water: float,
+    pv_series: list[float],
+    wind_series: list[float],
+    load_series: list[float],
+    demand_series: list[float],
+) -> str:
+    """SHA-256 over the settings and forecast series behind one microgrid scenario.
+
+    The digest is the full 64-character hex string, so a reader can re-check the
+    exact inputs behind a candidate CSV. It covers the scenario assumptions and
+    the four forecast series passed to the physical model; it does not cover the
+    rule-based schedules or their results.
+    """
+    payload = {
+        "horizon": int(horizon),
+        "pv_peak": float(pv_peak),
+        "wind_mean": float(wind_mean),
+        "essential_mean": float(essential_mean),
+        "water_demand": float(water_demand),
+        "ro_rating": float(ro_rating),
+        "sec": float(sec),
+        "tank_capacity": float(tank_capacity),
+        "initial_water": float(initial_water),
+        "pv_series": [float(value) for value in pv_series],
+        "wind_series": [float(value) for value in wind_series],
+        "load_series": [float(value) for value in load_series],
+        "demand_series": [float(value) for value in demand_series],
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def demo_csv_bytes(hours: int = 168) -> bytes:
     """Create a synthetic, repeatable example dataset."""
     output = io.StringIO()
@@ -1188,8 +1230,10 @@ elif page == "Microgrid screening":
         "against the same physical constraints."
     )
     st.warning(
-        "Synthetic scenario only — not measured site data, a forecast, a global optimizer, "
-        "or a live controller. Replace assumptions with validated site measurements before use."
+        "Synthetic scenario only — uses a transparent seasonal-naive baseline forecast "
+        "built from synthetic history; not measured site data, not a validated site "
+        "forecast, not a global optimizer, or a live controller. Replace assumptions "
+        "with validated site measurements before use."
     )
     with st.expander("Scenario and equipment assumptions", expanded=True):
         a, b, c = st.columns(3)
@@ -1227,6 +1271,22 @@ elif page == "Microgrid screening":
         wind_series = forecast["wind_kw"]
         load_series = forecast["essential_load_kw"]
         demand_series = forecast["water_demand_m3"]
+
+        scenario_input_sha256 = microgrid_scenario_fingerprint(
+            horizon=int(horizon),
+            pv_peak=pv_peak,
+            wind_mean=wind_mean,
+            essential_mean=essential_mean,
+            water_demand=water_demand,
+            ro_rating=ro_rating,
+            sec=sec,
+            tank_capacity=tank_capacity,
+            initial_water=initial_water,
+            pv_series=pv_series,
+            wind_series=wind_series,
+            load_series=load_series,
+            demand_series=demand_series,
+        )
 
         scenario = MicrogridInputs(
             pv_power_kw=pv_series,
@@ -1281,10 +1341,12 @@ elif page == "Microgrid screening":
                     if additional_water > 1e-9 else None
                 )
         frame = pd.DataFrame(rows)
+        frame["scenario_input_sha256"] = scenario_input_sha256
         st.caption(
             f"Data provenance: Synthetic demo data — not measured site data · "
             f"168 historical hourly observations → {horizon}-hour baseline forecast · "
-            "seasonal-naive (repeat latest 24-hour profile)"
+            "seasonal-naive (repeat latest 24-hour profile) · "
+            f"Scenario input SHA-256: {scenario_input_sha256}"
         )
         st.subheader("Baseline forecast used by the scheduler")
         forecast_frame = pd.DataFrame({
@@ -1468,8 +1530,10 @@ elif page == "Microgrid screening":
                 "All candidates are evaluated by the same physical model. The model serves essential "
                 "electricity first; RO uses remaining renewable power only. Grid imports can cover "
                 "essential load but are not used to power RO in this screening model. Candidate "
-                "generation is rule-based and uses the scenario values directly; it does not predict "
-                "future weather or demand and does not prove savings."
+                "generation is rule-based and uses the scenario values directly; candidates use "
+                "the same transparent seasonal-naive baseline forecast derived from the "
+                "synthetic history; this is not a validated site forecast, and does not prove "
+                "savings."
             )
 
 elif page == "Historical RO baseline":
