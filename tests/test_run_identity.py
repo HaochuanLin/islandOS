@@ -11,10 +11,12 @@ from islandos_core.run_identity import (
     InputGroupIdentity,
     PAGE_SIGNAL_ALIASES,
     RunIdentityError,
+    RunIdentity,
     canonical_signal_name,
     canonicalize_history_signals,
     canonicalize_units,
     derive_input_group_id,
+    derive_run_id,
 )
 
 
@@ -278,3 +280,224 @@ def test_module_has_no_streamlit_environment_or_database_dependency():
     assert "sqlite3" not in text
     assert "os.environ" not in text
     assert "requests" not in text
+
+
+RUN05_INPUTS = {
+    "page": "customer_dashboard",
+    "input_group": BASE_EXPECTED,
+    "site_configuration_sha256": "2eb26336383cd110d964c1297654d4b61a011c125fa2a02e4e2d85e025ea4ab2",
+    "page_settings": {"demand_scale": 1.0, "tariff_scale": 1.0, "cost_priority": 0.7},
+    "page_inputs": {},
+    "run_settings": {"currency": "USD"},
+    "forecast_settings": {"horizon_hours": 24, "forecast_policy": "fixed"},
+    "model_selection_policy": {"id": "forecast_policy_default", "version": "1"},
+    "model_catalogue_version": "catalogue-v1",
+    "optimizer": {"id": "customer_dashboard_policy_comparison", "version": "1"},
+    "algorithm_versions": {"input_adapter": "1", "customer_workflow": "1"},
+}
+
+RUN06_INPUTS = {
+    "page": "joint_resource_optimizer",
+    "input_group": BASE_EXPECTED,
+    "site_configuration_sha256": "4063d8d5acb192b871a7e11dbc406f8c68c9e2618906c16add2ac1e5ba328f6b",
+    "page_settings": {},
+    "page_inputs": {"window_end_utc": "2026-01-01T03:00:00Z"},
+    "run_settings": {
+        "currency": "USD",
+        "availability": {"grid_all_hours": True, "diesel_all_hours": True},
+    },
+    "forecast_settings": {"horizon_hours": 168, "forecast_lead_hours": 24},
+    "model_selection_policy": {"id": "per_signal_auto_select", "version": "1"},
+    "model_catalogue_version": "catalogue-v1",
+    "optimizer": {"id": "prediction_resource_dispatch", "version": "1"},
+    "algorithm_versions": {"forecast_engine": "1", "dispatch_optimizer": "1"},
+}
+
+
+def test_run_identity_fixed_page_05_vector():
+    identity = derive_run_id(**RUN05_INPUTS)
+
+    assert isinstance(identity, RunIdentity)
+    assert identity.run_id == "run-05-f099924addce15e4"
+    assert identity.run_identity_sha256 == "f099924addce15e4bde6c2d7146cd397fecb169dc1bfd06fbc11bb2b02073896"
+    assert identity.identity_schema_version == 1
+    assert identity.page == "customer_dashboard"
+    assert identity.input_group == BASE_EXPECTED
+
+
+def test_run_identity_fixed_page_06_vector():
+    identity = derive_run_id(**RUN06_INPUTS)
+
+    assert identity.run_id == "run-06-906cce6af6da7a0f"
+    assert identity.run_identity_sha256 == "906cce6af6da7a0f6061f11f27393fa6aa61f49e494bdf9a29abbf5e6e893a47"
+    assert identity.identity_schema_version == 1
+    assert identity.page == "joint_resource_optimizer"
+
+
+def test_run_identity_is_deterministic_and_mapping_order_independent():
+    first = derive_run_id(**RUN05_INPUTS)
+    second = derive_run_id(
+        **{
+            **RUN05_INPUTS,
+            "page_settings": dict(reversed(list(RUN05_INPUTS["page_settings"].items()))),
+            "run_settings": {"currency": "USD"},
+        }
+    )
+
+    assert first == second
+
+
+def test_technical_settings_change_run_id_but_not_input_group():
+    baseline = derive_run_id(**RUN05_INPUTS)
+    changed = derive_run_id(
+        **{
+            **RUN05_INPUTS,
+            "page_settings": {**RUN05_INPUTS["page_settings"], "demand_scale": 1.2},
+        }
+    )
+
+    assert changed.run_id == "run-05-1efacbd210e4c652"
+    assert changed.input_group == baseline.input_group
+
+
+def test_model_policy_and_catalogue_versions_are_part_of_run_identity():
+    baseline = derive_run_id(**RUN06_INPUTS)
+    changed_policy = derive_run_id(
+        **{
+            **RUN06_INPUTS,
+            "model_selection_policy": {"id": "per_signal_auto_select", "version": "2"},
+        }
+    )
+    changed_catalogue = derive_run_id(
+        **{**RUN06_INPUTS, "model_catalogue_version": "catalogue-v2"}
+    )
+
+    assert changed_policy.run_id != baseline.run_id
+    assert changed_catalogue.run_id == "run-06-2c3e86dbb13ec2e7"
+
+
+def test_currency_is_run_setting_not_input_group_identity():
+    baseline = derive_run_id(**RUN05_INPUTS)
+    changed = derive_run_id(
+        **{
+            **RUN05_INPUTS,
+            "run_settings": {"currency": "CNY"},
+        }
+    )
+
+    assert changed.run_id != baseline.run_id
+    assert changed.input_group == baseline.input_group
+
+
+def test_missing_input_group_is_supported_without_fabricating_a_group():
+    identity = derive_run_id(**{**RUN05_INPUTS, "input_group": None})
+
+    assert identity.input_group is None
+    assert identity.run_id.startswith("run-05-")
+
+
+def test_page_09_is_not_supported_by_the_persistent_run_identity_function():
+    with pytest.raises(RunIdentityError, match="unsupported page"):
+        derive_run_id(**{**RUN05_INPUTS, "page": "device_flexibility_planner"})
+
+
+def test_actual_selected_model_ids_are_not_an_identity_input():
+    with pytest.raises(TypeError):
+        derive_run_id(**{**RUN05_INPUTS, "model_ids": {"load_kw": "ridge"}})
+
+
+def test_run_identity_rejects_invalid_site_digest_and_missing_currency():
+    with pytest.raises(RunIdentityError, match="site_configuration_sha256"):
+        derive_run_id(**{**RUN05_INPUTS, "site_configuration_sha256": "not-a-digest"})
+    with pytest.raises(RunIdentityError, match="run_settings.currency"):
+        derive_run_id(**{**RUN05_INPUTS, "run_settings": {}})
+
+
+def test_run_identity_rejects_non_json_safe_values():
+    from datetime import datetime, timezone
+
+    with pytest.raises(RunIdentityError, match="JSON-safe"):
+        derive_run_id(
+            **{
+                **RUN05_INPUTS,
+                "page_inputs": {"created_at": datetime(2026, 1, 1, tzinfo=timezone.utc)},
+            }
+        )
+    with pytest.raises(RunIdentityError, match="finite JSON numbers"):
+        derive_run_id(**{**RUN05_INPUTS, "page_settings": {"weight": float("nan")}})
+
+
+def test_run_identity_rejects_malformed_input_group_objects():
+    malformed = InputGroupIdentity(
+        input_group_id="ig-wrong",
+        input_group_sha256=BASE_EXPECTED.input_group_sha256,
+        history_sha256=BASE_EXPECTED.history_sha256,
+        units_sha256=BASE_EXPECTED.units_sha256,
+        hour_count=3,
+    )
+    with pytest.raises(RunIdentityError, match="does not match"):
+        derive_run_id(**{**RUN05_INPUTS, "input_group": malformed})
+
+
+def test_run_identity_output_is_immutable():
+    identity = derive_run_id(**RUN05_INPUTS)
+    with pytest.raises(Exception):
+        identity.run_id = "run-05-mutated"
+
+
+def test_run_identity_schema_is_versioned_and_page_scoped():
+    identity_05 = derive_run_id(**RUN05_INPUTS)
+    identity_06 = derive_run_id(**RUN06_INPUTS)
+
+    assert identity_05.run_id.startswith("run-05-")
+    assert identity_06.run_id.startswith("run-06-")
+    assert identity_05.run_id != identity_06.run_id
+
+
+def test_run_identity_fixture_matches_implemented_contract():
+    fixture_path = Path(__file__).parents[1] / "docs" / "fixtures" / "j01_run_identity_p1b_vectors.json"
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    for case in fixture["cases"]:
+        identity = derive_run_id(
+            **case["inputs"],
+            input_group=BASE_EXPECTED,
+        )
+        assert identity.run_id == case["expected_run_id"]
+        assert identity.run_identity_sha256 == case["expected_run_identity_sha256"]
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"site_configuration_sha256": "9" * 64},
+        {"page_inputs": {"window_end_utc": "2026-01-02T03:00:00Z"}},
+        {"forecast_settings": {"horizon_hours": 48, "forecast_policy": "fixed"}},
+        {"optimizer": {"id": "prediction_resource_dispatch", "version": "2"}},
+        {"algorithm_versions": {"forecast_engine": "2", "dispatch_optimizer": "1"}},
+    ],
+)
+def test_each_technical_identity_dimension_changes_run_id(override):
+    baseline = derive_run_id(**RUN06_INPUTS)
+    changed = derive_run_id(**{**RUN06_INPUTS, **override})
+
+    assert changed.run_id != baseline.run_id
+    assert changed.input_group == baseline.input_group
+
+
+def test_input_group_change_changes_run_id():
+    changed_group = derive_input_group_id(
+        timestamps=base_timestamps,
+        signals=base_signals,
+        units={**base_units, "load_kw": "MW"},
+    )
+    changed = derive_run_id(**{**RUN05_INPUTS, "input_group": changed_group})
+    baseline = derive_run_id(**RUN05_INPUTS)
+
+    assert changed.run_id != baseline.run_id
+    assert changed.input_group == changed_group
+
+
+def test_investment_assumptions_are_not_accepted_as_run_identity_inputs():
+    with pytest.raises(TypeError):
+        derive_run_id(**{**RUN05_INPUTS, "investment_assumptions": {"upfront_capex": 1000}})
