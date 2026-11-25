@@ -98,12 +98,16 @@ two different `run_id`s and two different `manifest_sha256` values on the two pa
 two separate offline runs over the same history, not one run shown twice. A reader who sees both must not
 conclude that the pages disagree — they were never the same run.
 
-The customer pages now record a presentation-only snapshot of each view's last history SHA-256 and
-provenance in `islandos_customer_history_context`. On the next visit, `islandos_ui.customer_workflow`
-compares the two snapshots and warns when they differ. It does not merge results, create a shared
-run id, or claim that matching input makes the two pages' cost figures interchangeable. The same
-helper also offers a page-local CSV the existing `store_session_dataset` handoff, so an upload on
-05 or 06 can be reused by the other view without returning to Data onboarding.
+The customer pages also record a presentation-only snapshot of each view's last **shared input
+fingerprint** and provenance in `islandos_customer_history_context`. `build_input_fingerprint` covers the
+inputs 05 and 06 genuinely share — `history_sha256`, `site_digest`, `units`, `hour_count`, `currency` —
+and stores page-level settings separately as `page_settings_sha256`, because the two pages expose
+different knobs and folding them into the shared digest would turn every comparison into a false
+mismatch. On the next visit, `islandos_ui.customer_workflow` compares `fingerprint_sha256` and warns when
+the shared input differs. It does not merge results, create a shared run id, or claim that matching input
+makes the two pages' cost figures interchangeable. The same helper also offers a page-local CSV the
+existing `store_session_dataset` handoff, so an upload on 05 or 06 can be reused by the other view
+without returning to Data onboarding.
 
 ---
 
@@ -238,6 +242,13 @@ The view models are built **in-process**, read by the page for its metrics, and 
 page's downloadable JSON under `application_views` — `{request, result}` on 05, `{request, result,
 annual}` on 06, where `annual` is `null` unless the reader declares the equal-days assumption, and
 `{request, result, annual: null}` on 09.
+
+Status after T1–T7 and F-02/F-03/F-04: 05 and 06 now carry the shared input fingerprint while remaining
+two separate runs; 05 prints its assumptions and the recommended dispatch; 06 prints forecast points and
+intervals (display only, with no formal export contract yet); 09 and 05/06 share the same readable
+exception boundary; and the React viewer states its reference-surface role, links the three planning
+paths, and shows an explicit annual-unavailable panel instead of silently hiding a missing `annual`
+block. These are presentation and label changes: they do not close G1/G2/G5/G6/G8.
 
 A read-only transport now exists for non-Streamlit clients, but **No HTTP surface is deployed**: it is
 `python -m islandos_core.transport`, binds `127.0.0.1` only, has no authentication and no persistence,
@@ -434,12 +445,26 @@ written answer to "what did that cited report contain".
    12 kWh / 4 kW battery, 5 kW diesel) instead of inheriting the 40/20/100 site.
 2. **Run identity is not shared across pages.** See §3. No page can currently say "this is the same run
    the dashboard used", because no run id is handed off.
-3. ~~**Data preparation lives inside Streamlit function bodies.**~~ Closed by two steps: config
+3. **Annual replay is not implemented (G2).** `replay_run_request` returns `annual: None` for 05, 06 and
+   09. The 06 annual projection remains a page checkbox plus an equal-days assumption; a replay has no
+   route to reproduce it.
+4. **Forecast points are displayed, not formally exportable (G5).** 06 shows the prediction points,
+   bounds and model metadata, but there is no committed forecast-point CSV contract. The page table is a
+   display, not an export schema.
+5. **Simulation is not a first-class result layer (G6).** Simulation output is embedded in the
+   optimization result; there is no common `simulation_id`/scenario/dispatch/constraints envelope for
+   comparing "same input, same simulation, different optimizer".
+6. **Economic boundaries are not unified (G8).** 05's customer-entered annual bills, 06's equal-days
+   operating projection, 09's 24-hour energy charge and the workspace's per-m³ indicators use different
+   service boundaries and periods. Matching history does not make their cost figures comparable.
+7. **The React console has no server-side session or auth (B-04).** It remains a local reference surface;
+   there is no `session_id` / `user_id` / `role` / `tenant_id` contract.
+8. ~~**Data preparation lives inside Streamlit function bodies.**~~ Closed by two steps: config
    construction lives in `site_inputs` (T3), the request/result/annual shapes in `app_view_models`
    (T4), and the *call order* in `run_orchestration` (T8). Pages 05, 06 and 09 now collect inputs,
    build their request, call one orchestration function, and render. What remains page-side is
    widget wiring and the presentation of values that already exist.
-4. ~~**No transport for a non-Streamlit front end.**~~ Closed: `islandos_core/transport.py` serves
+9. ~~**No transport for a non-Streamlit front end.**~~ Closed: `islandos_core/transport.py` serves
    `GET /` (the built viewer), `GET /contracts`, `GET /health` and `POST /run` over loopback, and
    `replay_run_request` covers all three pages. Still open is what §4.5 lists: authentication, a hosted
    endpoint, a published npm package, and a run store. The contract now also ships a draft 2020-12 JSON
