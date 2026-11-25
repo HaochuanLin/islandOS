@@ -27,7 +27,11 @@ from islandos_core.app_view_models import (
 from islandos_core.contract_schemas import SCHEMA_PATH, contract_schema, write_schema
 from islandos_core.flexible_tasks import DeviceTask
 from islandos_core.investment_economics import evaluate_investment_economics
-from islandos_core.run_orchestration import device_task_payload, replay_run_request
+from islandos_core.run_orchestration import (
+    build_joint_optimizer_manifest,
+    device_task_payload,
+    replay_run_request,
+)
 from islandos_core.site_inputs import SiteAssumptions, device_planner_demo_site
 from islandos_core.transport import create_server
 
@@ -403,8 +407,12 @@ def test_the_same_joint_request_replays_to_the_same_run():
     request = _joint_request()
     first = replay_run_request(request)
     second = replay_run_request(json.loads(json.dumps(request)))
+    canonical_manifest = build_joint_optimizer_manifest(request).to_dict()
     assert first["result"] == second["result"]
     assert first["result"]["run_id"] == second["result"]["run_id"]
+    assert first["result"]["run_id"] == canonical_manifest["run_id"]
+    assert first["result"]["manifest_sha256"] == canonical_manifest["manifest_sha256"]
+    assert canonical_manifest["created_at_utc"] == request["history"]["timestamps_utc"][-1]
     assert first["result"]["run_id"].startswith("run-")
     assert first["result"]["run_id"] != replay_run_request(
         {**request, "run_settings": {**request["run_settings"], "currency": "EUR"}}
