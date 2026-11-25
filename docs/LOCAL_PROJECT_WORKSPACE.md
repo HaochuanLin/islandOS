@@ -32,7 +32,8 @@ through the existing explicit source-file opt-in.
 
 Completed run results are stored only after explicit result-storage consent.
 The default run-record mode stores result evidence and sanitised request
-metadata, not the full request/history arrays. Retaining the exact full request
+metadata (limited to 64 KiB and rejecting raw history, signal and telemetry
+payload keys), not the full request/history arrays. Retaining the exact full request
 requires a second, separate opt-in. A metadata-only run record is viewable but
 not replayable; a full-request record is marked replayable, subject to compatible
 software and model versions.
