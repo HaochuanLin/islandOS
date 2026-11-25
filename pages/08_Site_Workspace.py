@@ -219,8 +219,9 @@ else:
 
 st.divider()
 st.subheader("Portable project export")
-st.caption("Export one project's configuration, equipment history, import metadata, run manifests and audit evidence. Original source files are included only if they were separately retained with explicit consent.")
+st.caption("Export one project's configuration, equipment history, import metadata, saved run results and audit evidence. Full retained request/history data is excluded unless separately selected.")
 include_sources = st.checkbox("Include locally retained original CSV/XLSX files", value=True)
+include_full_run_requests = st.checkbox("Include retained full request/history data (separate opt-in)", value=False)
 if st.button("Build verified project package"):
     try:
         with tempfile.TemporaryDirectory(prefix="islandos-export-") as temp_dir:
@@ -228,9 +229,13 @@ if st.button("Build verified project package"):
             result = export_project_package(
                 db_path, target, project_id=project_id,
                 storage_dir=storage_root, include_retained_sources=include_sources,
+                include_retained_run_requests=include_full_run_requests,
             )
             package_bytes = target.read_bytes()
-        st.success(f"Package integrity verified · SHA-256: {result['sha256']}")
+        st.success(
+            f"Package integrity verified · {result['included_run_records']} run results · "
+            f"{result['included_replayable_run_records']} full requests included · SHA-256: {result['sha256']}"
+        )
         st.download_button(
             "Download project package",
             data=package_bytes,
@@ -249,8 +254,21 @@ with st.expander("Import a portable project package"):
         package_bytes = package_upload.getvalue()
         try:
             package_report = inspect_project_package(package_bytes)
-            st.success(f"Package verified · {package_report['project_name']} · {package_report['asset_count']} asset versions · {package_report['import_count']} imports")
+            st.success(
+                f"Package verified · {package_report['project_name']} · "
+                f"{package_report['asset_count']} asset versions · {package_report['import_count']} imports · "
+                f"{package_report['run_record_count']} saved run results"
+            )
             st.caption(f"Package SHA-256: {package_report['sha256']}")
+            import_run_results = st.checkbox(
+                "Also import saved run results into this local workspace",
+                value=False, disabled=package_report["run_record_count"] == 0,
+            )
+            retain_run_requests = st.checkbox(
+                "Also retain full request/history data for imported runs (separate opt-in)",
+                value=False,
+                disabled=(not import_run_results or package_report["replayable_run_record_count"] == 0),
+            )
             import_consent = st.checkbox("I consent to importing this project's metadata and configuration into this local workspace.")
             if st.button("Import as a new project", disabled=not import_consent):
                 import uuid
@@ -260,8 +278,15 @@ with st.expander("Import a portable project package"):
                     new_project_id="site-" + uuid.uuid4().hex[:12],
                     new_project_name=name, consent_to_store_metadata=True,
                     storage_dir=storage_root, retain_sources=retain_imported_sources,
+                    consent_to_import_run_records=import_run_results,
+                    consent_to_retain_run_requests=retain_run_requests,
                 )
-                st.success(f"Imported project {imported['project_id']} · {imported['asset_versions_imported']} asset versions · {imported['import_artifacts_imported']} datasets")
+                st.success(
+                    f"Imported project {imported['project_id']} · {imported['asset_versions_imported']} asset versions · "
+                    f"{imported['import_artifacts_imported']} datasets · "
+                    f"{imported['run_records_imported']} run results imported · "
+                    f"{imported['run_records_skipped']} run results skipped"
+                )
                 st.json(imported)
                 st.rerun()
         except Exception as exc:
