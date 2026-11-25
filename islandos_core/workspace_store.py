@@ -58,6 +58,33 @@ def _json(value: Any) -> str:
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
+_RUN_METADATA_MAX_BYTES = 64 * 1024
+_RUN_METADATA_FORBIDDEN_KEYS = {
+    "history", "timestamps_utc", "signals", "series", "telemetry",
+    "raw_data", "raw_telemetry",
+}
+
+
+def _validate_run_metadata(value: Mapping[str, Any]) -> str:
+    """Serialize small descriptive metadata while rejecting raw time-series payloads."""
+    def visit(item: Any) -> None:
+        if isinstance(item, Mapping):
+            for key, child in item.items():
+                if isinstance(key, str) and key.strip().lower() in _RUN_METADATA_FORBIDDEN_KEYS:
+                    raise WorkspaceStoreError(
+                        "request_metadata must not contain raw history, signal, or telemetry arrays"
+                    )
+                visit(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    serialized = _json(dict(value))
+    if len(serialized.encode("utf-8")) > _RUN_METADATA_MAX_BYTES:
+        raise WorkspaceStoreError("request_metadata exceeds the 64 KiB metadata limit")
+    return serialized
+
 
 @contextmanager
 def _connect(db_path: str | Path):
@@ -562,7 +589,7 @@ def record_run_record(
     if canonical_manifest is not None and not isinstance(canonical_manifest, Mapping):
         raise WorkspaceStoreError("canonical_manifest must be a mapping or None")
     timestamp = _timestamp(created_at)
-    metadata_json = _json(dict(request_metadata))
+    metadata_json = _validate_run_metadata(request_metadata)
     result_json = _json(dict(result))
     payload_json = _json(dict(request_payload)) if request_payload is not None else None
     manifest_json = _json(dict(canonical_manifest)) if canonical_manifest is not None else None
