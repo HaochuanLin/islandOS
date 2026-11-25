@@ -52,6 +52,7 @@ Keep a PR focused. Do not combine unrelated features simply to reduce the number
 - Request review from the relevant module owner where practical.
 - Resolve material review comments and ensure required CI checks pass before merging.
 - Use **Squash and merge** for a focused PR when its intermediate commits are only implementation steps. Use the PR title as the resulting main-branch commit subject, and keep the PR description as the detailed record.
+- When GitHub pre-fills the squash commit body with a list of individual commit messages, replace that body with a short summary of the PR's substantive change. Keep the detailed implementation history in the PR itself. This repository currently uses the `COMMIT_MESSAGES` squash-message setting, so check the generated message rather than assuming it will be concise.
 - Preserve separate commits when they represent meaningful, independently useful history or when a merge strategy is needed to retain that structure.
 - Do not squash unrelated work into a single PR just to produce one main-branch commit.
 - Delete the short-lived branch after merge when it is no longer needed.
