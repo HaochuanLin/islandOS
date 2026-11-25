@@ -239,6 +239,7 @@ def test_project_package_exports_and_imports_run_results_with_separate_request_c
         request_metadata={"history_rows": 1, "site_digest": "b" * 64},
         result={"grid_cost": 42.5, "unmet_load_kwh": 0},
         actor_id="tester", consent_to_store_result=True,
+        software_version="0.2.1", model_versions={"forecast": "baseline-v2"},
         request_payload=payload, consent_to_retain_request=True,
         history_sha256="b" * 64, created_at=None,
     )
@@ -269,6 +270,8 @@ def test_project_package_exports_and_imports_run_results_with_separate_request_c
     assert imported["run_records_imported"] == 1
     restored = get_run_record(destination_db, project_id="site-imported", run_id="same-run-id")
     assert restored["result"] == {"grid_cost": 42.5, "unmet_load_kwh": 0}
+    assert restored["software_version"] == "0.2.1"
+    assert restored["model_versions"] == {"forecast": "baseline-v2"}
     assert restored["request_payload"] is None
     assert restored["replayable"] is False
 
