@@ -311,6 +311,45 @@ try:
     handoff = run_outputs["handoff"]
     st.caption(f"Canonical run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
     render_decision_record(planning_run["decision_record"])
+
+    with st.expander("Inputs and assumptions used by this run", expanded=True):
+        run_window_start = target_timestamps[0].isoformat()
+        run_window_end = target_timestamps[-1].isoformat()
+        input_cols = st.columns([1.45, 1.15, 0.9])
+        with input_cols[0]:
+            st.markdown("**Data and window**")
+            st.caption(f"Source: {source}")
+            st.caption(f"History SHA-256: `{history_sha256}`")
+            st.caption(
+                f"Forecast / schedule: {run_window_start} → {run_window_end} "
+                f"({len(target_timestamps)} hours)"
+            )
+        with input_cols[1]:
+            st.markdown("**Site and equipment**")
+            st.caption(
+                f"PV {site_assumptions.pv_rated_kw:g} kW · Wind {site_assumptions.wind_rated_kw:g} kW · "
+                f"Grid limit {site_assumptions.grid_import_limit_kw:g} kW"
+            )
+            st.caption(
+                f"Battery {site_assumptions.battery_capacity_kwh:g} kWh / "
+                f"{site_assumptions.battery_power_kw:g} kW"
+            )
+            st.caption(
+                f"Diesel {site_assumptions.diesel_rated_kw:g} kW at "
+                f"{site_assumptions.diesel_variable_cost_per_kwh:g} {currency}/kWh"
+            )
+        with input_cols[2]:
+            st.markdown("**Search and currency**")
+            st.caption(
+                f"Population {int(population)} · Generations {int(generations)} · "
+                f"Seed {int(seed)}"
+            )
+            st.caption(f"Currency: {currency}")
+        st.caption(
+            "Synthetic defaults unless a CSV is uploaded; offline planning; "
+            "predictions are statistical baselines, not measured future values."
+        )
+
     st.subheader("Prediction engine")
     model_rows = []
     for canonical_id, forecast in predictions.items():
@@ -324,6 +363,44 @@ try:
         })
     st.dataframe(pd.DataFrame(model_rows), width="stretch", hide_index=True)
     st.caption("Built-in candidates are statistical baselines. Backtest scores describe only the supplied history.")
+
+    st.subheader("Forecast points and intervals")
+    signal_options = list(predictions.keys())
+    selected_signal = st.selectbox(
+        "Forecast signal",
+        signal_options,
+        format_func=lambda value: value.replace("_", " "),
+        help="One signal at a time: the chart never mixes units or forecast models.",
+    )
+    selected_forecast = predictions[selected_signal]
+    st.caption(f"Unit: {selected_forecast.unit}")
+    points = selected_forecast.points
+    if not points:
+        st.info("No forecast points returned for this signal")
+    else:
+        points_frame = pd.DataFrame([
+            {
+                "timestamp": point.timestamp,
+                "Predicted": point.predicted_value,
+                "Lower bound": point.lower_bound,
+                "Upper bound": point.upper_bound,
+            }
+            for point in points
+        ]).set_index("timestamp")
+        st.line_chart(points_frame)
+        st.caption(
+            "The band is an empirical backtest interval; it is not a guarantee "
+            "and not a live measurement."
+        )
+        with st.expander("Forecast point table and interval metadata", expanded=False):
+            st.dataframe(points_frame.reset_index(), width="stretch", hide_index=True)
+            st.caption(
+                f"Model: {selected_forecast.model_id}@{selected_forecast.model_version} · "
+                f"Unit: {selected_forecast.unit} · "
+                f"Confidence level: {selected_forecast.confidence_level:.0%} · "
+                f"Interval method: {selected_forecast.interval_method} · "
+                f"Calibration samples: {selected_forecast.interval_calibration_samples}"
+            )
 
     st.subheader("Recommended joint schedule")
     recommendation = result["recommendation"]
