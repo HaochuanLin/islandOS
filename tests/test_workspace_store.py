@@ -302,6 +302,17 @@ def test_run_record_persists_result_without_retaining_full_request_by_default(tm
     assert verify_audit_chain(db)["valid"] is True
 
 
+def test_run_record_metadata_rejects_raw_history_payloads(tmp_path):
+    db = ready_project(tmp_path)
+    with pytest.raises(WorkspaceStoreError, match="raw history"):
+        record_run_record(
+            db, project_id="site-01", run_id="raw-history-metadata",
+            page="06", request_sha256=DIGEST,
+            request_metadata={"inputs": {"history": {"timestamps_utc": ["2026-11-01T00:00:00Z"]}}},
+            result={}, actor_id="local-user", consent_to_store_result=True,
+        )
+
+
 def test_run_record_requires_separate_opt_in_for_full_request_retention(tmp_path):
     db = ready_project(tmp_path)
     payload = {"history": {"timestamps_utc": ["2026-11-01T00:00:00Z"], "signals": {"load_kw": [5]}}}
