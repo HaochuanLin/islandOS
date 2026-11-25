@@ -12,6 +12,7 @@ import json
 
 import pandas as pd
 import streamlit as st
+import altair as alt
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header, render_page_title
@@ -722,12 +723,50 @@ try:
                 "Annual net operating benefit after incremental O&M": investment.annual_net_operating_benefit,
                 "Reasons / review notes": investment.reasons,
             })
+            case_labels = {
+                "base": "Base case",
+                "high_20pct_energy_saving": "Energy saving +20%",
+                "low_20pct_energy_saving": "Energy saving -20%",
+            }
             sensitivity_frame = pd.DataFrame([
-                {"Case": label.replace("_", " ").title(), "NPV": value}
+                {"Case": case_labels.get(label, label.replace("_", " ").title()), "NPV": float(value)}
                 for label, value in investment.sensitivity_npv.items()
-            ]).set_index("Case")
+            ])
+            case_order = [
+                name for name in ("Base case", "Energy saving -20%", "Energy saving +20%")
+                if name in set(sensitivity_frame["Case"])
+            ]
+            sensitivity_chart = (
+                alt.Chart(sensitivity_frame)
+                .mark_bar(color="#2c7a6b")
+                .encode(
+                    x=alt.X(
+                        "Case:N",
+                        sort=case_order,
+                        title=None,
+                        axis=alt.Axis(
+                            labelAngle=0,
+                            labelLimit=0,
+                            labelOverlap=False,
+                            labelPadding=8,
+                            tickSize=0,
+                            domain=False,
+                        ),
+                    ),
+                    y=alt.Y(
+                        "NPV:Q",
+                        title=f"NPV ({currency})",
+                        axis=alt.Axis(format=",.0f", labelAngle=0),
+                    ),
+                    tooltip=[
+                        alt.Tooltip("Case:N", title="Case"),
+                        alt.Tooltip("NPV:Q", title=f"NPV ({currency})", format=",.0f"),
+                    ],
+                )
+                .properties(height=320, padding={"top": 18, "bottom": 10, "left": 6, "right": 10})
+            )
             st.caption("Sensitivity varies year-one energy-bill saving by ±20%; all other assumptions and escalation rates remain fixed.")
-            st.bar_chart(sensitivity_frame)
+            st.altair_chart(sensitivity_chart, width="stretch")
             st.subheader("Annual investment cashflow")
             cashflow_frame = pd.DataFrame(investment.annual_cashflows)
             render_table(cashflow_frame)
