@@ -227,6 +227,9 @@ def initialize_workspace(
                 record_schema_version TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 actor_id TEXT NOT NULL,
+                software_version TEXT,
+                model_versions_json TEXT,
+                model_versions_sha256 TEXT,
                 request_sha256 TEXT NOT NULL,
                 request_metadata_json TEXT NOT NULL,
                 request_metadata_sha256 TEXT NOT NULL,
@@ -243,7 +246,9 @@ def initialize_workspace(
                 CHECK((request_payload_json IS NULL AND request_payload_sha256 IS NULL AND retention_mode='metadata_only')
                    OR (request_payload_json IS NOT NULL AND request_payload_sha256 IS NOT NULL AND retention_mode='retained_full_request')),
                 CHECK((canonical_manifest_json IS NULL AND canonical_manifest_sha256 IS NULL)
-                   OR (canonical_manifest_json IS NOT NULL AND canonical_manifest_sha256 IS NOT NULL))
+                   OR (canonical_manifest_json IS NOT NULL AND canonical_manifest_sha256 IS NOT NULL)),
+                CHECK((model_versions_json IS NULL AND model_versions_sha256 IS NULL)
+                   OR (model_versions_json IS NOT NULL AND model_versions_sha256 IS NOT NULL))
             );
             CREATE TRIGGER IF NOT EXISTS run_records_no_update
             BEFORE UPDATE ON run_records BEGIN
@@ -562,6 +567,8 @@ def record_run_record(
     result: Mapping[str, Any],
     actor_id: str,
     consent_to_store_result: bool,
+    software_version: str | None = None,
+    model_versions: Mapping[str, str] | None = None,
     request_payload: Mapping[str, Any] | None = None,
     consent_to_retain_request: bool = False,
     canonical_manifest: Mapping[str, Any] | None = None,
@@ -593,11 +600,22 @@ def record_run_record(
         raise WorkspaceStoreError("request_payload is required when full-request retention is enabled")
     if canonical_manifest is not None and not isinstance(canonical_manifest, Mapping):
         raise WorkspaceStoreError("canonical_manifest must be a mapping or None")
+    if software_version is not None and (not isinstance(software_version, str) or not software_version.strip()):
+        raise WorkspaceStoreError("software_version must be non-empty text or None")
+    if model_versions is not None:
+        if not isinstance(model_versions, Mapping) or any(
+            not isinstance(key, str) or not key.strip()
+            or not isinstance(value, str) or not value.strip()
+            for key, value in model_versions.items()
+        ):
+            raise WorkspaceStoreError("model_versions must map non-empty names to non-empty version strings")
     timestamp = _timestamp(created_at)
     metadata_json = _validate_run_metadata(request_metadata)
     result_json = _json(dict(result))
     payload_json = _json(dict(request_payload)) if request_payload is not None else None
     manifest_json = _json(dict(canonical_manifest)) if canonical_manifest is not None else None
+    model_versions_json = _json(dict(model_versions)) if model_versions is not None else None
+    model_versions_hash = _hash(model_versions_json) if model_versions_json is not None else None
     payload_hash = _hash(payload_json) if payload_json is not None else None
     result_hash = _hash(result_json)
     manifest_hash = _hash(manifest_json) if manifest_json is not None else None
@@ -613,12 +631,15 @@ def record_run_record(
         connection.execute(
             """INSERT INTO run_records
             (project_id, run_id, page, record_schema_version, created_at, actor_id,
+             software_version, model_versions_json, model_versions_sha256,
              request_sha256, request_metadata_json, request_metadata_sha256, request_payload_json, request_payload_sha256,
              result_json, result_sha256, canonical_manifest_json, canonical_manifest_sha256,
              history_sha256, input_fingerprint_sha256, retention_mode)
-            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                project_id, run_id, page, timestamp, actor_id.strip(), request_sha256,
+                project_id, run_id, page, timestamp, actor_id.strip(),
+                software_version.strip() if software_version else None,
+                model_versions_json, model_versions_hash, request_sha256,
                 metadata_json, _hash(metadata_json), payload_json, payload_hash, result_json, result_hash,
                 manifest_json, manifest_hash, history_sha256, input_fingerprint_sha256,
                 retention_mode,
@@ -637,7 +658,9 @@ def record_run_record(
     return {
         "project_id": project_id, "run_id": run_id, "page": page,
         "record_schema_version": "1.0", "created_at": timestamp,
-        "actor_id": actor_id.strip(), "request_sha256": request_sha256,
+        "actor_id": actor_id.strip(), "software_version": software_version.strip() if software_version else None,
+        "model_versions": json.loads(model_versions_json) if model_versions_json is not None else None,
+        "model_versions_sha256": model_versions_hash, "request_sha256": request_sha256,
         "request_metadata_sha256": _hash(metadata_json),
         "request_metadata": json.loads(metadata_json),
         "request_payload": json.loads(payload_json) if payload_json is not None else None,
@@ -663,6 +686,7 @@ def get_run_record(db_path: str | Path, *, project_id: str, run_id: str) -> dict
         raise WorkspaceStoreError("run record does not exist")
     for json_field, hash_field, label in (
         ("request_metadata_json", "request_metadata_sha256", "request metadata"),
+        ("model_versions_json", "model_versions_sha256", "model versions"),
         ("result_json", "result_sha256", "run result"),
         ("request_payload_json", "request_payload_sha256", "retained request"),
         ("canonical_manifest_json", "canonical_manifest_sha256", "canonical manifest"),
@@ -687,7 +711,10 @@ def get_run_record(db_path: str | Path, *, project_id: str, run_id: str) -> dict
     return {
         "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
         "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
-        "actor_id": row["actor_id"], "request_sha256": row["request_sha256"],
+        "actor_id": row["actor_id"], "software_version": row["software_version"],
+        "model_versions": json.loads(row["model_versions_json"]) if row["model_versions_json"] is not None else None,
+        "model_versions_sha256": row["model_versions_sha256"],
+        "request_sha256": row["request_sha256"],
         "request_metadata_sha256": row["request_metadata_sha256"],
         "request_metadata": metadata, "request_payload": request_payload,
         "request_payload_sha256": row["request_payload_sha256"],
