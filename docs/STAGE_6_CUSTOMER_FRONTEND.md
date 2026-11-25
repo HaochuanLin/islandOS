@@ -14,12 +14,49 @@ The console currently supports:
 
 ## Run locally
 
+One command starts both loopback services, waits for the API health check, and records the PIDs:
+
+```powershell
+.\scripts\start_console.ps1        # API 127.0.0.1:8766, console 127.0.0.1:5173
+.\scripts\start_console.ps1 -Stop  # stop both
+```
+
+Registration stays closed by default. A new environment needs one bootstrap window; stop and restart without the flag afterwards:
+
+```powershell
+.\scripts\start_console.ps1 -BootstrapRegistration
+```
+
+The console's `/api` proxy follows `-ApiPort` through the `ISLANDOS_API_TARGET` environment variable read by `vite.config.ts`; without it the default stays `http://127.0.0.1:8766`.
+
+The manual equivalent remains:
+
 1. Start the local reference API: `python islandos_service_api.py --host 127.0.0.1 --port 8766`.
 2. Create the initial owner through the controlled bootstrap procedure described by the API operator; registration is disabled by default.
 3. In `frontend/`, run `npm install`, then `npm run dev`.
 4. Open `http://127.0.0.1:5173`. Vite proxies `/api` to the loopback API at port 8766.
 
 Build with `npm run build`; the static output is written to `frontend/dist`.
+
+## Database lifecycle and backup
+
+Everything the console stores lives in one SQLite file selected by `--database` (default `build/islandos-service.sqlite3`). The behaviour below is asserted by `tests/test_service_db_lifecycle.py` and `tests/test_service_db_backup.py`.
+
+| Situation | Actual behaviour |
+|---|---|
+| Normal start on an existing file | `IslandOSStore._initialize` runs `CREATE TABLE IF NOT EXISTS` for the eight tables on every start. Reopening a file keeps users and sessions; there is no schema-version table, no `ALTER TABLE`, and no migration step. A schema change needs a deliberate migration or a new database file. |
+| Restart or clean shutdown | Rows survive because they are on disk. Sessions survive too, but each token expires after 12 hours and the browser keeps it in memory only, so a reload requires a fresh sign-in. |
+| Database file missing | The service creates a new empty database and starts; it does not restore or warn. Every tenant, user, site, telemetry row and audit event is gone. |
+| Database file corrupt | Startup fails closed with `sqlite3.DatabaseError` before serving requests. The file is left untouched; there is no automatic repair. |
+| Backup while running | `python scripts/backup_service_db.py` uses SQLite's online backup API and runs `PRAGMA integrity_check` on the copy, then reports the path, byte size and per-table row counts as JSON. |
+| Restore | Manual: stop both services, replace the database file with the backup, start again. The test suite copies a backup into a new path, opens it through `IslandOSStore`, and signs in with the account it contained. |
+
+```powershell
+python scripts/backup_service_db.py
+# -> {"backup_path": "build\\backups\\islandos-service-20261125T130000Z.sqlite3", "integrity_check": "ok", ...}
+```
+
+Limits that remain: backups sit on the same disk as the database, so they cover a bad migration or a mistaken delete, not disk loss; there is no schedule, no retention policy, and no off-machine copy. The API exposes no export route for tenants, sites, telemetry or audit events — the CSV downloads in the repository belong to the Streamlit workspace, not to the console. That is a gap, not a feature.
 
 ## Security and deployment boundary
 

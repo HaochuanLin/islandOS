@@ -4,6 +4,7 @@ import { api } from "./api";
 import Icon from "./Icon";
 import IslandAtlas from "./IslandAtlas";
 import MemberManagement from "./MemberManagement";
+import { canCreateSite } from "./roles";
 import "./workflow.css";
 import type { Notification, Session, Site, Telemetry } from "./api";
 
@@ -147,6 +148,8 @@ function App() {
     </section>
   </main>;
 
+  const canAddSite = canCreateSite(session.role);
+
   return <div className="app-shell">
     <aside className="sidebar">
       <IslandAtlas className="sidebar-atlas" />
@@ -159,13 +162,13 @@ function App() {
         <div className="side-label site-label"><span>Sites</span><span className="side-count">{sites.length}</span></div>
         <div className="site-list">
           {sites.map((site) => <button key={site.id} className={site.id === siteId ? "site-choice active" : "site-choice"} onClick={() => selectSite(site.id)}><span className="site-dot" />{site.name}</button>)}
-          {!sites.length && <p className="empty-small">No sites yet. Add your first site below.</p>}
+          {!sites.length && <p className="empty-small">{canAddSite ? "No sites yet. Add your first site below." : "No sites yet. An owner or analyst adds them."}</p>}
         </div>
-        <form className="add-site" onSubmit={handleCreateSite}>
+        {canAddSite ? <form className="add-site" onSubmit={handleCreateSite}>
           <label>New site<input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="e.g. North microgrid" required maxLength={120} /></label>
           <label>Timezone<input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="UTC or Asia/Tokyo" required maxLength={80} /></label>
           <button className="outline full" disabled={busy || !siteName.trim()}><Icon name="plus" size={14} /> Add site</button>
-        </form>
+        </form> : <p className="empty-small viewer-note">Viewer role: site creation is restricted to owners and analysts.</p>}
       </div>
       <div className="sidebar-bottom"><div className="user-line"><div className="avatar">{session.role.slice(0,1).toUpperCase()}</div><div><strong>{session.role}</strong><small>{session.role} access</small></div></div><button className="logout" onClick={handleLogout} disabled={busy}>Sign out <Icon name="arrow" size={14} /></button></div>
     </aside>
