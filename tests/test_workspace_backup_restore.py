@@ -9,6 +9,8 @@ from islandos_core.workspace_store import (
     backup_workspace,
     create_project,
     initialize_workspace,
+    record_run_record,
+    get_run_record,
     restore_workspace,
     verify_audit_chain,
 )
@@ -89,3 +91,32 @@ def test_backup_requires_supported_workspace_and_distinct_paths(tmp_path):
     make_workspace(source)
     with pytest.raises(WorkspaceStoreError, match="must differ"):
         backup_workspace(source, source)
+
+
+def test_backup_and_restore_preserve_run_records_and_verify_their_hashes(tmp_path):
+    source = tmp_path / "source-with-runs.sqlite3"
+    backup = tmp_path / "backup-with-runs.sqlite3"
+    restored = tmp_path / "restored-with-runs.sqlite3"
+    make_workspace(source)
+    record_run_record(
+        source, project_id="site-backup-test", run_id="run-backup-01",
+        page="06", request_sha256="a" * 64,
+        request_metadata={"history_rows": 168},
+        result={"grid_cost": 123.4, "unmet_load_kwh": 0},
+        actor_id="test-operator", consent_to_store_result=True,
+    )
+    backup_workspace(source, backup)
+    restore_workspace(backup, restored)
+    run = get_run_record(restored, project_id="site-backup-test", run_id="run-backup-01")
+    assert run["result"]["grid_cost"] == 123.4
+    assert run["replayable"] is False
+    assert verify_audit_chain(restored)["valid"] is True
+
+    with sqlite3.connect(restored) as connection:
+        connection.execute("DROP TRIGGER run_records_no_update")
+        connection.execute(
+            "UPDATE run_records SET result_json='{}' WHERE project_id=? AND run_id=?",
+            ("site-backup-test", "run-backup-01"),
+        )
+    with pytest.raises(AuditIntegrityError, match="run result hash"):
+        backup_workspace(restored, tmp_path / "must-not-backup.sqlite3")
