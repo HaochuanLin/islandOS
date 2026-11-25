@@ -30,6 +30,7 @@ from islandos_core.workspace_store import (
     get_run_record,
     list_run_records,
     record_run_record,
+    _validate_run_metadata,
 )
 
 SITE_TYPES = {"microgrid", "island", "industrial", "commercial", "community", "other"}
@@ -563,6 +564,7 @@ def import_project_package(
             raise WorkspaceStoreError("package contains an unsupported run record schema")
         if not isinstance(record.get("request_metadata"), dict) or not isinstance(record.get("result"), dict):
             raise WorkspaceStoreError("package run record metadata and result must be objects")
+        _validate_run_metadata(record["request_metadata"])
         if record.get("request_metadata_sha256") != _hash(_json(record["request_metadata"])):
             raise AuditIntegrityError("package run request metadata failed SHA-256 verification")
         if record.get("result_sha256") != _hash(_json(record["result"])):
