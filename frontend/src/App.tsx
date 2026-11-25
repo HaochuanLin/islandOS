@@ -175,7 +175,7 @@ function App() {
 
     <main className="main-content">
       <header className="topbar">
-        <div>
+        <div className="topbar-heading">
           <h1>{selectedSite?.name ?? "Island operations"}</h1>
           <p className="topbar-meta">{selectedSite ? `Local reference surface · ${sites.length} registered site${sites.length === 1 ? "" : "s"}` : "Local reference surface · workspace overview"}</p>
         </div>

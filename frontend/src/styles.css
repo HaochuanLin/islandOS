@@ -1,26 +1,26 @@
 :root {
-  --ink: #14221f;
-  --ink-soft: #1f3a35;
-  --ocean: #102c2b;
+  --ink: #122923;
+  --ink-soft: #3d5149;
+  --ocean: #0b2a26;
   --ocean-deep: #071614;
-  --sea: #1e7367;
-  --sea-bright: #4cae9b;
-  --sea-soft: #dbeae4;
+  --sea: #2f6f6a;
+  --sea-bright: #5e9e91;
+  --sea-soft: #e4efe7;
   --sand: #d8c7a7;
   --seal: #9f4b3b;
-  --paper: #f3f1ea;
-  --surface: #fcfbf7;
-  --line: #d9ded8;
-  --line-strong: #c4cec7;
-  --text: #1a2925;
-  --muted: #687775;
-  --muted-2: #88948f;
+  --paper: #f4f1e8;
+  --surface: #fffcf4;
+  --line: #d8d1c0;
+  --line-strong: #c5bba7;
+  --text: #3d5149;
+  --muted: #5d6e66;
+  --muted-2: #7a8982;
   --danger: #b34545;
   --warning: #b6752d;
   --success: #1d8a61;
   --shadow: 0 24px 60px -24px rgba(9, 31, 42, 0.24);
-  --font-ui: "Bahnschrift", "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-editorial: "Constantia", "Cambria", Georgia, "Songti SC", serif;
+  --font-ui: "Avenir Next", "Avenir", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-editorial: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, "Songti SC", serif;
   color-scheme: light;
   font-family: var(--font-ui);
   font-synthesis: none;
@@ -209,7 +209,7 @@ a {
 }
 
 .story-copy {
-  max-width: 590px;
+  max-width: 640px;
   margin-top: auto;
   padding-top: 72px;
 }
@@ -339,10 +339,19 @@ a {
 }
 
 .login-heading p {
-  margin: 0 0 30px;
+  margin: 0;
   color: var(--muted);
   font-size: 15px;
   line-height: 1.6;
+}
+
+.login-heading::after {
+  content: "";
+  display: block;
+  width: 64px;
+  height: 4px;
+  margin: 18px 0 30px;
+  background: var(--sea);
 }
 
 .login-form-wrap form {
@@ -797,8 +806,18 @@ a {
   font-family: var(--font-editorial);
   font-size: 42px;
   font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.04;
+  letter-spacing: -0.028em;
+  line-height: 1;
+  text-wrap: balance;
+}
+
+.topbar-heading::after {
+  content: "";
+  display: block;
+  width: 64px;
+  height: 4px;
+  margin-top: 18px;
+  background: var(--sea);
 }
 
 .topbar-meta {
@@ -1659,8 +1678,8 @@ a {
 /* ---------- Projector readability pass ---------- */
 
 body {
-  font-size: 19px;
-  line-height: 1.56;
+  font-size: 1.22rem;
+  line-height: 1.55;
 }
 
 .brand-wordmark strong {
@@ -1669,20 +1688,27 @@ body {
 
 .brand-wordmark span,
 .muted {
-  font-size: 15px;
+  font-size: 1rem;
+}
+
+.side-brand .brand-wordmark span,
+.login-brand .brand-wordmark span {
+  color: #d8b37b;
+  letter-spacing: 0.14em;
 }
 
 .story-copy h1 {
-  font-size: 76px;
+  font-size: clamp(3.4rem, 4.15vw, 4.4rem);
+  letter-spacing: -0.028em;
 }
 
 .story-lede {
-  font-size: 20px;
+  font-size: 1.3rem;
 }
 
 .story-principles strong,
 .story-principles span {
-  font-size: 17px;
+  font-size: 1.1rem;
 }
 
 .story-foot,
@@ -1691,17 +1717,21 @@ body {
 }
 
 .login-heading h2 {
-  font-size: 50px;
+  font-family: var(--font-editorial);
+  font-size: clamp(2.75rem, 3.1vw, 3.25rem);
+  letter-spacing: -0.028em;
+  line-height: 1.02;
 }
 
 .login-heading p {
-  font-size: 18px;
+  font-size: 1.22rem;
+  line-height: 1.55;
 }
 
 .field span,
 .add-site label,
 .invite-form label {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .field input,
@@ -1709,31 +1739,31 @@ body {
 .invite-form input,
 .invite-form select,
 .member-actions select {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .primary,
 .outline {
   min-height: 44px;
-  font-size: 16px;
+  font-size: 1.0625rem;
 }
 
 .login-form-wrap .full {
   min-height: 52px;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .error {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .access-note strong,
 .access-note span {
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .login-foot {
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .side-label {
@@ -1775,11 +1805,17 @@ body {
 }
 
 .topbar h1 {
-  font-size: 60px;
+  font-size: clamp(3.4rem, 4.15vw, 4.4rem);
+  letter-spacing: -0.028em;
+  line-height: 1;
+  text-wrap: balance;
 }
 
 .topbar-meta {
-  font-size: 19px;
+  max-width: 65ch;
+  font-size: 1.3rem;
+  line-height: 1.55;
+  text-wrap: pretty;
 }
 
 .status-pill {
@@ -1792,163 +1828,212 @@ body {
 
 .notice strong,
 .notice p {
-  font-size: 18px;
+  font-size: 1.22rem;
+  line-height: 1.55;
 }
 
 .planning-head h2 {
-  font-size: 21px;
+  color: var(--sea);
+  font-family: var(--font-ui);
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.22;
+  text-transform: uppercase;
 }
 
 .planning-head p,
 .planning-links a {
-  font-size: 17px;
+  font-size: 1.22rem;
 }
 
 .planning-links a span {
-  font-size: 15.5px;
+  font-size: 1rem;
 }
 
 .onboarding-copy h2 {
-  font-size: 32px;
+  font-size: clamp(2.25rem, 2.5vw, 2.625rem);
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 
 .onboarding-copy p {
-  font-size: 18px;
+  font-size: 1.22rem;
+  line-height: 1.55;
 }
 
 .step-no {
-  font-size: 15px;
+  font-size: 1rem;
 }
 
 .onboarding-steps strong {
-  font-size: 18px;
+  font-size: 1.22rem;
 }
 
 .onboarding-steps div span {
-  font-size: 17px;
+  font-size: 1.22rem;
+  line-height: 1.5;
 }
 
 .metric-label {
-  font-size: 15.5px;
+  color: var(--sea);
+  font-size: 1.05rem;
+  letter-spacing: 0.09em;
 }
 
 .snapshot-item strong {
-  font-size: 44px;
+  font-size: 3rem;
 }
 
 .snapshot-item .is-date {
-  font-size: 22px;
+  font-size: 1.5rem;
 }
 
 .snapshot-item small {
-  font-size: 17px;
+  font-size: 1.22rem;
+  line-height: 1.5;
 }
 
 .panel-head h2 {
   font-size: 24px;
 }
 
+.app-shell .panel-head h2 {
+  color: var(--sea);
+  font-family: var(--font-ui);
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.22;
+  text-transform: uppercase;
+}
+
+.viewer .panel-head h2 {
+  font-family: var(--font-editorial);
+  font-size: 1.75rem;
+  letter-spacing: -0.018em;
+  line-height: 1.14;
+}
+
 .panel-copy,
 .empty-state p {
-  font-size: 18px;
+  font-size: 1.22rem;
+  line-height: 1.55;
 }
 
 .tag,
 .data-cell span {
-  font-size: 15.5px;
+  font-size: 1rem;
 }
 
-.empty-state strong,
+.empty-state strong {
+  font-family: var(--font-editorial);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
 .data-cell strong {
-  font-size: 19px;
+  font-size: 1.25rem;
 }
 
 .telemetry-foot {
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .notification-title strong {
-  font-size: 18px;
+  font-size: 1.22rem;
 }
 
 .notification-title small {
-  font-size: 15px;
+  font-size: 1rem;
 }
 
 .notification p {
-  font-size: 17px;
+  font-size: 1.22rem;
 }
 
 .text-button {
-  font-size: 16px;
+  font-size: 1.0625rem;
 }
 
 .error-banner {
-  font-size: 17px;
+  font-size: 1.125rem;
 }
 
 .error-banner button {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .page-foot,
 .section-note,
 .detail-label {
-  font-size: 15.5px;
+  font-size: 1rem;
 }
 
 .viewer-anatomy-head h2,
 .schema-index-head h2 {
-  font-size: 30px;
+  font-size: clamp(2.15rem, 2.6vw, 2.7rem);
+  letter-spacing: -0.018em;
+  line-height: 1.1;
+  text-wrap: balance;
 }
 
 .viewer-anatomy-head p,
 .schema-index-head p,
 .viewer p {
-  font-size: 18px;
+  font-size: 1.22rem;
+  line-height: 1.55;
+}
+
+.viewer .topbar-meta {
+  font-size: 1.3rem;
 }
 
 .viewer-anatomy li > span,
 .schema-index-list a > span {
-  font-size: 15.5px;
+  font-size: 1rem;
 }
 
 .viewer-anatomy strong,
 .schema-index-list strong {
-  font-size: 18px;
+  font-size: 1.25rem;
 }
 
 .viewer-anatomy small {
-  font-size: 17px;
+  font-size: 1.18rem;
 }
 
 .schema-index-meta {
-  font-size: 15.5px;
+  color: var(--sea);
+  font-size: 1rem;
 }
 
 .schema-index-list small {
-  font-size: 16px;
+  font-size: 1.0625rem;
 }
 
 .viewer .metric span {
-  font-size: 15.5px;
+  color: var(--sea);
+  font-size: 1.0625rem;
 }
 
 .viewer .metric strong {
-  font-size: 20px;
+  font-size: 1.5rem;
 }
 
 .viewer input[type="file"] {
-  font-size: 16px;
+  font-size: 1.125rem;
 }
 
 .viewer table {
-  font-size: 18px;
+  font-size: 1.18rem;
 }
 
 .viewer thead th {
   padding: 13px 12px;
-  font-size: 16px;
+  font-size: 1.06rem;
   text-align: center;
 }
 

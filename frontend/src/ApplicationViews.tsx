@@ -140,7 +140,7 @@ function App() {
   return (
     <main className="viewer">
       <header className="topbar">
-        <div>
+        <div className="topbar-heading">
           <h1>Contract viewer</h1>
           <p className="topbar-meta">Report shapes and schema, read-only.</p>
         </div>
