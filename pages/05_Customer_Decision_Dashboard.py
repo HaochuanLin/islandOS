@@ -301,12 +301,50 @@ try:
 
     recommended = result["recommendation"]["policy"]
     candidates = {row["policy"]: row for row in result["candidates"]}
+    # Kept next to the candidate map so the assumption summary and the dispatch
+    # section can both read the stored result; no second simulation is run.
+    selected_candidate = candidates[recommended]
     selected = candidates[recommended]["summary"]
     baseline = candidates["grid_first"]["summary"]
     service_equal = economics["service_equivalent"]
     result_view = build_run_result_summary(
         page="customer_dashboard", result=result, economics=economics, currency=currency,
     )
+
+    with st.expander("Inputs and assumptions for this run", expanded=True):
+        st.write(f"**Data source:** {source_label}")
+        st.write(f"**History SHA-256:** `{history_sha256}`")
+        st.write(
+            f"**Time window:** {history_stamps[0].isoformat()} → "
+            f"{history_stamps[-1].isoformat()} ({len(history_stamps)} hourly rows)"
+        )
+        st.write({
+            "Installed PV capacity (kW)": float(pv_capacity),
+            "Installed wind capacity (kW)": float(wind_capacity),
+            "Grid import limit (kW)": float(grid_limit),
+            "Battery capacity (kWh)": float(battery_capacity),
+            "Battery charge/discharge limit (kW)": float(battery_power),
+            "Battery SOC band": (
+                f"{BATTERY_MIN_SOC:.0%}–{BATTERY_MAX_SOC:.0%} "
+                f"(initial {BATTERY_INITIAL_SOC:.0%})"
+            ),
+            "Currency label": currency,
+        })
+        st.write({
+            "Essential load level (demand scale)": float(demand_scale),
+            "Electricity tariff level (tariff scale)": float(tariff_scale),
+            "Cost priority": float(cost_priority),
+            "Reliability weight (remainder of the objective)": round(float(weights.reliability), 2),
+        })
+        if shared_payload is None:
+            st.caption(
+                "The demand and tariff sliders shape the synthetic default history; an uploaded "
+                "CSV is read as given, so those two scales do not apply to it."
+            )
+        st.caption(
+            "Offline screening; synthetic defaults unless a CSV is uploaded; "
+            "not measured customer savings."
+        )
 
     st.subheader("Decision snapshot")
     m1, m2, m3, m4 = st.columns(4)
@@ -393,6 +431,91 @@ try:
         "The optimizer compares two explicit dispatch priorities using the shared "
         "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
     )
+
+    st.subheader("Hourly dispatch for the recommended policy")
+    dispatch_rows = [dict(row) for row in selected_candidate["dispatch"].get("rows") or []]
+    st.caption(
+        f"Offline dispatch for **{recommended.replace('_', ' ').title()}**, read from the same "
+        "simulation that produced the policy comparison above. It is not an equipment command, "
+        "not real-time control, and not a proof that this schedule is globally optimal."
+    )
+    if not dispatch_rows:
+        st.info("Hourly dispatch is not available in this run: the stored dispatch contains no rows.")
+    else:
+        dispatch_frame = pd.DataFrame(dispatch_rows).reset_index(drop=True)
+        if "timestep" in dispatch_frame.columns:
+            hours = dispatch_frame["timestep"].astype(int) + 1
+        else:
+            hours = pd.Series(range(1, len(dispatch_frame) + 1))
+        dispatch_frame.index = pd.Index(hours, name="Hour")
+
+        flow_columns = {
+            "Grid import (kW)": "grid_import_kw",
+            "Battery charge (kW)": "battery_charge_kw",
+            "Battery discharge (kW)": "battery_discharge_kw",
+        }
+        available_flows = {
+            label: dispatch_frame[field].astype(float)
+            for label, field in flow_columns.items()
+            if field in dispatch_frame.columns
+        }
+        diesel_note = None
+        if "diesel_generation_kw" in dispatch_frame.columns:
+            diesel_series = dispatch_frame["diesel_generation_kw"].astype(float)
+            if float(site_assumptions.diesel_rated_kw) > 0.0 or float(diesel_series.max()) > 0.0:
+                available_flows["Diesel generation (kW)"] = diesel_series
+            else:
+                diesel_note = (
+                    "Diesel generation is not part of this run: the generator is not configured "
+                    "(rated 0 kW), so the dispatch carries no diesel output to plot."
+                )
+        else:
+            diesel_note = (
+                "Diesel generation is not available in this run: the dispatch rows carry no "
+                "diesel column."
+            )
+        if available_flows:
+            st.caption("Grid import and battery flows (kW)")
+            st.line_chart(pd.DataFrame(available_flows), width="stretch")
+        else:
+            st.info(
+                "Hourly power flows are not available in this run: the dispatch rows carry none "
+                "of the grid-import or battery columns."
+            )
+        if diesel_note:
+            st.caption(diesel_note)
+
+        if "battery_soc" in dispatch_frame.columns and dispatch_frame["battery_soc"].notna().any():
+            soc_frame = pd.DataFrame({
+                "Battery SOC (%)": dispatch_frame["battery_soc"].astype(float) * 100.0,
+            })
+            st.caption("Battery state of charge (%)")
+            st.line_chart(soc_frame, width="stretch")
+        else:
+            st.info(
+                "Battery state of charge is not available in this run: the dispatch rows carry "
+                "no SOC column."
+            )
+
+        detail_columns = {
+            "Grid import (kW)": "grid_import_kw",
+            "Diesel generation (kW)": "diesel_generation_kw",
+            "Battery charge (kW)": "battery_charge_kw",
+            "Battery discharge (kW)": "battery_discharge_kw",
+            "Battery SOC (%)": "battery_soc",
+            "Load served (kW)": "load_served_kw",
+            "Unmet load (kW)": "unmet_load_kw",
+            "Renewable curtailed (kW)": "renewable_curtailed_kw",
+        }
+        detail_frame = pd.DataFrame({"Hour": list(dispatch_frame.index)})
+        for label, field in detail_columns.items():
+            if field in dispatch_frame.columns:
+                column = dispatch_frame[field].astype(float)
+                if field == "battery_soc":
+                    column = column * 100.0
+                detail_frame[label] = column.to_numpy()
+        with st.expander("Hourly dispatch detail (hourly rows)"):
+            st.dataframe(detail_frame, width="stretch", hide_index=True)
 
     st.subheader("Paired customer-impact evidence")
     impact_baseline = paired_impact["baseline_metrics"]
@@ -619,7 +742,6 @@ try:
             "Nothing is bound to a run while the inputs are missing: a binding would have to "
             "describe bills nobody entered."
         )
-    selected_candidate = candidates[recommended]
     operator_result = dict(result)
     operator_result.update({
         "algorithm": "bounded_two_policy_pareto_screening",
