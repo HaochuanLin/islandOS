@@ -146,7 +146,8 @@ jobs:
                   f"{best[0]} hours. Missing values and gaps are not imputed."
               )
 
-          source_sha256 = hashlib.file_digest(source.open("rb"), "sha256").hexdigest()
+          with source.open("rb") as source_handle:
+              source_sha256 = hashlib.file_digest(source_handle, "sha256").hexdigest()
           payload = {
               "source_type": "public_historical",
               "measurement_scope": "country_control_area_or_bidding_zone_aggregate",
@@ -199,6 +200,7 @@ jobs:
           import hashlib
           import json
           import math
+          from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
           root = Path("build/opsd")
@@ -212,8 +214,10 @@ jobs:
           assert source_sha256 == window["source_file_sha256"]
           assert provenance["region_code"] == window["region_code"]
           assert provenance["observations"] == window["selected_observations"]
-          assert provenance["history_start_utc"] == window["start_utc"]
-          assert provenance["history_end_utc"] + "Z" == window["end_utc_exclusive"][:-1] + "Z"
+          expected_start = datetime.fromisoformat(window["start_utc"].replace("Z", "+00:00"))
+          expected_end = datetime.fromisoformat(window["end_utc_exclusive"].replace("Z", "+00:00")) - timedelta(hours=1)
+          assert datetime.fromisoformat(provenance["history_start_utc"]) == expected_start
+          assert datetime.fromisoformat(provenance["history_end_utc"]) == expected_end
           assert len(provenance["history_sha256"]) == 64
           assert window["rows_scanned"] == window["complete_rows"] + window["incomplete_rows"]
           assert window["complete_rows"] == (
