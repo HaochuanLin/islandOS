@@ -4,6 +4,20 @@ Notable project changes are recorded here. This is a research prototype; version
 
 ## Unreleased
 
+- **Local workspaces can now retain immutable run results with explicit consent.**
+  Workspace schema 1.0 migrates to 1.1 and creates a separate `run_records` table
+  keyed by `(project_id, run_id)`. Records retain request/result digests, request
+  metadata, result JSON, optional canonical manifest and input fingerprints. Result
+  storage requires explicit consent; retaining the full request/history arrays
+  requires a separate opt-in. Metadata-only records can be viewed but are not
+  replayable. Read APIs verify stored hashes and SQLite triggers reject ordinary
+  updates/deletes. Project packages now carry run results; full requests are
+  excluded by default and require a separate export/import opt-in.
+  `tests/test_workspace_store.py`, `tests/test_workspace_backup_restore.py` and
+  `tests/test_site_workspace.py` cover migration, consent, integrity, backup and
+  project portability.
+
+
 - **Sign out in the local customer workspace now revokes the session.**
   Page 07 and `frontend/src/api.ts` sign out with `POST /api/v1/auth/logout`, but the route was
   registered on `do_GET` only: the browser got `404 not found`, the page said "server-side revocation
