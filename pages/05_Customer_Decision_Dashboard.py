@@ -736,19 +736,42 @@ try:
                 name for name in ("Base case", "Energy saving -20%", "Energy saving +20%")
                 if name in set(sensitivity_frame["Case"])
             ]
-            sensitivity_chart = (
+            base_rows = sensitivity_frame[sensitivity_frame["Case"] == "Base case"]
+            base_npv = (
+                float(base_rows["NPV"].iloc[0])
+                if not base_rows.empty
+                else float(investment.net_present_value)
+            )
+            sensitivity_frame["Change vs base"] = sensitivity_frame["NPV"] - base_npv
+            sensitivity_frame["NPV label"] = sensitivity_frame["NPV"].map(lambda value: f"{value:,.0f}")
+            sensitivity_frame["Change label"] = sensitivity_frame["Change vs base"].map(
+                lambda value: f"{value:+,.0f} vs base"
+            )
+            base_rows = sensitivity_frame[sensitivity_frame["Case"] == "Base case"]
+            downside = sensitivity_frame[sensitivity_frame["Case"] == "Energy saving -20%"]
+            upside = sensitivity_frame[sensitivity_frame["Case"] == "Energy saving +20%"]
+            low = min(0.0, float(sensitivity_frame["NPV"].min()))
+            high = max(0.0, float(sensitivity_frame["NPV"].max()))
+            value_span = max(high - low, 1.0)
+            domain_pad = max(value_span * 0.12, abs(base_npv) * 0.05, 1000.0)
+            y_domain = [low - domain_pad, high + domain_pad]
+
+            bars = (
                 alt.Chart(sensitivity_frame)
-                .mark_bar(color="#2c7a6b")
+                .mark_bar(cornerRadius=4, opacity=0.94)
                 .encode(
                     x=alt.X(
                         "Case:N",
                         sort=case_order,
+                        scale=alt.Scale(domain=case_order),
                         title=None,
                         axis=alt.Axis(
                             labelAngle=0,
                             labelLimit=0,
                             labelOverlap=False,
-                            labelPadding=8,
+                            labelPadding=10,
+                            labelColor="#5d6e66",
+                            labelFontSize=15,
                             tickSize=0,
                             domain=False,
                         ),
@@ -756,16 +779,143 @@ try:
                     y=alt.Y(
                         "NPV:Q",
                         title=f"NPV ({currency})",
-                        axis=alt.Axis(format=",.0f", labelAngle=0),
+                        scale=alt.Scale(domain=y_domain, zero=True, nice=False),
+                        axis=alt.Axis(
+                            format=",.0f",
+                            labelAngle=0,
+                            labelColor="#5d6e66",
+                            labelFontSize=14,
+                            titleColor="#3d5149",
+                            titleFontSize=13,
+                            gridColor="#e8e1d2",
+                            gridOpacity=0.8,
+                            domain=False,
+                            ticks=False,
+                            tickCount=5,
+                        ),
+                    ),
+                    color=alt.Color(
+                        "Case:N",
+                        scale=alt.Scale(
+                            domain=["Base case", "Energy saving -20%", "Energy saving +20%"],
+                            range=["#a9793f", "#9f4b3b", "#2f6f6a"],
+                        ),
+                        legend=None,
                     ),
                     tooltip=[
                         alt.Tooltip("Case:N", title="Case"),
                         alt.Tooltip("NPV:Q", title=f"NPV ({currency})", format=",.0f"),
+                        alt.Tooltip(
+                            "Change vs base:Q",
+                            title=f"Change vs base ({currency})",
+                            format="+,.0f",
+                        ),
                     ],
                 )
-                .properties(height=320, padding={"top": 18, "bottom": 10, "left": 6, "right": 10})
             )
-            st.caption("Sensitivity varies year-one energy-bill saving by ±20%; all other assumptions and escalation rates remain fixed.")
+
+            zero_rule = (
+                alt.Chart(pd.DataFrame({"y": [0.0]}))
+                .mark_rule(color="#8f9187", strokeWidth=1)
+                .encode(y="y:Q")
+            )
+            base_rule = (
+                alt.Chart(pd.DataFrame({"y": [base_npv]}))
+                .mark_rule(color="#a9793f", strokeDash=[6, 4], strokeWidth=1.4)
+                .encode(y="y:Q")
+            )
+
+            base_value_label = (
+                alt.Chart(base_rows)
+                .mark_text(
+                    align="center",
+                    baseline="top",
+                    dy=13,
+                    color="#fffcf4",
+                    fontSize=17,
+                    fontWeight=700,
+                )
+                .encode(x="Case:N", y="NPV:Q", text=alt.Text("NPV label:N"))
+            )
+            positive_value_label = (
+                alt.Chart(
+                    sensitivity_frame[
+                        (sensitivity_frame["Case"] != "Base case") & (sensitivity_frame["NPV"] >= 0)
+                    ]
+                )
+                .mark_text(
+                    align="center",
+                    baseline="top",
+                    dy=13,
+                    color="#fffcf4",
+                    fontSize=17,
+                    fontWeight=700,
+                )
+                .encode(x="Case:N", y="NPV:Q", text=alt.Text("NPV label:N"))
+            )
+            negative_value_label = (
+                alt.Chart(
+                    sensitivity_frame[
+                        (sensitivity_frame["Case"] != "Base case") & (sensitivity_frame["NPV"] < 0)
+                    ]
+                )
+                .mark_text(
+                    align="center",
+                    baseline="bottom",
+                    dy=-13,
+                    color="#fffcf4",
+                    fontSize=17,
+                    fontWeight=700,
+                )
+                .encode(x="Case:N", y="NPV:Q", text=alt.Text("NPV label:N"))
+            )
+
+            delta_layers = []
+            if not upside.empty:
+                delta_layers.append(
+                    alt.Chart(upside)
+                    .mark_text(
+                        align="center",
+                        baseline="bottom",
+                        dy=-12,
+                        color="#2f6f6a",
+                        fontSize=14,
+                        fontWeight=700,
+                    )
+                    .encode(x="Case:N", y="NPV:Q", text=alt.Text("Change label:N"))
+                )
+            if not downside.empty:
+                delta_layers.append(
+                    alt.Chart(downside)
+                    .mark_text(
+                        align="center",
+                        baseline="top",
+                        dy=12,
+                        color="#9f4b3b",
+                        fontSize=14,
+                        fontWeight=700,
+                    )
+                    .encode(x="Case:N", y="NPV:Q", text=alt.Text("Change label:N"))
+                )
+
+            sensitivity_chart = (
+                alt.layer(
+                    zero_rule,
+                    base_rule,
+                    bars,
+                    base_value_label,
+                    positive_value_label,
+                    negative_value_label,
+                    *delta_layers,
+                )
+                .properties(height=340, padding={"top": 30, "bottom": 24, "left": 6, "right": 14})
+                .configure_view(stroke=None)
+            )
+            st.caption(
+                "Sensitivity varies year-one energy-bill saving by ±20%, with every other "
+                "assumption and escalation rate fixed. The dotted gold line is the base case; "
+                "the labels above and below the two sensitivity bars show the change from it."
+            )
             st.altair_chart(sensitivity_chart, width="stretch")
             st.subheader("Annual investment cashflow")
             cashflow_frame = pd.DataFrame(investment.annual_cashflows)
