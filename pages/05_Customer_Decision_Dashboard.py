@@ -16,6 +16,7 @@ import altair as alt
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header, render_page_title
+from islandos_ui.project_context_selector import render_optional_project_selector
 from islandos_ui.streamlit_theme import apply_theme
 from islandos_ui.table import render_table
 from islandos_ui.customer_workflow import (
@@ -90,6 +91,9 @@ now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
     st.subheader("Inputs and assumptions")
+    render_optional_project_selector(
+        st.session_state, widget_key="project_context_dashboard",
+    )
     currency = st.text_input("Currency label", value="USD").strip() or "currency"
     demand_scale = st.slider("Essential load level", 0.6, 1.6, 1.0, 0.05)
     tariff_scale = st.slider("Electricity tariff level", 0.5, 2.0, 1.0, 0.05)

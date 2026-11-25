@@ -30,6 +30,11 @@ from islandos_core.workspace_store import (
     save_asset_record,
     verify_audit_chain,
 )
+from islandos_ui.workspace_project_context import (
+    clear_active_project,
+    get_active_project_id,
+    set_active_project,
+)
 
 st.set_page_config(page_title="IslandOS | Site Workspace", page_icon="🏝️", layout="wide")
 st.title("Site workspace")
@@ -72,6 +77,7 @@ with st.expander("Create a project", expanded=not bool(projects)):
                     db_path, project_id=project_id, display_name=project_name.strip(),
                     actor_id=actor_id, consent_to_store_metadata=True,
                 )
+                set_active_project(st.session_state, project_id)
                 st.success("Project created. Select it below to configure the site.")
                 st.rerun()
             except Exception as exc:
@@ -83,8 +89,30 @@ if not projects:
     st.stop()
 
 labels = {f"{item['display_name']} · {item['project_id']}": item["project_id"] for item in projects}
-selected_label = st.selectbox("Active project", list(labels))
+no_project_label = "— No project selected —"
+active_project_id = get_active_project_id(st.session_state)
+if active_project_id is not None and active_project_id not in labels.values():
+    clear_active_project(st.session_state)
+    active_project_id = None
+options = [no_project_label, *labels]
+default_index = 0
+if active_project_id is not None:
+    default_index = next(
+        (index for index, label in enumerate(options) if labels.get(label) == active_project_id),
+        0,
+    )
+selected_label = st.selectbox(
+    "Active project",
+    options,
+    index=default_index,
+    help="Selection is shared with Pages 05/06; it does not grant persistence consent.",
+)
+if selected_label == no_project_label:
+    clear_active_project(st.session_state)
+    st.info("Select a project to configure its site, equipment and portable evidence.")
+    st.stop()
 project_id = labels[selected_label]
+set_active_project(st.session_state, project_id)
 
 st.divider()
 st.subheader("Site configuration")

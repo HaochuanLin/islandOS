@@ -15,6 +15,7 @@ import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header, render_page_title
+from islandos_ui.project_context_selector import render_optional_project_selector
 from islandos_ui.streamlit_theme import apply_theme
 from islandos_ui.table import render_table
 from islandos_ui.customer_workflow import (
@@ -75,6 +76,9 @@ now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
     st.subheader("Inputs and assumptions")
+    render_optional_project_selector(
+        st.session_state, widget_key="project_context_joint_optimizer",
+    )
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
     shared_dataset, dataset_error = read_session_dataset(st.session_state)

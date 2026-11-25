@@ -11,10 +11,17 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import sqlite3
-from typing import Literal, Mapping
+from collections.abc import Mapping, MutableMapping
+from typing import Literal
 
 
 WorkspaceLookupStatus = Literal["disabled", "not_initialized", "available", "unavailable"]
+ProjectBindingStatus = Literal[
+    "disabled", "not_initialized", "unregistered", "registered", "invalid", "unavailable"
+]
+SelectionSource = Literal["none", "active_project_key"]
+
+ACTIVE_PROJECT_SESSION_KEY = "islandos_active_project_id"
 
 
 @dataclass(frozen=True)
@@ -28,6 +35,16 @@ class WorkspaceProjectLookup:
     status: WorkspaceLookupStatus
     db_path: Path | None
     projects: tuple[WorkspaceProject, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProjectBinding:
+    """A read-only project selection state; it is never a write permission."""
+
+    status: ProjectBindingStatus
+    project: WorkspaceProject | None = None
+    selected_project_id: str | None = None
+    selection_source: SelectionSource = "none"
 
 
 def load_workspace_projects(
@@ -90,3 +107,73 @@ def resolve_selected_project(
         (project for project in lookup.projects if project.project_id == selected_project_id),
         None,
     )
+
+
+def get_active_project_id(session_state: Mapping[str, object]) -> str | None:
+    """Read the shared selection key without inventing or persisting a project."""
+    value = session_state.get(ACTIVE_PROJECT_SESSION_KEY)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def set_active_project(
+    session_state: MutableMapping[str, object],
+    project_id: str,
+) -> None:
+    """Record an explicit selection in the one shared session key."""
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise ValueError("project_id must be a non-empty string")
+    session_state[ACTIVE_PROJECT_SESSION_KEY] = project_id.strip()
+
+
+def clear_active_project(session_state: MutableMapping[str, object]) -> None:
+    """Remove the selection; a later run is unregistered, not auto-bound."""
+    session_state.pop(ACTIVE_PROJECT_SESSION_KEY, None)
+
+
+def resolve_project_binding(
+    lookup: WorkspaceProjectLookup,
+    selected_project_id: str | None,
+) -> ProjectBinding:
+    """Classify the shared selection against a fresh read-only lookup.
+
+    ``registered`` only means that the project exists. It does not assert
+    result-storage consent or authorize a write; those checks belong to the
+    persistence layer.
+    """
+    if lookup.status in {"disabled", "not_initialized", "unavailable"}:
+        return ProjectBinding(status=lookup.status)
+
+    selected = (
+        selected_project_id.strip()
+        if isinstance(selected_project_id, str) and selected_project_id.strip()
+        else None
+    )
+    if selected is None:
+        return ProjectBinding(status="unregistered")
+
+    project = resolve_selected_project(lookup, selected)
+    if project is None:
+        return ProjectBinding(
+            status="invalid",
+            selected_project_id=selected,
+            selection_source="active_project_key",
+        )
+    return ProjectBinding(
+        status="registered",
+        project=project,
+        selected_project_id=selected,
+        selection_source="active_project_key",
+    )
+
+
+def load_project_binding(
+    *,
+    environ: Mapping[str, str] | None = None,
+    session_state: Mapping[str, object] | None = None,
+) -> ProjectBinding:
+    """Load a fresh lookup and classify the shared session selection."""
+    lookup = load_workspace_projects(environ=environ)
+    selected = get_active_project_id(session_state) if session_state is not None else None
+    return resolve_project_binding(lookup, selected)
