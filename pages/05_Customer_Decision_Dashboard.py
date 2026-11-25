@@ -334,6 +334,10 @@ try:
         st.write(f"**Data source:** {source_label}")
         st.write(f"**History SHA-256:** `{history_sha256}`")
         st.write(
+            f"**Local request SHA-256:** `{run_request_view['request_sha256']}` "
+            "(this page's own request, not a cross-page run identity)"
+        )
+        st.write(
             f"**Time window:** {history_stamps[0].isoformat()} → "
             f"{history_stamps[-1].isoformat()} ({len(history_stamps)} hourly rows)"
         )
