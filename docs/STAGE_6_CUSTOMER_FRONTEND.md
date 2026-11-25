@@ -40,11 +40,12 @@ Build with `npm run build`; the static output is written to `frontend/dist`.
 
 ## Database lifecycle and backup
 
-Everything the console stores lives in one SQLite file selected by `--database` (default `build/islandos-service.sqlite3`). The behaviour below is asserted by `tests/test_service_db_lifecycle.py` and `tests/test_service_db_backup.py`.
+Everything the console stores lives in one SQLite file selected by `--database` (default `build/islandos-service.sqlite3`). The behaviour below is asserted by `tests/test_service_db_lifecycle.py`, `tests/test_service_db_backup.py` and `tests/test_service_schema_version.py`.
 
 | Situation | Actual behaviour |
 |---|---|
-| Normal start on an existing file | `IslandOSStore._initialize` runs `CREATE TABLE IF NOT EXISTS` for the eight tables on every start. Reopening a file keeps users and sessions; there is no schema-version table, no `ALTER TABLE`, and no migration step. A schema change needs a deliberate migration or a new database file. |
+| Normal start on an existing file | `IslandOSStore._initialize` reads `PRAGMA user_version`, runs `CREATE TABLE IF NOT EXISTS` for the eight tables, applies any registered migration whose target version is newer than the file, then stamps `user_version = SCHEMA_VERSION` (currently 1). A file written before versioning reports 0 and is stamped to 1 without losing rows; a file reporting a higher version than the build knows refuses to open. |
+| Schema written by a newer build | Opening raises `SchemaVersionError` and leaves the file untouched. There is no downgrade or best-effort open. |
 | Restart or clean shutdown | Rows survive because they are on disk. Sessions survive too, but each token expires after 12 hours and the browser keeps it in memory only, so a reload requires a fresh sign-in. |
 | Database file missing | The service creates a new empty database and starts; it does not restore or warn. Every tenant, user, site, telemetry row and audit event is gone. |
 | Database file corrupt | Startup fails closed with `sqlite3.DatabaseError` before serving requests. The file is left untouched; there is no automatic repair. |
@@ -53,8 +54,10 @@ Everything the console stores lives in one SQLite file selected by `--database` 
 
 ```powershell
 python scripts/backup_service_db.py
-# -> {"backup_path": "build\\backups\\islandos-service-20261125T130000Z.sqlite3", "integrity_check": "ok", ...}
+# -> {"backup_path": "build\\backups\\islandos-service-20261125T130000Z.sqlite3", "integrity_check": "ok", "schema_version": 1, ...}
 ```
+
+The summary now reports `schema_version`, read from the copy itself, so a restore can be matched against the build that will open it.
 
 Limits that remain: backups sit on the same disk as the database, so they cover a bad migration or a mistaken delete, not disk loss; there is no schedule, no retention policy, and no off-machine copy. The API exposes no export route for tenants, sites, telemetry or audit events — the CSV downloads in the repository belong to the Streamlit workspace, not to the console. That is a gap, not a feature.
 

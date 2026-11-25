@@ -28,6 +28,16 @@ PASSWORD_ITERATIONS = 240000
 ROLES = {"owner", "analyst", "viewer"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
+# The schema below is the baseline that ``SCHEMA_VERSION`` describes. A database
+# written before versioning existed reports ``PRAGMA user_version = 0`` and is
+# stamped to 1 on the next start; a database that reports a higher number than
+# this build knows refuses to open instead of guessing.
+SCHEMA_VERSION = 1
+
+
+class SchemaVersionError(RuntimeError):
+    """Raised when the database was written by a newer build than this one."""
+
 
 def _utcnow():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -35,6 +45,15 @@ def _utcnow():
 
 def _json(payload):
     return (json.dumps(payload, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+
+
+MIGRATIONS = {}
+"""Upgrade steps keyed by target version: ``MIGRATIONS[n]`` moves a database
+from ``n-1`` to ``n``. Version 1 is the baseline declared in ``_initialize``,
+so the registry starts empty. A future change adds an entry and raises
+``SCHEMA_VERSION``; opening an older file then runs the entries in order inside
+the same transaction as the baseline ``CREATE TABLE IF NOT EXISTS``.
+"""
 
 
 class IslandOSStore:
@@ -67,6 +86,12 @@ class IslandOSStore:
 
     def _initialize(self):
         with self._lock, self.session() as db:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise SchemaVersionError(
+                    f"database schema version {version} is newer than this build supports "
+                    f"({SCHEMA_VERSION}); open it with the build that wrote it"
+                )
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS tenants (
                     id TEXT PRIMARY KEY, name TEXT NOT NULL,
@@ -131,6 +156,15 @@ class IslandOSStore:
                 CREATE INDEX IF NOT EXISTS notifications_inbox
                     ON notifications(tenant_id,user_id,created_at DESC);
             """)
+            for target in range(max(version, 1), SCHEMA_VERSION + 1):
+                migrate = MIGRATIONS.get(target)
+                if migrate is not None:
+                    migrate(db)
+            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+
+    def schema_version(self):
+        with self.session() as db:
+            return db.execute("PRAGMA user_version").fetchone()[0]
 
     @staticmethod
     def _password(password, salt):
