@@ -5,9 +5,7 @@ verified. Outputs are offline schedule-search estimates, never device commands.
 """
 from __future__ import annotations
 
-import hashlib
 import json
-from dataclasses import asdict
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -42,7 +40,6 @@ from islandos_core.annual_operating_basis import (
     annualise_run_summary,
     verify_annual_operating_basis,
 )
-from islandos_core.run_orchestration import run_joint_optimizer
 
 
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
