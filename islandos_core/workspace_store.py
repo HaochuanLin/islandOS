@@ -600,6 +600,7 @@ def record_run_record(
         "project_id": project_id, "run_id": run_id, "page": page,
         "record_schema_version": "1.0", "created_at": timestamp,
         "actor_id": actor_id.strip(), "request_sha256": request_sha256,
+        "request_metadata_sha256": _hash(metadata_json),
         "request_metadata": json.loads(metadata_json),
         "request_payload": json.loads(payload_json) if payload_json is not None else None,
         "request_payload_sha256": payload_hash,
@@ -932,7 +933,18 @@ def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
             raise AuditIntegrityError("workspace SQLite integrity check failed")
         if not {"workspace_meta", "projects", "audit_events"}.issubset(tables):
             raise WorkspaceStoreError("file is not a supported IslandOS workspace database")
+        schema_row = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='schema_version'"
+        ).fetchone()
+        if schema_row is None or schema_row[0] not in {"1.0", SCHEMA_VERSION}:
+            raise WorkspaceStoreError("workspace database has an unsupported schema version")
+        has_run_records = "run_records" in tables
+        run_keys = connection.execute(
+            "SELECT project_id, run_id FROM run_records ORDER BY project_id, run_id"
+        ).fetchall() if has_run_records else []
         audit = verify_audit_chain(source)
+        for project_id, run_id in run_keys:
+            get_run_record(source, project_id=project_id, run_id=run_id)
     except sqlite3.Error as exc:
         raise WorkspaceStoreError(f"workspace database cannot be opened: {exc}") from exc
     if not audit["valid"]:
@@ -951,7 +963,7 @@ def backup_workspace(
     """Create an atomic, integrity-checked SQLite backup of the complete local workspace.
 
     Uploaded source-file bytes are not part of the workspace schema; this backs
-    up project metadata, assets, run manifests, and audit history only.
+    up project metadata, assets, run manifests, execution records, and audit history.
     """
     source = Path(db_path).expanduser().resolve()
     destination = Path(destination_path).expanduser().resolve()
