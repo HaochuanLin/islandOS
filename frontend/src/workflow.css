@@ -41,7 +41,7 @@
   border-radius: 50%;
   background: #e8f2ed;
   color: #2f625a;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -53,7 +53,7 @@
 .member-row strong {
   display: block;
   color: #304b52;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -63,7 +63,7 @@
   display: block;
   margin-top: 3px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -84,7 +84,7 @@
   background: #fcfdfa;
   color: #354e54;
   font: inherit;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .member-actions select {
@@ -108,21 +108,21 @@
   gap: 6px;
   min-width: 190px;
   color: #5f7376;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
 }
 
 .invite-form .primary {
   min-height: 38px;
   padding: 8px 13px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .invite-note {
   max-width: 230px;
   margin: 0 0 4px auto;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -137,14 +137,14 @@
 .invitation-result strong {
   display: block;
   color: #2e5e52;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
 .invitation-result p {
   margin: 5px 0 0;
   color: #647b74;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -156,7 +156,7 @@
   border-radius: 7px;
   background: #ffffff;
   color: #294b45;
-  font-size: 10px;
+  font-size: 11.5px;
   overflow-wrap: anywhere;
 }
 
