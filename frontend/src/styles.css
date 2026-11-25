@@ -1656,11 +1656,312 @@ a {
   line-height: 1.65;
 }
 
+/* ---------- Projector readability pass ---------- */
+
+body {
+  font-size: 19px;
+  line-height: 1.56;
+}
+
+.brand-wordmark strong {
+  font-size: 24px;
+}
+
+.brand-wordmark span,
+.muted {
+  font-size: 15px;
+}
+
+.story-copy h1 {
+  font-size: 76px;
+}
+
+.story-lede {
+  font-size: 20px;
+}
+
+.story-principles strong,
+.story-principles span {
+  font-size: 17px;
+}
+
+.story-foot,
+.story-seal {
+  font-size: 15px;
+}
+
+.login-heading h2 {
+  font-size: 50px;
+}
+
+.login-heading p {
+  font-size: 18px;
+}
+
+.field span,
+.add-site label,
+.invite-form label {
+  font-size: 16px;
+}
+
+.field input,
+.add-site input,
+.invite-form input,
+.invite-form select,
+.member-actions select {
+  font-size: 18px;
+}
+
+.primary,
+.outline {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.login-form-wrap .full {
+  min-height: 52px;
+  font-size: 18px;
+}
+
+.error {
+  font-size: 16px;
+}
+
+.access-note strong,
+.access-note span {
+  font-size: 17px;
+}
+
+.login-foot {
+  font-size: 17px;
+}
+
+.side-label {
+  font-size: 15.5px;
+}
+
+.side-count {
+  font-size: 15px;
+}
+
+.tenant-card strong {
+  font-size: 17px;
+}
+
+.tenant-card small,
+.user-line small {
+  font-size: 15px;
+}
+
+.site-choice {
+  font-size: 17px;
+}
+
+.empty-small {
+  font-size: 16px;
+}
+
+.add-site input,
+.user-line strong {
+  font-size: 18px;
+}
+
+.avatar {
+  font-size: 16px;
+}
+
+.logout {
+  font-size: 16px;
+}
+
+.topbar h1 {
+  font-size: 60px;
+}
+
+.topbar-meta {
+  font-size: 19px;
+}
+
+.status-pill {
+  font-size: 15.5px;
+}
+
+.refresh-button {
+  font-size: 17px;
+}
+
+.notice strong,
+.notice p {
+  font-size: 18px;
+}
+
+.planning-head h2 {
+  font-size: 21px;
+}
+
+.planning-head p,
+.planning-links a {
+  font-size: 17px;
+}
+
+.planning-links a span {
+  font-size: 15.5px;
+}
+
+.onboarding-copy h2 {
+  font-size: 32px;
+}
+
+.onboarding-copy p {
+  font-size: 18px;
+}
+
+.step-no {
+  font-size: 15px;
+}
+
+.onboarding-steps strong {
+  font-size: 18px;
+}
+
+.onboarding-steps div span {
+  font-size: 17px;
+}
+
+.metric-label {
+  font-size: 15.5px;
+}
+
+.snapshot-item strong {
+  font-size: 44px;
+}
+
+.snapshot-item .is-date {
+  font-size: 22px;
+}
+
+.snapshot-item small {
+  font-size: 17px;
+}
+
+.panel-head h2 {
+  font-size: 24px;
+}
+
+.panel-copy,
+.empty-state p {
+  font-size: 18px;
+}
+
+.tag,
+.data-cell span {
+  font-size: 15.5px;
+}
+
+.empty-state strong,
+.data-cell strong {
+  font-size: 19px;
+}
+
+.telemetry-foot {
+  font-size: 17px;
+}
+
+.notification-title strong {
+  font-size: 18px;
+}
+
+.notification-title small {
+  font-size: 15px;
+}
+
+.notification p {
+  font-size: 17px;
+}
+
+.text-button {
+  font-size: 16px;
+}
+
+.error-banner {
+  font-size: 17px;
+}
+
+.error-banner button {
+  font-size: 16px;
+}
+
+.page-foot,
+.section-note,
+.detail-label {
+  font-size: 15.5px;
+}
+
+.viewer-anatomy-head h2,
+.schema-index-head h2 {
+  font-size: 30px;
+}
+
+.viewer-anatomy-head p,
+.schema-index-head p,
+.viewer p {
+  font-size: 18px;
+}
+
+.viewer-anatomy li > span,
+.schema-index-list a > span {
+  font-size: 15.5px;
+}
+
+.viewer-anatomy strong,
+.schema-index-list strong {
+  font-size: 18px;
+}
+
+.viewer-anatomy small {
+  font-size: 17px;
+}
+
+.schema-index-meta {
+  font-size: 15.5px;
+}
+
+.schema-index-list small {
+  font-size: 16px;
+}
+
+.viewer .metric span {
+  font-size: 15.5px;
+}
+
+.viewer .metric strong {
+  font-size: 20px;
+}
+
+.viewer input[type="file"] {
+  font-size: 16px;
+}
+
+.viewer table {
+  font-size: 18px;
+}
+
+.viewer thead th {
+  padding: 13px 12px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.viewer tbody td {
+  padding: 13px 12px;
+  text-align: center;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1120px) {
   .login-story h1 {
-    font-size: 50px;
+    font-size: 64px;
   }
 
   .app-shell {
@@ -1693,11 +1994,11 @@ a {
 
   .story-copy h1 {
     max-width: 13ch;
-    font-size: 42px;
+    font-size: 52px;
   }
 
   .story-lede {
-    font-size: 14px;
+    font-size: 18px;
   }
 
   .story-principles,
@@ -1776,7 +2077,7 @@ a {
   }
 
   .topbar h1 {
-    font-size: 34px;
+    font-size: 46px;
   }
 
   .onboarding {
@@ -1859,7 +2160,7 @@ a {
 
   .story-copy h1 {
     margin-bottom: 14px;
-    font-size: 36px;
+    font-size: 46px;
   }
 
   .login-panel {
@@ -1867,7 +2168,7 @@ a {
   }
 
   .login-heading h2 {
-    font-size: 32px;
+    font-size: 42px;
   }
 
   .add-site {
