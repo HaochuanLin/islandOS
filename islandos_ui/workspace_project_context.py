@@ -12,8 +12,6 @@ from pathlib import Path
 import sqlite3
 from typing import Literal, Mapping
 
-from islandos_core.workspace_store import WorkspaceStoreError, list_projects
-
 
 WorkspaceLookupStatus = Literal["disabled", "not_initialized", "available", "unavailable"]
 
@@ -39,7 +37,8 @@ def load_workspace_projects(
 
     The Workspace must be explicitly enabled with ISLANDOS_ENABLE_LOCAL_WORKSPACE=1.
     A missing database is reported as not_initialized; callers must not initialise
-    it implicitly.
+    it implicitly. SQLite is opened in read-only mode to avoid creating a database
+    if the file disappears between the existence check and the connection.
     """
     env = os.environ if environ is None else environ
     if env.get("ISLANDOS_ENABLE_LOCAL_WORKSPACE", "").strip() != "1":
@@ -53,8 +52,13 @@ def load_workspace_projects(
         return WorkspaceProjectLookup(status="not_initialized", db_path=db_path)
 
     try:
-        rows = list_projects(db_path)
-    except (OSError, sqlite3.Error, WorkspaceStoreError):
+        read_only_uri = db_path.resolve().as_uri() + "?mode=ro"
+        with sqlite3.connect(read_only_uri, uri=True) as connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                "SELECT project_id, display_name FROM projects ORDER BY created_at, project_id"
+            ).fetchall()
+    except (OSError, sqlite3.Error):
         # Do not leak a local path or database details into a page-level message.
         return WorkspaceProjectLookup(status="unavailable", db_path=db_path)
 
@@ -75,7 +79,7 @@ def resolve_selected_project(
     """Resolve a session selection against the current DB snapshot.
 
     A stale, unknown, blank, or unselected ID returns None. The caller must
-    re-resolve immediately before any persistence write as well.
+    refresh the lookup immediately before any persistence write as well.
     """
     if lookup.status != "available":
         return None
