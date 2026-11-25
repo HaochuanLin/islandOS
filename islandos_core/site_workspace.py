@@ -1,7 +1,6 @@
 """Versioned site profiles, optional local source retention, and portable project export.
 
-The module extends the local-first SQLite workspace without changing the existing
-schema version. Raw customer files are retained only after explicit opt-in and
+The module extends the local-first SQLite workspace and portable project packages. Raw customer files are retained only after explicit opt-in and
 only in a caller-selected local directory. No cloud upload or device control is
 performed here.
 """
@@ -28,6 +27,9 @@ from islandos_core.workspace_store import (
     _hash,
     _json,
     _timestamp,
+    get_run_record,
+    list_run_records,
+    record_run_record,
 )
 
 SITE_TYPES = {"microgrid", "island", "industrial", "commercial", "community", "other"}
@@ -283,13 +285,14 @@ def export_project_package(
     project_id: str,
     storage_dir: str | Path | None = None,
     include_retained_sources: bool = True,
+    include_retained_run_requests: bool = False,
     overwrite: bool = False,
 ) -> dict[str, Any]:
     """Export one project and its provenance into a verifiable ZIP package."""
     from islandos_core.workspace_store import list_asset_records, list_audit_events, list_import_artifacts, list_projects
 
-    if not isinstance(include_retained_sources, bool) or not isinstance(overwrite, bool):
-        raise WorkspaceStoreError("include_retained_sources and overwrite must be booleans")
+    if not all(isinstance(value, bool) for value in (include_retained_sources, include_retained_run_requests, overwrite)):
+        raise WorkspaceStoreError("export inclusion and overwrite options must be booleans")
     projects = [item for item in list_projects(db_path) if item["project_id"] == project_id]
     if len(projects) != 1:
         raise WorkspaceStoreError("project_id does not exist")
@@ -318,17 +321,29 @@ def export_project_package(
         if _hash(row["manifest_json"]) != row["manifest_sha256"]:
             raise AuditIntegrityError("run manifest failed hash verification during export")
         manifest_records.append({"manifest": json.loads(row["manifest_json"]), "sha256": row["manifest_sha256"]})
+    execution_records = []
+    for summary in list_run_records(db_path, project_id=project_id):
+        record = get_run_record(db_path, project_id=project_id, run_id=summary["run_id"])
+        omitted_full_request = record["request_payload"] is not None and not include_retained_run_requests
+        if omitted_full_request:
+            record["request_payload"] = None
+            record["request_payload_sha256"] = None
+            record["retention_mode"] = "metadata_only"
+            record["replayable"] = False
+        record["request_payload_omitted_from_export"] = omitted_full_request
+        execution_records.append(record)
     audit = list_audit_events(db_path, project_id=project_id)
     payload = {
         "package_schema_version": "1.0",
         "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "project": projects[0], "site_profiles": profiles,
         "assets": assets, "imports": imports, "run_manifests": manifest_records,
-        "audit_events": audit,
+        "run_records": execution_records, "audit_events": audit,
         "limitations": [
             "This package is a project evidence export, not a complete workspace database backup.",
             "Audit events retain their source workspace hash-chain references; importing them into another workspace must create new local audit events.",
             "Original source files are included only when they were separately retained with explicit consent.",
+            "Completed run results and metadata are included. Retained full request payloads are excluded unless the exporter separately opts in.",
         ],
     }
     payload_bytes = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
@@ -372,6 +387,8 @@ def export_project_package(
         "package_path": str(destination), "sha256": digest,
         "project_id": project_id, "included_source_files": len(retained),
         "included_imports": len(imports), "included_assets": len(assets),
+        "included_run_records": len(execution_records),
+        "included_replayable_run_records": sum(item["request_payload"] is not None for item in execution_records),
         "integrity": "verified",
     }
 
@@ -419,6 +436,11 @@ def inspect_project_package(content: bytes, *, max_package_bytes: int = 100 * 10
                 "project_name": project["project"].get("display_name"),
                 "asset_count": len(project.get("assets", [])),
                 "import_count": len(project.get("imports", [])),
+                "run_record_count": len(project.get("run_records", [])),
+                "replayable_run_record_count": sum(
+                    isinstance(item, dict) and isinstance(item.get("request_payload"), dict)
+                    for item in project.get("run_records", [])
+                ),
                 "retained_source_count": sum(name.startswith("source_files/") for name in names),
                 "sha256": hashlib.sha256(content).hexdigest(),
             }
@@ -436,6 +458,8 @@ def import_project_package(
     consent_to_store_metadata: bool,
     storage_dir: str | Path | None = None,
     retain_sources: bool = False,
+    consent_to_import_run_records: bool = False,
+    consent_to_retain_run_requests: bool = False,
 ) -> dict[str, Any]:
     """Import a verified project package as a new project in the local workspace.
 
@@ -455,6 +479,8 @@ def import_project_package(
         raise WorkspaceStoreError("explicit consent is required before importing project metadata")
     if not isinstance(retain_sources, bool):
         raise WorkspaceStoreError("retain_sources must be a boolean")
+    if not isinstance(consent_to_import_run_records, bool) or not isinstance(consent_to_retain_run_requests, bool):
+        raise WorkspaceStoreError("run-record import consent options must be booleans")
     if not all(isinstance(value, str) and value.strip() for value in (actor_id, new_project_id, new_project_name)):
         raise WorkspaceStoreError("actor_id, new_project_id and new_project_name are required")
 
@@ -522,6 +548,37 @@ def import_project_package(
             source_record = imports_by_id.get(old_id)
             if source_record is None or hashlib.sha256(source_bytes).hexdigest() != source_record["sha256"]:
                 raise AuditIntegrityError("package source file does not match its registered import metadata")
+
+    prepared_run_records = package.get("run_records", [])
+    if prepared_run_records and consent_to_import_run_records is not True:
+        raise WorkspaceStoreError("explicit consent is required before importing saved run results")
+    for record in prepared_run_records:
+        if not isinstance(record, dict):
+            raise WorkspaceStoreError("package contains an invalid run record")
+        if not all(isinstance(record.get(key), str) and record[key].strip() for key in ("run_id", "page", "request_sha256")):
+            raise WorkspaceStoreError("package run record is missing its identity fields")
+        if not _SHA256.fullmatch(record["request_sha256"]):
+            raise WorkspaceStoreError("package run record has an invalid request digest")
+        if record.get("record_schema_version") != "1.0":
+            raise WorkspaceStoreError("package contains an unsupported run record schema")
+        if not isinstance(record.get("request_metadata"), dict) or not isinstance(record.get("result"), dict):
+            raise WorkspaceStoreError("package run record metadata and result must be objects")
+        if record.get("result_sha256") != _hash(_json(record["result"])):
+            raise AuditIntegrityError("package run result failed SHA-256 verification")
+        request_payload = record.get("request_payload")
+        if request_payload is not None:
+            if not isinstance(request_payload, dict) or record.get("request_payload_sha256") != _hash(_json(request_payload)):
+                raise AuditIntegrityError("package retained request failed SHA-256 verification")
+        elif record.get("request_payload_sha256") is not None:
+            raise AuditIntegrityError("package run record has a request hash without retained request content")
+        canonical_manifest = record.get("canonical_manifest")
+        if canonical_manifest is not None:
+            if not isinstance(canonical_manifest, dict) or record.get("canonical_manifest_sha256") != _hash(_json(canonical_manifest)):
+                raise AuditIntegrityError("package canonical manifest failed SHA-256 verification")
+        elif record.get("canonical_manifest_sha256") is not None:
+            raise AuditIntegrityError("package run record has a manifest hash without manifest content")
+        if record.get("retention_mode") not in {"metadata_only", "retained_full_request"}:
+            raise WorkspaceStoreError("package run record has an unsupported retention mode")
 
     import_hashes = {item["sha256"] for item in prepared_imports}
     for item in package.get("run_manifests", []):
@@ -610,6 +667,24 @@ def import_project_package(
             created_at=timestamp,
         ))
 
+    imported_run_records = []
+    for record in prepared_run_records:
+        retain_request = consent_to_retain_run_requests is True and record.get("request_payload") is not None
+        created = record.get("created_at")
+        timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
+        imported_run_records.append(record_run_record(
+            db_path, project_id=new_project_id, run_id=record["run_id"],
+            page=record["page"], request_sha256=record["request_sha256"],
+            request_metadata=record["request_metadata"], result=record["result"],
+            actor_id=actor_id, consent_to_store_result=True,
+            request_payload=record.get("request_payload") if retain_request else None,
+            consent_to_retain_request=retain_request,
+            canonical_manifest=record.get("canonical_manifest"),
+            history_sha256=record.get("history_sha256"),
+            input_fingerprint_sha256=record.get("input_fingerprint_sha256"),
+            created_at=timestamp,
+        ))
+
     package_digest = hashlib.sha256(content).hexdigest()
     with _connect(db_path) as connection:
         _append_event(
@@ -619,6 +694,8 @@ def import_project_package(
                 "source_project_id": inspected["project_id"],
                 "package_sha256": package_digest,
                 "source_audit_event_count": len(package.get("audit_events", [])),
+                "run_record_count": len(imported_run_records),
+                "replayable_run_record_count": sum(item["replayable"] for item in imported_run_records),
                 "retained_source_count": sum(
                     1 for old_id in source_payloads if old_id in artifact_ids
                 ) if retain_sources else 0,
@@ -634,6 +711,8 @@ def import_project_package(
         "asset_versions_imported": len(saved_assets),
         "import_artifacts_imported": len(artifact_ids),
         "run_manifests_imported": len(imported_runs),
+        "run_records_imported": len(imported_run_records),
+        "replayable_run_records_imported": sum(item["replayable"] for item in imported_run_records),
         "source_files_retained": sum(
             1 for old_id in source_payloads if old_id in artifact_ids
         ) if retain_sources else 0,
