@@ -1,7 +1,7 @@
 # J-01 纯函数接口设计与固定测试向量
 
 - 状态：**P1a 输入组已实现；`derive_run_id` 仍为设计，未实现。**
-- 基线：`main = f7e5f2f`；P1a 分支：`feat/j01-input-group-identity-2026-11-25`。
+- 基线：`main = fc34678`；P1a 已合并（PR #372，分支 `feat/j01-input-group-identity-2026-11-25`）。
 - 关联：`docs/J-01_RUN_IDENTITY_DECISION.md`、`docs/fixtures/j01_run_identity_vectors.json`。
 
 ## 1. 边界
