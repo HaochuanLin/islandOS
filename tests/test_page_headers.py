@@ -28,7 +28,7 @@ HEADER_LINES = ("question=", "data=", "conclusions=", "limits=")
 
 def test_helper_defines_the_four_lines():
     source = HELPER.read_text(encoding="utf-8")
-    for label in ("Answers:", "Data:", "You can conclude:", "Limits:"):
+    for label in ("Answers", "Data", "You can conclude", "Limits"):
         assert label in source
 
 
@@ -45,5 +45,7 @@ def test_entry_page_calls_the_header(relative_path: str):
 def test_workspace_header_reaches_the_rendered_page():
     app = AppTest.from_file(str(APP), default_timeout=90).run()
     assert not app.exception
-    rendered = "\n".join(m.value for m in app.markdown)
-    assert "Answers:" in rendered and "Limits:" in rendered
+    rendered = "\n".join(m.value for m in app.html)
+    assert 'aria-label="Page brief"' in rendered
+    for label in ("Answers", "Data", "You can conclude", "Limits"):
+        assert f">{label}</span>" in rendered
