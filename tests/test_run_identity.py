@@ -501,3 +501,26 @@ def test_input_group_change_changes_run_id():
 def test_investment_assumptions_are_not_accepted_as_run_identity_inputs():
     with pytest.raises(TypeError):
         derive_run_id(**{**RUN05_INPUTS, "investment_assumptions": {"upfront_capex": 1000}})
+
+
+def test_investment_only_assumptions_are_rejected_from_technical_identity():
+    with pytest.raises(RunIdentityError, match="investment-only"):
+        derive_run_id(
+            **{
+                **RUN05_INPUTS,
+                "run_settings": {
+                    "currency": "USD",
+                    "investment": {
+                        "upfront_capex": 1000,
+                        "project_life_years": 15,
+                    },
+                },
+            }
+        )
+    with pytest.raises(RunIdentityError, match="investment-only"):
+        derive_run_id(
+            **{
+                **RUN05_INPUTS,
+                "page_inputs": {"discount_rate": 0.08},
+            }
+        )
