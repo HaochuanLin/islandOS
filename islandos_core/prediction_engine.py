@@ -2,7 +2,8 @@
 
 The engine compares registered forecast candidates with rolling-origin replay,
 selects the best candidate by declared error metric, and emits empirical error
-bands. Built-ins combine transparent baselines with a small univariate Ridge autoregression.
+bands. Built-ins combine transparent baselines with a small univariate Ridge
+autoregression.
 """
 from __future__ import annotations
 
@@ -596,7 +597,8 @@ class PredictionEngine:
             backtest=selected_metrics,
             points=tuple(points),
             limitations=(
-                "Built-in candidates include transparent baselines and a univariate Ridge autoregression; no cross-signal or exogenous effects are learned.",
+                "Built-in candidates include transparent baselines and a univariate Ridge "
+                "autoregression; no cross-signal or exogenous effects are learned.",
                 "Error bands summarize historical rolling-origin residuals; they are not guaranteed prediction intervals.",
                 "Candidate selection and error-band estimation reuse the same rolling-origin replay; bands are descriptive, not independently calibrated.",
                 "Backtest skill on supplied history does not establish future accuracy or site-wide operational suitability.",
