@@ -1,8 +1,20 @@
-﻿# Changelog
+# Changelog
 
 Notable project changes are recorded here. This is a research prototype; versioned releases are verification bundles, not site-operation approvals.
 
 ## Unreleased
+
+- **J-01 P1b technical run identity now maps directly onto immutable run records.**
+  `derive_run_id()` derives a page-scoped `run-<05|06>-<sha16>` identity from the
+  input group, site configuration, page settings/inputs, forecast and run settings,
+  model-selection policy, catalogue version, optimizer and algorithm versions.
+  The new `run_record_identity_fields()` maps it to `run_id`, `page`,
+  `run_request_sha256`, and `input_group_id` for `record_run_record()`.
+  `run_request_sha256` is the same technical identity digest, not a second hash and
+  not the full request digest. Manually corrupted identities are rejected.
+  Tests cover Page 05/06 vectors, technical-input sensitivity, investment/Page 09
+  boundaries, exact replay, and `run_result_conflict` after mapping.
+  Page 05/06 persistence and the v4 API contract remain separate integration work.
 
 - **Local workspaces can now retain immutable run results with explicit consent.**
   Workspace schema 1.0 migrates to 1.1 and creates a separate `run_records` table

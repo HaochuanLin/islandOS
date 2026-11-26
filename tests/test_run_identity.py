@@ -17,6 +17,7 @@ from islandos_core.run_identity import (
     canonicalize_units,
     derive_input_group_id,
     derive_run_id,
+    run_record_identity_fields,
 )
 
 
@@ -332,6 +333,55 @@ def test_run_identity_fixed_page_06_vector():
     assert identity.run_identity_sha256 == "906cce6af6da7a0f6061f11f27393fa6aa61f49e494bdf9a29abbf5e6e893a47"
     assert identity.identity_schema_version == 1
     assert identity.page == "joint_resource_optimizer"
+
+
+def test_run_record_identity_fields_are_the_record_identity():
+    identity = derive_run_id(**RUN05_INPUTS)
+
+    assert run_record_identity_fields(identity) == {
+        "run_id": "run-05-f099924addce15e4",
+        "page": "customer_dashboard",
+        "run_request_sha256": "f099924addce15e4bde6c2d7146cd397fecb169dc1bfd06fbc11bb2b02073896",
+        "input_group_id": "ig-3a993a72953b9348",
+    }
+
+    without_group = derive_run_id(**{**RUN05_INPUTS, "input_group": None})
+    assert run_record_identity_fields(without_group)["input_group_id"] is None
+
+
+def test_run_record_identity_fields_reject_a_manually_corrupted_identity():
+    corrupted = RunIdentity(
+        run_id="run-05-1111111111111111",
+        run_identity_sha256="0" * 64,
+        identity_schema_version=1,
+        page="customer_dashboard",
+        input_group=BASE_EXPECTED,
+    )
+
+    with pytest.raises(RunIdentityError, match="run_id does not match"):
+        run_record_identity_fields(corrupted)
+    with pytest.raises(RunIdentityError, match="unsupported page"):
+        run_record_identity_fields(
+            RunIdentity(
+                run_id="run-05-f099924addce15e4",
+                run_identity_sha256="0" * 64,
+                identity_schema_version=1,
+                page="device_flexibility_planner",
+                input_group=BASE_EXPECTED,
+            )
+        )
+    with pytest.raises(RunIdentityError, match="schema version"):
+        run_record_identity_fields(
+            RunIdentity(
+                run_id="run-05-f099924addce15e4",
+                run_identity_sha256="0" * 64,
+                identity_schema_version=2,
+                page="customer_dashboard",
+                input_group=BASE_EXPECTED,
+            )
+        )
+    with pytest.raises(RunIdentityError, match="RunIdentity"):
+        run_record_identity_fields({"run_id": "not-an-identity"})
 
 
 def test_run_identity_is_deterministic_and_mapping_order_independent():

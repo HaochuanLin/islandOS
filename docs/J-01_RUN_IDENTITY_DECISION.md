@@ -1,9 +1,9 @@
 # J-01 跨页面 Run Identity 产品定义（正式主线）
 
-- 状态：**产品规则 D1-D9 已由负责人确认；PD-1 至 PD-6 据此收敛。数据库字段与错误码仍待 PR #359 作者确认。**
-- 审查基线：`main = fc34678`（2026-11-25，P1a/P3 合并后的 main）；PR #359 head = `94388ed`（未合并）；P1a PR #372 与 P3 ProjectBinding PR #371 已合并。
+- 状态：**产品规则 D1-D9 已确认；P1a、P1b 与 #359 A1-A8 均已实现并合并。**
+- 基线：`main = 3990996`（2026-11-26）；P1a #372、P3 #371、#359、P1b #373 已合并。
 - 主线：**PR #362 是 J-01 正式文档主线。PR #360 是早期 draft，不再扩展为第二套身份契约；二者不得同时作为实现依据。**
-- 范围：页面 05 / 06 / 09 的身份、项目绑定和持久化边界。本轮 P1a 只实现输入组纯函数；P3 只实现项目上下文；不实现 `derive_run_id`，不修改 #359 数据库。
+- 范围：页面 05 / 06 / 09 的身份、项目绑定和持久化边界。P1a 实现输入组纯函数；P1b 实现 `derive_run_id` 与 run-record 字段映射；P3 实现项目上下文；页面 05/06 持久化仍未接入。
 
 一句话：**两级身份**——`input_group_id` 标识“同一份物理输入数据”，`run_id` 标识“一个页面、一次可复现的技术运行定义”；同一输入组跨页面只做关联，永不自动合并为一次实验。
 
@@ -86,18 +86,18 @@ D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再
 ### PD-3 成功记录幂等
 
 - 幂等键：`(project_id, run_id)`。
-- 完全相同的重复提交：返回已有记录，标记 replay；不新增、不改时间、不改 actor。
-- 同 `run_id` 不同技术摘要/page/input group：`run_id_conflict`。
-- 同技术请求不同结果：`run_result_conflict`。
+- 完全相同的重复提交：返回已有记录，标记 `idempotent_replay=true`；不新增记录、不改时间、不改 actor、不新增审计。
+- 同 `run_id` 不同 page / 技术摘要 / input group：`run_id_conflict`、`run_request_conflict`、`input_group_conflict`。
+- 同技术请求不同结果：`run_result_conflict`；retention 不同：`retention_conflict`。
 - 首次保存和重复保存都不覆盖；不可变触发器保留。
-- HTTP 200/201 与响应体由 PR #359 作者确认；本文件不替作者批准。
+- 冲突统一以 `RunRecordConflict` 抛出，`http_status=409`；并发插入在 `IntegrityError` 后重读判定。
 
 ### PD-4 失败只进审计
 
 - 失败不写 `run_records`，只追加 `audit_events`，事件类型 `run_failed`。
 - payload 至少含：`run_id`、`page`、`run_request_sha256`、`input_group_id`（可空）、受控 `error_code`、`attempt_no`、`occurred_at`。
 - 不含请求正文、原始历史或敏感数据；失败重试沿用同一 `run_id`。
-- 失败审计是否需要真实项目/同意，仍待 #359 作者和负责人确认。
+- 失败审计要求真实 `project_id`，只写审计；不复用 result-storage consent，也不写请求正文/结果。
 
 ### PD-5 投资分析：独立 append-only binding
 
@@ -123,8 +123,8 @@ D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再
 | Page 06 使用物理名 | `signal_history` 直接使用 `*_kw`/`*_per_kwh` | 与 05 共用同一组 |
 | Page 06 先 manifest 后 forecast | 现有 manifest 在 selected models 之前建立 | D5 用模型策略身份，不要求重排 |
 | Page 09 无身份 | summary `run_id=None`，无 manifest | D8 保持零持久化 |
-| #359 项目级不可变 | `run_records` PK `(project_id, run_id)`；重复即拒 | 需 A1-A8 扩展；本轮不改 |
-| #371 只读 lookup | `disabled`/`not_initialized`/`available`/`unavailable`；`resolve_selected_project` 返回 project 或 None | P3 需增加 registered/unregistered/invalid 状态与共享 key |
+| #359 项目级不可变 | `run_records` PK `(project_id, run_id)`；A1-A8 已合并，加入三列、幂等重放与 409 冲突 | 页面可直接调用 `record_run_record`；仍需项目与 consent 门禁 |
+| #371 只读 lookup | `disabled`/`not_initialized`/`available`/`unavailable`；`resolve_selected_project` 返回 project 或 None | P3 已增加 registered/unregistered/invalid 状态与共享 key |
 | API 契约仍 v3 | `app_view_models.CONTRACT_VERSION = 3`，无 `run_identity` 块 | 身份接入页面/契约是后续步骤 |
 
 ## 5. Page 05/06：选择、模拟、持久化分离
@@ -164,13 +164,14 @@ D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再
 ## 9. 接口与固定向量
 
 - 输入组纯函数已按 `docs/J-01_RUN_IDENTITY_INTERFACE.md` 落地：无 Streamlit、无环境变量、无数据库；只做校验、canonical JSON、SHA-256。
-- `derive_run_id` 仍为设计，本轮不实现；不得把设计签名当成已交付代码。
-- 固定向量只覆盖输入组，由实际实现重算；旧 `USD/kWh` 向量已作废。
+- `derive_run_id` 已实现并合并（#373）；`run_record_identity_fields` 已实现把技术身份映射到 `run_id`、`page`、`run_request_sha256`、`input_group_id`。
+- P1a/P1b 固定向量分别由 `docs/fixtures/j01_run_identity_vectors.json` 与 `docs/fixtures/j01_run_identity_p1b_vectors.json` 固定；旧 `USD/kWh` 向量已作废。
 - 时间范围、`hour_count`、输入顺序、空值、数值序列化规则在接口文档与测试中固定。
+- `run_request_sha256` 直接取 `run_identity_sha256`；两者覆盖同一组技术输入，不对 `run_id` 做二次 hash。
 
 ## 10. PR #359 与 A1-A8
 
-本轮不修改 PR #359 分支、不修改数据库。A1-A8 的字段、类型、nullable、索引、幂等、冲突分类、失败 payload、迁移、旧记录兼容与包导入导出建议，见：
+A1-A8 已由 #359 实现并合并：`run_request_sha256`、`input_group_id`、`identity_schema_version` 三列，部分索引，幂等重放，409 冲突，失败只写审计，1.0/1.1 包兼容。字段、类型、nullable、索引、冲突分类、失败 payload 与迁移细节见：
 
 - `docs/J-01_PR359_A1_A8_CONTRACT.md`
 - `docs/J-01_PR359_IDEMPOTENCY_REVIEW.md`
@@ -181,20 +182,22 @@ D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再
 
 | 工作 | 状态 |
 | --- | --- |
-| #362 J-01 文档 | 本文件与接口/向量已更新；#360 不再扩展 |
-| P1a 输入组 | 独立分支实现；14 项测试通过；未接页面 |
-| P3 ProjectBinding | 独立分支基于 #371；未接持久化；状态与共享 key 测试 |
-| #359 A1-A8 | 仅技术契约建议；未改分支/DB |
-| B-02 年度预测 | 继续暂缓；等待 B-01、正式 run identity、#359 契约、annualisation 规则 |
+| #362 J-01 文档 | 本文件与接口/向量已同步；#360 不再扩展 |
+| P1a 输入组 | #372 已合并；输入组纯函数与固定向量；未接页面 |
+| P1b run identity | #373 已合并；`derive_run_id`、Page 05/06 向量、investment/Page 09 边界 |
+| run-record 映射 | 本分支实现 `run_record_identity_fields`；映射到 #359 字段并有幂等/冲突测试 |
+| P3 ProjectBinding | #371 已合并；项目上下文与共享 key 已接入 |
+| #359 A1-A8 | 已合并；三列、索引、A3 幂等、A4 失败审计、A6 包兼容 |
+| 页面 05/06 持久化 | 未接入；下一步需页面 owner 确认后使用映射 |
+| B-02 年度预测 | 继续暂缓；等待 annualisation identity 明确 |
 
 ## 12. 兼容性与未决
 
-**兼容**：旧 run id 只读；旧记录 `input_group_id=null`；旧 `run_manifests` 不迁移；旧包继续可导入（待 A6 确认）。
+**兼容**：旧 run id 只读；旧记录 `input_group_id=null`、`identity_schema_version=0`；旧 `run_manifests` 不迁移；旧 1.0 包继续可导入。
 
-**未决（不阻塞 P1a/P3）**：
+**未决（不阻塞 P1a/P1b）**：
 
-1. #359 状态码、错误体、字段名与迁移方式（A1-A8）。
-2. 失败审计是否需要真实项目与独立同意。
-3. `run_bindings` 的最终表结构与保留策略（P5）。
-4. `run_identity` 进入 v4 请求/结果契约的时点。
-5. Page 09 是否永不进入持久化，或另立 identity 规则。
+1. Page 05/06 新 run 采用“旧记录保留只读 + 新记录新身份”还是迁移旧绑定；需要页面 owner 确认。
+2. `run_bindings` 的最终表结构与保留策略（P5）。
+3. `run_identity` 进入 v4 请求/结果契约的时点。
+4. Page 09 是否永不进入持久化，或另立 identity 规则。

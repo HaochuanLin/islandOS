@@ -420,3 +420,53 @@ def derive_run_id(
         page=page,
         input_group=input_group,
     )
+
+
+def _validate_run_identity(identity: RunIdentity) -> None:
+    if not isinstance(identity, RunIdentity):
+        raise RunIdentityError("identity must be a RunIdentity")
+    if not isinstance(identity.page, str) or identity.page not in PAGE_SLUGS:
+        raise RunIdentityError("identity contains an unsupported page")
+    if (
+        isinstance(identity.identity_schema_version, bool)
+        or not isinstance(identity.identity_schema_version, int)
+        or identity.identity_schema_version != RUN_IDENTITY_SCHEMA_VERSION
+    ):
+        raise RunIdentityError("identity contains an unsupported identity schema version")
+    if not isinstance(identity.run_identity_sha256, str) or not _SHA256_RE.fullmatch(identity.run_identity_sha256):
+        raise RunIdentityError("identity has an invalid run_identity_sha256")
+    if not isinstance(identity.run_id, str):
+        raise RunIdentityError("identity has an invalid run_id")
+    expected_run_id = f"run-{PAGE_SLUGS[identity.page]}-{identity.run_identity_sha256[:16]}"
+    if identity.run_id != expected_run_id:
+        raise RunIdentityError("run_id does not match the identity page and digest")
+    _validate_input_group_identity(identity.input_group)
+
+
+def run_record_identity_fields(identity: RunIdentity) -> dict[str, str | None]:
+    """Map a derived run identity onto the immutable run-record identity fields.
+
+    D5's technical identity digest is the D6 technical request digest: both
+    cover exactly the inputs that can change a technical result. Do not hash the
+    run id again, and do not substitute the full request digest. The returned
+    mapping is meant to be passed to ``record_run_record`` together with the
+    result and consent arguments::
+
+        record_run_record(
+            db, **run_record_identity_fields(identity),
+            request_sha256=full_request_sha256,
+            request_metadata=..., result=..., actor_id=...,
+            consent_to_store_result=True,
+        )
+    """
+    _validate_run_identity(identity)
+    return {
+        "run_id": identity.run_id,
+        "page": identity.page,
+        "run_request_sha256": identity.run_identity_sha256,
+        "input_group_id": (
+            identity.input_group.input_group_id
+            if identity.input_group is not None
+            else None
+        ),
+    }
