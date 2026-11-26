@@ -122,6 +122,19 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
             assert horizon_result["best_by_mae"] in {
                 item["model_id"] for item in horizon_result["models"]
             }
+            evaluated_ids = {item["model_id"] for item in horizon_result["models"]}
+            excluded_ids = {
+                item["model_id"] for item in horizon_result["excluded_candidates"]
+            }
+            assert evaluated_ids.isdisjoint(excluded_ids)
+            assert evaluated_ids | excluded_ids == {
+                "persistence",
+                "seasonal_naive",
+                "recent_mean",
+                "linear_trend",
+                "ridge_autoregressive_lag_only",
+            }
+            assert all(item["reason"] for item in horizon_result["excluded_candidates"])
             for model in horizon_result["models"]:
                 assert "bias_predicted_minus_actual" in model
                 assert model["fold_metrics"]
