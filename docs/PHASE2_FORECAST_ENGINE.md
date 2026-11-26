@@ -132,8 +132,9 @@ claim that every signal has site-trained or externally validated model skill.
 
 `forecast_site_signals` accepts an optional `PredictionEngine`. The default
 engine registers persistence, 24-hour seasonal-naive, recent-mean, linear-trend,
-and a univariate Ridge autoregressive candidate, ranks them using rolling-origin replay, and selects the lowest-error
-eligible candidate independently for each signal. A customer or integrator can
+and a univariate Ridge autoregressive candidate. It ranks them using
+rolling-origin replay and selects the lowest-error eligible candidate
+independently for each signal. A customer or integrator can
 supply a separately configured engine with one or more registered candidates;
 the selected model ID/version and input-history digest remain in each result.
 
