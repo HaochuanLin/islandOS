@@ -1,4 +1,5 @@
 """Tests for the model-agnostic IslandOS prediction engine."""
+import math
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -8,6 +9,7 @@ from islandos_core.prediction_engine import (
     PredictionEngine,
     PersistenceCandidate,
     RecentMeanCandidate,
+    RidgeAutoregressiveCandidate,
     SeasonalNaiveCandidate,
     SignalObservation,
 )
@@ -48,7 +50,7 @@ class TestPredictionEngine(unittest.TestCase):
         engine = PredictionEngine()
         self.assertEqual(
             {name for name, _ in engine.available_candidates()},
-            {"persistence", "seasonal_naive", "recent_mean", "linear_trend"},
+            {"persistence", "seasonal_naive", "recent_mean", "linear_trend", "ridge_autoregressive"},
         )
 
     def test_persistence_baseline_repeats_last_observation(self):
@@ -224,6 +226,70 @@ class TestPredictionEngine(unittest.TestCase):
                 make_request([float(index % 24) for index in range(72)]),
                 model_id="mutating", initial_history=48,
             )
+
+    def test_ridge_candidate_is_deterministic_and_records_alpha_in_version(self):
+        values = [
+            20.0
+            + 3.0 * math.sin(2.0 * math.pi * index / 24.0)
+            + 0.4 * math.sin(2.0 * math.pi * index / 168.0)
+            for index in range(120)
+        ]
+        candidate = RidgeAutoregressiveCandidate(ridge_alpha=2.5)
+        first = candidate.predict(values, 12, season_length=24)
+        second = candidate.predict(values, 12, season_length=24)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 12)
+        self.assertTrue(all(math.isfinite(value) for value in first))
+        self.assertIn("alpha2.5", candidate.version)
+
+    def test_ridge_candidate_rejects_invalid_alpha_and_short_training_history(self):
+        with self.assertRaisesRegex(ValueError, "ridge_alpha"):
+            RidgeAutoregressiveCandidate(ridge_alpha=0)
+        with self.assertRaisesRegex(ValueError, "at least 32"):
+            RidgeAutoregressiveCandidate().predict(
+                [1.0] * 31, 1, season_length=24,
+            )
+
+    def test_ridge_candidate_preserves_negative_tariff_forecasts(self):
+        values = [-0.05 + (index % 24) * 0.0005 for index in range(96)]
+        request = make_request(
+            values, non_negative=False, signal_id="tariff", unit="EUR/kWh",
+        )
+        predictions = PredictionEngine().predict_candidate(
+            request, "ridge_autoregressive", season_length=24,
+        )
+        self.assertTrue(any(value < 0 for value in predictions))
+
+    def test_ridge_candidate_refits_on_each_expanding_training_fold(self):
+        class RecordingRidge(RidgeAutoregressiveCandidate):
+            def __init__(self):
+                super().__init__()
+                self.training_lengths = []
+
+            def predict(self, history, horizon, *, season_length):
+                self.training_lengths.append(len(history))
+                return super().predict(history, horizon, season_length=season_length)
+
+        candidate = RecordingRidge()
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(candidate)
+        values = [
+            25.0 + 2.0 * math.sin(2.0 * math.pi * index / 24.0)
+            for index in range(120)
+        ]
+
+        scores = engine.evaluate_candidates(
+            values, initial_history=48, horizon=24, season_length=24,
+        )
+
+        self.assertEqual(candidate.training_lengths, [48, 72, 96])
+        self.assertEqual(scores[0].model_id, "ridge_autoregressive")
+        self.assertEqual(scores[0].folds, 3)
+        self.assertEqual(
+            [fold.train_samples for fold in scores[0].fold_metrics],
+            [48, 72, 96],
+        )
 
     def test_recent_mean_is_constant(self):
         self.assertEqual(
