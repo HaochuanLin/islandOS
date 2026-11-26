@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   phase2-forecast-tests:
-    name: Phase 2 forecast and planning contract tests
+    name: Full Python suite before OPSD regional backtests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -61,16 +61,8 @@ jobs:
       - name: Compile Phase 2 source and examples
         run: python -m compileall -q islandos_core examples tests
 
-      - name: Run forecast, rolling-validation, OPSD, and planning contract tests
-        run: >-
-          python -m pytest -q
-          tests/test_prediction_engine.py
-          tests/test_prediction_engine_fold_sampling.py
-          tests/test_phase2_opsd_backtest.py
-          tests/test_opsd_adapter.py
-          tests/test_forecast_signal_catalog.py
-          tests/test_prediction_dispatch_adapter.py
-          tests/test_forecast_optimizer_adapter.py
+      - name: Run complete pytest suite including forecast and planning contracts
+        run: python -m pytest -q
 
   public-history-backtest:
     needs: phase2-forecast-tests
