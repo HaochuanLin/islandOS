@@ -123,8 +123,8 @@ class ForecastService:
             limitations=(
                 "Signals are forecast independently; cross-signal causal or multivariate effects are not learned.",
                 "Every signal must have complete, regular, timestamp-aligned history; missing values are not imputed.",
-                "Built-in candidates include transparent baselines and a small univariate Ridge "
-                "autoregression; signals are still forecast independently.",
+                "The default candidates are transparent baselines; univariate Ridge is opt-in for controlled evaluation. "
+                "Signals are still forecast independently.",
                 "Historical backtest performance does not establish future accuracy or site-wide operational suitability.",
                 "The bundle is decision-support evidence and does not issue equipment commands.",
             ),
