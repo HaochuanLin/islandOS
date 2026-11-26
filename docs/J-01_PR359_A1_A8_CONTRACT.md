@@ -28,6 +28,7 @@
 | 校验 | 64 位小写 hex；与完整 `request_sha256` 分开保存，不用后者代替 |
 | 索引 | 不需要单独索引；幂等使用 `(project_id, run_id)`，技术摘要用于冲突比较 |
 | 旧记录 | `NULL`，不补算 |
+| 生成 | `RunIdentity.run_identity_sha256`；由 `run_record_identity_fields()` 映射，不对 `run_id` 二次 hash，不用完整 `request_sha256` 代替 |
 
 `request_sha256` 保留完整请求语义；`request_metadata` 仍受 64 KiB 与禁止键限制，不把原始历史放进去。
 
@@ -110,7 +111,7 @@
 
 ## 迁移实现
 
-1. **#359 尚未合并**：A1/A2/A8 列直接进入 `1.1` 的 `CREATE TABLE`，不额外发 1.2。
+1. **#359 合并前**：A1/A2/A8 列直接进入 `1.1` 的 `CREATE TABLE`，未额外发 1.2；现已随 #359 合并。
 2. 已存在的 1.1 `run_records` 表由 `_ensure_run_record_identity_columns()` 检测缺列，`ALTER TABLE` 补 `run_request_sha256`、`input_group_id`、`identity_schema_version`，再建部分索引。
 3. 新增列全部向后兼容；旧行得到 `NULL/NULL/0`，不设回填。
 4. 索引只加在 `input_group_id`；其他字段不增加查询索引，避免写放大。

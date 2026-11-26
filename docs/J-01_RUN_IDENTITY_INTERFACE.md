@@ -1,15 +1,15 @@
-# J-01 纯函数接口设计与固定测试向量
+# J-01 纯函数接口与固定测试向量
 
-- 状态：**P1a 输入组已实现；`derive_run_id` 仍为设计，未实现。**
-- 基线：`main = fc34678`；P1a 已合并（PR #372，分支 `feat/j01-input-group-identity-2026-11-25`）。
-- 关联：`docs/J-01_RUN_IDENTITY_DECISION.md`、`docs/fixtures/j01_run_identity_vectors.json`。
+- 状态：**P1a 输入组、P1b `derive_run_id` 和 run-record 身份映射均已实现；页面接入未做。**
+- 基线：`main = 3990996`（2026-11-26）；P1a #372、P1b #373、存储契约 #359 已合并。
+- 关联：`docs/J-01_RUN_IDENTITY_DECISION.md`、`docs/fixtures/j01_run_identity_vectors.json`、`docs/fixtures/j01_run_identity_p1b_vectors.json`。
 
 ## 1. 边界
 
-- P1a 无 I/O、无数据库、无 Streamlit、无 `session_state`、无环境变量、无全局状态。
+- 纯函数无 I/O、无数据库、无 Streamlit、无 `session_state`、无环境变量、无全局状态。
 - 不读系统时钟、不用随机数、不解析 CSV、不推断缺失信号。
 - 只做：校验 → canonical JSON → SHA-256 → 冻结对象。
-- `derive_run_id` 本轮不写代码；其签名、D5 字段和兼容规则只作为后续设计。
+- `run_record_identity_fields()` 只做字段映射，不写数据库；持久化仍由 `workspace_store.record_run_record()` 负责。
 
 ## 2. 规范信号名与页面适配
 
@@ -24,8 +24,6 @@
 
 ## 3. 返回对象
 
-P1a 实际实现：
-
 ```python
 @dataclass(frozen=True)
 class InputGroupIdentity:
@@ -35,11 +33,7 @@ class InputGroupIdentity:
     units_sha256: str
     hour_count: int
     schema_version: int = 1
-```
 
-后续 `derive_run_id` 设计（未实现）：
-
-```python
 @dataclass(frozen=True)
 class RunIdentity:
     run_id: str
@@ -49,7 +43,7 @@ class RunIdentity:
     input_group: InputGroupIdentity | None
 ```
 
-## 4. P1a 函数签名
+## 4. 函数签名
 
 ```python
 def canonical_signal_name(name: str) -> str: ...
@@ -64,9 +58,26 @@ def derive_input_group_id(
     signals: Mapping[str, Sequence[float]],
     units: Mapping[str, str],
 ) -> InputGroupIdentity: ...
+
+def derive_run_id(
+    *,
+    page: str,
+    input_group: InputGroupIdentity | None,
+    site_configuration_sha256: str,
+    page_settings: Mapping[str, Any],
+    page_inputs: Mapping[str, Any],
+    run_settings: Mapping[str, Any],
+    forecast_settings: Mapping[str, Any],
+    model_selection_policy: Mapping[str, str],
+    model_catalogue_version: str,
+    optimizer: Mapping[str, str],
+    algorithm_versions: Mapping[str, str],
+) -> RunIdentity: ...
+
+def run_record_identity_fields(identity: RunIdentity) -> dict[str, str | None]: ...
 ```
 
-不接收 `hour_count` 或 `history_sha256` 作为参数：前者由时间戳长度推出，后者由函数内部计算，避免调用方传入不一致值。
+不接收 `hour_count` 或 `history_sha256` 作为入参：前者由时间戳长度推出，后者由函数内部计算，避免调用方传入不一致值。
 
 ## 5. 校验与规范化规则
 
@@ -97,7 +108,7 @@ def derive_input_group_id(
 - canonical JSON：`sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False`。
 - 不填充空值、不插值、不重采样。
 
-## 6. 算法与域分隔
+## 6. P1a 输入组算法
 
 ```
 H = canonical_history_sha256(utc_sorted(timestamps), pv, wind, load, tariff)
@@ -111,12 +122,9 @@ input_group_sha256 = sha256(canonical_json({
 input_group_id = "ig-" + input_group_sha256[:16]
 ```
 
-- `schema` 是域分隔，未来算法变化必须改 schema 并升 `identity_schema_version`，不得静默改公式。
-- 组摘要不含 page、site digest、`page_inputs`、币种、投资参数。
+`schema` 是域分隔；未来算法变化必须改 schema 并升 `identity_schema_version`，不得静默改公式。组摘要不含 page、site digest、`page_inputs`、币种、投资参数。
 
-## 7. `derive_run_id` 设计（D5，未实现）
-
-D5 使用稳定模型策略身份，不要求 forecast 前拿到实际 selected model IDs：
+## 7. P1b 技术 run 身份算法
 
 ```
 run_identity_sha256 = sha256(canonical_json({
@@ -137,53 +145,84 @@ run_identity_sha256 = sha256(canonical_json({
 run_id = "run-" + slug(page) + "-" + run_identity_sha256[:16]
 ```
 
-- `model_ids` 实际 selected IDs 不放这里；它们写入 run evidence。
-- 不把 investment 参数放进 run identity。
-- 页面 slug 只用于可读 id；页面名进入摘要。
-- 旧 id 只读兼容，不重算。
+- `page` 只允许 `customer_dashboard`（05）和 `joint_resource_optimizer`（06）；Page 09 按 D8 不进入持久化。
+- 实际 selected model IDs 和结果指标不进入身份；稳定 selection policy + catalogue version 进入。
+- investment-only 字段递归拒绝，留给后续 append-only run binding。
+- `run_settings.currency` 必填；币种不进入 input group，但进入 run identity。
 
-## 8. 固定向量
+## 8. 映射到 `run_records`
 
-机器可读：`docs/fixtures/j01_run_identity_vectors.json`。字段与实际实现一致，全部由 P1a 代码重算。
+`run_record_identity_fields()` 返回：
+
+```python
+{
+    "run_id": identity.run_id,
+    "page": identity.page,
+    "run_request_sha256": identity.run_identity_sha256,
+    "input_group_id": identity.input_group.input_group_id if ... else None,
+}
+```
+
+调用方式：
+
+```python
+record_run_record(
+    db,
+    project_id=selected_project_id,
+    **run_record_identity_fields(identity),
+    request_sha256=full_request_sha256,
+    request_metadata=...,
+    result=...,
+    actor_id=...,
+    consent_to_store_result=True,
+)
+```
+
+约定：**`run_request_sha256` 直接使用 `run_identity_sha256`**。两者覆盖的是同一组技术输入；不再对 `run_id` 做二次 hash，也不用完整 `request_sha256` 代替。该映射只生成字段，不检查项目选择、consent 或数据库状态。
+
+`run_record_identity_fields()` 会拒绝手工构造的不一致 `RunIdentity`：`run_id` 必须与 page + digest 匹配，`identity_schema_version` 必须为 1，input group 必须通过 P1a 校验。
+
+## 9. 固定向量
+
+机器可读：`docs/fixtures/j01_run_identity_vectors.json`（P1a）与 `docs/fixtures/j01_run_identity_p1b_vectors.json`（P1b）。
 
 公共历史：3 行 UTC；PV `[0.0, 1.5, 4.25]`、风电 `[2.0, 2.5, 3.0]`、负荷 `[10.0, 12.5, 11.0]`、电价 `[0.20, 0.25, 0.30]`。
 
-| 向量 | 关键输入 | 期望 |
-| --- | --- | --- |
-| 历史摘要 | 上述 | `db13539cb15d68101bfdb28ad106c6fc2f36e249200f62c07056c7ebe0884d70` |
-| 单位摘要 | `kW/kW/kW/currency/kWh` | `f9649c8dc9775e90525e1e7d2f97916619144fea84b40b42dd7e7467f3b7cc04` |
-| 输入组 | 上述 | `ig-3a993a72953b9348` |
-| 组 sha256 | 上述 | `3a993a72953b9348e62f72919a129d4dcfc1cddd6fd68ed9c4a03ef401b49761` |
-| USD | `USD/kWh` | 同 `ig-3a993a72953b9348` |
-| CNY/GBP/EUR | 对应 `/kWh` | 同 `ig-3a993a72953b9348` |
-| Page 05 别名 | 四个展示名 | 同 `ig-3a993a72953b9348` |
-| 改 `load_kw` 为 `MW` | `MW` | `ig-180f52a578a52b95` |
-| 行顺序反转 | 时间戳与值同时反转 | 同 `ig-3a993a72953b9348` |
-| 等价 +01:00 偏移 | 同一 UTC 时刻 | 同 `ig-3a993a72953b9348` |
+| 向量 | 期望 |
+| --- | --- |
+| 历史摘要 | `db13539cb15d68101bfdb28ad106c6fc2f36e249200f62c07056c7ebe0884d70` |
+| 单位摘要 | `f9649c8dc9775e90525e1e7d2f97916619144fea84b40b42dd7e7467f3b7cc04` |
+| 输入组 | `ig-3a993a72953b9348` |
+| 组 sha256 | `3a993a72953b9348e62f72919a129d4dcfc1cddd6fd68ed9c4a03ef401b49761` |
+| Page 05 run id | `run-05-f099924addce15e4` |
+| Page 05 identity sha256 | `f099924addce15e4bde6c2d7146cd397fecb169dc1bfd06fbc11bb2b02073896` |
+| Page 06 run id | `run-06-906cce6af6da7a0f` |
+| Page 06 identity sha256 | `906cce6af6da7a0f6061f11f27393fa6aa61f49e494bdf9a29abbf5e6e893a47` |
 
 旧 `ig-ca9c886e6fb1343c` / `a03cc9eb…` 是 `USD/kWh` 进入单位摘要的旧口径，已作废。
 
-## 9. 测试状态
+## 10. 测试状态
 
-文件：`tests/test_run_identity.py`；当前 **14 passed**。
+文件：`tests/test_run_identity.py`、`tests/test_run_identity_record_mapping.py`；当前 **40 passed**。
 
 覆盖：
 
-1. 固定向量与 fixture 一致。
-2. USD/CNY/GBP/EUR 币种中立。
-3. Page 05/06 跨页面同组。
-4. 物理单位变化新组。
+1. P1a/P1b 固定向量与 fixture 一致。
+2. USD/CNY/GBP/EUR 币种中立；币种只进 run identity。
+3. Page 05/06 跨页面同组、不同 page 身份。
+4. 物理单位、历史值、行数、时间范围变化。
 5. 行顺序、时区偏移等价。
-6. 历史值/行数变化新组。
-7. 缺失、额外、重复、未知信号拒绝。
-8. `None`/字符串/`bool`/`NaN`/`inf` 拒绝。
-9. 长度不一致、空序列拒绝。
-10. 重复/无时区时间戳拒绝。
-11. 模块无 Streamlit / 环境变量 / 数据库依赖。
+6. 缺失、额外、重复、未知信号拒绝。
+7. `None`/字符串/`bool`/`NaN`/`inf` 拒绝。
+8. 重复/无时区时间戳拒绝。
+9. 技术字段、模型策略/目录版本、optimizer、算法版本变化改变 run id。
+10. investment-only 字段拒绝；Page 09 拒绝。
+11. `run_record_identity_fields` 映射、错误身份拒绝。
+12. 映射结果写入 `run_records` 后字段一致、完全重放幂等、不同结果抛 `run_result_conflict`。
 
-## 10. 后续集成顺序
+## 11. 后续集成顺序
 
-1. P1a 合并后，05/06 仅通过 adapter 调用，不自行拼 hash。
-2. `request_sha256` 范围不变；`run_identity` 不参与，避免循环。
-3. `derive_run_id` 待 D5 字段与 A1-A8 契约确认后实现。
-4. Page 05/06 持久化、Page 09、`run_bindings` 不在 P1a/P3 范围。
+1. 先接 core 映射（本文件），不接页面。
+2. Page 05/06 接入时，保留旧 `run-dashboard-*` / `run-*` 记录只读；新 run 使用新身份，是否迁移旧记录另行决定。
+3. 持久化必须同时满足：真实项目、result-storage consent、run identity 可用；缺一项不写 `run_records`。
+4. Page 09、`run_bindings`、API v4 契约不在 P1a/P1b 范围。
