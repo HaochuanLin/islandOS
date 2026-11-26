@@ -1,9 +1,6 @@
 name: OPSD public regional forecast backtest
 
 on:
-  push:
-    branches:
-      - feat/phase2-ridge-canonical-candidate
   pull_request:
     branches:
       - main
