@@ -15,6 +15,9 @@ SQLite library. Streamlit session state is not treated as a customer database.
 - Immutable run manifests: input artifact hashes, configuration snapshot,
   model/software version identifiers, random seed, output summary, and the
   human-review/read-only execution boundary.
+- Immutable execution records keyed by `(project_id, run_id)`: workflow/page,
+  request digest and metadata, result JSON and digest, software/model versions,
+  optional canonical manifest, history/input fingerprints, and retention mode.
 - Append-only audit events with actor, timestamp, event type, payload, previous
   event hash, and current event hash.
 - Reasoned operator-override proposals and independent review events linked by
@@ -23,17 +26,41 @@ SQLite library. Streamlit session state is not treated as a customer database.
 
 ## What is not stored
 
-Uploaded CSV/XLSX bytes are **not** stored by this service. Import retention is
-fixed to metadata_only; the customer retains control of the original file.
-This avoids silently copying potentially sensitive operational data into the
-project database.
+Uploaded CSV/XLSX bytes are **not** stored by the workspace store. Import
+metadata remains `metadata_only`; original files are retained separately only
+through the existing explicit source-file opt-in.
+
+Completed run results are stored only after explicit result-storage consent.
+The default run-record mode stores result evidence and sanitised request
+metadata (limited to 64 KiB and rejecting raw history, signal and telemetry
+payload keys), not the full request/history arrays. Retaining the exact full request
+requires a second, separate opt-in. A metadata-only run record is viewable but
+not replayable; a full-request record is marked replayable, subject to compatible
+software and model versions.
+
+Run records are immutable after insert. A new record created with a technical
+`run_request_sha256` also carries `input_group_id` and
+`identity_schema_version=1`, uses `record_schema_version="1.1"`, and must use a
+canonical page name (`customer_dashboard`, `joint_resource_optimizer`, or
+`device_flexibility_planner`). Omitting the technical digest keeps the legacy
+1.0 shape and accepts the old `05`/`06`/`09` page codes for compatibility.
+
+Repeating an identical `(project_id, run_id)` write returns the existing
+record with `idempotent_replay=true` and adds no audit event. If the replay
+differs in page, technical digest, input group, result, or retention mode, the
+store raises `RunRecordConflict` with a stable code
+(`run_id_conflict`, `run_request_conflict`, `input_group_conflict`,
+`run_result_conflict`, or `retention_conflict`) and 409 semantics instead of
+overwriting or silently returning a different result. Failed runs are recorded
+as audit-only `run_failed` events; they never enter `run_records`.
 
 ## Consent and traceability
 
 Creating a project or storing import metadata requires explicit consent.
 Absolute source paths are reduced to the filename only. A run can reference
-only source hashes registered to the same project. Run manifests and audit
-events have SQLite triggers that reject normal update/delete operations.
+only source hashes registered to the same project. Run manifests, execution records, and audit events have SQLite triggers that
+reject normal update/delete operations. Stored request metadata, result,
+retained request, and canonical manifest content are SHA-256 checked when read.
 The audit chain also hashes each event together with the preceding event hash,
 and verify_audit_chain detects edits or reordering. A reasoned override review
 record is not proof that the reviewer has the legal or engineering authority
@@ -52,7 +79,7 @@ encrypted vault, access-control system, or regulatory records system.
 from datetime import datetime, timezone
 from islandos_core.workspace_store import (
     initialize_workspace, create_project, record_import_artifact,
-    create_run_manifest, verify_audit_chain,
+    create_run_manifest, record_run_record, get_run_record, verify_audit_chain,
 )
 
 db = "islandos_workspace.sqlite3"
@@ -75,21 +102,44 @@ manifest = create_run_manifest(
     software_version="0.1.0", output_summary={"unmet_load_kwh": 0},
     actor_id="operator", created_at=now,
 )
+record_run_record(
+    db, project_id="site-001", run_id="demo-run-001", page="customer_dashboard",
+    request_sha256="<64-character-request-sha256>",
+    run_request_sha256="<64-character-technical-request-sha256>",
+    input_group_id="ig-<16-lowercase-hex>",
+    request_metadata={"history_rows": 168, "history_sha256": "<64-character-history-sha256>"},
+    result={"grid_cost": 12.5, "unmet_load_kwh": 0},
+    actor_id="operator", consent_to_store_result=True, created_at=now,
+)
+record = get_run_record(db, project_id="site-001", run_id="demo-run-001")
+assert record["record_schema_version"] == "1.1"
+assert record["identity_schema_version"] == 1
+assert record["idempotent_replay"] is False
+assert record["replayable"] is False
 assert verify_audit_chain(db)["valid"]
 ~~~
 
 ## Important limitations and next steps
 
-- No raw customer data is retained by the store.
+- Raw customer history is not retained by default. The store can retain a full
+  validated request only after separate explicit opt-in; source files have
+  their own independent retention opt-in.
 - Atomic whole-workspace SQLite backup and restore are implemented with
   SQLite integrity checks, audit-chain verification, SHA-256 output, and
   explicit overwrite opt-in. These functions back up workspace metadata,
-  asset versions, run manifests, and audit history; they do not include the
-  original uploaded CSV/XLSX bytes.
+  asset versions, run manifests, execution records, and audit history; they do
+  not include the original uploaded CSV/XLSX bytes.
 - The SQLite file must be placed in an OS-approved user-data directory by the
   desktop shell, not beside the executable.
-- Project-level portable export/import, raw source-file retention, retention
-  controls, deletion/purge policy, multi-user approvals, cloud synchronization,
+- Project-level portable export/import now includes run results and their
+  integrity hashes. Run-record packages may carry either
+  `record_schema_version="1.0"` (legacy) or `"1.1"` (technical identity); both
+  are accepted, and 1.1 records keep `run_request_sha256`, `input_group_id`, and
+  `identity_schema_version` across round-trip. Full retained request payloads
+  are excluded by default and require a separate export opt-in; importing run
+  results requires explicit consent, and retaining imported full requests
+  requires another opt-in.
+- Deletion/purge policy, multi-user approvals, cloud synchronization,
   encryption-at-rest, and a security review remain unimplemented. Override
   proposals are recorded as history only; a separate authorization model and
   signed approval workflow are required before a reviewed value can be treated

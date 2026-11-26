@@ -1,7 +1,6 @@
 """Versioned site profiles, optional local source retention, and portable project export.
 
-The module extends the local-first SQLite workspace without changing the existing
-schema version. Raw customer files are retained only after explicit opt-in and
+The module extends the local-first SQLite workspace and portable project packages. Raw customer files are retained only after explicit opt-in and
 only in a caller-selected local directory. No cloud upload or device control is
 performed here.
 """
@@ -22,12 +21,22 @@ from typing import Any, Mapping
 
 from islandos_core.workspace_store import (
     AuditIntegrityError,
+    IDENTITY_SCHEMA_VERSION,
+    LEGACY_RUN_RECORD_SCHEMA_VERSION,
+    RUN_RECORD_SCHEMA_VERSION,
     WorkspaceStoreError,
     _append_event,
     _connect,
+    _CANONICAL_PAGES,
+    _INPUT_GROUP_RE,
+    _LEGACY_PAGES,
     _hash,
     _json,
     _timestamp,
+    get_run_record,
+    list_run_records,
+    record_run_record,
+    _validate_run_metadata,
 )
 
 SITE_TYPES = {"microgrid", "island", "industrial", "commercial", "community", "other"}
@@ -283,13 +292,14 @@ def export_project_package(
     project_id: str,
     storage_dir: str | Path | None = None,
     include_retained_sources: bool = True,
+    include_retained_run_requests: bool = False,
     overwrite: bool = False,
 ) -> dict[str, Any]:
     """Export one project and its provenance into a verifiable ZIP package."""
     from islandos_core.workspace_store import list_asset_records, list_audit_events, list_import_artifacts, list_projects
 
-    if not isinstance(include_retained_sources, bool) or not isinstance(overwrite, bool):
-        raise WorkspaceStoreError("include_retained_sources and overwrite must be booleans")
+    if not all(isinstance(value, bool) for value in (include_retained_sources, include_retained_run_requests, overwrite)):
+        raise WorkspaceStoreError("export inclusion and overwrite options must be booleans")
     projects = [item for item in list_projects(db_path) if item["project_id"] == project_id]
     if len(projects) != 1:
         raise WorkspaceStoreError("project_id does not exist")
@@ -318,17 +328,29 @@ def export_project_package(
         if _hash(row["manifest_json"]) != row["manifest_sha256"]:
             raise AuditIntegrityError("run manifest failed hash verification during export")
         manifest_records.append({"manifest": json.loads(row["manifest_json"]), "sha256": row["manifest_sha256"]})
+    execution_records = []
+    for summary in list_run_records(db_path, project_id=project_id):
+        record = get_run_record(db_path, project_id=project_id, run_id=summary["run_id"])
+        omitted_full_request = record["request_payload"] is not None and not include_retained_run_requests
+        if omitted_full_request:
+            record["request_payload"] = None
+            record["request_payload_sha256"] = None
+            record["retention_mode"] = "metadata_only"
+            record["replayable"] = False
+        record["request_payload_omitted_from_export"] = omitted_full_request
+        execution_records.append(record)
     audit = list_audit_events(db_path, project_id=project_id)
     payload = {
         "package_schema_version": "1.0",
         "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "project": projects[0], "site_profiles": profiles,
         "assets": assets, "imports": imports, "run_manifests": manifest_records,
-        "audit_events": audit,
+        "run_records": execution_records, "audit_events": audit,
         "limitations": [
             "This package is a project evidence export, not a complete workspace database backup.",
             "Audit events retain their source workspace hash-chain references; importing them into another workspace must create new local audit events.",
             "Original source files are included only when they were separately retained with explicit consent.",
+            "Completed run results and metadata are included. Retained full request payloads are excluded unless the exporter separately opts in.",
         ],
     }
     payload_bytes = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
@@ -372,6 +394,8 @@ def export_project_package(
         "package_path": str(destination), "sha256": digest,
         "project_id": project_id, "included_source_files": len(retained),
         "included_imports": len(imports), "included_assets": len(assets),
+        "included_run_records": len(execution_records),
+        "included_replayable_run_records": sum(item["request_payload"] is not None for item in execution_records),
         "integrity": "verified",
     }
 
@@ -419,6 +443,11 @@ def inspect_project_package(content: bytes, *, max_package_bytes: int = 100 * 10
                 "project_name": project["project"].get("display_name"),
                 "asset_count": len(project.get("assets", [])),
                 "import_count": len(project.get("imports", [])),
+                "run_record_count": len(project.get("run_records", [])),
+                "replayable_run_record_count": sum(
+                    isinstance(item, dict) and isinstance(item.get("request_payload"), dict)
+                    for item in project.get("run_records", [])
+                ),
                 "retained_source_count": sum(name.startswith("source_files/") for name in names),
                 "sha256": hashlib.sha256(content).hexdigest(),
             }
@@ -436,6 +465,8 @@ def import_project_package(
     consent_to_store_metadata: bool,
     storage_dir: str | Path | None = None,
     retain_sources: bool = False,
+    consent_to_import_run_records: bool = False,
+    consent_to_retain_run_requests: bool = False,
 ) -> dict[str, Any]:
     """Import a verified project package as a new project in the local workspace.
 
@@ -455,6 +486,8 @@ def import_project_package(
         raise WorkspaceStoreError("explicit consent is required before importing project metadata")
     if not isinstance(retain_sources, bool):
         raise WorkspaceStoreError("retain_sources must be a boolean")
+    if not isinstance(consent_to_import_run_records, bool) or not isinstance(consent_to_retain_run_requests, bool):
+        raise WorkspaceStoreError("run-record import consent options must be booleans")
     if not all(isinstance(value, str) and value.strip() for value in (actor_id, new_project_id, new_project_name)):
         raise WorkspaceStoreError("actor_id, new_project_id and new_project_name are required")
 
@@ -522,6 +555,91 @@ def import_project_package(
             source_record = imports_by_id.get(old_id)
             if source_record is None or hashlib.sha256(source_bytes).hexdigest() != source_record["sha256"]:
                 raise AuditIntegrityError("package source file does not match its registered import metadata")
+
+    prepared_run_records = package.get("run_records", [])
+    for record in prepared_run_records:
+        if not isinstance(record, dict):
+            raise WorkspaceStoreError("package contains an invalid run record")
+        if not all(isinstance(record.get(key), str) and record[key].strip() for key in ("run_id", "page", "request_sha256")):
+            raise WorkspaceStoreError("package run record is missing its identity fields")
+        if not _SHA256.fullmatch(record["request_sha256"]):
+            raise WorkspaceStoreError("package run record has an invalid request digest")
+        record_schema_version = record.get("record_schema_version")
+        if record_schema_version not in {
+            LEGACY_RUN_RECORD_SCHEMA_VERSION, RUN_RECORD_SCHEMA_VERSION,
+        }:
+            raise WorkspaceStoreError("package contains an unsupported run record schema")
+        identity_schema_version = record.get("identity_schema_version", 0)
+        if identity_schema_version not in {0, IDENTITY_SCHEMA_VERSION}:
+            raise WorkspaceStoreError("package run record has an unsupported identity schema version")
+        run_request_sha256 = record.get("run_request_sha256")
+        input_group_id = record.get("input_group_id")
+        if record_schema_version == RUN_RECORD_SCHEMA_VERSION:
+            if identity_schema_version != IDENTITY_SCHEMA_VERSION:
+                raise WorkspaceStoreError("package 1.1 run record must use identity schema version 1")
+            if not isinstance(run_request_sha256, str) or not _SHA256.fullmatch(run_request_sha256):
+                raise WorkspaceStoreError("package 1.1 run record has an invalid technical request digest")
+        else:
+            if identity_schema_version != 0 or run_request_sha256 is not None:
+                raise WorkspaceStoreError("package 1.0 run record has an inconsistent identity schema")
+        if input_group_id is not None:
+            if not isinstance(input_group_id, str) or not _INPUT_GROUP_RE.fullmatch(input_group_id):
+                raise WorkspaceStoreError("package run record has an invalid input_group_id")
+        page = record["page"]
+        if page not in _CANONICAL_PAGES and page not in _LEGACY_PAGES:
+            raise WorkspaceStoreError("package run record has an unsupported page value")
+        if record_schema_version == RUN_RECORD_SCHEMA_VERSION and page not in _CANONICAL_PAGES:
+            raise WorkspaceStoreError("package 1.1 run record must use a canonical page name")
+        created_at = record.get("created_at")
+        if not isinstance(created_at, str) or not created_at.strip():
+            raise WorkspaceStoreError("package run record has no creation timestamp")
+        try:
+            parsed_created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise WorkspaceStoreError("package run record has an invalid creation timestamp") from exc
+        if parsed_created_at.tzinfo is None or parsed_created_at.utcoffset() is None:
+            raise WorkspaceStoreError("package run record creation timestamp must include a timezone")
+        if not isinstance(record.get("request_metadata"), dict) or not isinstance(record.get("result"), dict):
+            raise WorkspaceStoreError("package run record metadata and result must be objects")
+        _validate_run_metadata(record["request_metadata"])
+        if record.get("request_metadata_sha256") != _hash(_json(record["request_metadata"])):
+            raise AuditIntegrityError("package run request metadata failed SHA-256 verification")
+        software_version = record.get("software_version")
+        if software_version is not None and (not isinstance(software_version, str) or not software_version.strip()):
+            raise WorkspaceStoreError("package run record has an invalid software version")
+        model_versions = record.get("model_versions")
+        if model_versions is not None:
+            if (
+                not isinstance(model_versions, dict)
+                or any(not isinstance(key, str) or not key.strip() or not isinstance(value, str) or not value.strip()
+                       for key, value in model_versions.items())
+                or record.get("model_versions_sha256") != _hash(_json(model_versions))
+            ):
+                raise AuditIntegrityError("package model versions failed SHA-256 verification")
+        elif record.get("model_versions_sha256") is not None:
+            raise AuditIntegrityError("package run record has a model-version hash without model versions")
+        for digest_name in ("history_sha256", "input_fingerprint_sha256"):
+            digest = record.get(digest_name)
+            if digest is not None and (not isinstance(digest, str) or not _SHA256.fullmatch(digest)):
+                raise WorkspaceStoreError(f"package run record has an invalid {digest_name}")
+        if record.get("result_sha256") != _hash(_json(record["result"])):
+            raise AuditIntegrityError("package run result failed SHA-256 verification")
+        request_payload = record.get("request_payload")
+        if request_payload is not None:
+            if not isinstance(request_payload, dict) or record.get("request_payload_sha256") != _hash(_json(request_payload)):
+                raise AuditIntegrityError("package retained request failed SHA-256 verification")
+        elif record.get("request_payload_sha256") is not None:
+            raise AuditIntegrityError("package run record has a request hash without retained request content")
+        canonical_manifest = record.get("canonical_manifest")
+        if canonical_manifest is not None:
+            if not isinstance(canonical_manifest, dict) or record.get("canonical_manifest_sha256") != _hash(_json(canonical_manifest)):
+                raise AuditIntegrityError("package canonical manifest failed SHA-256 verification")
+        elif record.get("canonical_manifest_sha256") is not None:
+            raise AuditIntegrityError("package run record has a manifest hash without manifest content")
+        if record.get("retention_mode") not in {"metadata_only", "retained_full_request"}:
+            raise WorkspaceStoreError("package run record has an unsupported retention mode")
+        if (request_payload is None) != (record.get("retention_mode") == "metadata_only"):
+            raise WorkspaceStoreError("package run record retention mode does not match its retained request")
 
     import_hashes = {item["sha256"] for item in prepared_imports}
     for item in package.get("run_manifests", []):
@@ -610,6 +728,28 @@ def import_project_package(
             created_at=timestamp,
         ))
 
+    imported_run_records = []
+    for record in (prepared_run_records if consent_to_import_run_records is True else []):
+        retain_request = consent_to_retain_run_requests is True and record.get("request_payload") is not None
+        created = record.get("created_at")
+        timestamp = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
+        imported_run_records.append(record_run_record(
+            db_path, project_id=new_project_id, run_id=record["run_id"],
+            page=record["page"], request_sha256=record["request_sha256"],
+            request_metadata=record["request_metadata"], result=record["result"],
+            actor_id=actor_id, consent_to_store_result=True,
+            software_version=record.get("software_version"),
+            model_versions=record.get("model_versions"),
+            request_payload=record.get("request_payload") if retain_request else None,
+            consent_to_retain_request=retain_request,
+            canonical_manifest=record.get("canonical_manifest"),
+            history_sha256=record.get("history_sha256"),
+            input_fingerprint_sha256=record.get("input_fingerprint_sha256"),
+            run_request_sha256=record.get("run_request_sha256"),
+            input_group_id=record.get("input_group_id"),
+            created_at=timestamp,
+        ))
+
     package_digest = hashlib.sha256(content).hexdigest()
     with _connect(db_path) as connection:
         _append_event(
@@ -619,6 +759,9 @@ def import_project_package(
                 "source_project_id": inspected["project_id"],
                 "package_sha256": package_digest,
                 "source_audit_event_count": len(package.get("audit_events", [])),
+                "run_record_count": len(imported_run_records),
+                "run_record_count_skipped": len(prepared_run_records) - len(imported_run_records),
+                "replayable_run_record_count": sum(item["replayable"] for item in imported_run_records),
                 "retained_source_count": sum(
                     1 for old_id in source_payloads if old_id in artifact_ids
                 ) if retain_sources else 0,
@@ -634,6 +777,9 @@ def import_project_package(
         "asset_versions_imported": len(saved_assets),
         "import_artifacts_imported": len(artifact_ids),
         "run_manifests_imported": len(imported_runs),
+        "run_records_imported": len(imported_run_records),
+        "run_records_skipped": len(prepared_run_records) - len(imported_run_records),
+        "replayable_run_records_imported": sum(item["replayable"] for item in imported_run_records),
         "source_files_retained": sum(
             1 for old_id in source_payloads if old_id in artifact_ids
         ) if retain_sources else 0,

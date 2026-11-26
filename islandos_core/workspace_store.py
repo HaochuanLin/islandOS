@@ -23,8 +23,21 @@ from typing import Any, Mapping, Sequence
 from islandos_core.assets import AssetRecord, evaluate_asset_readiness
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
+RUN_MANIFEST_SCHEMA_VERSION = "1.0"
+RUN_RECORD_SCHEMA_VERSION = "1.1"
+LEGACY_RUN_RECORD_SCHEMA_VERSION = "1.0"
+IDENTITY_SCHEMA_VERSION = 1
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_INPUT_GROUP_RE = re.compile(r"^ig-[0-9a-f]{16}$")
+_CANONICAL_PAGES = {
+    "customer_dashboard", "joint_resource_optimizer", "device_flexibility_planner",
+}
+_LEGACY_PAGES = {"05", "06", "09"}
+_FAILURE_CODES = {
+    "validation_error", "forecast_failed", "optimizer_failed",
+    "persistence_error", "internal_error",
+}
 _ALLOWED_SOURCE_TYPES = {
     "measured", "customer_provided", "public_reanalysis",
     "synthetic", "forecast", "vendor_specification", "inferred",
@@ -34,6 +47,15 @@ _ALLOWED_QUALITY = {"valid", "needs_review", "invalid", "unassessed"}
 
 class WorkspaceStoreError(ValueError):
     """Raised when a workspace write would violate its data contract."""
+
+
+class RunRecordConflict(WorkspaceStoreError):
+    """Raised when a repeated run id carries different immutable content."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.http_status = 409
 
 
 class AuditIntegrityError(RuntimeError):
@@ -56,6 +78,57 @@ def _json(value: Any) -> str:
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+_RUN_METADATA_MAX_BYTES = 64 * 1024
+_RUN_METADATA_FORBIDDEN_KEYS = {
+    "history", "timestamps_utc", "signals", "series", "telemetry",
+    "raw_data", "raw_telemetry",
+}
+
+
+def _validate_run_metadata(value: Mapping[str, Any]) -> str:
+    """Serialize small descriptive metadata while rejecting raw time-series payloads."""
+    def visit(item: Any) -> None:
+        if isinstance(item, Mapping):
+            for key, child in item.items():
+                if isinstance(key, str) and key.strip().lower() in _RUN_METADATA_FORBIDDEN_KEYS:
+                    raise WorkspaceStoreError(
+                        "request_metadata must not contain raw history, signal, or telemetry arrays"
+                    )
+                visit(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    serialized = _json(dict(value))
+    if len(serialized.encode("utf-8")) > _RUN_METADATA_MAX_BYTES:
+        raise WorkspaceStoreError("request_metadata exceeds the 64 KiB metadata limit")
+    return serialized
+
+
+def _validate_run_page(page: str, *, identity_schema_version: int) -> str:
+    if not isinstance(page, str) or not page.strip():
+        raise WorkspaceStoreError("page is required")
+    page = page.strip()
+    if identity_schema_version == IDENTITY_SCHEMA_VERSION:
+        if page not in _CANONICAL_PAGES:
+            raise WorkspaceStoreError(
+                "new run records require a canonical page name: "
+                + ", ".join(sorted(_CANONICAL_PAGES))
+            )
+        return page
+    if page not in _CANONICAL_PAGES and page not in _LEGACY_PAGES:
+        raise WorkspaceStoreError("unsupported legacy page value")
+    return page
+
+
+def _validate_input_group_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _INPUT_GROUP_RE.fullmatch(value):
+        raise WorkspaceStoreError("input_group_id must match ^ig-[0-9a-f]{16}$")
+    return value
 
 
 @contextmanager
@@ -115,6 +188,24 @@ def _append_event(
     return event_id
 
 
+def _ensure_run_record_identity_columns(connection: sqlite3.Connection) -> None:
+    """Add the new identity columns when opening an existing 1.1 workspace."""
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(run_records)")}
+    if "input_group_id" not in columns:
+        connection.execute("ALTER TABLE run_records ADD COLUMN input_group_id TEXT")
+    if "run_request_sha256" not in columns:
+        connection.execute("ALTER TABLE run_records ADD COLUMN run_request_sha256 TEXT")
+    if "identity_schema_version" not in columns:
+        connection.execute(
+            "ALTER TABLE run_records ADD COLUMN identity_schema_version INTEGER NOT NULL DEFAULT 0"
+        )
+    connection.execute(
+        """CREATE INDEX IF NOT EXISTS run_records_project_input_group_idx
+           ON run_records(project_id, input_group_id, created_at)
+           WHERE input_group_id IS NOT NULL"""
+    )
+
+
 def initialize_workspace(
     db_path: str | Path,
     *,
@@ -129,6 +220,13 @@ def initialize_workspace(
         raise WorkspaceStoreError("actor_id is required")
     timestamp = _timestamp(created_at)
     with _connect(db_path) as connection:
+        existing_schema = connection.execute(
+            "SELECT value FROM workspace_meta WHERE key='schema_version'"
+        ).fetchone() if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_meta'"
+        ).fetchone() else None
+        if existing_schema and existing_schema["value"] not in {"1.0", SCHEMA_VERSION}:
+            raise WorkspaceStoreError("unsupported workspace schema version")
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS workspace_meta (
@@ -185,6 +283,49 @@ def initialize_workspace(
                 manifest_json TEXT NOT NULL,
                 manifest_sha256 TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS run_records (
+                project_id TEXT NOT NULL REFERENCES projects(project_id),
+                run_id TEXT NOT NULL,
+                page TEXT NOT NULL,
+                record_schema_version TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                software_version TEXT,
+                model_versions_json TEXT,
+                model_versions_sha256 TEXT,
+                request_sha256 TEXT NOT NULL,
+                run_request_sha256 TEXT,
+                input_group_id TEXT,
+                identity_schema_version INTEGER NOT NULL DEFAULT 0,
+                request_metadata_json TEXT NOT NULL,
+                request_metadata_sha256 TEXT NOT NULL,
+                request_payload_json TEXT,
+                request_payload_sha256 TEXT,
+                result_json TEXT NOT NULL,
+                result_sha256 TEXT NOT NULL,
+                canonical_manifest_json TEXT,
+                canonical_manifest_sha256 TEXT,
+                history_sha256 TEXT,
+                input_fingerprint_sha256 TEXT,
+                retention_mode TEXT NOT NULL CHECK(retention_mode IN ('metadata_only', 'retained_full_request')),
+                PRIMARY KEY(project_id, run_id),
+                CHECK((request_payload_json IS NULL AND request_payload_sha256 IS NULL AND retention_mode='metadata_only')
+                   OR (request_payload_json IS NOT NULL AND request_payload_sha256 IS NOT NULL AND retention_mode='retained_full_request')),
+                CHECK((canonical_manifest_json IS NULL AND canonical_manifest_sha256 IS NULL)
+                   OR (canonical_manifest_json IS NOT NULL AND canonical_manifest_sha256 IS NOT NULL)),
+                CHECK((model_versions_json IS NULL AND model_versions_sha256 IS NULL)
+                   OR (model_versions_json IS NOT NULL AND model_versions_sha256 IS NOT NULL)),
+                CHECK(identity_schema_version IN (0, 1)),
+                CHECK(identity_schema_version = 0 OR run_request_sha256 IS NOT NULL)
+            );
+            CREATE TRIGGER IF NOT EXISTS run_records_no_update
+            BEFORE UPDATE ON run_records BEGIN
+                SELECT RAISE(ABORT, 'run records are immutable');
+            END;
+            CREATE TRIGGER IF NOT EXISTS run_records_no_delete
+            BEFORE DELETE ON run_records BEGIN
+                SELECT RAISE(ABORT, 'run records are immutable');
+            END;
             CREATE TABLE IF NOT EXISTS audit_events (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id TEXT NOT NULL UNIQUE,
@@ -214,6 +355,7 @@ def initialize_workspace(
             END;
             """
         )
+        _ensure_run_record_identity_columns(connection)
         existing = connection.execute(
             "SELECT value FROM workspace_meta WHERE key='workspace_id'"
         ).fetchone()
@@ -230,7 +372,23 @@ def initialize_workspace(
         schema_row = connection.execute(
             "SELECT value FROM workspace_meta WHERE key='schema_version'"
         ).fetchone()
-        if schema_row and schema_row["value"] != SCHEMA_VERSION:
+        if schema_row and schema_row["value"] == "1.0":
+            audit_before_migration = verify_audit_chain(db_path)
+            if not audit_before_migration["valid"]:
+                raise AuditIntegrityError(
+                    f"workspace audit chain is invalid at sequence {audit_before_migration['failed_sequence']}"
+                )
+            connection.execute(
+                "UPDATE workspace_meta SET value=? WHERE key='schema_version'",
+                (SCHEMA_VERSION,),
+            )
+            _append_event(
+                connection, actor_id=actor_id, event_type="workspace_schema_migrated",
+                project_id=None,
+                payload={"from_schema_version": "1.0", "to_schema_version": SCHEMA_VERSION},
+                created_at=timestamp,
+            )
+        elif schema_row and schema_row["value"] != SCHEMA_VERSION:
             raise WorkspaceStoreError("unsupported workspace schema version")
         if not connection.execute("SELECT 1 FROM audit_events LIMIT 1").fetchone():
             _append_event(
@@ -359,7 +517,7 @@ def create_run_manifest(
     timestamp = _timestamp(created_at)
     run_id = str(uuid.uuid4())
     manifest = {
-        "manifest_schema_version": SCHEMA_VERSION,
+        "manifest_schema_version": RUN_MANIFEST_SCHEMA_VERSION,
         "run_id": run_id,
         "project_id": project_id,
         "created_at": timestamp,
@@ -464,6 +622,322 @@ def get_run_manifest(db_path: str | Path, *, run_id: str) -> dict[str, Any]:
     if _hash(row["manifest_json"]) != row["manifest_sha256"]:
         raise AuditIntegrityError("stored run manifest hash does not match its contents")
     return {**manifest, "manifest_sha256": row["manifest_sha256"]}
+
+
+
+def record_run_record(
+    db_path: str | Path,
+    *,
+    project_id: str,
+    run_id: str,
+    page: str,
+    request_sha256: str,
+    request_metadata: Mapping[str, Any],
+    result: Mapping[str, Any],
+    actor_id: str,
+    consent_to_store_result: bool,
+    software_version: str | None = None,
+    model_versions: Mapping[str, str] | None = None,
+    request_payload: Mapping[str, Any] | None = None,
+    consent_to_retain_request: bool = False,
+    canonical_manifest: Mapping[str, Any] | None = None,
+    history_sha256: str | None = None,
+    input_fingerprint_sha256: str | None = None,
+    run_request_sha256: str | None = None,
+    input_group_id: str | None = None,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Persist an immutable result record, or replay an identical existing one.
+
+    ``run_request_sha256`` is the technical request digest introduced by J-01.
+    Passing it creates a 1.1 identity record and requires a canonical page name.
+    Omitting it deliberately writes a legacy 1.0 record for package compatibility.
+    """
+    if consent_to_store_result is not True:
+        raise WorkspaceStoreError("explicit consent is required before saving a run result")
+    if not all(isinstance(value, str) and value.strip() for value in (project_id, run_id, actor_id)):
+        raise WorkspaceStoreError("project_id, run_id, and actor_id are required")
+    for name, digest in (
+        ("request_sha256", request_sha256),
+        ("history_sha256", history_sha256),
+        ("input_fingerprint_sha256", input_fingerprint_sha256),
+    ):
+        if digest is not None and (not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest)):
+            raise WorkspaceStoreError(f"{name} must be a lowercase SHA-256 digest")
+    if not isinstance(request_sha256, str) or not _SHA256_RE.fullmatch(request_sha256):
+        raise WorkspaceStoreError("request_sha256 must be a lowercase SHA-256 digest")
+    if run_request_sha256 is not None and (
+        not isinstance(run_request_sha256, str) or not _SHA256_RE.fullmatch(run_request_sha256)
+    ):
+        raise WorkspaceStoreError("run_request_sha256 must be a lowercase SHA-256 digest")
+    input_group_id = _validate_input_group_id(input_group_id)
+    identity_schema_version = IDENTITY_SCHEMA_VERSION if run_request_sha256 is not None else 0
+    record_schema_version = (
+        RUN_RECORD_SCHEMA_VERSION if identity_schema_version == IDENTITY_SCHEMA_VERSION
+        else LEGACY_RUN_RECORD_SCHEMA_VERSION
+    )
+    if identity_schema_version == 0 and input_group_id is not None:
+        raise WorkspaceStoreError("input_group_id requires a technical run request digest")
+    page = _validate_run_page(page, identity_schema_version=identity_schema_version)
+    if not isinstance(request_metadata, Mapping) or not isinstance(result, Mapping):
+        raise WorkspaceStoreError("request_metadata and result must be mappings")
+    if request_payload is not None and not isinstance(request_payload, Mapping):
+        raise WorkspaceStoreError("request_payload must be a mapping or None")
+    if consent_to_retain_request is not True and request_payload is not None:
+        raise WorkspaceStoreError("separate explicit consent is required before retaining the full request")
+    if consent_to_retain_request is True and request_payload is None:
+        raise WorkspaceStoreError("request_payload is required when full-request retention is enabled")
+    if canonical_manifest is not None and not isinstance(canonical_manifest, Mapping):
+        raise WorkspaceStoreError("canonical_manifest must be a mapping or None")
+    if software_version is not None and (not isinstance(software_version, str) or not software_version.strip()):
+        raise WorkspaceStoreError("software_version must be non-empty text or None")
+    if model_versions is not None:
+        if not isinstance(model_versions, Mapping) or any(
+            not isinstance(key, str) or not key.strip()
+            or not isinstance(value, str) or not value.strip()
+            for key, value in model_versions.items()
+        ):
+            raise WorkspaceStoreError("model_versions must map non-empty names to non-empty version strings")
+    timestamp = _timestamp(created_at)
+    metadata_json = _validate_run_metadata(request_metadata)
+    result_json = _json(dict(result))
+    payload_json = _json(dict(request_payload)) if request_payload is not None else None
+    manifest_json = _json(dict(canonical_manifest)) if canonical_manifest is not None else None
+    model_versions_json = _json(dict(model_versions)) if model_versions is not None else None
+    model_versions_hash = _hash(model_versions_json) if model_versions_json is not None else None
+    payload_hash = _hash(payload_json) if payload_json is not None else None
+    result_hash = _hash(result_json)
+    manifest_hash = _hash(manifest_json) if manifest_json is not None else None
+    metadata_hash = _hash(metadata_json)
+    retention_mode = "retained_full_request" if payload_json is not None else "metadata_only"
+
+    def compare_existing(existing: sqlite3.Row) -> bool:
+        if existing["page"] != page:
+            raise RunRecordConflict("run_id_conflict", "run_id is already used by another page")
+        if identity_schema_version == IDENTITY_SCHEMA_VERSION:
+            if existing["identity_schema_version"] != IDENTITY_SCHEMA_VERSION:
+                raise RunRecordConflict(
+                    "run_request_conflict", "run_id already exists as a legacy record"
+                )
+            if existing["run_request_sha256"] != run_request_sha256:
+                raise RunRecordConflict(
+                    "run_request_conflict", "technical request digest does not match the existing record"
+                )
+            if existing["input_group_id"] != input_group_id:
+                raise RunRecordConflict(
+                    "input_group_conflict", "input_group_id does not match the existing record"
+                )
+        else:
+            if existing["identity_schema_version"] != 0 or existing["request_sha256"] != request_sha256:
+                raise RunRecordConflict(
+                    "run_request_conflict", "request digest does not match the existing record"
+                )
+        if existing["result_sha256"] != result_hash:
+            raise RunRecordConflict("run_result_conflict", "result differs from the immutable record")
+        if existing["retention_mode"] != retention_mode:
+            raise RunRecordConflict("retention_conflict", "retention mode differs from the existing record")
+        if existing["request_payload_sha256"] != payload_hash:
+            raise RunRecordConflict("retention_conflict", "retained request differs from the existing record")
+        return True
+
+    replay = False
+    inserted = False
+    with _connect(db_path) as connection:
+        if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
+            raise WorkspaceStoreError("project_id does not exist")
+        existing = connection.execute(
+            "SELECT * FROM run_records WHERE project_id=? AND run_id=?",
+            (project_id, run_id),
+        ).fetchone()
+        if existing is not None:
+            replay = compare_existing(existing)
+        else:
+            try:
+                connection.execute(
+                    """INSERT INTO run_records
+                    (project_id, run_id, page, record_schema_version, created_at, actor_id,
+                     software_version, model_versions_json, model_versions_sha256,
+                     request_sha256, run_request_sha256, input_group_id, identity_schema_version,
+                     request_metadata_json, request_metadata_sha256,
+                     request_payload_json, request_payload_sha256,
+                     result_json, result_sha256, canonical_manifest_json, canonical_manifest_sha256,
+                     history_sha256, input_fingerprint_sha256, retention_mode)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        project_id, run_id, page, record_schema_version, timestamp, actor_id.strip(),
+                        software_version.strip() if software_version else None,
+                        model_versions_json, model_versions_hash, request_sha256,
+                        run_request_sha256, input_group_id, identity_schema_version,
+                        metadata_json, metadata_hash, payload_json, payload_hash,
+                        result_json, result_hash, manifest_json, manifest_hash,
+                        history_sha256, input_fingerprint_sha256, retention_mode,
+                    ),
+                )
+                inserted = True
+            except sqlite3.IntegrityError:
+                existing = connection.execute(
+                    "SELECT * FROM run_records WHERE project_id=? AND run_id=?",
+                    (project_id, run_id),
+                ).fetchone()
+                if existing is None:
+                    raise
+                replay = compare_existing(existing)
+        if inserted:
+            _append_event(
+                connection, actor_id=actor_id, event_type="run_record_created",
+                project_id=project_id,
+                payload={
+                    "run_id": run_id, "page": page, "request_sha256": request_sha256,
+                    "run_request_sha256": run_request_sha256,
+                    "input_group_id": input_group_id,
+                    "identity_schema_version": identity_schema_version,
+                    "record_schema_version": record_schema_version,
+                    "result_sha256": result_hash, "retention_mode": retention_mode,
+                    "canonical_manifest_sha256": manifest_hash,
+                },
+                created_at=timestamp,
+            )
+    record = get_run_record(db_path, project_id=project_id, run_id=run_id)
+    record["idempotent_replay"] = replay
+    return record
+
+
+def get_run_record(db_path: str | Path, *, project_id: str, run_id: str) -> dict[str, Any]:
+    """Read one run record and verify every stored content digest."""
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT * FROM run_records WHERE project_id=? AND run_id=?",
+            (project_id, run_id),
+        ).fetchone()
+    if row is None:
+        raise WorkspaceStoreError("run record does not exist")
+    for json_field, hash_field, label in (
+        ("request_metadata_json", "request_metadata_sha256", "request metadata"),
+        ("model_versions_json", "model_versions_sha256", "model versions"),
+        ("result_json", "result_sha256", "run result"),
+        ("request_payload_json", "request_payload_sha256", "retained request"),
+        ("canonical_manifest_json", "canonical_manifest_sha256", "canonical manifest"),
+    ):
+        raw = row[json_field]
+        if raw is None:
+            if hash_field and row[hash_field] is not None:
+                raise AuditIntegrityError(f"{label} hash exists without stored content")
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise AuditIntegrityError(f"stored {label} is not valid JSON") from exc
+        if hash_field and _hash(raw) != row[hash_field]:
+            raise AuditIntegrityError(f"stored {label} hash does not match its contents")
+        if not isinstance(parsed, dict):
+            raise AuditIntegrityError(f"stored {label} must be a JSON object")
+    metadata = json.loads(row["request_metadata_json"])
+    result = json.loads(row["result_json"])
+    request_payload = json.loads(row["request_payload_json"]) if row["request_payload_json"] is not None else None
+    manifest = json.loads(row["canonical_manifest_json"]) if row["canonical_manifest_json"] is not None else None
+    return {
+        "project_id": row["project_id"], "run_id": row["run_id"], "page": row["page"],
+        "record_schema_version": row["record_schema_version"], "created_at": row["created_at"],
+        "actor_id": row["actor_id"], "software_version": row["software_version"],
+        "model_versions": json.loads(row["model_versions_json"]) if row["model_versions_json"] is not None else None,
+        "model_versions_sha256": row["model_versions_sha256"],
+        "request_sha256": row["request_sha256"],
+        "run_request_sha256": row["run_request_sha256"],
+        "input_group_id": row["input_group_id"],
+        "identity_schema_version": row["identity_schema_version"],
+        "request_metadata_sha256": row["request_metadata_sha256"],
+        "request_metadata": metadata, "request_payload": request_payload,
+        "request_payload_sha256": row["request_payload_sha256"],
+        "result": result, "result_sha256": row["result_sha256"],
+        "canonical_manifest": manifest, "canonical_manifest_sha256": row["canonical_manifest_sha256"],
+        "history_sha256": row["history_sha256"],
+        "input_fingerprint_sha256": row["input_fingerprint_sha256"],
+        "retention_mode": row["retention_mode"],
+        "replayable": request_payload is not None,
+    }
+
+
+def list_run_records(
+    db_path: str | Path,
+    *,
+    project_id: str,
+    input_group_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """List run history without returning retained full request payloads."""
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise WorkspaceStoreError("project_id is required")
+    input_group_id = _validate_input_group_id(input_group_id)
+    with _connect(db_path) as connection:
+        if input_group_id is None:
+            keys = connection.execute(
+                "SELECT run_id FROM run_records WHERE project_id=? ORDER BY created_at DESC, run_id",
+                (project_id,),
+            ).fetchall()
+        else:
+            keys = connection.execute(
+                """SELECT run_id FROM run_records
+                   WHERE project_id=? AND input_group_id=?
+                   ORDER BY created_at DESC, run_id""",
+                (project_id, input_group_id),
+            ).fetchall()
+    results = []
+    for row in keys:
+        record = get_run_record(db_path, project_id=project_id, run_id=row["run_id"])
+        record.pop("request_payload", None)
+        record.pop("result", None)
+        record.pop("canonical_manifest", None)
+        results.append(record)
+    return results
+
+
+def record_run_failure(
+    db_path: str | Path,
+    *,
+    project_id: str,
+    run_id: str,
+    page: str,
+    run_request_sha256: str,
+    error_code: str,
+    attempt_no: int,
+    actor_id: str,
+    input_group_id: str | None = None,
+    occurred_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Append a failed-run audit event; failures never enter ``run_records``."""
+    if not all(isinstance(value, str) and value.strip() for value in (project_id, run_id, actor_id)):
+        raise WorkspaceStoreError("project_id, run_id, and actor_id are required")
+    if not isinstance(run_request_sha256, str) or not _SHA256_RE.fullmatch(run_request_sha256):
+        raise WorkspaceStoreError("run_request_sha256 must be a lowercase SHA-256 digest")
+    input_group_id = _validate_input_group_id(input_group_id)
+    page = _validate_run_page(page, identity_schema_version=IDENTITY_SCHEMA_VERSION)
+    if not isinstance(error_code, str) or error_code not in _FAILURE_CODES:
+        raise WorkspaceStoreError("error_code must be one of: " + ", ".join(sorted(_FAILURE_CODES)))
+    if not isinstance(attempt_no, int) or isinstance(attempt_no, bool) or attempt_no < 1:
+        raise WorkspaceStoreError("attempt_no must be an integer >= 1")
+    timestamp = _timestamp(occurred_at)
+    payload = {
+        "run_id": run_id,
+        "page": page,
+        "run_request_sha256": run_request_sha256,
+        "input_group_id": input_group_id,
+        "identity_schema_version": IDENTITY_SCHEMA_VERSION,
+        "error_code": error_code,
+        "attempt_no": attempt_no,
+        "occurred_at": timestamp,
+        "project_bound": True,
+    }
+    with _connect(db_path) as connection:
+        if not connection.execute("SELECT 1 FROM projects WHERE project_id=?", (project_id,)).fetchone():
+            raise WorkspaceStoreError("project_id does not exist")
+        event_id = _append_event(
+            connection,
+            actor_id=actor_id,
+            event_type="run_failed",
+            project_id=project_id,
+            payload=payload,
+            created_at=timestamp,
+        )
+    return {"event_id": event_id, "event_type": "run_failed", **payload}
 
 
 def record_operator_override(
@@ -685,7 +1159,7 @@ def _file_sha256(path: str | Path) -> str:
 
 
 def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
-    """Validate SQLite integrity and the append-only audit chain before backup/restore."""
+    """Validate SQLite integrity, stored run hashes, and the append-only audit chain."""
     source = Path(path)
     if not source.is_file():
         raise WorkspaceStoreError("workspace database file does not exist")
@@ -697,10 +1171,21 @@ def _validate_workspace_file(path: str | Path) -> dict[str, Any]:
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
             }
+            if not {"workspace_meta", "projects", "audit_events"}.issubset(tables):
+                raise WorkspaceStoreError("file is not a supported IslandOS workspace database")
+            schema_row = connection.execute(
+                "SELECT value FROM workspace_meta WHERE key='schema_version'"
+            ).fetchone()
+            if schema_row is None or schema_row[0] not in {"1.0", SCHEMA_VERSION}:
+                raise WorkspaceStoreError("workspace database has an unsupported schema version")
+            has_run_records = "run_records" in tables
+            run_keys = connection.execute(
+                "SELECT project_id, run_id FROM run_records ORDER BY project_id, run_id"
+            ).fetchall() if has_run_records else []
         if integrity != "ok":
             raise AuditIntegrityError("workspace SQLite integrity check failed")
-        if not {"workspace_meta", "projects", "audit_events"}.issubset(tables):
-            raise WorkspaceStoreError("file is not a supported IslandOS workspace database")
+        for project_id, run_id in run_keys:
+            get_run_record(source, project_id=project_id, run_id=run_id)
         audit = verify_audit_chain(source)
     except sqlite3.Error as exc:
         raise WorkspaceStoreError(f"workspace database cannot be opened: {exc}") from exc
@@ -720,7 +1205,7 @@ def backup_workspace(
     """Create an atomic, integrity-checked SQLite backup of the complete local workspace.
 
     Uploaded source-file bytes are not part of the workspace schema; this backs
-    up project metadata, assets, run manifests, and audit history only.
+    up project metadata, assets, run manifests, execution records, and audit history.
     """
     source = Path(db_path).expanduser().resolve()
     destination = Path(destination_path).expanduser().resolve()

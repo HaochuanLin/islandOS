@@ -22,6 +22,8 @@ from islandos_core.workspace_store import (
     create_project,
     initialize_workspace,
     record_import_artifact,
+    record_run_record,
+    get_run_record,
     list_import_artifacts,
     list_asset_records,
     save_asset_record,
@@ -226,3 +228,98 @@ def test_project_package_import_creates_new_project_and_revalidates_sources(tmp_
     )
     assert restored == source_bytes
     assert verify_audit_chain(destination_db)["valid"] is True
+
+
+def test_project_package_exports_and_imports_run_results_with_separate_request_consent(tmp_path):
+    source_db = make_workspace(tmp_path / "source-run-records")
+    payload = {"history": {"timestamps_utc": ["2026-11-01T00:00:00Z"], "signals": {"load_kw": [8]}}}
+    record_run_record(
+        source_db, project_id="site-1", run_id="same-run-id", page="06",
+        request_sha256="a" * 64,
+        request_metadata={"history_rows": 1, "site_digest": "b" * 64},
+        result={"grid_cost": 42.5, "unmet_load_kwh": 0},
+        actor_id="tester", consent_to_store_result=True,
+        software_version="0.2.1", model_versions={"forecast": "baseline-v2"},
+        request_payload=payload, consent_to_retain_request=True,
+        history_sha256="b" * 64, created_at=None,
+    )
+
+    default_package = tmp_path / "default-export.zip"
+    default_export = export_project_package(source_db, default_package, project_id="site-1")
+    assert default_export["included_run_records"] == 1
+    assert default_export["included_replayable_run_records"] == 0
+    with zipfile.ZipFile(default_package) as archive:
+        package = json.loads(archive.read("project.json"))
+    exported = package["run_records"][0]
+    assert exported["result"] == {"grid_cost": 42.5, "unmet_load_kwh": 0}
+    assert exported["request_payload"] is None
+    assert exported["request_payload_omitted_from_export"] is True
+
+    destination_db = make_workspace(tmp_path / "destination-run-records")
+    skipped = import_project_package(
+        destination_db, default_package.read_bytes(), actor_id="importer",
+        new_project_id="site-skipped", new_project_name="Imported without run results",
+        consent_to_store_metadata=True,
+    )
+    assert skipped["run_records_imported"] == 0
+    assert skipped["run_records_skipped"] == 1
+    imported = import_project_package(
+        destination_db, default_package.read_bytes(), actor_id="importer",
+        new_project_id="site-imported", new_project_name="Imported",
+        consent_to_store_metadata=True, consent_to_import_run_records=True,
+    )
+    assert imported["run_records_imported"] == 1
+    restored = get_run_record(destination_db, project_id="site-imported", run_id="same-run-id")
+    assert restored["result"] == {"grid_cost": 42.5, "unmet_load_kwh": 0}
+    assert restored["software_version"] == "0.2.1"
+    assert restored["model_versions"] == {"forecast": "baseline-v2"}
+    assert restored["request_payload"] is None
+    assert restored["replayable"] is False
+
+    full_package = tmp_path / "full-export.zip"
+    full_export = export_project_package(
+        source_db, full_package, project_id="site-1",
+        include_retained_run_requests=True,
+    )
+    assert full_export["included_replayable_run_records"] == 1
+    full_destination = make_workspace(tmp_path / "full-destination")
+    imported_full = import_project_package(
+        full_destination, full_package.read_bytes(), actor_id="importer",
+        new_project_id="site-full", new_project_name="Full Import",
+        consent_to_store_metadata=True, consent_to_import_run_records=True,
+        consent_to_retain_run_requests=True,
+    )
+    assert imported_full["replayable_run_records_imported"] == 1
+    full_record = get_run_record(full_destination, project_id="site-full", run_id="same-run-id")
+    assert full_record["request_payload"] == payload
+    assert full_record["replayable"] is True
+
+
+def test_project_package_round_trips_run_record_identity_1_1(tmp_path):
+    source_db = make_workspace(tmp_path / "source-identity")
+    record_run_record(
+        source_db, project_id="site-1", run_id="identity-run",
+        page="device_flexibility_planner", request_sha256="a" * 64,
+        run_request_sha256="b" * 64, input_group_id="ig-" + "c" * 16,
+        request_metadata={"history_rows": 1}, result={"flexible_kw": 12},
+        actor_id="tester", consent_to_store_result=True, created_at=None,
+    )
+    package_path = tmp_path / "identity.zip"
+    export = export_project_package(source_db, package_path, project_id="site-1")
+    assert export["included_run_records"] == 1
+    inspected = inspect_project_package(package_path.read_bytes())
+    assert inspected["valid"] is True
+
+    destination_db = make_workspace(tmp_path / "destination-identity")
+    imported = import_project_package(
+        destination_db, package_path.read_bytes(), actor_id="importer",
+        new_project_id="site-identity", new_project_name="Identity import",
+        consent_to_store_metadata=True, consent_to_import_run_records=True,
+    )
+    assert imported["run_records_imported"] == 1
+    restored = get_run_record(destination_db, project_id="site-identity", run_id="identity-run")
+    assert restored["record_schema_version"] == "1.1"
+    assert restored["identity_schema_version"] == 1
+    assert restored["run_request_sha256"] == "b" * 64
+    assert restored["input_group_id"] == "ig-" + "c" * 16
+    assert restored["result"] == {"flexible_kw": 12}
