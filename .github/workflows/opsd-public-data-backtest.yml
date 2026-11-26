@@ -1,22 +1,8 @@
 name: OPSD public regional forecast backtest
 
 on:
-  push:
-    branches:
-      - "**"
-    paths:
-      - ".github/workflows/opsd-public-data-backtest.yml"
-      - "docs/PHASE2_PUBLIC_DATA.md"
-      - "examples/phase2_opsd_backtest.py"
-      - "islandos_core/opsd_adapter.py"
-      - "islandos_core/prediction_engine.py"
-      - "islandos_core/forecast_engine.py"
-      - "islandos_core/forecast_signal_catalog.py"
-      - "tests/test_opsd_adapter.py"
-      - "tests/test_phase2_opsd_backtest.py"
-      - "tests/test_prediction_engine_fold_sampling.py"
   pull_request:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
     branches:
       - main
     paths:
