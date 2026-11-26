@@ -209,6 +209,39 @@ class TestPredictionEngine(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must be non-negative"):
             make_request([1.0, -1.0, 2.0])
 
+    def test_detailed_evaluation_reports_ineligible_candidate_reason(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        engine.register(InvalidCandidate())
+
+        history = [float(value) for value in range(12)]
+        report = engine.evaluate_candidates_detailed(
+            history,
+            initial_history=4,
+            horizon=2,
+        )
+
+        self.assertEqual(
+            [item.model_id for item in report.ranked_candidates],
+            ["persistence"],
+        )
+        self.assertEqual(
+            [
+                (item.model_id, item.reason)
+                for item in report.excluded_candidates
+            ],
+            [("invalid", "ValueError: candidate prediction 0 must be finite")],
+        )
+        # The existing tuple-returning API remains compatible.
+        self.assertEqual(
+            engine.evaluate_candidates(
+                history,
+                initial_history=4,
+                horizon=2,
+            ),
+            report.ranked_candidates,
+        )
+
     def test_model_output_validation_and_linear_trend(self):
         candidate = LinearTrendCandidate()
         self.assertEqual(candidate.predict([1.0, 2.0, 3.0], 2, season_length=3), [4.0, 5.0])
