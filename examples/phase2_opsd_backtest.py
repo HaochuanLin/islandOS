@@ -127,7 +127,7 @@ def _canonical_prediction_report(
         for signal_id, values in canonical_history.items()
     }
 
-    engine = PredictionEngine()
+    engine = PredictionEngine(include_ridge_candidate=True)
     bundle = forecast_site_signals(
         training_timestamps,
         training_history,
