@@ -1,9 +1,9 @@
 """Model-agnostic, evidence-gated prediction engine for IslandOS signals.
 
 The engine compares registered forecast candidates with rolling-origin replay,
-selects the best candidate by declared error metric, and emits empirical error
-bands. Built-ins combine transparent baselines with a small univariate Ridge
-autoregression.
+selects the lowest-MAE eligible candidate, and emits descriptive empirical
+error bands. The default registry contains transparent baselines; a univariate
+Ridge autoregression can be enabled explicitly for controlled evaluation.
 """
 from __future__ import annotations
 
@@ -364,9 +364,18 @@ def _select_fold_indices(total_folds: int, max_folds: int | None) -> tuple[int, 
     )
 
 class PredictionEngine:
-    """Register candidates, compare them chronologically, and forecast with calibrated error bands."""
+    """Register candidates, compare them chronologically, and emit empirical error bands."""
 
-    def __init__(self, *, include_builtin_candidates: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        include_builtin_candidates: bool = True,
+        include_ridge_candidate: bool = False,
+    ) -> None:
+        if not isinstance(include_builtin_candidates, bool):
+            raise ValueError("include_builtin_candidates must be a boolean")
+        if not isinstance(include_ridge_candidate, bool):
+            raise ValueError("include_ridge_candidate must be a boolean")
         self._candidates: dict[str, tuple[ForecastCandidate, str]] = {}
         if include_builtin_candidates:
             for candidate in (
@@ -374,9 +383,10 @@ class PredictionEngine:
                 SeasonalNaiveCandidate(),
                 RecentMeanCandidate(),
                 LinearTrendCandidate(),
-                RidgeAutoregressiveCandidate(),
             ):
                 self.register(candidate)
+        if include_ridge_candidate:
+            self.register(RidgeAutoregressiveCandidate())
 
     def register(self, candidate: ForecastCandidate) -> None:
         model_id = getattr(candidate, "model_id", None)
@@ -631,8 +641,8 @@ class PredictionEngine:
             backtest=selected_metrics,
             points=tuple(points),
             limitations=(
-                "Built-in candidates include transparent baselines and a univariate Ridge "
-                "autoregression; no cross-signal or exogenous effects are learned.",
+                "The default candidates are transparent baselines; optional Ridge is a univariate lag-only model. "
+                "No cross-signal or exogenous effects are learned.",
                 "Error bands summarize historical rolling-origin residuals; they are not guaranteed prediction intervals.",
                 "Candidate selection and error-band estimation reuse the same rolling-origin replay; bands are descriptive, not independently calibrated.",
                 "Backtest skill on supplied history does not establish future accuracy or site-wide operational suitability.",
