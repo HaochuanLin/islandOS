@@ -1,0 +1,80 @@
+{
+  "schema": "j01-run-identity-p1b-vectors-v1",
+  "canonical_json": "json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False), UTF-8",
+  "note": "Fixture site digests are deterministic test labels. Production must pass SiteAssumptions.digest(). The vectors use the P1a input-group digest from the currency-neutral fixture.",
+  "input_group_sha256": "3a993a72953b9348e62f72919a129d4dcfc1cddd6fd68ed9c4a03ef401b49761",
+  "cases": [
+    {
+      "name": "page05_base",
+      "inputs": {
+        "page": "customer_dashboard",
+        "site_configuration_sha256": "2eb26336383cd110d964c1297654d4b61a011c125fa2a02e4e2d85e025ea4ab2",
+        "page_settings": {
+          "demand_scale": 1.0,
+          "tariff_scale": 1.0,
+          "cost_priority": 0.7
+        },
+        "page_inputs": {},
+        "run_settings": {
+          "currency": "USD"
+        },
+        "forecast_settings": {
+          "horizon_hours": 24,
+          "forecast_policy": "fixed"
+        },
+        "model_selection_policy": {
+          "id": "forecast_policy_default",
+          "version": "1"
+        },
+        "model_catalogue_version": "catalogue-v1",
+        "optimizer": {
+          "id": "customer_dashboard_policy_comparison",
+          "version": "1"
+        },
+        "algorithm_versions": {
+          "input_adapter": "1",
+          "customer_workflow": "1"
+        }
+      },
+      "expected_run_id": "run-05-f099924addce15e4",
+      "expected_run_identity_sha256": "f099924addce15e4bde6c2d7146cd397fecb169dc1bfd06fbc11bb2b02073896"
+    },
+    {
+      "name": "page06_base",
+      "inputs": {
+        "page": "joint_resource_optimizer",
+        "site_configuration_sha256": "4063d8d5acb192b871a7e11dbc406f8c68c9e2618906c16add2ac1e5ba328f6b",
+        "page_settings": {},
+        "page_inputs": {
+          "window_end_utc": "2026-01-01T03:00:00Z"
+        },
+        "run_settings": {
+          "currency": "USD",
+          "availability": {
+            "grid_all_hours": true,
+            "diesel_all_hours": true
+          }
+        },
+        "forecast_settings": {
+          "horizon_hours": 168,
+          "forecast_lead_hours": 24
+        },
+        "model_selection_policy": {
+          "id": "per_signal_auto_select",
+          "version": "1"
+        },
+        "model_catalogue_version": "catalogue-v1",
+        "optimizer": {
+          "id": "prediction_resource_dispatch",
+          "version": "1"
+        },
+        "algorithm_versions": {
+          "forecast_engine": "1",
+          "dispatch_optimizer": "1"
+        }
+      },
+      "expected_run_id": "run-06-906cce6af6da7a0f",
+      "expected_run_identity_sha256": "906cce6af6da7a0f6061f11f27393fa6aa61f49e494bdf9a29abbf5e6e893a47"
+    }
+  ]
+}
