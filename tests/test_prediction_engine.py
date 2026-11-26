@@ -51,8 +51,7 @@ class TestPredictionEngine(unittest.TestCase):
         self.assertEqual(
             {name for name, _ in engine.available_candidates()},
             {
-                "persistence", "seasonal_naive", "recent_mean",
-                "linear_trend", "ridge_autoregressive_lag_only",
+                "persistence", "seasonal_naive", "recent_mean", "linear_trend",
             },
         )
 
@@ -230,6 +229,25 @@ class TestPredictionEngine(unittest.TestCase):
                 model_id="mutating", initial_history=48,
             )
 
+    def test_ridge_candidate_is_opt_in_and_does_not_change_default_registry(self):
+        default_ids = {model_id for model_id, _ in PredictionEngine().available_candidates()}
+        enabled_ids = {
+            model_id
+            for model_id, _ in PredictionEngine(
+                include_ridge_candidate=True,
+            ).available_candidates()
+        }
+
+        self.assertEqual(
+            default_ids,
+            {"persistence", "seasonal_naive", "recent_mean", "linear_trend"},
+        )
+        self.assertIn("ridge_autoregressive_lag_only", enabled_ids)
+        self.assertEqual(
+            enabled_ids,
+            default_ids | {"ridge_autoregressive_lag_only"},
+        )
+
     def test_ridge_candidate_is_deterministic_and_records_alpha_in_version(self):
         values = [
             20.0
@@ -259,7 +277,7 @@ class TestPredictionEngine(unittest.TestCase):
         request = make_request(
             values, non_negative=False, signal_id="tariff", unit="EUR/kWh",
         )
-        predictions = PredictionEngine().predict_candidate(
+        predictions = PredictionEngine(include_ridge_candidate=True).predict_candidate(
             request, "ridge_autoregressive_lag_only", season_length=24,
         )
         self.assertTrue(any(value < 0 for value in predictions))
