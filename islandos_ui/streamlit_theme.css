@@ -549,37 +549,37 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   width: 100% !important;
   border-collapse: collapse !important;
   color: var(--ios-ink-soft) !important;
-  font-size: 1.2rem !important;
-  line-height: 1.45 !important;
+  font-size: 1.32rem !important;
+  line-height: 1.5 !important;
 }
 
 [data-testid="stTable"] thead th {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 0.85rem 0.9rem !important;
+  padding: 0.9rem 0.9rem !important;
   background: #e9e3d4 !important;
   color: #31463e !important;
   border: 0 !important;
   border-bottom: 1px solid var(--ios-line) !important;
   font-family: var(--ios-sans) !important;
-  font-size: 1.06rem !important;
+  font-size: 1.18rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.04em;
-  line-height: 1.3 !important;
+  line-height: 1.35 !important;
   text-align: center !important;
   text-transform: uppercase;
   white-space: normal !important;
 }
 
 [data-testid="stTable"] tbody td {
-  padding: 0.85rem 0.9rem !important;
+  padding: 0.9rem 0.9rem !important;
   border: 0 !important;
   border-bottom: 1px solid var(--ios-line-soft) !important;
-  font-size: 1.18rem !important;
-  line-height: 1.45 !important;
+  font-size: 1.3rem !important;
+  line-height: 1.5 !important;
   text-align: center !important;
-  vertical-align: top;
+  vertical-align: middle;
   overflow-wrap: anywhere;
 }
 
@@ -663,17 +663,48 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stWidgetLabel"] p,
 [data-testid="stWidgetLabel"] label {
   color: var(--ios-ink-soft) !important;
-  font-size: 1.08rem !important;
+  font-size: 1.24rem !important;
   font-weight: 600 !important;
-  line-height: 1.45 !important;
+  line-height: 1.48 !important;
+}
+
+/* Streamlit 1.66 renders selectbox labels and values through nested React
+ * Aria wrappers whose own type rules would otherwise win. */
+[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] label {
+  color: var(--ios-ink-soft) !important;
+  font-size: 1.24rem !important;
+  font-weight: 600 !important;
+  line-height: 1.48 !important;
+}
+
+[data-testid="stSelectbox"] input[role="combobox"] {
+  color: var(--ios-ink) !important;
+  font-size: 1.18rem !important;
+  font-weight: 500 !important;
 }
 
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input,
 [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
 [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
-  font-size: 1.08rem !important;
-  min-height: 2.9rem;
+  font-size: 1.18rem !important;
+  min-height: 3.05rem;
+}
+
+/* The onboarding form is read at a distance like the tables; keep its
+ * labels, selected values and uploader controls on the same type scale. */
+[data-testid="stFileUploader"] button p,
+[data-testid="stFileUploader"] button span {
+  color: var(--ios-ink) !important;
+  font-size: 1.12rem !important;
+  font-weight: 600 !important;
+}
+
+[data-testid="stFileUploader"] small {
+  color: var(--ios-muted) !important;
+  font-size: 1.02rem !important;
+  line-height: 1.45 !important;
 }
 
 [data-testid="stButton"] button,
@@ -697,6 +728,25 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 [data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
   background: #275d58 !important;
   border-color: #275d58 !important;
+}
+
+/* Streamlit nests the button label in a MarkdownContainer.  The global body
+ * rule would otherwise turn primary-button copy dark on the teal surface. */
+[data-testid="stButton"] button[kind="primary"] p,
+[data-testid="stButton"] button[kind="primary"] span,
+[data-testid="stButton"] button[kind="primary"] div[data-testid="stMarkdownContainer"],
+[data-testid="stFormSubmitButton"] button[kind="primary"] p,
+[data-testid="stFormSubmitButton"] button[kind="primary"] span,
+[data-testid="stFormSubmitButton"] button[kind="primary"] div[data-testid="stMarkdownContainer"] {
+  color: #ffffff !important;
+  font-size: 1.08rem !important;
+  line-height: 1.35 !important;
+}
+
+[data-testid="stButton"] button[kind="primary"] svg,
+[data-testid="stFormSubmitButton"] button[kind="primary"] svg {
+  color: #ffffff !important;
+  fill: #ffffff !important;
 }
 
 [data-testid="stCheckbox"] label p,
@@ -786,7 +836,11 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   }
 
   [data-testid="stTable"] table {
-    font-size: 1.12rem !important;
+    font-size: 1.2rem !important;
+  }
+
+  [data-testid="stTable"] tbody td {
+    font-size: 1.18rem !important;
   }
 }
 

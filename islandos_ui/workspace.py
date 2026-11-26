@@ -25,6 +25,7 @@ import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.page_header import render_page_header
+from islandos_ui.table import render_table
 
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
 from experiments.nsga2_dispatch_optimizer import optimize_dispatch
@@ -389,8 +390,8 @@ elif page == "Flexible-load cost optimizer":
     })
     st.markdown("### Scenario inputs")
     st.caption(
-        "Use the synthetic example, upload a site scenario CSV, or edit the table "
-        "directly. The baseline determines the required total energy, so the "
+        "Use the synthetic example, upload a site scenario CSV, or open Edit scenario values "
+        "to change the table directly. The baseline determines the required total energy, so the "
         "comparison keeps service quantity equal."
     )
     st.caption(
@@ -573,25 +574,28 @@ elif page == "Flexible-load cost optimizer":
             reject_upload("Historical price CSV", exc)
             st.stop()
 
-    profile = st.data_editor(
-        profile_input,
-        width="stretch",
-        hide_index=True,
-        num_rows="fixed",
-        disabled=["Interval"],
-        column_config={
-            "Price (currency/kWh)": st.column_config.NumberColumn(
-                min_value=-1000000.0, max_value=1000000.0, step=0.01, format="%.3f"
-            ),
-            "Available power budget (kW)": st.column_config.NumberColumn(
-                min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
-            ),
-            "Baseline power (kW)": st.column_config.NumberColumn(
-                min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
-            ),
-        },
-        key=editor_key,
-    )
+    st.markdown("#### Scenario table")
+    with st.expander("Edit scenario values", expanded=False):
+        profile = st.data_editor(
+            profile_input,
+            width="stretch",
+            hide_index=True,
+            num_rows="fixed",
+            disabled=["Interval"],
+            column_config={
+                "Price (currency/kWh)": st.column_config.NumberColumn(
+                    min_value=-1000000.0, max_value=1000000.0, step=0.01, format="%.3f"
+                ),
+                "Available power budget (kW)": st.column_config.NumberColumn(
+                    min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
+                ),
+                "Baseline power (kW)": st.column_config.NumberColumn(
+                    min_value=0.0, max_value=1000000.0, step=0.1, format="%.2f"
+                ),
+            },
+            key=editor_key,
+        )
+    render_table(profile, hide_index=True)
 
     try:
         price_values = [float(value) for value in profile["Price (currency/kWh)"]]
@@ -1909,7 +1913,7 @@ else:
     st.title("Data guide")
     st.write("The uploaded CSV must contain one row per time step, with strictly increasing timestamps.")
     st.markdown("**Required columns**")
-    st.dataframe(pd.DataFrame({
+    render_table(pd.DataFrame({
         "Column": list(REQUIRED_COLUMNS),
         "Meaning": [
             "Timestamp text, strictly increasing",
@@ -1920,7 +1924,7 @@ else:
             "Whether grid electricity is available (true/false or 1/0)",
             "Water demand during the interval (m³)",
         ],
-    }), width="stretch", hide_index=True)
+    }), hide_index=True)
     st.markdown(
         """
         **Optional column**
