@@ -149,7 +149,7 @@ class RidgeAutoregressiveCandidate:
     that call, so rolling-origin evaluation refits inside each training fold.
     """
 
-    model_id = "ridge_autoregressive"
+    model_id = "ridge_autoregressive_lag_only"
 
     def __init__(self, ridge_alpha: float = 1.0) -> None:
         if (
