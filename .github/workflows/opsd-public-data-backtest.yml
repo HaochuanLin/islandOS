@@ -1,7 +1,22 @@
 name: OPSD public regional forecast backtest
 
 on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - ".github/workflows/opsd-public-data-backtest.yml"
+      - "docs/PHASE2_PUBLIC_DATA.md"
+      - "examples/phase2_opsd_backtest.py"
+      - "islandos_core/opsd_adapter.py"
+      - "islandos_core/prediction_engine.py"
+      - "islandos_core/forecast_engine.py"
+      - "islandos_core/forecast_signal_catalog.py"
+      - "tests/test_opsd_adapter.py"
+      - "tests/test_phase2_opsd_backtest.py"
+      - "tests/test_prediction_engine_fold_sampling.py"
   pull_request:
+    types: [opened, reopened]
     branches:
       - main
     paths:
@@ -25,7 +40,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  phase2-forecast-tests:
+    name: Phase 2 forecast and planning contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.lock
+
+      - name: Install locked project and test dependencies
+        run: python -m pip install -r requirements-ci.lock
+
+      - name: Compile Phase 2 source and examples
+        run: python -m compileall -q islandos_core examples tests
+
+      - name: Run forecast, rolling-validation, OPSD, and planning contract tests
+        run: >-
+          python -m pytest -q
+          tests/test_prediction_engine.py
+          tests/test_prediction_engine_fold_sampling.py
+          tests/test_phase2_opsd_backtest.py
+          tests/test_opsd_adapter.py
+          tests/test_forecast_signal_catalog.py
+          tests/test_prediction_dispatch_adapter.py
+          tests/test_forecast_optimizer_adapter.py
+
   public-history-backtest:
+    needs: phase2-forecast-tests
     name: OPSD public backtest (${{ matrix.region }})
     strategy:
       fail-fast: false
