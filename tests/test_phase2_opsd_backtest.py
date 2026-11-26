@@ -107,7 +107,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
         }
         assert set(candidate_models) == {
             "persistence", "seasonal_naive", "recent_mean", "linear_trend",
-            "ridge_autoregressive",
+            "ridge_autoregressive_lag_only",
         }
         selected = candidate_models[signal["selected_model"]]
         assert selected["selected_for_forecast"] is True
