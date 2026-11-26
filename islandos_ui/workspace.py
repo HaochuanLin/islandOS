@@ -1840,7 +1840,12 @@ elif page == "Forecast lab":
     from islandos_core.prediction_adapter import build_forecast_request
     from islandos_core.prediction_engine import PredictionEngine
 
-    st.info("Built-in candidates include transparent baselines and a small univariate Ridge autoregression. Scores describe only the supplied history; they do not establish site accuracy. Use measured or explicitly labelled data; synthetic examples demonstrate the workflow only.")
+    st.info(
+        "Built-in candidates include transparent baselines and a small univariate Ridge "
+        "autoregression. Scores describe only the supplied history; they do not establish "
+        "site accuracy. Use measured or explicitly labelled data; synthetic examples "
+        "demonstrate the workflow only."
+    )
     forecast_mode = st.radio(
         "Forecast input",
         ["Built-in synthetic demo history", "Upload a timestamped CSV"],
