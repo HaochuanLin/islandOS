@@ -13,9 +13,17 @@ Notable project changes are recorded here. This is a research prototype; version
   replayable. Read APIs verify stored hashes and SQLite triggers reject ordinary
   updates/deletes. Project packages now carry run results; full requests are
   excluded by default and require a separate export/import opt-in.
+  Records now also carry `run_request_sha256`, `input_group_id`, and
+  `identity_schema_version` (0 legacy, 1 technical identity), with an index on
+  `(project_id, input_group_id, created_at)`. Identical replay returns the stored
+  record with `idempotent_replay=true` and adds no audit event; page, technical
+  request, input group, result, or retention mismatches raise `RunRecordConflict`
+  with 409 semantics. Failed runs are audit-only `run_failed` events,
+  import/export accepts both 1.0 and 1.1 run records, and concurrent inserts are
+  resolved by re-reading after `IntegrityError`.
   `tests/test_workspace_store.py`, `tests/test_workspace_backup_restore.py` and
-  `tests/test_site_workspace.py` cover migration, consent, integrity, backup and
-  project portability.
+  `tests/test_site_workspace.py` cover migration, consent, integrity, backup,
+  idempotency, conflicts and project portability.
 
 
 - **Sign out in the local customer workspace now revokes the session.**

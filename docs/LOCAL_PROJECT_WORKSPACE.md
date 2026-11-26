@@ -38,6 +38,22 @@ requires a second, separate opt-in. A metadata-only run record is viewable but
 not replayable; a full-request record is marked replayable, subject to compatible
 software and model versions.
 
+Run records are immutable after insert. A new record created with a technical
+`run_request_sha256` also carries `input_group_id` and
+`identity_schema_version=1`, uses `record_schema_version="1.1"`, and must use a
+canonical page name (`customer_dashboard`, `joint_resource_optimizer`, or
+`device_flexibility_planner`). Omitting the technical digest keeps the legacy
+1.0 shape and accepts the old `05`/`06`/`09` page codes for compatibility.
+
+Repeating an identical `(project_id, run_id)` write returns the existing
+record with `idempotent_replay=true` and adds no audit event. If the replay
+differs in page, technical digest, input group, result, or retention mode, the
+store raises `RunRecordConflict` with a stable code
+(`run_id_conflict`, `run_request_conflict`, `input_group_conflict`,
+`run_result_conflict`, or `retention_conflict`) and 409 semantics instead of
+overwriting or silently returning a different result. Failed runs are recorded
+as audit-only `run_failed` events; they never enter `run_records`.
+
 ## Consent and traceability
 
 Creating a project or storing import metadata requires explicit consent.
@@ -87,13 +103,19 @@ manifest = create_run_manifest(
     actor_id="operator", created_at=now,
 )
 record_run_record(
-    db, project_id="site-001", run_id="demo-run-001", page="06",
+    db, project_id="site-001", run_id="demo-run-001", page="customer_dashboard",
     request_sha256="<64-character-request-sha256>",
+    run_request_sha256="<64-character-technical-request-sha256>",
+    input_group_id="ig-<16-lowercase-hex>",
     request_metadata={"history_rows": 168, "history_sha256": "<64-character-history-sha256>"},
     result={"grid_cost": 12.5, "unmet_load_kwh": 0},
     actor_id="operator", consent_to_store_result=True, created_at=now,
 )
-assert get_run_record(db, project_id="site-001", run_id="demo-run-001")["replayable"] is False
+record = get_run_record(db, project_id="site-001", run_id="demo-run-001")
+assert record["record_schema_version"] == "1.1"
+assert record["identity_schema_version"] == 1
+assert record["idempotent_replay"] is False
+assert record["replayable"] is False
 assert verify_audit_chain(db)["valid"]
 ~~~
 
@@ -110,9 +132,13 @@ assert verify_audit_chain(db)["valid"]
 - The SQLite file must be placed in an OS-approved user-data directory by the
   desktop shell, not beside the executable.
 - Project-level portable export/import now includes run results and their
-  integrity hashes. Full retained request payloads are excluded by default and
-  require a separate export opt-in; importing run results requires explicit
-  consent, and retaining imported full requests requires another opt-in.
+  integrity hashes. Run-record packages may carry either
+  `record_schema_version="1.0"` (legacy) or `"1.1"` (technical identity); both
+  are accepted, and 1.1 records keep `run_request_sha256`, `input_group_id`, and
+  `identity_schema_version` across round-trip. Full retained request payloads
+  are excluded by default and require a separate export opt-in; importing run
+  results requires explicit consent, and retaining imported full requests
+  requires another opt-in.
 - Deletion/purge policy, multi-user approvals, cloud synchronization,
   encryption-at-rest, and a security review remain unimplemented. Override
   proposals are recorded as history only; a separate authorization model and

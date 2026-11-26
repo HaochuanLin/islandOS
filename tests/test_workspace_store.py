@@ -6,6 +6,7 @@ import pytest
 
 from islandos_core.workspace_store import (
     AuditIntegrityError,
+    RunRecordConflict,
     WorkspaceStoreError,
     create_project,
     create_run_manifest,
@@ -14,6 +15,7 @@ from islandos_core.workspace_store import (
     list_import_artifacts,
     list_audit_events,
     record_import_artifact,
+    record_run_failure,
     record_run_record,
     get_run_record,
     list_run_records,
@@ -26,6 +28,8 @@ from islandos_core.workspace_store import (
 
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
 DIGEST = "a" * 64
+RUN_REQUEST = "b" * 64
+INPUT_GROUP = "ig-" + "c" * 16
 
 
 def ready_project(tmp_path):
@@ -363,6 +367,11 @@ def test_run_record_integrity_and_immutability(tmp_path):
         consent_to_store_result=True, canonical_manifest={"run_id": "canonical-run-04"},
         created_at=NOW,
     )
+    assert record["record_schema_version"] == "1.0"
+    assert record["identity_schema_version"] == 0
+    assert record["run_request_sha256"] is None
+    assert record["input_group_id"] is None
+    assert record["idempotent_replay"] is False
     with sqlite3.connect(db) as connection:
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
             connection.execute(
@@ -393,8 +402,10 @@ def test_run_record_cannot_be_replaced_within_the_same_project(tmp_path):
     )
     record_run_record(**args)
     before = verify_audit_chain(db)["event_count"]
-    with pytest.raises(WorkspaceStoreError, match="already exists"):
+    with pytest.raises(RunRecordConflict) as conflict:
         record_run_record(**{**args, "result": {"grid_cost": 999}})
+    assert conflict.value.code == "run_result_conflict"
+    assert conflict.value.http_status == 409
     assert get_run_record(db, project_id="site-01", run_id="immutable-run")["result"] == {"grid_cost": 10}
     assert verify_audit_chain(db)["event_count"] == before
 
@@ -414,6 +425,104 @@ def test_same_canonical_run_id_can_be_saved_in_two_projects(tmp_path):
         )
     assert len(list_run_records(db, project_id="site-01")) == 1
     assert len(list_run_records(db, project_id="site-02")) == 1
+
+
+def test_run_record_identity_columns_and_exact_replay(tmp_path):
+    db = ready_project(tmp_path)
+    args = dict(
+        db_path=db, project_id="site-01", run_id="identity-run",
+        page="joint_resource_optimizer", request_sha256=DIGEST,
+        run_request_sha256=RUN_REQUEST, input_group_id=INPUT_GROUP,
+        request_metadata={"row_count": 24}, result={"grid_cost": 12.5},
+        actor_id="local-user", consent_to_store_result=True, created_at=NOW,
+    )
+    first = record_run_record(**args)
+    assert first["record_schema_version"] == "1.1"
+    assert first["identity_schema_version"] == 1
+    assert first["run_request_sha256"] == RUN_REQUEST
+    assert first["input_group_id"] == INPUT_GROUP
+    assert first["idempotent_replay"] is False
+    before = verify_audit_chain(db)["event_count"]
+    replay = record_run_record(**args)
+    assert replay["idempotent_replay"] is True
+    assert replay["created_at"] == first["created_at"]
+    assert replay["result"] == {"grid_cost": 12.5}
+    assert verify_audit_chain(db)["event_count"] == before
+    with sqlite3.connect(db) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(run_records)")}
+        assert {"input_group_id", "run_request_sha256", "identity_schema_version"} <= columns
+        assert connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='run_records_project_input_group_idx'"
+        ).fetchone() is not None
+
+
+def test_run_record_identity_conflicts_are_typed_409s(tmp_path):
+    db = ready_project(tmp_path)
+    args = dict(
+        db_path=db, project_id="site-01", run_id="conflict-run",
+        page="joint_resource_optimizer", request_sha256=DIGEST,
+        run_request_sha256=RUN_REQUEST, input_group_id=INPUT_GROUP,
+        request_metadata={}, result={"grid_cost": 10},
+        actor_id="local-user", consent_to_store_result=True, created_at=NOW,
+    )
+    record_run_record(**args)
+    cases = [
+        ({**args, "page": "customer_dashboard"}, "run_id_conflict"),
+        ({**args, "run_request_sha256": "d" * 64}, "run_request_conflict"),
+        ({**args, "input_group_id": "ig-" + "e" * 16}, "input_group_conflict"),
+        ({**args, "result": {"grid_cost": 11}}, "run_result_conflict"),
+        (
+            {
+                **args,
+                "request_payload": {"history": {"timestamps_utc": ["2026-11-01T00:00:00Z"]}},
+                "consent_to_retain_request": True,
+            },
+            "retention_conflict",
+        ),
+    ]
+    for changed, code in cases:
+        with pytest.raises(RunRecordConflict) as conflict:
+            record_run_record(**changed)
+        assert conflict.value.code == code
+        assert conflict.value.http_status == 409
+    assert get_run_record(db, project_id="site-01", run_id="conflict-run")["result"] == {"grid_cost": 10}
+
+
+def test_run_record_failure_is_audit_only(tmp_path):
+    db = ready_project(tmp_path)
+    before = len(list_audit_events(db, project_id="site-01"))
+    result = record_run_failure(
+        db, project_id="site-01", run_id="failed-run",
+        page="customer_dashboard", run_request_sha256=RUN_REQUEST,
+        input_group_id=INPUT_GROUP, error_code="forecast_failed",
+        attempt_no=2, actor_id="local-user", occurred_at=NOW,
+    )
+    assert result["event_type"] == "run_failed"
+    assert result["attempt_no"] == 2
+    assert result["project_bound"] is True
+    with sqlite3.connect(db) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM run_records").fetchone()[0] == 0
+    events = list_audit_events(db, project_id="site-01")
+    assert len(events) == before + 1
+    failed = next(event for event in events if event["event_type"] == "run_failed")
+    assert failed["payload"]["error_code"] == "forecast_failed"
+    assert "request_metadata" not in failed["payload"]
+    assert "result" not in failed["payload"]
+
+
+def test_list_run_records_filters_by_input_group(tmp_path):
+    db = ready_project(tmp_path)
+    for run_id, group in (("group-a-run", INPUT_GROUP), ("group-b-run", "ig-" + "e" * 16)):
+        record_run_record(
+            db, project_id="site-01", run_id=run_id,
+            page="joint_resource_optimizer", request_sha256=DIGEST,
+            run_request_sha256=RUN_REQUEST, input_group_id=group,
+            request_metadata={}, result={"ok": True},
+            actor_id="local-user", consent_to_store_result=True, created_at=NOW,
+        )
+    filtered = list_run_records(db, project_id="site-01", input_group_id=INPUT_GROUP)
+    assert [item["run_id"] for item in filtered] == ["group-a-run"]
+    assert filtered[0]["input_group_id"] == INPUT_GROUP
 
 
 def test_existing_schema_1_0_workspace_migrates_without_losing_history(tmp_path):

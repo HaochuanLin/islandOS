@@ -21,9 +21,15 @@ from typing import Any, Mapping
 
 from islandos_core.workspace_store import (
     AuditIntegrityError,
+    IDENTITY_SCHEMA_VERSION,
+    LEGACY_RUN_RECORD_SCHEMA_VERSION,
+    RUN_RECORD_SCHEMA_VERSION,
     WorkspaceStoreError,
     _append_event,
     _connect,
+    _CANONICAL_PAGES,
+    _INPUT_GROUP_RE,
+    _LEGACY_PAGES,
     _hash,
     _json,
     _timestamp,
@@ -558,8 +564,32 @@ def import_project_package(
             raise WorkspaceStoreError("package run record is missing its identity fields")
         if not _SHA256.fullmatch(record["request_sha256"]):
             raise WorkspaceStoreError("package run record has an invalid request digest")
-        if record.get("record_schema_version") != "1.0":
+        record_schema_version = record.get("record_schema_version")
+        if record_schema_version not in {
+            LEGACY_RUN_RECORD_SCHEMA_VERSION, RUN_RECORD_SCHEMA_VERSION,
+        }:
             raise WorkspaceStoreError("package contains an unsupported run record schema")
+        identity_schema_version = record.get("identity_schema_version", 0)
+        if identity_schema_version not in {0, IDENTITY_SCHEMA_VERSION}:
+            raise WorkspaceStoreError("package run record has an unsupported identity schema version")
+        run_request_sha256 = record.get("run_request_sha256")
+        input_group_id = record.get("input_group_id")
+        if record_schema_version == RUN_RECORD_SCHEMA_VERSION:
+            if identity_schema_version != IDENTITY_SCHEMA_VERSION:
+                raise WorkspaceStoreError("package 1.1 run record must use identity schema version 1")
+            if not isinstance(run_request_sha256, str) or not _SHA256.fullmatch(run_request_sha256):
+                raise WorkspaceStoreError("package 1.1 run record has an invalid technical request digest")
+        else:
+            if identity_schema_version != 0 or run_request_sha256 is not None:
+                raise WorkspaceStoreError("package 1.0 run record has an inconsistent identity schema")
+        if input_group_id is not None:
+            if not isinstance(input_group_id, str) or not _INPUT_GROUP_RE.fullmatch(input_group_id):
+                raise WorkspaceStoreError("package run record has an invalid input_group_id")
+        page = record["page"]
+        if page not in _CANONICAL_PAGES and page not in _LEGACY_PAGES:
+            raise WorkspaceStoreError("package run record has an unsupported page value")
+        if record_schema_version == RUN_RECORD_SCHEMA_VERSION and page not in _CANONICAL_PAGES:
+            raise WorkspaceStoreError("package 1.1 run record must use a canonical page name")
         created_at = record.get("created_at")
         if not isinstance(created_at, str) or not created_at.strip():
             raise WorkspaceStoreError("package run record has no creation timestamp")
@@ -715,6 +745,8 @@ def import_project_package(
             canonical_manifest=record.get("canonical_manifest"),
             history_sha256=record.get("history_sha256"),
             input_fingerprint_sha256=record.get("input_fingerprint_sha256"),
+            run_request_sha256=record.get("run_request_sha256"),
+            input_group_id=record.get("input_group_id"),
             created_at=timestamp,
         ))
 

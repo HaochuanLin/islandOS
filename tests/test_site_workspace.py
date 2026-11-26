@@ -293,3 +293,33 @@ def test_project_package_exports_and_imports_run_results_with_separate_request_c
     full_record = get_run_record(full_destination, project_id="site-full", run_id="same-run-id")
     assert full_record["request_payload"] == payload
     assert full_record["replayable"] is True
+
+
+def test_project_package_round_trips_run_record_identity_1_1(tmp_path):
+    source_db = make_workspace(tmp_path / "source-identity")
+    record_run_record(
+        source_db, project_id="site-1", run_id="identity-run",
+        page="device_flexibility_planner", request_sha256="a" * 64,
+        run_request_sha256="b" * 64, input_group_id="ig-" + "c" * 16,
+        request_metadata={"history_rows": 1}, result={"flexible_kw": 12},
+        actor_id="tester", consent_to_store_result=True, created_at=None,
+    )
+    package_path = tmp_path / "identity.zip"
+    export = export_project_package(source_db, package_path, project_id="site-1")
+    assert export["included_run_records"] == 1
+    inspected = inspect_project_package(package_path.read_bytes())
+    assert inspected["valid"] is True
+
+    destination_db = make_workspace(tmp_path / "destination-identity")
+    imported = import_project_package(
+        destination_db, package_path.read_bytes(), actor_id="importer",
+        new_project_id="site-identity", new_project_name="Identity import",
+        consent_to_store_metadata=True, consent_to_import_run_records=True,
+    )
+    assert imported["run_records_imported"] == 1
+    restored = get_run_record(destination_db, project_id="site-identity", run_id="identity-run")
+    assert restored["record_schema_version"] == "1.1"
+    assert restored["identity_schema_version"] == 1
+    assert restored["run_request_sha256"] == "b" * 64
+    assert restored["input_group_id"] == "ig-" + "c" * 16
+    assert restored["result"] == {"flexible_kw": 12}
