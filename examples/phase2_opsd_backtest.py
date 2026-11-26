@@ -144,7 +144,7 @@ def _canonical_prediction_report(
         spec = FORECAST_SIGNAL_SPECS[signal_id]
         candidate_evaluations = {}
         for validation_horizon in rolling_horizons:
-            ranking = engine.evaluate_candidates(
+            evaluation = engine.evaluate_candidates_detailed(
                 training_history[signal_id],
                 initial_history=initial_history,
                 horizon=validation_horizon,
@@ -152,6 +152,7 @@ def _canonical_prediction_report(
                 non_negative=spec.non_negative,
                 max_folds=max_rolling_folds,
             )
+            ranking = evaluation.ranked_candidates
             available_complete_folds = (
                 len(training_history[signal_id]) - initial_history
             ) // validation_horizon
@@ -200,6 +201,10 @@ def _canonical_prediction_report(
                     "excluded_trailing_samples": excluded_trailing_samples,
                 },
                 "best_by_mae": ranking[0].model_id,
+                "excluded_candidates": [
+                    {"model_id": item.model_id, "reason": item.reason}
+                    for item in evaluation.excluded_candidates
+                ],
                 "models": [
                     {
                         "model_id": item.model_id,
