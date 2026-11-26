@@ -5,7 +5,8 @@ CSS cannot enlarge it.  That is too small for a reviewer sitting across a table.
 These pages therefore use ``st.table`` (real HTML) and this helper normalises
 number formatting before display: whole-number columns stay whole, money and
 rates keep two decimals, very small coefficients keep four, and thousands get
-separators.  The result stays a pandas Styler, so numerals remain right-aligned.
+separators.  The result stays a pandas Styler; the shared table CSS centres the
+numerals and gives them the same projector-readable type scale as prose.
 """
 
 from __future__ import annotations
