@@ -50,7 +50,10 @@ class TestPredictionEngine(unittest.TestCase):
         engine = PredictionEngine()
         self.assertEqual(
             {name for name, _ in engine.available_candidates()},
-            {"persistence", "seasonal_naive", "recent_mean", "linear_trend", "ridge_autoregressive"},
+            {
+                "persistence", "seasonal_naive", "recent_mean",
+                "linear_trend", "ridge_autoregressive",
+            },
         )
 
     def test_persistence_baseline_repeats_last_observation(self):
