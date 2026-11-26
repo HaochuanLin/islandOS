@@ -310,8 +310,25 @@ jobs:
 
               rolling = canonical_signal["rolling_origin_candidate_evaluations"]
               assert set(rolling) == {"1", "6", "24", "168"}
+              registered_candidates = {
+                  "persistence",
+                  "seasonal_naive",
+                  "recent_mean",
+                  "linear_trend",
+                  "ridge_autoregressive_lag_only",
+              }
               for horizon, evaluation in rolling.items():
                   window_report = evaluation["evaluation_window"]
+                  evaluated_ids = {item["model_id"] for item in evaluation["models"]}
+                  excluded_ids = {
+                      item["model_id"] for item in evaluation["excluded_candidates"]
+                  }
+                  assert evaluated_ids.isdisjoint(excluded_ids)
+                  assert evaluated_ids | excluded_ids == registered_candidates
+                  assert all(
+                      isinstance(item["reason"], str) and item["reason"]
+                      for item in evaluation["excluded_candidates"]
+                  )
                   available = window_report["available_complete_folds"]
                   evaluated = window_report["evaluated_folds"]
                   indices = window_report["fold_indices"]
