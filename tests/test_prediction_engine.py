@@ -294,6 +294,15 @@ class TestPredictionEngine(unittest.TestCase):
             [48, 72, 96],
         )
 
+        forecast = engine.forecast(
+            make_request(values),
+            model_id="ridge_autoregressive",
+            initial_history=48,
+            backtest_horizon=24,
+        )
+        self.assertEqual(candidate.training_lengths[-1], len(values))
+        self.assertEqual(len(forecast.points), 4)
+
     def test_recent_mean_is_constant(self):
         self.assertEqual(
             RecentMeanCandidate().predict([1.0, 3.0, 5.0], 3, season_length=3),
