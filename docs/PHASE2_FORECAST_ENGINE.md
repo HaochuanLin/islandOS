@@ -131,8 +131,8 @@ claim that every signal has site-trained or externally validated model skill.
 ### Model evaluation and replacement
 
 `forecast_site_signals` accepts an optional `PredictionEngine`. The default
-engine registers the built-in seasonal-naive, recent-mean, and linear-trend
-candidates, ranks them using rolling-origin replay, and selects the lowest-error
+engine registers persistence, 24-hour seasonal-naive, recent-mean, linear-trend,
+and a univariate Ridge autoregressive candidate, ranks them using rolling-origin replay, and selects the lowest-error
 eligible candidate independently for each signal. A customer or integrator can
 supply a separately configured engine with one or more registered candidates;
 the selected model ID/version and input-history digest remain in each result.
@@ -146,6 +146,19 @@ engine.register(MyForecastCandidate())  # implements model_id, version, predict(
 bundle = forecast_site_signals(timestamps, history, units, horizon=24, engine=engine)
 selected = bundle.results["pv_power_kw"].model_id
 ```
+
+The canonical `PredictionEngine` Ridge candidate is intentionally distinct
+from the timestamp-aware Ridge implementation in the older
+`forecast_engine.py` path. It uses lag features 1, 2, 3 and the configured
+`season_length`, standardises features using only the current training history,
+and fits an L2-regularised least-squares model. Each rolling fold refits from
+that fold's training prefix, then forecasts recursively. The selected candidate
+is refit on the full pre-holdout history for the final forecast. The model does
+not use calendar, weather, market, or other signal covariates; it is univariate.
+Its alpha value is included in the registered model version. Insufficient
+history or an invalid/non-finite output makes the candidate ineligible rather
+than silently repairing its forecast. The legacy and canonical Ridge scores
+must remain separate because their feature sets and evaluation paths differ.
 
 Candidate registration is a software extension point, not automatic model
 promotion to production. Candidate suitability still depends on representative
