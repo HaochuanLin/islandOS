@@ -246,6 +246,7 @@ class RidgeAutoregressiveCandidate:
             extended.append(prediction)
         return predictions
 
+
 @dataclass(frozen=True)
 class CandidateFoldMetrics:
     fold_index: int
@@ -344,7 +345,13 @@ class PredictionEngine:
     def __init__(self, *, include_builtin_candidates: bool = True) -> None:
         self._candidates: dict[str, tuple[ForecastCandidate, str]] = {}
         if include_builtin_candidates:
-            for candidate in (PersistenceCandidate(), SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate(), RidgeAutoregressiveCandidate()):
+            for candidate in (
+                PersistenceCandidate(),
+                SeasonalNaiveCandidate(),
+                RecentMeanCandidate(),
+                LinearTrendCandidate(),
+                RidgeAutoregressiveCandidate(),
+            ):
                 self.register(candidate)
 
     def register(self, candidate: ForecastCandidate) -> None:
