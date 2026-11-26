@@ -1841,10 +1841,10 @@ elif page == "Forecast lab":
     from islandos_core.prediction_engine import PredictionEngine
 
     st.info(
-        "Built-in candidates include transparent baselines and a small univariate Ridge "
-        "autoregression. Scores describe only the supplied history; they do not establish "
-        "site accuracy. Use measured or explicitly labelled data; synthetic examples "
-        "demonstrate the workflow only."
+        "The default forecast uses transparent baseline candidates. A separate univariate Ridge "
+        "candidate is enabled only in controlled Phase 2 evaluation. Scores describe only "
+        "the supplied history and do not establish site accuracy. Use measured or explicitly "
+        "labelled data; synthetic examples demonstrate the workflow only."
     )
     forecast_mode = st.radio(
         "Forecast input",
