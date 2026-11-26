@@ -40,7 +40,45 @@ The holdout is the final contiguous 20% of the supplied history. The model is tr
 - No missing-value imputation, clipping of source observations, or silent unit conversion is performed.
 - Non-negative forecasts are clipped at zero; negative-price signals must be explicitly allowed by omitting them from `non_negative_signals`.
 
-## Forecast-to-planning hand-off
+## Legacy forecast-to-planning compatibility contract
+
+The example below documents the `ForecastBundle` compatibility path in
+`islandos_core/forecast_contract.py`. It is not the return type of the
+canonical site-signal catalog described later in this document.
+
+For new site-forecast work, use one of these canonical entry points:
+
+- `forecast_site_signals(...)` returns a `SiteForecastBundle`; its
+  `planning` field is a validated `PlanningForecast`.
+- `CanonicalForecastRuntime.prepare(...)` accepts a typed
+  `ForecastBundleRequest` and returns the same `PlanningForecast` contract.
+
+The canonical contract is implemented by
+`islandos_core/canonical_runtime.py`. It carries:
+
+- One shared, UTC-normalised target timestamp grid.
+- Read-only point-value, lower-bound, and upper-bound mappings.
+- Explicit units and selected model IDs for each required signal.
+- A bundle digest and per-signal input-history digests.
+- Limitations inherited from the forecast service.
+
+The adapter rejects missing required signals, unit mismatches, unequal
+horizons, misaligned or non-hourly timestamps, malformed provenance digests,
+non-finite values, and bounds that do not contain the point forecast. The
+caller supplies the exact signal allow-list and expected units; extra signals
+are not silently promoted into a planning request.
+
+`islandos_core/forecast_optimizer_adapter.py` currently consumes the older
+`ForecastBundle` type. It does not yet accept `PlanningForecast`, and there
+is no automatic conversion between these two paths. Do not cast one contract
+to the other or manually copy arrays around this boundary. A later integration
+phase must add a typed adapter and test exact timestamp alignment, unit
+semantics, required-signal selection, provenance preservation, physical
+constraints, and service-equivalent economic comparisons. This document does
+not claim that the canonical prediction engine is already connected to the
+physical optimizer.
+
+## Legacy ForecastBundle adapter example
 
 A validated, policy-free hand-off is available in `islandos_core/forecast_contract.py`:
 
@@ -68,7 +106,7 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 - No external weather, market, outage, or calendar covariates yet.
 - No deep learning or large pretrained time-series model.
 - No automatic model deployment or continuous online learning.
-- No dispatch optimizer, forecast-to-optimizer closed loop, or autonomous control in this phase; only the validated data hand-off is defined.
+- No canonical `PlanningForecast`-to-optimizer adapter or forecast-driven closed loop in this phase; the planner contract is defined, but the current physical optimizer adapter still consumes the legacy `ForecastBundle` path.
 - No live telemetry ingestion, equipment command, or autonomous control.
 - No claim of measured customer savings or site accuracy.
 
@@ -77,7 +115,7 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 1. Run the OPSD adapter and CLI on a complete, provenance-documented public historical interval; inspect data quality and rolling-origin scores.
 2. Use `evaluate_signal_rolling(...)` to compare the actual built-in persistence, seasonal-naive, and ridge candidates at multiple horizons; review stability across folds before changing automatic promotion.
 3. Add exogenous covariates only where timestamp alignment and availability-at-decision-time are proven.
-4. Integrate the validated planning input with the physical evaluator in the subsequent integration phase, then compare forecast-driven decisions against a transparent baseline.
+4. In the subsequent integration phase, add a typed adapter from `PlanningForecast` to the physical evaluator, then compare forecast-driven decisions against a transparent baseline without weakening service constraints.
 5. Promote a model only when it consistently beats transparent baselines on relevant held-out data and stress cases.
 
 
