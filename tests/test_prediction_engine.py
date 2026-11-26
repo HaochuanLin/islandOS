@@ -52,7 +52,7 @@ class TestPredictionEngine(unittest.TestCase):
             {name for name, _ in engine.available_candidates()},
             {
                 "persistence", "seasonal_naive", "recent_mean",
-                "linear_trend", "ridge_autoregressive",
+                "linear_trend", "ridge_autoregressive_lag_only",
             },
         )
 
@@ -260,7 +260,7 @@ class TestPredictionEngine(unittest.TestCase):
             values, non_negative=False, signal_id="tariff", unit="EUR/kWh",
         )
         predictions = PredictionEngine().predict_candidate(
-            request, "ridge_autoregressive", season_length=24,
+            request, "ridge_autoregressive_lag_only", season_length=24,
         )
         self.assertTrue(any(value < 0 for value in predictions))
 
@@ -287,7 +287,7 @@ class TestPredictionEngine(unittest.TestCase):
         )
 
         self.assertEqual(candidate.training_lengths, [48, 72, 96])
-        self.assertEqual(scores[0].model_id, "ridge_autoregressive")
+        self.assertEqual(scores[0].model_id, "ridge_autoregressive_lag_only")
         self.assertEqual(scores[0].folds, 3)
         self.assertEqual(
             [fold.train_samples for fold in scores[0].fold_metrics],
@@ -296,7 +296,7 @@ class TestPredictionEngine(unittest.TestCase):
 
         forecast = engine.forecast(
             make_request(values),
-            model_id="ridge_autoregressive",
+            model_id="ridge_autoregressive_lag_only",
             initial_history=48,
             backtest_horizon=24,
         )
