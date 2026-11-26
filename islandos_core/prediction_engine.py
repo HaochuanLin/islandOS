@@ -340,6 +340,29 @@ def _history_digest(request: ForecastRequest) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _select_fold_indices(total_folds: int, max_folds: int | None) -> tuple[int, ...]:
+    """Select deterministic, evenly spaced zero-based fold indices.
+
+    When sampling is required, both the first and last complete folds are
+    retained. A None limit preserves exhaustive evaluation for library callers.
+    """
+    if isinstance(total_folds, bool) or not isinstance(total_folds, int) or total_folds < 0:
+        raise ValueError("total_folds must be a non-negative integer")
+    if total_folds == 0:
+        return ()
+    if max_folds is None:
+        return tuple(range(total_folds))
+    if isinstance(max_folds, bool) or not isinstance(max_folds, int) or max_folds < 1:
+        raise ValueError("max_folds must be a positive integer or None")
+    if max_folds >= total_folds:
+        return tuple(range(total_folds))
+    if max_folds < 2:
+        raise ValueError("max_folds must be at least 2 when sampling multiple complete folds")
+    return tuple(
+        (index * (total_folds - 1)) // (max_folds - 1)
+        for index in range(max_folds)
+    )
+
 class PredictionEngine:
     """Register candidates, compare them chronologically, and forecast with calibrated error bands."""
 
@@ -441,26 +464,31 @@ class PredictionEngine:
         horizon: int,
         season_length: int,
         non_negative: bool,
+        fold_indices: Sequence[int] | None = None,
     ) -> tuple[CandidateMetrics, list[float]]:
         candidate, version = self._candidates[model_id]
         actual_all: list[float] = []
         predicted_all: list[float] = []
-        cutoff = initial_history
-        folds = 0
+        total_folds = (len(values) - initial_history) // horizon
+        selected_fold_indices = (
+            tuple(range(total_folds)) if fold_indices is None else tuple(fold_indices)
+        )
         fold_metrics = []
-        while cutoff + horizon <= len(values):
-            # Score only complete blocks so a requested 168-hour evaluation
-            # never silently includes a shorter final block.
-            fold_horizon = horizon
+        for original_fold_index in selected_fold_indices:
+            # Preserve each sampled fold's original chronological position.
+            # Training expands only through observations before that block.
+            cutoff = initial_history + original_fold_index * horizon
             train = values[:cutoff]
             predicted = self._predict(
-                model_id, train, fold_horizon,
+                model_id, train, horizon,
                 season_length=season_length, non_negative=non_negative,
             )
-            actual = [float(value) for value in values[cutoff:cutoff + fold_horizon]]
+            actual = [
+                float(value) for value in values[cutoff:cutoff + horizon]
+            ]
             fold_mae, fold_rmse, fold_bias, _ = _metrics(actual, predicted)
             fold_metrics.append(CandidateFoldMetrics(
-                fold_index=folds + 1,
+                fold_index=original_fold_index + 1,
                 train_samples=len(train),
                 samples=len(actual),
                 mae=fold_mae,
@@ -469,13 +497,11 @@ class PredictionEngine:
             ))
             actual_all.extend(actual)
             predicted_all.extend(predicted)
-            cutoff += fold_horizon
-            folds += 1
         mae, rmse, bias, wape = _metrics(actual_all, predicted_all)
         return CandidateMetrics(
             model_id=model_id,
             model_version=version,
-            folds=folds,
+            folds=len(fold_metrics),
             samples=len(actual_all),
             mae=mae,
             rmse=rmse,
@@ -494,6 +520,7 @@ class PredictionEngine:
         horizon: int = 24,
         season_length: int = 24,
         non_negative: bool = True,
+        max_folds: int | None = None,
     ) -> tuple[CandidateMetrics, ...]:
         values = list(history)
         if (
@@ -515,6 +542,10 @@ class PredictionEngine:
             raise ValueError("season_length must be a positive integer")
         if not isinstance(non_negative, bool):
             raise ValueError("non_negative must be a boolean")
+        if max_folds is not None and (
+            isinstance(max_folds, bool) or not isinstance(max_folds, int) or max_folds < 1
+        ):
+            raise ValueError("max_folds must be a positive integer or None")
         for index, value in enumerate(values):
             if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
                 raise ValueError(f"history[{index}] must be finite numeric data")
@@ -522,12 +553,15 @@ class PredictionEngine:
                 raise ValueError(f"history[{index}] cannot be negative for this signal")
         if not self._candidates:
             raise ValueError("no forecast candidates are registered")
+        available_folds = (len(values) - initial_history) // horizon
+        selected_fold_indices = _select_fold_indices(available_folds, max_folds)
         results = []
         for model_id in sorted(self._candidates):
             try:
                 metrics, _ = self._replay(
                     model_id, values, initial_history=initial_history, horizon=horizon,
                     season_length=season_length, non_negative=non_negative,
+                    fold_indices=selected_fold_indices,
                 )
                 results.append(metrics)
             except (TypeError, ValueError, ArithmeticError):
