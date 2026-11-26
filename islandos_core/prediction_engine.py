@@ -164,7 +164,7 @@ class RidgeAutoregressiveCandidate:
     @property
     def version(self) -> str:
         # Hyperparameters are part of the registered identity and provenance.
-        return f"1.0.0+alpha{self.ridge_alpha:.12g}"
+        return f"1.0.0+alpha{self.ridge_alpha!r}"
 
     def predict(
         self,
