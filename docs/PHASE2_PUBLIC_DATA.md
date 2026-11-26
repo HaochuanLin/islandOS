@@ -91,6 +91,28 @@ For the canonical prediction-service report, `--horizon` also sets one final chr
 
 Running the CLI on a real downloaded OPSD file is still required before claiming public-data backtest results. Synthetic adapter/CLI tests verify software behavior only.
 
+## Automated two-region evidence workflow
+
+The GitHub Actions workflow `.github/workflows/opsd-public-data-backtest.yml`
+runs separate jobs for `AT` and `DE_LU`. Each job downloads the official
+OPSD 2020-10-06 CSV and independently selects the longest complete contiguous
+hourly window containing load, solar, wind, and price. It requires at least
+912 observations: 72 initial observations, four 168-hour legacy validation
+folds, and a separate 168-hour canonical final holdout. Missing values and
+time gaps are not imputed or bridged.
+
+The canonical rolling-origin evaluation covers 1, 6, 24, and 168-hour
+horizons, with at most 168 evenly spaced complete folds per signal/horizon.
+When sampling is required, the first and last folds are retained and the
+report records the original fold indices plus available, evaluated, skipped,
+and trailing sample counts. Each region uploads its own JSON report, selected
+window metadata, source-file digest, and Markdown summary.
+
+These artifacts represent public historical regional aggregates, not site
+telemetry. A successful workflow run demonstrates a reproducible historical
+evaluation only; it does not establish site-level accuracy, deployment
+readiness, dispatch feasibility, or customer savings.
+
 ## Attribution
 
 Open Power System Data. 2020. Data Package Time series. Version 2020-10-06. https://doi.org/10.25832/time_series/2020-10-06. (Primary data from various sources; see OPSD source documentation.)
