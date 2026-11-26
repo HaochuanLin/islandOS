@@ -223,7 +223,7 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
         "excluded_trailing_samples": 23,
     }
     assert all(len(model["fold_metrics"]) == 2 for model in evaluation["models"])
-    assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"]
+    assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"].lower()
 
 
 def test_canonical_rolling_report_samples_folds_evenly_and_reports_skips():
