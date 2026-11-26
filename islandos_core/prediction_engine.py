@@ -2,7 +2,7 @@
 
 The engine compares registered forecast candidates with rolling-origin replay,
 selects the best candidate by declared error metric, and emits empirical error
-bands. Built-in candidates are statistical baselines, not trained AI models.
+bands. Built-ins combine transparent baselines with a small univariate Ridge autoregression.
 """
 from __future__ import annotations
 
@@ -139,6 +139,113 @@ class LinearTrendCandidate:
         return [intercept + slope * (len(window) - 1 + step) for step in range(1, horizon + 1)]
 
 
+class RidgeAutoregressiveCandidate:
+    """Fold-local univariate Ridge autoregression using lagged signal values.
+
+    The candidate is deliberately timestamp-independent: it uses lags 1, 2,
+    3 and the configured seasonal lag only. It learns no cross-signal, weather,
+    market, or calendar effects. Every call fits from the history supplied to
+    that call, so rolling-origin evaluation refits inside each training fold.
+    """
+
+    model_id = "ridge_autoregressive"
+
+    def __init__(self, ridge_alpha: float = 1.0) -> None:
+        if (
+            isinstance(ridge_alpha, bool)
+            or not isinstance(ridge_alpha, Real)
+            or not math.isfinite(float(ridge_alpha))
+            or ridge_alpha <= 0
+        ):
+            raise ValueError("ridge_alpha must be finite and greater than zero")
+        self.ridge_alpha = float(ridge_alpha)
+
+    @property
+    def version(self) -> str:
+        # Hyperparameters are part of the registered identity and provenance.
+        return f"1.0.0+alpha{self.ridge_alpha:.12g}"
+
+    def predict(
+        self,
+        history: Sequence[float],
+        horizon: int,
+        *,
+        season_length: int,
+    ) -> list[float]:
+        if isinstance(history, (str, bytes)):
+            raise ValueError("history must be a finite numeric sequence")
+        if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
+            raise ValueError("horizon must be a positive integer")
+        if (
+            isinstance(season_length, bool)
+            or not isinstance(season_length, int)
+            or season_length < 1
+        ):
+            raise ValueError("season_length must be a positive integer")
+
+        values = []
+        for index, value in enumerate(history):
+            if isinstance(value, bool) or not isinstance(value, Real):
+                raise ValueError(f"history[{index}] must be finite numeric data")
+            number = float(value)
+            if not math.isfinite(number):
+                raise ValueError(f"history[{index}] must be finite numeric data")
+            values.append(number)
+
+        lags = tuple(sorted({1, 2, 3, season_length}))
+        max_lag = max(lags)
+        minimum_history = max_lag + 8
+        if len(values) < minimum_history:
+            raise ValueError(
+                f"Ridge autoregression requires at least {minimum_history} "
+                "history observations for the configured seasonal lag"
+            )
+
+        # NumPy is already a locked runtime dependency used by the Phase 2
+        # forecast engine. Import lazily so baseline-only callers pay no cost.
+        import numpy as np
+
+        train_x = np.asarray([
+            [values[index - lag] for lag in lags]
+            for index in range(max_lag, len(values))
+        ], dtype=float)
+        train_y = np.asarray(values[max_lag:], dtype=float)
+        if not np.all(np.isfinite(train_x)) or not np.all(np.isfinite(train_y)):
+            raise ValueError("Ridge training data contain non-finite values")
+
+        mean = train_x.mean(axis=0)
+        scale = train_x.std(axis=0)
+        scale[scale < 1e-9] = 1.0
+        standardized = (train_x - mean) / scale
+        design = np.column_stack((np.ones(len(standardized)), standardized))
+
+        # Augmented least squares implements L2 regularisation while leaving
+        # the intercept unpenalised and avoids explicitly inverting X'X.
+        penalty = np.eye(design.shape[1], dtype=float) * math.sqrt(self.ridge_alpha)
+        penalty[0, 0] = 0.0
+        augmented_x = np.vstack((design, penalty))
+        augmented_y = np.concatenate((
+            train_y,
+            np.zeros(design.shape[1], dtype=float),
+        ))
+        coefficients, *_ = np.linalg.lstsq(augmented_x, augmented_y, rcond=None)
+        if not np.all(np.isfinite(coefficients)):
+            raise ValueError("Ridge model produced non-finite coefficients")
+
+        extended = list(values)
+        predictions = []
+        for _ in range(horizon):
+            index = len(extended)
+            row = np.asarray([extended[index - lag] for lag in lags], dtype=float)
+            standardized_row = (row - mean) / scale
+            features = np.concatenate(([1.0], standardized_row))
+            prediction = float(features @ coefficients)
+            if not math.isfinite(prediction):
+                raise ValueError("Ridge model produced a non-finite prediction")
+            predictions.append(prediction)
+            extended.append(prediction)
+        return predictions
+
 @dataclass(frozen=True)
 class CandidateFoldMetrics:
     fold_index: int
@@ -237,7 +344,7 @@ class PredictionEngine:
     def __init__(self, *, include_builtin_candidates: bool = True) -> None:
         self._candidates: dict[str, tuple[ForecastCandidate, str]] = {}
         if include_builtin_candidates:
-            for candidate in (PersistenceCandidate(), SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate()):
+            for candidate in (PersistenceCandidate(), SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate(), RidgeAutoregressiveCandidate()):
                 self.register(candidate)
 
     def register(self, candidate: ForecastCandidate) -> None:
@@ -482,7 +589,7 @@ class PredictionEngine:
             backtest=selected_metrics,
             points=tuple(points),
             limitations=(
-                "Built-in candidates are statistical baselines, not trained AI models.",
+                "Built-in candidates include transparent baselines and a univariate Ridge autoregression; no cross-signal or exogenous effects are learned.",
                 "Error bands summarize historical rolling-origin residuals; they are not guaranteed prediction intervals.",
                 "Candidate selection and error-band estimation reuse the same rolling-origin replay; bands are descriptive, not independently calibrated.",
                 "Backtest skill on supplied history does not establish future accuracy or site-wide operational suitability.",
