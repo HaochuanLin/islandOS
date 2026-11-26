@@ -202,6 +202,14 @@ history or an invalid/non-finite output makes the candidate ineligible rather
 than silently repairing its forecast. The legacy and canonical Ridge scores
 must remain separate because their feature sets and evaluation paths differ.
 
+For audit reports, `PredictionEngine.evaluate_candidates_detailed(...)`
+returns both the ranked eligible candidates and an explicit reason for every
+registered candidate excluded by the signal or output contract.
+The existing `evaluate_candidates(...)` method remains a compatibility wrapper
+that returns only the ranked metrics tuple. Public-data reports use the detailed
+form so a candidate cannot disappear from a rolling comparison without an
+explanation.
+
 Candidate registration is a software extension point, not automatic model
 promotion to production. Candidate suitability still depends on representative
 chronological backtests, data quality, and site-specific review.
