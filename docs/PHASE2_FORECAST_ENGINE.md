@@ -148,8 +148,9 @@ bundle = forecast_site_signals(timestamps, history, units, horizon=24, engine=en
 selected = bundle.results["pv_power_kw"].model_id
 ```
 
-The canonical `PredictionEngine` Ridge candidate is intentionally distinct
-from the timestamp-aware Ridge implementation in the older
+The canonical `PredictionEngine` candidate is registered as
+`ridge_autoregressive_lag_only` and is intentionally distinct from the
+`ridge_autoregressive` timestamp-aware implementation in the older
 `forecast_engine.py` path. It uses lag features 1, 2, 3 and the configured
 `season_length`, standardises features using only the current training history,
 and fits an L2-regularised least-squares model. Each rolling fold refits from
