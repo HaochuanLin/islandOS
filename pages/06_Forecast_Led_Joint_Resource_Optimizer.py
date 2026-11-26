@@ -395,7 +395,8 @@ try:
         })
     render_table(pd.DataFrame(model_rows))
     st.caption(
-        "The forecast path includes transparent baselines and a small Ridge autoregression. "
+        "This application path uses transparent baseline forecasts. The univariate Ridge candidate "
+        "is evaluated separately in Phase 2 and is not enabled in the default schedule run. "
         "Backtest scores describe only the supplied history; they do not establish site accuracy."
     )
 
