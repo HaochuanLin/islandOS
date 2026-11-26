@@ -298,7 +298,7 @@ jobs:
                   canonical_signal["holdout_candidate_evaluations"]["excluded_candidates"]
               )
               candidate_ids = {item["model_id"] for item in candidates}
-              assert "ridge_autoregressive" in candidate_ids | excluded_candidates
+              assert "ridge_autoregressive_lag_only" in candidate_ids | excluded_candidates
               selected = [
                   item for item in candidates
                   if item["model_id"] == canonical_signal["selected_model"]
