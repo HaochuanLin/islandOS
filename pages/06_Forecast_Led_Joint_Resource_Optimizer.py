@@ -394,7 +394,10 @@ try:
             "Unit": forecast.unit,
         })
     render_table(pd.DataFrame(model_rows))
-    st.caption("The forecast path includes transparent baselines and a small Ridge autoregression. Backtest scores describe only the supplied history; they do not establish site accuracy.")
+    st.caption(
+        "The forecast path includes transparent baselines and a small Ridge autoregression. "
+        "Backtest scores describe only the supplied history; they do not establish site accuracy."
+    )
 
     st.subheader("Forecast points and intervals")
     signal_options = list(predictions.keys())
