@@ -272,6 +272,18 @@ class CandidateMetrics:
 
 
 @dataclass(frozen=True)
+class CandidateExclusion:
+    model_id: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class CandidateEvaluationReport:
+    ranked_candidates: tuple[CandidateMetrics, ...]
+    excluded_candidates: tuple[CandidateExclusion, ...]
+
+
+@dataclass(frozen=True)
 class ForecastPoint:
     timestamp: datetime
     predicted_value: float
@@ -522,7 +534,7 @@ class PredictionEngine:
             abs(guess - truth) for truth, guess in zip(actual_all, predicted_all)
         ]
 
-    def evaluate_candidates(
+    def evaluate_candidates_detailed(
         self,
         history: Sequence[float],
         *,
@@ -531,7 +543,8 @@ class PredictionEngine:
         season_length: int = 24,
         non_negative: bool = True,
         max_folds: int | None = None,
-    ) -> tuple[CandidateMetrics, ...]:
+    ) -> CandidateEvaluationReport:
+        """Return ranked candidates and explicit reasons for ineligible candidates."""
         values = list(history)
         if (
             len(values) < 3
@@ -566,6 +579,7 @@ class PredictionEngine:
         available_folds = (len(values) - initial_history) // horizon
         selected_fold_indices = _select_fold_indices(available_folds, max_folds)
         results = []
+        excluded = []
         for model_id in sorted(self._candidates):
             try:
                 metrics, _ = self._replay(
@@ -574,12 +588,46 @@ class PredictionEngine:
                     fold_indices=selected_fold_indices,
                 )
                 results.append(metrics)
-            except (TypeError, ValueError, ArithmeticError):
-                # A candidate that violates the signal contract is ineligible for this signal.
-                continue
+            except (TypeError, ValueError, ArithmeticError) as exc:
+                # Preserve the reason so a report cannot silently hide an ineligible model.
+                excluded.append(CandidateExclusion(
+                    model_id=model_id,
+                    reason=f"{type(exc).__name__}: {exc}",
+                ))
         if not results:
-            raise ValueError("no registered forecast candidate passed the signal contract")
-        return tuple(sorted(results, key=lambda item: (item.mae, item.rmse, item.model_id)))
+            details = "; ".join(
+                f"{item.model_id}: {item.reason}" for item in excluded
+            )
+            suffix = f"; exclusions: {details}" if details else ""
+            raise ValueError(
+                "no registered forecast candidate passed the signal contract" + suffix
+            )
+        return CandidateEvaluationReport(
+            ranked_candidates=tuple(
+                sorted(results, key=lambda item: (item.mae, item.rmse, item.model_id))
+            ),
+            excluded_candidates=tuple(excluded),
+        )
+
+    def evaluate_candidates(
+        self,
+        history: Sequence[float],
+        *,
+        initial_history: int,
+        horizon: int = 24,
+        season_length: int = 24,
+        non_negative: bool = True,
+        max_folds: int | None = None,
+    ) -> tuple[CandidateMetrics, ...]:
+        """Return only eligible ranked metrics for backward-compatible callers."""
+        return self.evaluate_candidates_detailed(
+            history,
+            initial_history=initial_history,
+            horizon=horizon,
+            season_length=season_length,
+            non_negative=non_negative,
+            max_folds=max_folds,
+        ).ranked_candidates
 
     def forecast(
         self,
