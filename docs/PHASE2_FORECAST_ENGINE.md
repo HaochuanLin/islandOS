@@ -131,10 +131,11 @@ claim that every signal has site-trained or externally validated model skill.
 ### Model evaluation and replacement
 
 `forecast_site_signals` accepts an optional `PredictionEngine`. The default
-engine registers persistence, 24-hour seasonal-naive, recent-mean, linear-trend,
-and a univariate Ridge autoregressive candidate. It ranks them using
-rolling-origin replay and selects the lowest-error eligible candidate
-independently for each signal. A customer or integrator can
+By default the engine registers persistence, 24-hour seasonal-naive, recent-mean,
+and linear-trend candidates. A separate univariate Ridge candidate can be
+registered explicitly for controlled evaluation; it is not enabled in the
+application default path until its comparative evidence is reviewed. The engine
+ranks the candidates that were explicitly registered using rolling-origin replay. A customer or integrator can
 supply a separately configured engine with one or more registered candidates;
 the selected model ID/version and input-history digest remain in each result.
 
@@ -148,10 +149,11 @@ bundle = forecast_site_signals(timestamps, history, units, horizon=24, engine=en
 selected = bundle.results["pv_power_kw"].model_id
 ```
 
-The canonical `PredictionEngine` candidate is registered as
+The optional canonical `PredictionEngine` candidate is registered as
 `ridge_autoregressive_lag_only` and is intentionally distinct from the
 `ridge_autoregressive` timestamp-aware implementation in the older
-`forecast_engine.py` path. It uses lag features 1, 2, 3 and the configured
+`forecast_engine.py` path. It is enabled explicitly in the OPSD evaluation CLI,
+not in the default application engine. It uses lag features 1, 2, 3 and the configured
 `season_length`, standardises features using only the current training history,
 and fits an L2-regularised least-squares model. Each rolling fold refits from
 that fold's training prefix, then forecasts recursively. The selected candidate
