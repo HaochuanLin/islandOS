@@ -264,6 +264,17 @@ class TestPredictionEngine(unittest.TestCase):
         self.assertTrue(all(math.isfinite(value) for value in first))
         self.assertIn("alpha2.5", candidate.version)
 
+    def test_ridge_candidate_version_distinguishes_close_alpha_values(self):
+        first_alpha = 1.0000000000001
+        second_alpha = 1.0000000000002
+        first = RidgeAutoregressiveCandidate(ridge_alpha=first_alpha)
+        second = RidgeAutoregressiveCandidate(ridge_alpha=second_alpha)
+
+        self.assertNotEqual(first.ridge_alpha, second.ridge_alpha)
+        self.assertNotEqual(first.version, second.version)
+        self.assertIn(repr(first_alpha), first.version)
+        self.assertIn(repr(second_alpha), second.version)
+
     def test_ridge_candidate_rejects_invalid_alpha_and_short_training_history(self):
         with self.assertRaisesRegex(ValueError, "ridge_alpha"):
             RidgeAutoregressiveCandidate(ridge_alpha=0)
