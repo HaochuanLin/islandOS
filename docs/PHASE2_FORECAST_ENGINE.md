@@ -177,6 +177,16 @@ ranks the candidates that were explicitly registered using rolling-origin replay
 supply a separately configured engine with one or more registered candidates;
 the selected model ID/version and input-history digest remain in each result.
 
+For a requested forecast horizon, model selection must use the same validation
+horizon rather than silently ranking a 168-hour forecast with 24-hour errors.
+The OPSD report therefore sets `backtest_horizon` to the requested forecast
+horizon. When rolling validation is enabled, the same fold cap is passed to
+selection and to the per-horizon diagnostics; the report records the horizon,
+cap, and original fold indices. If the selection horizon is included in
+`rolling_horizons`, the selection and diagnostic fold indices and aggregate
+metrics must match. This keeps model selection, residual-based bands, and the
+reported comparison on one auditable evaluation scope.
+
 ```python
 from islandos_core.forecast_signal_catalog import forecast_site_signals
 from islandos_core.prediction_engine import PredictionEngine

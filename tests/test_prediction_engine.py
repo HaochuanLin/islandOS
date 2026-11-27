@@ -365,6 +365,32 @@ class TestPredictionEngine(unittest.TestCase):
         self.assertEqual(candidate.training_lengths[-1], len(values))
         self.assertEqual(len(forecast.points), 4)
 
+    def test_forecast_bounds_selection_and_residual_replay_to_the_same_folds(self):
+        engine = PredictionEngine()
+        request = make_request([float(value) for value in range(20)])
+
+        bounded = engine.forecast(
+            request,
+            initial_history=4,
+            backtest_horizon=2,
+            max_backtest_folds=4,
+        )
+        self.assertEqual(
+            [fold.fold_index for fold in bounded.backtest.fold_metrics],
+            [1, 3, 6, 8],
+        )
+        self.assertEqual(bounded.backtest.folds, 4)
+        self.assertEqual(bounded.backtest.samples, 8)
+        self.assertEqual(bounded.interval_calibration_samples, 8)
+
+        exhaustive = engine.forecast(
+            request,
+            initial_history=4,
+            backtest_horizon=2,
+        )
+        self.assertEqual(exhaustive.backtest.folds, 8)
+        self.assertEqual(exhaustive.interval_calibration_samples, 16)
+
     def test_recent_mean_is_constant(self):
         self.assertEqual(
             RecentMeanCandidate().predict([1.0, 3.0, 5.0], 3, season_length=3),

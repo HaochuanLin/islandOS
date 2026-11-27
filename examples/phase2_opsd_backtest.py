@@ -134,8 +134,9 @@ def _canonical_prediction_report(
         canonical_units,
         forecast_horizon,
         engine=engine,
-        backtest_horizon=24,
+        backtest_horizon=forecast_horizon,
         season_length=24,
+        max_backtest_folds=max_rolling_folds,
     )
     initial_history = min(48, len(training_timestamps) - 1)
     signals = {}
@@ -307,6 +308,11 @@ def _canonical_prediction_report(
             "selected_model": result.model_id,
             "selected_model_version": result.model_version,
             "selection_backtest": {
+                "horizon_hours": forecast_horizon,
+                "max_backtest_folds": max_rolling_folds,
+                "fold_indices": [
+                    fold.fold_index for fold in result.backtest.fold_metrics
+                ],
                 "folds": result.backtest.folds,
                 "samples": result.backtest.samples,
                 "mae": result.backtest.mae,
@@ -367,7 +373,8 @@ def _canonical_prediction_report(
         },
         "candidate_selection": (
             "lowest aggregate MAE among registered candidates on pre-holdout chronological "
-            "rolling-origin replay; not a deployment promotion gate"
+            "rolling-origin replay at the requested forecast horizon; not a deployment "
+            "promotion gate"
         ),
         "rolling_evaluation_scope": (
             "Rolling-origin candidate evaluations use only the pre-holdout training history. "
@@ -413,7 +420,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=168,
         help=(
-            "Maximum canonical rolling-origin folds per signal and horizon "
+            "Maximum canonical rolling-origin folds per signal and horizon, including "
+            "forecast selection when --rolling-validation is enabled "
             "(default: 168); first and last complete folds are retained"
         ),
     )

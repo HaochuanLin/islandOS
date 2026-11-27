@@ -290,6 +290,18 @@ jobs:
               canonical_signal = canonical[signal]
               holdout = canonical_signal["holdout_metrics"]
               assert holdout["samples"] == 168
+              selection = canonical_signal["selection_backtest"]
+              selection_horizon = int(report["forecast_horizon_hours"])
+              assert selection["horizon_hours"] == selection_horizon
+              assert selection["max_backtest_folds"] == 168
+              assert len(selection["fold_indices"]) == selection["folds"]
+              assert [
+                  fold["fold_index"] for fold in selection["fold_metrics"]
+              ] == selection["fold_indices"]
+              assert all(
+                  fold["samples"] == selection_horizon
+                  for fold in selection["fold_metrics"]
+              )
               for metric in ("mae", "rmse", "bias_predicted_minus_actual"):
                   assert math.isfinite(holdout[metric])
 
@@ -310,6 +322,17 @@ jobs:
 
               rolling = canonical_signal["rolling_origin_candidate_evaluations"]
               assert set(rolling) == {"1", "6", "24", "168"}
+              selection_horizon_report = rolling.get(str(selection_horizon))
+              if selection_horizon_report is not None:
+                  assert selection["fold_indices"] == (
+                      selection_horizon_report["evaluation_window"]["fold_indices"]
+                  )
+                  selected_rolling = next(
+                      item for item in selection_horizon_report["models"]
+                      if item["model_id"] == canonical_signal["selected_model"]
+                  )
+                  assert selection["mae"] == selected_rolling["mae"]
+                  assert selection["rmse"] == selected_rolling["rmse"]
               registered_candidates = {
                   "persistence",
                   "seasonal_naive",

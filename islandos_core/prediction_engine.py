@@ -638,6 +638,7 @@ class PredictionEngine:
         backtest_horizon: int = 24,
         season_length: int = 24,
         confidence_level: float = 0.90,
+        max_backtest_folds: int | None = None,
     ) -> PredictionResult:
         if not isinstance(request, ForecastRequest):
             raise TypeError("request must be a ForecastRequest")
@@ -648,6 +649,7 @@ class PredictionEngine:
         ranking = self.evaluate_candidates(
             values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            max_folds=max_backtest_folds,
         )
         selected_id = model_id or ranking[0].model_id
         if selected_id not in self._candidates:
@@ -656,9 +658,16 @@ class PredictionEngine:
         # eligibility gate. This preserves identity-integrity and output-contract
         # errors (for example, a mutated plug-in or negative physical output)
         # instead of masking them behind a generic ranking rejection.
+        # Candidate ranking and residual-based interval estimation must use the
+        # same bounded fold set. Otherwise a capped selection could be paired
+        # with exhaustive residuals and report inconsistent evaluation scopes.
+        selected_fold_indices = tuple(
+            fold.fold_index for fold in ranking[0].fold_metrics
+        )
         selected_metrics, absolute_errors = self._replay(
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            fold_indices=selected_fold_indices,
         )
         _, registered_version = self._candidates[selected_id]
         predictions = self._predict(

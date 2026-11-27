@@ -73,7 +73,8 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     report = _canonical_prediction_report(
         _dataset(),
         forecast_horizon=6,
-        rolling_horizons=(1, 24),
+        rolling_horizons=(1, 6, 24),
+        max_rolling_folds=4,
     )
 
     assert report["engine"] == "canonical PredictionEngine via forecast_site_signals"
@@ -95,7 +96,21 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
     for signal in report["signals"].values():
         assert signal["selected_model"]
         assert len(signal["input_history_sha256"]) == 64
-        assert signal["selection_backtest"]["fold_metrics"]
+        selection = signal["selection_backtest"]
+        assert selection["horizon_hours"] == 6
+        assert selection["max_backtest_folds"] == 4
+        assert selection["fold_indices"] == [
+            fold["fold_index"] for fold in selection["fold_metrics"]
+        ]
+        matching_horizon = signal["rolling_origin_candidate_evaluations"]["6"]
+        selected_rolling = next(
+            model for model in matching_horizon["models"]
+            if model["model_id"] == signal["selected_model"]
+        )
+        assert selection["fold_indices"] == [
+            fold["fold_index"] for fold in selected_rolling["fold_metrics"]
+        ]
+        assert selection["mae"] == pytest.approx(selected_rolling["mae"])
         assert signal["holdout_metrics"]["samples"] == 6
         assert signal["holdout_metrics"]["mae"] >= 0
         assert len(signal["forecast_points"]) == 6
@@ -116,7 +131,7 @@ def test_public_history_is_evaluated_by_the_canonical_prediction_engine():
             len(item["forecast_points"]) == 6
             for item in candidate_models.values()
         )
-        assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "24"}
+        assert set(signal["rolling_origin_candidate_evaluations"]) == {"1", "6", "24"}
         for horizon_result in signal["rolling_origin_candidate_evaluations"].values():
             assert horizon_result["models"]
             assert horizon_result["best_by_mae"] in {
@@ -244,7 +259,7 @@ def test_canonical_rolling_report_samples_folds_evenly_and_reports_skips():
     report = _canonical_prediction_report(
         dataset,
         forecast_horizon=6,
-        rolling_horizons=(1,),
+        rolling_horizons=(1, 6),
         max_rolling_folds=4,
     )
 
