@@ -1,10 +1,12 @@
 # PR #359 只读兼容性审查：幂等写入、input_group_id、失败审计
 
+> 归档状态：#359 已合并（merge `bfaf5b7`）；下文保留审查当时的状态与行号，用于追溯，不代表当前分支状态。
+>
 > 后续状态：A1-A8 的最终字段、类型、迁移、包兼容建议以 `docs/J-01_PR359_A1_A8_CONTRACT.md` 为准。本文件保留审查过程；其中“identity_schema_version 先放 metadata”的早期建议已被新契约文档取代（推荐列方案，若作者选择 metadata 则作为备选）。
 
 - 审查对象：PR #359 `feat: persist immutable local run records`，head `94388ed`，分支 `feat/persistent-run-records-2026-11-25`。
 - 审查方式：只读 `git show` + detached worktree 运行 `tests/test_workspace_store.py` 与 `tests/test_site_workspace.py`，本次复核 **28 passed**。
-- 边界：**未修改、未推送、未评论 #359 分支**；以下是最小改动建议，供 #359 作者与 B-01 决定。
+- 边界：审查时未修改、未推送、未评论 #359 分支；以下是最小改动建议，供 #359 作者与 B-01 决定。
 - 结论：现有表结构与 J-01 的两级身份**基本兼容**，但三处必须补：`input_group_id` 列/索引、幂等分支、失败审计。都不需要改主键、不可变触发器或 retention 约束。
 
 ## 1. 现状核对（代码级）
@@ -25,7 +27,7 @@
 
 ### 2.1 推荐：合并前直接改 CREATE TABLE（不引入 1.2 迁移）
 
-PR 尚未合并，且当前只有 1.1 测试库；在 `CREATE TABLE run_records` 增加：
+审查时 PR 尚未合并，且当前只有 1.1 测试库；在 `CREATE TABLE run_records` 增加：
 
 ```sql
 input_group_id TEXT,

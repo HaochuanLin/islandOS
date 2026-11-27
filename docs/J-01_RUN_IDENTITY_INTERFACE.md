@@ -1,7 +1,7 @@
 # J-01 纯函数接口与固定测试向量
 
 - 状态：**P1a 输入组、P1b `derive_run_id` 和 run-record 身份映射均已实现；页面接入未做。**
-- 基线：`main = 3990996`（2026-11-26）；P1a #372、P1b #373、存储契约 #359 已合并。
+- 基线：`main = f9ca1b0`（2026-11-27）；P1a #372、P1b #373、存储契约 #359、run-record 映射 #379 已合并。
 - 关联：`docs/J-01_RUN_IDENTITY_DECISION.md`、`docs/fixtures/j01_run_identity_vectors.json`、`docs/fixtures/j01_run_identity_p1b_vectors.json`。
 
 ## 1. 边界
