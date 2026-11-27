@@ -86,7 +86,7 @@ def navigation_pages() -> dict:
                 url_path=_url_path("pages/09_Device_Flexibility_Planner.py"),
             ),
         ],
-        "Experimental": [
+        "Advanced / operator": [
             st.Page(
                 "pages/2_Rolling_Horizon_Lab.py",
                 title="Rolling horizon lab",
@@ -115,7 +115,7 @@ def navigation_pages() -> dict:
             )
         )
     if local_pages:
-        groups["Local deployment only"] = local_pages
+        groups["Advanced / operator"].extend(local_pages)
     return groups
 
 

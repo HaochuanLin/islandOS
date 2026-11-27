@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from dataclasses import asdict
 import hashlib
+import html
 import json
 
 import pandas as pd
@@ -74,7 +75,7 @@ render_page_title(
 
 render_page_header(
     question="Given a site's history, what does the forecast imply for the cost and reliability trade-off?",
-    data="A synthetic default history, or your uploaded CSV/XLSX (session-only, with a recorded hash).",
+    data="A synthetic default history, or your uploaded CSV/XLSX (session-only).",
     conclusions="Which operating policy is worth comparing next, and how much of the gap is forecast-driven.",
     limits="Offline planning estimates, not measured customer savings or a site-validated forecast.",
 )
@@ -113,7 +114,7 @@ with st.sidebar:
             "upload control if you still need it."
         )
     if shared_dataset is not None:
-        st.caption(f"Session dataset available: {shared_dataset['file_name']} · SHA-256 {shared_dataset['sha256'][:12]}…")
+        st.caption(f"Session dataset available: {shared_dataset['file_name']}")
         if st.button("Clear session dataset", key="clear_shared_dataset_dashboard"):
             clear_session_dataset(st.session_state)
             st.rerun()
@@ -223,18 +224,22 @@ else:
     )
 
 demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
-st.caption(
-    f"History window: {history_stamps[0].isoformat()} → {history_stamps[-1].isoformat()} "
-    f"({len(history_stamps)} hourly rows){demo_note}"
-)
-st.caption(f"Input provenance: {source_label}")
+summary_left, summary_mid, summary_right = st.columns([1.5, 1.8, 0.7])
+with summary_left:
+    st.caption(f"**Data source**  \n{source_label}")
+with summary_mid:
+    st.caption(
+        f"**History window**  \n{history_stamps[0]:%Y-%m-%d %H:%M} → "
+        f"{history_stamps[-1]:%Y-%m-%d %H:%M} UTC · {len(history_stamps)} h{demo_note}"
+    )
+with summary_right:
+    st.caption(f"**Currency**  \n{currency}")
 if site_csv is not None:
     render_page_upload_handoff(
         page_key="decision_dashboard",
         file_name=site_csv.name,
         payload=site_csv.getvalue(),
     )
-st.caption(f"Shared history SHA-256: {history_sha256}")
 
 units = {
     "pv_power": "kW",
@@ -275,7 +280,6 @@ try:
         source_label=source_label,
         fingerprint=fingerprint,
     )
-    st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
     config = site_assumptions.to_energy_system_config()
     # The request this page acts on, in the shared application-facing shape: the site,
     # the history with its units and provenance, this page's own simulation knobs and the
@@ -309,6 +313,10 @@ try:
         provenance=source_label,
         source_sha256=source_sha256,
     )
+    st.caption(
+        "Offline screening; synthetic defaults unless a CSV is uploaded; "
+        "not measured customer savings."
+    )
     # The whole sequence lives in islandos_core.run_orchestration: forecast → coordination
     # inputs → objective weights → optimize → service-equivalent economics → stress →
     # paired impact. The page keeps the objects it renders and nothing about the order.
@@ -341,45 +349,6 @@ try:
         page="customer_dashboard", result=result, economics=economics, currency=currency,
     )
 
-    with st.expander("Inputs and assumptions for this run", expanded=True):
-        st.write(f"**Data source:** {source_label}")
-        st.write(f"**History SHA-256:** `{history_sha256}`")
-        st.write(
-            f"**Local request SHA-256:** `{run_request_view['request_sha256']}` "
-            "(this page's own request, not a cross-page run identity)"
-        )
-        st.write(
-            f"**Time window:** {history_stamps[0].isoformat()} → "
-            f"{history_stamps[-1].isoformat()} ({len(history_stamps)} hourly rows)"
-        )
-        st.write({
-            "Installed PV capacity (kW)": float(pv_capacity),
-            "Installed wind capacity (kW)": float(wind_capacity),
-            "Grid import limit (kW)": float(grid_limit),
-            "Battery capacity (kWh)": float(battery_capacity),
-            "Battery charge/discharge limit (kW)": float(battery_power),
-            "Battery SOC band": (
-                f"{BATTERY_MIN_SOC:.0%}–{BATTERY_MAX_SOC:.0%} "
-                f"(initial {BATTERY_INITIAL_SOC:.0%})"
-            ),
-            "Currency label": currency,
-        })
-        st.write({
-            "Essential load level (demand scale)": float(demand_scale),
-            "Electricity tariff level (tariff scale)": float(tariff_scale),
-            "Cost priority": float(cost_priority),
-            "Reliability weight (remainder of the objective)": round(float(weights.reliability), 2),
-        })
-        if shared_payload is None:
-            st.caption(
-                "The demand and tariff sliders shape the synthetic default history; an uploaded "
-                "CSV is read as given, so those two scales do not apply to it."
-            )
-        st.caption(
-            "Offline screening; synthetic defaults unless a CSV is uploaded; "
-            "not measured customer savings."
-        )
-
     st.subheader("Decision snapshot")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Recommended policy", result_view["recommended_policy_label"])
@@ -403,6 +372,27 @@ try:
         st.caption(
             "The cost difference is a modeled estimate under identical service in this "
             "scenario, not a measured or guaranteed customer saving."
+        )
+    recommended_label = recommended.replace("_", " ").title()
+    cost_gap = baseline["estimated_energy_cost"] - selected["estimated_energy_cost"]
+    grid_gap = baseline["grid_import_kwh"] - selected["grid_import_kwh"]
+    curtail_gap = baseline["renewable_curtailed_kwh"] - selected["renewable_curtailed_kwh"]
+    if service_equal and cost_gap > 0:
+        st.caption(
+            f"**Why {recommended_label}:** it serves the same load with "
+            f"{cost_gap:,.2f} {currency} less modeled 24-hour energy cost, "
+            f"{grid_gap:,.2f} kWh less grid import, and "
+            f"{curtail_gap:,.2f} kWh less renewable curtailment."
+        )
+    elif service_equal:
+        st.caption(
+            f"**Why {recommended_label}:** it is the lowest modeled-cost policy that "
+            "still serves the same load in this scenario."
+        )
+    else:
+        st.caption(
+            f"**Why {recommended_label}:** it is the lowest modeled-cost policy in this "
+            "comparison, but its service differs from the grid-first reference."
         )
 
     st.subheader("Forecast: next 24 hours")
@@ -551,47 +541,47 @@ try:
         with st.expander("Hourly dispatch detail (hourly rows)"):
             render_table(detail_frame)
 
-    st.subheader("Paired customer-impact evidence")
-    impact_baseline = paired_impact["baseline_metrics"]
-    impact_candidate = paired_impact["candidate_metrics"]
-    impact_benefit = paired_impact["gross_operating_benefit"]
-    impact_audit = paired_impact["equipment_constraint_audit"]
-    impact_service = paired_impact["service_equivalence"]
-    impact_cols = st.columns(4)
-    impact_cols[0].metric(
-        "Paired-policy gross difference",
-        (
-            f"{impact_benefit['value']:,.2f} {currency}"
-            if impact_benefit["value"] is not None else "Withheld"
-        ),
-    )
-    impact_cols[1].metric(
-        "Service equivalence",
-        "Passed" if impact_service["passed"] else "Failed",
-    )
-    impact_cols[2].metric(
-        "Independent dispatch audit",
-        "Passed" if impact_audit["passed"] else "Failed",
-    )
-    impact_cols[3].metric("Net customer value", "Not calculated")
-    render_table(
-        pd.DataFrame([
-            {"Measure": "Estimated energy cost", "Grid-first baseline": impact_baseline["estimated_energy_cost"], "Battery-first candidate": impact_candidate["estimated_energy_cost"]},
-            {"Measure": "Grid import (kWh)", "Grid-first baseline": impact_baseline["grid_import_kwh"], "Battery-first candidate": impact_candidate["grid_import_kwh"]},
-            {"Measure": "Diesel generation (kWh)", "Grid-first baseline": impact_baseline["diesel_generation_kwh"], "Battery-first candidate": impact_candidate["diesel_generation_kwh"]},
-            {"Measure": "Renewable curtailment (kWh)", "Grid-first baseline": impact_baseline["renewable_curtailed_kwh"], "Battery-first candidate": impact_candidate["renewable_curtailed_kwh"]},
-            {"Measure": "Critical unmet load (kWh)", "Grid-first baseline": impact_baseline["critical_unmet_load_kwh"], "Battery-first candidate": impact_candidate["critical_unmet_load_kwh"]},
-            {"Measure": "Flexible load shed (kWh)", "Grid-first baseline": impact_baseline["flexible_load_shed_kwh"], "Battery-first candidate": impact_candidate["flexible_load_shed_kwh"]},
-        ]),
-    )
-    st.caption(
-        "This is a separate, same-input 24-hour grid-first vs battery-first evidence comparison. "
-        "It is not the optimizer's recommended policy, not annual savings, and not a water-service assessment. "
-        "Net customer value is withheld because software, integration, maintenance and training costs "
-        "have not been supplied on this same 24-hour basis."
-    )
-    with st.expander("Paired impact audit details"):
-        st.json(paired_impact)
+    with st.expander("Paired policy replay (independent evidence)", expanded=False):
+        impact_baseline = paired_impact["baseline_metrics"]
+        impact_candidate = paired_impact["candidate_metrics"]
+        impact_benefit = paired_impact["gross_operating_benefit"]
+        impact_audit = paired_impact["equipment_constraint_audit"]
+        impact_service = paired_impact["service_equivalence"]
+        impact_cols = st.columns(4)
+        impact_cols[0].metric(
+            "Paired-policy gross difference",
+            (
+                f"{impact_benefit['value']:,.2f} {currency}"
+                if impact_benefit["value"] is not None else "Withheld"
+            ),
+        )
+        impact_cols[1].metric(
+            "Service equivalence",
+            "Passed" if impact_service["passed"] else "Failed",
+        )
+        impact_cols[2].metric(
+            "Independent dispatch audit",
+            "Passed" if impact_audit["passed"] else "Failed",
+        )
+        impact_cols[3].metric("Net customer value", "Not calculated")
+        render_table(
+            pd.DataFrame([
+                {"Measure": "Estimated energy cost", "Grid-first baseline": impact_baseline["estimated_energy_cost"], "Battery-first candidate": impact_candidate["estimated_energy_cost"]},
+                {"Measure": "Grid import (kWh)", "Grid-first baseline": impact_baseline["grid_import_kwh"], "Battery-first candidate": impact_candidate["grid_import_kwh"]},
+                {"Measure": "Diesel generation (kWh)", "Grid-first baseline": impact_baseline["diesel_generation_kwh"], "Battery-first candidate": impact_candidate["diesel_generation_kwh"]},
+                {"Measure": "Renewable curtailment (kWh)", "Grid-first baseline": impact_baseline["renewable_curtailed_kwh"], "Battery-first candidate": impact_candidate["renewable_curtailed_kwh"]},
+                {"Measure": "Critical unmet load (kWh)", "Grid-first baseline": impact_baseline["critical_unmet_load_kwh"], "Battery-first candidate": impact_candidate["critical_unmet_load_kwh"]},
+                {"Measure": "Flexible load shed (kWh)", "Grid-first baseline": impact_baseline["flexible_load_shed_kwh"], "Battery-first candidate": impact_candidate["flexible_load_shed_kwh"]},
+            ]),
+        )
+        st.caption(
+            "This is a separate, same-input 24-hour grid-first vs battery-first evidence comparison. "
+            "It is not the optimizer's recommended policy, not annual savings, and not a water-service assessment. "
+            "Net customer value is withheld because software, integration, maintenance and training costs "
+            "have not been supplied on this same 24-hour basis."
+        )
+        with st.expander("Paired impact audit details"):
+            st.json(paired_impact)
 
     st.subheader("Reliability and stress review")
     stress_rows = []
@@ -708,7 +698,7 @@ try:
                 + "; ".join(binding_verification["errors"])
             )
             st.stop()
-        render_annual_economics_basis(economics_binding)
+        render_annual_economics_basis(economics_binding, include_hashes=False)
         st.caption(
             "The metrics below are a screening result under the assumptions printed with them; "
             "they are not a procurement guarantee."
@@ -721,12 +711,14 @@ try:
             i2.metric("Simple payback", f"{investment.simple_payback_years:.1f} years" if investment.simple_payback_years is not None else "Not achieved")
             i3.metric("Discounted payback", f"{investment.discounted_payback_years:.1f} years" if investment.discounted_payback_years is not None else "Not achieved")
             i4.metric("Break-even annual energy saving", f"{investment.break_even_annual_energy_saving:,.0f} {currency}")
-            st.write({
-                "Screen result": investment.decision.replace("_", " ").title(),
-                "Annual energy-bill difference": investment.annual_energy_cost_saving,
-                "Annual net operating benefit after incremental O&M": investment.annual_net_operating_benefit,
-                "Reasons / review notes": investment.reasons,
-            })
+            st.caption(
+                f"Screen result: {investment.decision.replace('_', ' ').title()}. "
+                f"Annual energy-bill difference: {investment.annual_energy_cost_saving:,.0f} {currency}; "
+                f"annual net operating benefit after incremental O&M: "
+                f"{investment.annual_net_operating_benefit:,.0f} {currency}."
+            )
+            if investment.reasons:
+                st.caption(" ".join(investment.reasons))
             case_labels = {
                 "base": "Base case",
                 "high_20pct_energy_saving": "Energy saving +20%",
@@ -921,9 +913,9 @@ try:
                 "the labels above and below the two sensitivity bars show the change from it."
             )
             st.altair_chart(sensitivity_chart, width="stretch")
-            st.subheader("Annual investment cashflow")
-            cashflow_frame = pd.DataFrame(investment.annual_cashflows)
-            render_table(cashflow_frame)
+            with st.expander("Annual investment cashflow detail", expanded=False):
+                cashflow_frame = pd.DataFrame(investment.annual_cashflows)
+                render_table(cashflow_frame)
         investment_report = investment.to_dict()
 
     else:
@@ -1025,8 +1017,8 @@ try:
         st.stop()
     st.subheader("Operator decision record")
     st.caption(
-        f"Integrity verified · SHA-256 {operator_record['record_sha256']} · "
-        "human approval pending · device writes disabled"
+        "Integrity verified · human approval pending · device writes disabled. "
+        "The record hash is in the technical appendix."
     )
     investment_report["assumptions"] = {
         "baseline_annual_energy_cost": baseline_annual_bill,
@@ -1081,22 +1073,86 @@ try:
         },
         "scope": "offline screening; not measured savings or equipment control",
     }
+    summary_npv = investment_report.get("net_present_value")
+    summary_simple = investment_report.get("simple_payback_years")
+    summary_discounted = investment_report.get("discounted_payback_years")
+    summary_annual_bill = investment_report.get("annual_energy_cost_saving")
+    summary_net_benefit = investment_report.get("annual_net_operating_benefit")
+    summary_html = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IslandOS customer decision summary</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1d2420; max-width: 820px; margin: 40px auto; line-height: 1.55; }}
+h1 {{ font-size: 26px; margin-bottom: 4px; }}
+h2 {{ font-size: 16px; margin-top: 28px; border-bottom: 1px solid #d9d2c5; padding-bottom: 6px; }}
+.meta {{ color: #5b625d; font-size: 13px; margin-bottom: 24px; }}
+table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
+td {{ padding: 7px 8px; border-bottom: 1px solid #eee7da; vertical-align: top; }}
+td:first-child {{ color: #5b625d; width: 45%; }}
+.note {{ color: #5b625d; font-size: 12px; margin-top: 26px; }}
+</style>
+</head>
+<body>
+<h1>IslandOS customer decision summary</h1>
+<p class="meta">{html.escape(source_label)} · {history_stamps[0]:%Y-%m-%d %H:%M} → {history_stamps[-1]:%Y-%m-%d %H:%M} UTC · {len(history_stamps)} h · {html.escape(currency)}</p>
+<h2>Recommendation</h2>
+<table>
+<tr><td>Recommended policy</td><td><strong>{html.escape(recommended_label)}</strong></td></tr>
+<tr><td>Modeled 24-hour energy cost</td><td>{selected['estimated_energy_cost']:,.2f} {html.escape(currency)}</td></tr>
+<tr><td>Modeled difference vs grid-first</td><td>{f"{cost_gap:,.2f} {currency}" if service_equal else "Withheld — service differs"}</td></tr>
+<tr><td>Grid import</td><td>{selected['grid_import_kwh']:,.2f} kWh</td></tr>
+<tr><td>Renewable curtailment</td><td>{selected['renewable_curtailed_kwh']:,.2f} kWh</td></tr>
+<tr><td>Unmet load</td><td>{selected['unmet_load_kwh']:,.2f} kWh</td></tr>
+</table>
+<h2>Investment screen</h2>
+<table>
+<tr><td>Net present value</td><td>{f"{summary_npv:,.0f} {currency}" if summary_npv is not None else "Withheld — inputs not entered"}</td></tr>
+<tr><td>Simple payback</td><td>{f"{summary_simple:.1f} years" if summary_simple is not None else "Not achieved"}</td></tr>
+<tr><td>Discounted payback</td><td>{f"{summary_discounted:.1f} years" if summary_discounted is not None else "Not achieved"}</td></tr>
+<tr><td>Annual energy-bill difference</td><td>{f"{summary_annual_bill:,.0f} {currency}" if summary_annual_bill is not None else "Withheld"}</td></tr>
+<tr><td>Annual net operating benefit</td><td>{f"{summary_net_benefit:,.0f} {currency}" if summary_net_benefit is not None else "Withheld"}</td></tr>
+</table>
+<p class="note">Offline screening based on the inputs in this run. Results are modeled estimates, not measured customer savings, a validated forecast, or equipment commands. Human review remains required.</p>
+</body>
+</html>"""
     st.download_button(
-        "Download human-review decision record (JSON)",
-        data=json.dumps(operator_record, indent=2, default=str).encode("utf-8"),
-        file_name="islandos_operator_decision_record.json",
-        mime="application/json",
+        "Download customer summary (HTML)",
+        data=summary_html.encode("utf-8"),
+        file_name="islandos_customer_summary.html",
+        mime="text/html",
     )
-    st.caption(
-        "The decision record preserves the selected offline dispatch, supported physical audit, "
-        "paired customer-impact evidence and input hashes. It is advisory-only and requires human review."
-    )
-    st.download_button(
-        "Download decision report (JSON)",
-        data=json.dumps(report, indent=2, default=str).encode("utf-8"),
-        file_name="islandos_customer_decision_report.json",
-        mime="application/json",
-    )
+
+    with st.expander("Technical appendix (audit identifiers)"):
+        st.caption(f"Shared history SHA-256: {history_sha256}")
+        st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
+        st.caption(f"Local request SHA-256: {run_request_view['request_sha256']} — this page's own request, not a cross-page run identity")
+        st.caption(f"Decision record SHA-256: {operator_record['record_sha256']}")
+        if economics_binding:
+            st.caption(
+                f"Manifest SHA-256: {economics_binding.get('manifest_sha256', 'missing')} · "
+                f"Binding SHA-256: {economics_binding.get('binding_sha256', 'missing')}"
+            )
+        if source_sha256:
+            st.caption(f"Uploaded file SHA-256: {source_sha256}")
+
+        st.download_button(
+            "Download human-review decision record (JSON)",
+            data=json.dumps(operator_record, indent=2, default=str).encode("utf-8"),
+            file_name="islandos_operator_decision_record.json",
+            mime="application/json",
+        )
+        st.caption(
+            "The decision record preserves the selected offline dispatch, supported physical audit, "
+            "paired customer-impact evidence and input hashes. It is advisory-only and requires human review."
+        )
+        st.download_button(
+            "Download decision report (JSON)",
+            data=json.dumps(report, indent=2, default=str).encode("utf-8"),
+            file_name="islandos_customer_decision_report.json",
+            mime="application/json",
+        )
 except (ValueError, KeyError, TypeError, ArithmeticError, IndexError) as exc:
     st.error(f"Could not build the decision dashboard: {exc}")
     st.caption("Check the scenario assumptions and the forecast/optimizer input contracts.")

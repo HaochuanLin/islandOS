@@ -39,7 +39,9 @@ def test_pages_do_not_claim_a_shared_run():
 def test_default_pages_show_the_new_labels():
     app_05 = AppTest.from_file(str(PAGE_05), default_timeout=120).run()
     assert not app_05.exception, "\n".join(str(e) for e in app_05.exception)
-    text_05 = " ".join(str(item.value) for item in app_05.markdown)
+    text_05 = " ".join(
+        str(item.value) for item in [*app_05.markdown, *app_05.caption]
+    )
     assert "Local request SHA-256:" in text_05
 
     app_06 = AppTest.from_file(str(PAGE_06), default_timeout=120).run()

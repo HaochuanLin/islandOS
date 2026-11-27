@@ -253,9 +253,8 @@ def render_customer_workflow(
     )
     peer_name = meta["other_title"]
 
-    with st.container(border=True):
-        st.caption(f"CUSTOMER DECISION PATH · STEP {meta['step']} OF 3")
-        st.markdown(f"**{meta['title']}**")
+    with st.container():
+        st.caption(f"Step {meta['step']} of 3 · {meta['title']}")
         if relation == "match":
             if fingerprint is not None:
                 st.caption(
@@ -286,16 +285,10 @@ def render_customer_workflow(
                     "same demo clock and assumptions before comparing them."
                 )
         else:
-            if fingerprint is not None:
-                st.caption(
-                    "Input check: use the left navigation to open the other customer view "
-                    "in this browser session, then compare this page's full input fingerprint."
-                )
-            else:
-                st.caption(
-                    "Input check: use the left navigation to open the other customer view "
-                    "in this browser session, then compare this page's history SHA-256."
-                )
+            st.caption(
+                f"Next: open {peer_name} from the left navigation when you want to compare "
+                "the same input window."
+            )
         st.caption(
             "The device flexibility planner is an optional third check with fixed synthetic "
             "inputs; it is not a continuation of this history."

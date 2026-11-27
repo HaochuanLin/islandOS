@@ -70,7 +70,7 @@ def record_facts(record: Mapping) -> list[tuple[str, str]]:
     ]
 
 
-def render_decision_record(record: Mapping) -> None:
+def render_decision_record(record: Mapping, *, include_hash: bool = False) -> None:
     """Render the gate: one banner, then the facts, then nothing else from here."""
     level = audit_level(record)
     facts = record_facts(record)
@@ -80,4 +80,5 @@ def render_decision_record(record: Mapping) -> None:
     else:
         st.error(banner)
     st.caption(facts[2][1])
-    st.caption(" · ".join(f"**{label}:** {value}" for label, value in facts[3:]))
+    visible_facts = facts[3:] if include_hash else facts[3:5]
+    st.caption(" · ".join(f"**{label}:** {value}" for label, value in visible_facts))
