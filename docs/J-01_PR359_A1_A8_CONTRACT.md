@@ -1,7 +1,7 @@
 # J-01 / PR #359 A1-A8 技术契约
 
-- 状态：**已由仓库负责人确认，并已在 PR #359 分支实现。**
-- 基线：PR #359 本地 rebase 到 main `b42c624`；workspace `SCHEMA_VERSION="1.1"`；`run_records` PK 为 `(project_id, run_id)`。
+- 状态：**已由仓库负责人确认，并已由 PR #359 实现、合并。**
+- 基线：PR #359 实现时 rebase 到 main `b42c624`；workspace `SCHEMA_VERSION="1.1"`；`run_records` PK 为 `(project_id, run_id)`。
 - 原则：旧记录不回填虚构 identity，不重写旧 `run_id`，不复用旧 `run_manifests` 主键，不破坏 audit chain，不改变 consent 含义。
 
 ## A1 `input_group_id` 列与索引
@@ -14,7 +14,7 @@
 | 写入 | `record_run_record(..., input_group_id: str | None = None)`；core 校验格式；identity=0 的旧格式记录不允许携带该字段 |
 | 查询 | `list_run_records(..., input_group_id=None)` 可选过滤 |
 | 旧记录 | `NULL`，不补算、不猜测 |
-| 迁移 | #359 未合并，因此直接加入 1.1 `CREATE TABLE`；另加 `_ensure_run_record_identity_columns()` 对已存在的 1.1 表补列并建索引 |
+| 迁移 | 审查时 #359 尚未合并，因此采纳直接加入 1.1 `CREATE TABLE` 的方案；现已随 #359 合并。另加 `_ensure_run_record_identity_columns()` 对已存在的 1.1 表补列并建索引 |
 
 `input_group_id` 不放进 `request_metadata`：它需要按项目/组查询，并参与幂等比较。
 
@@ -111,7 +111,7 @@
 
 ## 迁移实现
 
-1. **#359 合并前**：A1/A2/A8 列直接进入 `1.1` 的 `CREATE TABLE`，未额外发 1.2；现已随 #359 合并。
+1. **合并方案**：A1/A2/A8 列直接进入 `1.1` 的 `CREATE TABLE`，未额外发 1.2；已随 #359 合并。
 2. 已存在的 1.1 `run_records` 表由 `_ensure_run_record_identity_columns()` 检测缺列，`ALTER TABLE` 补 `run_request_sha256`、`input_group_id`、`identity_schema_version`，再建部分索引。
 3. 新增列全部向后兼容；旧行得到 `NULL/NULL/0`，不设回填。
 4. 索引只加在 `input_group_id`；其他字段不增加查询索引，避免写放大。
