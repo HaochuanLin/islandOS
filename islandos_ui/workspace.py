@@ -678,7 +678,14 @@ elif page == "Flexible-load cost optimizer":
                 ["Baseline power (kW)", "Optimized power (kW)"]
             ]
         )
-        st.dataframe(schedule_frame, width="stretch", hide_index=True)
+        # Tariff source is constant across every interval, and the forecast
+        # target is empty unless a history was uploaded. Showing those columns
+        # per row would force the projector-scale table into multi-line cells.
+        schedule_display = schedule_frame.drop(columns=["Tariff source"])
+        if tariff_forecast_metadata is None:
+            schedule_display = schedule_display.drop(columns=["Tariff forecast target (UTC)"])
+        st.caption(f"Tariff source: **{tariff_source}**")
+        render_table(schedule_display, hide_index=True)
         export = schedule_frame.copy()
         export["data_provenance"] = profile_provenance
         export["tariff_source"] = tariff_source

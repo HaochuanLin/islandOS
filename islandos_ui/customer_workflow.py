@@ -251,7 +251,7 @@ def render_customer_workflow(
         history_sha256,
         fingerprint=fingerprint,
     )
-    other = PAGE_META[meta["other"]]
+    peer_name = meta["other_title"]
 
     with st.container(border=True):
         st.caption(f"CUSTOMER DECISION PATH · STEP {meta['step']} OF 3")
@@ -259,14 +259,14 @@ def render_customer_workflow(
         if relation == "match":
             if fingerprint is not None:
                 st.caption(
-                    f"Input match: the last {other['other_title']} used the same shared "
+                    f"Input match: the last {peer_name} used the same shared "
                     "input fingerprint. The pages are still separate runs with different "
                     "optimization and cost boundaries; do not compare their cost or "
                     "saving totals as interchangeable."
                 )
             else:
                 st.caption(
-                    f"Input match: the last {other['other_title']} used the same history "
+                    f"Input match: the last {peer_name} used the same history "
                     "SHA-256. The pages are still separate runs with different optimization "
                     "and cost boundaries; do not compare their cost or saving totals as "
                     "interchangeable."
@@ -275,28 +275,27 @@ def render_customer_workflow(
             prior_source = previous.get("source_label") if previous else "an earlier run"
             if fingerprint is not None:
                 st.warning(
-                    f"Input fingerprint differs from the last {other['other_title']} "
+                    f"Input fingerprint differs from the last {peer_name} "
                     f"({prior_source}). The two outputs are not like-for-like. Use the same "
                     "CSV, site assumptions and shared input window before comparing them."
                 )
             else:
                 st.warning(
-                    f"Input differs from the last {other['other_title']} ({prior_source}). "
+                    f"Input differs from the last {peer_name} ({prior_source}). "
                     "The two outputs are not like-for-like. Use the same CSV or restore the "
                     "same demo clock and assumptions before comparing them."
                 )
         else:
             if fingerprint is not None:
                 st.caption(
-                    f"Input check: open the {other['other_title']} in this browser session "
-                    "to compare this page's full input fingerprint with the other view."
+                    "Input check: use the left navigation to open the other customer view "
+                    "in this browser session, then compare this page's full input fingerprint."
                 )
             else:
                 st.caption(
-                    f"Input check: open the {other['other_title']} in this browser session "
-                    "to compare this page's history SHA-256 with the other view."
+                    "Input check: use the left navigation to open the other customer view "
+                    "in this browser session, then compare this page's history SHA-256."
                 )
-        st.markdown(f"[Open the {other['other_title']}](/{other['route']})")
         st.caption(
             "The device flexibility planner is an optional third check with fixed synthetic "
             "inputs; it is not a continuation of this history."
