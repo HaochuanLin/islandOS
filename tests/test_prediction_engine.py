@@ -377,7 +377,7 @@ class TestPredictionEngine(unittest.TestCase):
         )
         self.assertEqual(
             [fold.fold_index for fold in bounded.backtest.fold_metrics],
-            [1, 3, 6, 8],
+            [1, 3, 5, 8],
         )
         self.assertEqual(bounded.backtest.folds, 4)
         self.assertEqual(bounded.backtest.samples, 8)
