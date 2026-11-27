@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
+from streamlit.errors import StreamlitPageNotFoundError
 from islandos_ui.upload_guard import reject_upload
 from islandos_ui.upload_recovery import offer_schema_conformant_csv
 from islandos_ui.page_header import render_page_header, render_page_title
@@ -55,21 +56,10 @@ from islandos_core.run_orchestration import run_joint_optimizer
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
 apply_theme()
 render_page_title(
-    "IslandOS · joint resource brief",
-    "Forecast-led joint resource optimizer",
+    "",
+    "Joint resource optimizer",
     "One pipeline: site history → model selection → aligned forecasts → battery/diesel schedule search.",
-)
-
-render_page_header(
-    question="What battery and diesel schedule follows from aligned forecasts for this site?",
-    data="The synthetic default, or an uploaded history put through the canonical forecast catalogue.",
-    conclusions="A candidate schedule, its energy balance, and whether the constraints bind.",
-    limits="A schedule-search result only: no device commands and no warranty of feasibility on real equipment.",
-)
-
-st.info(
-    "Default inputs are synthetic. Uploaded CSV values are customer-supplied and not independently verified. "
-    "This page performs offline planning only: it does not connect to live telemetry or write commands to equipment."
+    compact=True,
 )
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -81,6 +71,10 @@ with st.sidebar:
     )
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
+    st.caption(
+        "Uploads are processed by the hosted app server. Share only data you are "
+        "authorized to share, and redact sensitive exports."
+    )
     shared_dataset, dataset_error = read_session_dataset(st.session_state)
     if dataset_error:
         st.warning(
@@ -89,7 +83,7 @@ with st.sidebar:
             "upload control if you still need it."
         )
     if shared_dataset is not None:
-        st.caption(f"Session dataset available: {shared_dataset['file_name']} · SHA-256 {shared_dataset['sha256'][:12]}…")
+        st.caption(f"Session dataset available: {shared_dataset['file_name']}")
         if st.button("Clear session dataset", key="clear_shared_dataset_joint_optimizer"):
             clear_session_dataset(st.session_state)
             st.rerun()
@@ -100,9 +94,10 @@ with st.sidebar:
     battery_power = st.number_input("Battery power limit (kW)", min_value=1.0, value=20.0, step=1.0)
     diesel_capacity = st.number_input("Diesel rated power (kW)", min_value=1.0, value=30.0, step=1.0)
     diesel_cost = st.number_input(f"Diesel variable cost ({currency}/kWh)", min_value=0.0, value=0.32, step=0.01)
-    population = st.slider("Search population", 4, 40, 12, 4)
-    generations = st.slider("Search generations", 1, 20, 5)
-    seed = st.number_input("Reproducible search seed", min_value=0, value=20261113, step=1)
+    with st.expander("Advanced search settings", expanded=False):
+        population = st.slider("Search population", 4, 40, 12, 4)
+        generations = st.slider("Search generations", 1, 20, 5)
+        seed = st.number_input("Reproducible search seed", min_value=0, value=20261113, step=1)
     st.divider()
     st.subheader("Demo clock")
     demo_date = st.date_input(
@@ -169,18 +164,27 @@ else:
         tariff_per_kwh=synthetic.tariff_per_kwh,
     )
 
-st.caption(f"Data provenance: {source}")
 if upload is not None:
     render_page_upload_handoff(
         page_key="joint_optimizer",
         file_name=upload.name,
         payload=upload.getvalue(),
     )
-st.caption(f"Shared history SHA-256: {history_sha256}")
-demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
+demo_note = f" · Demo {int(demo_hour):02d}:00" if shared_payload is None else ""
+summary_source = "Synthetic demo" if shared_payload is None else source
+window_start = pd.Timestamp(timestamps[0]).strftime("%Y-%m-%d")
+window_end = pd.Timestamp(timestamps[-1]).strftime("%Y-%m-%d")
 st.caption(
-    f"History window: {timestamps[0].isoformat()} → {timestamps[-1].isoformat()} "
-    f"({len(timestamps)} hourly rows){demo_note}"
+    f"**Data source:** {summary_source} · **Window:** "
+    f"{window_start} → {window_end} UTC · {len(timestamps)} h · "
+    f"**Currency:** {currency}{demo_note}"
+)
+render_page_header(
+    question="What battery and diesel schedule follows from aligned forecasts for this site?",
+    data="The synthetic default, or an uploaded history put through the canonical forecast catalogue.",
+    conclusions="A candidate schedule, its energy balance, and whether the constraints bind.",
+    limits="A schedule-search result only: no device commands and no warranty of feasibility on real equipment.",
+    collapsible=True,
 )
 
 signal_history = {
@@ -228,7 +232,6 @@ try:
         source_label=source,
         fingerprint=fingerprint,
     )
-    st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
     config = site_assumptions.to_energy_system_config()
     grid_available = [True] * 24
     diesel_available = [True] * 24
@@ -338,13 +341,9 @@ try:
     target_timestamps = run_outputs["target_timestamps"]
     result = run_outputs["result"]
     handoff = run_outputs["handoff"]
-    st.caption(f"Canonical page run: {planning_run['run_id']} · Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…")
-    st.caption(
-        "This run id is 06's own canonical run; it is not a cross-page handoff id for 05."
-    )
     render_decision_record(planning_run["decision_record"])
 
-    with st.expander("Inputs and assumptions used by this run", expanded=True):
+    with st.expander("Inputs and assumptions used by this run", expanded=False):
         run_window_start = target_timestamps[0].isoformat()
         run_window_end = target_timestamps[-1].isoformat()
         input_cols = st.columns([1.45, 1.15, 0.9])
@@ -388,13 +387,14 @@ try:
         model_rows.append({
             "Signal": canonical_id,
             "Selected model": f"{forecast.model_id}@{forecast.model_version}",
-            "Rolling-origin MAE": forecast.backtest.mae,
-            "Rolling-origin RMSE": forecast.backtest.rmse,
-            "Error-band samples": forecast.interval_calibration_samples,
-            "Unit": forecast.unit,
+            "MAE": forecast.backtest.mae,
+            "RMSE": forecast.backtest.rmse,
         })
     render_table(pd.DataFrame(model_rows))
-    st.caption("Built-in candidates are statistical baselines. Backtest scores describe only the supplied history.")
+    st.caption(
+        "Rolling-origin backtest scores; lower is better. MAE and RMSE use the signal's own unit. "
+        "Built-in candidates are statistical baselines, not measured future values."
+    )
 
     st.subheader("Forecast points and intervals")
     signal_options = list(predictions.keys())
@@ -486,8 +486,12 @@ try:
     if schedule_rows:
         st.subheader("Hourly setpoint schedule")
         schedule_frame = pd.DataFrame(schedule_rows)
-        st.line_chart(schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"))
-        render_table(schedule_frame)
+        st.line_chart(
+            schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"),
+            height=240,
+        )
+        with st.expander("Hourly setpoint rows", expanded=False):
+            render_table(schedule_frame)
     else:
         st.caption("Schedule vectors are available in the downloadable audit report.")
 
@@ -580,9 +584,8 @@ try:
                 "offline run, not a bill, not measured consumption, and not site-validated."
             )
             st.caption(
-                f"Traceable to run {annual_view['run_id']} · Manifest SHA-256 "
-                f"{annual_view['manifest_sha256'][:16]}… · Projection SHA-256 "
-                f"{annual_view['projection_sha256'][:16]}…"
+                "Projected from the same offline run. Run and manifest identifiers are in the "
+                "technical appendix."
             )
             st.caption(
                 f"Projected figure source: {annual_view['summary_source']}. Each scenario in the "
@@ -596,21 +599,17 @@ try:
         )
 
     with st.expander("Decision trace, model provenance and limitations"):
-        st.write({
-            "source_file_sha256": source_hash,
-            "canonical_run_manifest": planning_run["manifest"],
-            "canonical_run_forecast_evidence": planning_run["forecast"],
-            "evidence_sha256": planning_run["evidence_sha256"],
-            "forecast_handoff": handoff,
-            "forecast_scenario_scope": result.get("forecast_scenario_scope"),
-            "decision_scope": result.get("decision_scope"),
-            "physical_audit": result.get("physical_audit"),
-            "operator_decision_record": planning_run["decision_record"],
-            "objective": result.get("objective"),
-            "optimizer": "bounded seeded heuristic; not a guaranteed global optimum",
-            "device_write_authorized": handoff.get("device_write_authorized"),
-        })
-        st.caption("Stress envelopes are deterministic and are not probabilistic joint confidence intervals.")
+        st.caption(
+            "Scope: an offline schedule search over the stated history. The optimizer is a "
+            "bounded seeded heuristic, not a guaranteed global optimum, and this run never "
+            "authorizes a device write."
+        )
+        st.caption(f"Decision scope: {result.get('decision_scope')}")
+        st.caption(f"Forecast scenario scope: {result.get('forecast_scenario_scope')}")
+        st.caption(
+            "The full manifest, forecast evidence, physical audit and operator decision record "
+            "are in the downloaded audit JSON under Technical appendix."
+        )
 
     report = {
         "canonical_run": {
@@ -658,12 +657,34 @@ try:
         "mode": "offline_schedule_search",
         "device_write_authorized": False,
     }
-    st.download_button(
-        "Download joint schedule audit (JSON)",
-        data=json.dumps(report, indent=2, default=str).encode("utf-8"),
-        file_name="islandos_joint_resource_schedule.json",
-        mime="application/json",
-    )
+    with st.expander("Technical appendix (audit identifiers)"):
+        st.caption(f"Shared history SHA-256: {history_sha256}")
+        st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
+        st.caption(
+            f"Canonical page run: {planning_run['run_id']} · "
+            f"Manifest SHA-256: {planning_run['manifest_sha256'][:16]}… · "
+            f"Evidence SHA-256: {planning_run['evidence_sha256'][:16]}…"
+        )
+        st.caption("This run id is 06's own canonical run; it is not a cross-page handoff id for 05.")
+        st.caption(f"Decision record SHA-256: {planning_run['decision_record_sha256']}")
+        if source_hash:
+            st.caption(f"Uploaded file SHA-256: {source_hash}")
+
+        st.download_button(
+            "Download joint schedule audit (JSON)",
+            data=json.dumps(report, indent=2, default=str).encode("utf-8"),
+            file_name="islandos_joint_resource_schedule.json",
+            mime="application/json",
+        )
+
+    try:
+        st.page_link(
+            "pages/05_Customer_Decision_Dashboard.py",
+            label="Next: compare policies",
+            icon=":material/arrow_forward:",
+        )
+    except StreamlitPageNotFoundError:
+        st.caption("Next: compare policies and screen the investment on the dashboard.")
 except (ValueError, KeyError, TypeError, ArithmeticError, IndexError) as exc:
     st.error(f"Joint resource scheduling could not run: {exc}")
     st.caption("Check the hourly history, units, forecast horizon, and explicit asset assumptions.")

@@ -16,14 +16,12 @@ optimality or executability of the schedule on real equipment.
 
 from pathlib import Path
 
-import pytest
 from streamlit.testing.v1 import AppTest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PAGE_FILE = REPO_ROOT / "pages" / "05_Customer_Decision_Dashboard.py"
 
 DISPATCH_HEADER = "Hourly dispatch for the recommended policy"
-ASSUMPTION_HEADER = "Inputs and assumptions for this run"
 
 
 def _render_page() -> AppTest:
@@ -40,10 +38,6 @@ def _json_text(app: AppTest) -> str:
     return "\n".join(str(item.value) for item in app.get("json"))
 
 
-def _markdown_text(app: AppTest) -> str:
-    return "\n".join(str(item.value) for item in app.markdown)
-
-
 def _dispatch_table(app: AppTest):
     for frame in app.table:
         columns = list(getattr(frame.value, "columns", []))
@@ -52,21 +46,20 @@ def _dispatch_table(app: AppTest):
     return None
 
 
-def test_default_inputs_render_both_new_blocks():
+def test_default_inputs_render_the_dispatch_block():
     app = _render_page()
     headers = [item.value for item in app.subheader]
     assert DISPATCH_HEADER in headers
-    assert ASSUMPTION_HEADER in [item.label for item in app.expander]
+    assert "Inputs and assumptions for this run" not in [item.label for item in app.expander]
 
 
-def test_assumption_summary_reports_provenance_and_scope():
+def test_run_context_is_not_dumped_as_raw_json():
     app = _render_page()
-    markdown = _markdown_text(app)
     captions = _caption_text(app)
     payload = _json_text(app)
 
-    for label in ("Data source", "History SHA-256", "Time window", "hourly rows"):
-        assert label in markdown, f"assumption summary is missing {label!r}"
+    assert "Local request SHA-256" in captions
+    assert "not measured customer savings" in captions.lower()
     for label in (
         "Installed PV capacity (kW)",
         "Installed wind capacity (kW)",
@@ -79,9 +72,7 @@ def test_assumption_summary_reports_provenance_and_scope():
         "Cost priority",
         "Reliability weight",
     ):
-        assert label in payload, f"assumption summary is missing {label!r}"
-    assert "offline screening; synthetic defaults unless a csv is uploaded" in captions.lower()
-    assert "not measured customer savings" in captions.lower()
+        assert label not in payload, f"raw run assumptions still dumped: {label!r}"
 
 
 def test_dispatch_detail_table_comes_from_stored_hours():
@@ -150,8 +141,8 @@ def test_missing_dispatch_columns_explain_the_gap(monkeypatch):
     assert "Battery SOC (%)" not in table.columns
 
 
-@pytest.mark.parametrize("heading", [DISPATCH_HEADER, ASSUMPTION_HEADER])
-def test_new_block_headings_are_declared_in_source(heading):
+def test_dispatch_heading_is_declared_in_source():
     """Keep the wording stable even if AppTest cannot render a surface."""
     source = PAGE_FILE.read_text(encoding="utf-8")
-    assert heading in source
+    assert DISPATCH_HEADER in source
+    assert "Inputs and assumptions for this run" not in source
