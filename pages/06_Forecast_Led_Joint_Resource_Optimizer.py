@@ -56,9 +56,10 @@ from islandos_core.run_orchestration import run_joint_optimizer
 st.set_page_config(page_title="IslandOS | Joint Resource Optimizer", page_icon="⚡", layout="wide")
 apply_theme()
 render_page_title(
-    "IslandOS · joint resource brief",
-    "Forecast-led joint resource optimizer",
+    "",
+    "Joint resource optimizer",
     "One pipeline: site history → model selection → aligned forecasts → battery/diesel schedule search.",
+    compact=True,
 )
 
 render_page_header(
@@ -66,11 +67,7 @@ render_page_header(
     data="The synthetic default, or an uploaded history put through the canonical forecast catalogue.",
     conclusions="A candidate schedule, its energy balance, and whether the constraints bind.",
     limits="A schedule-search result only: no device commands and no warranty of feasibility on real equipment.",
-)
-
-st.info(
-    "Default inputs are synthetic. Uploaded CSV values are customer-supplied and not independently verified. "
-    "This page performs offline planning only: it does not connect to live telemetry or write commands to equipment."
+    collapsible=True,
 )
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -82,6 +79,10 @@ with st.sidebar:
     )
     currency = st.text_input("Tariff currency", "USD").strip() or "currency"
     upload = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
+    st.caption(
+        "Uploads are processed by the hosted app server. Share only data you are "
+        "authorized to share, and redact sensitive exports."
+    )
     shared_dataset, dataset_error = read_session_dataset(st.session_state)
     if dataset_error:
         st.warning(
@@ -177,17 +178,15 @@ if upload is not None:
         file_name=upload.name,
         payload=upload.getvalue(),
     )
-demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
-summary_left, summary_mid, summary_right = st.columns([1.5, 1.8, 0.7])
-with summary_left:
-    st.caption(f"**Data source**  \n{source}")
-with summary_mid:
-    st.caption(
-        f"**History window**  \n{timestamps[0]:%Y-%m-%d %H:%M} → "
-        f"{timestamps[-1]:%Y-%m-%d %H:%M} UTC · {len(timestamps)} h{demo_note}"
-    )
-with summary_right:
-    st.caption(f"**Currency**  \n{currency}")
+demo_note = f" · Demo {int(demo_hour):02d}:00" if shared_payload is None else ""
+summary_source = "Synthetic demo" if shared_payload is None else source
+window_start = pd.Timestamp(timestamps[0]).strftime("%Y-%m-%d")
+window_end = pd.Timestamp(timestamps[-1]).strftime("%Y-%m-%d")
+st.caption(
+    f"**Data source:** {summary_source} · **Window:** "
+    f"{window_start} → {window_end} UTC · {len(timestamps)} h · "
+    f"**Currency:** {currency}{demo_note}"
+)
 
 signal_history = {
     "pv_power_kw": values["pv_power"],
@@ -389,13 +388,14 @@ try:
         model_rows.append({
             "Signal": canonical_id,
             "Selected model": f"{forecast.model_id}@{forecast.model_version}",
-            "Rolling-origin MAE": forecast.backtest.mae,
-            "Rolling-origin RMSE": forecast.backtest.rmse,
-            "Error-band samples": forecast.interval_calibration_samples,
-            "Unit": forecast.unit,
+            "MAE": forecast.backtest.mae,
+            "RMSE": forecast.backtest.rmse,
         })
     render_table(pd.DataFrame(model_rows))
-    st.caption("Built-in candidates are statistical baselines. Backtest scores describe only the supplied history.")
+    st.caption(
+        "Rolling-origin backtest scores; lower is better. MAE and RMSE use the signal's own unit. "
+        "Built-in candidates are statistical baselines, not measured future values."
+    )
 
     st.subheader("Forecast points and intervals")
     signal_options = list(predictions.keys())
@@ -487,8 +487,12 @@ try:
     if schedule_rows:
         st.subheader("Hourly setpoint schedule")
         schedule_frame = pd.DataFrame(schedule_rows)
-        st.line_chart(schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"))
-        render_table(schedule_frame)
+        st.line_chart(
+            schedule_frame.pivot(index="Timestamp (UTC)", columns="Setpoint", values="Power (kW)"),
+            height=240,
+        )
+        with st.expander("Hourly setpoint rows", expanded=False):
+            render_table(schedule_frame)
     else:
         st.caption("Schedule vectors are available in the downloadable audit report.")
 
@@ -677,11 +681,11 @@ try:
     try:
         st.page_link(
             "pages/05_Customer_Decision_Dashboard.py",
-            label="Next: compare policies and screen the investment",
-            icon="➡️",
+            label="Next: compare policies",
+            icon=":material/arrow_forward:",
         )
     except StreamlitPageNotFoundError:
-        st.caption("Next: compare policies and screen the investment in Customer views.")
+        st.caption("Next: compare policies and screen the investment on the dashboard.")
 except (ValueError, KeyError, TypeError, ArithmeticError, IndexError) as exc:
     st.error(f"Joint resource scheduling could not run: {exc}")
     st.caption("Check the hourly history, units, forecast horizon, and explicit asset assumptions.")

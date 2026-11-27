@@ -68,9 +68,10 @@ st.set_page_config(
 
 apply_theme()
 render_page_title(
-    "IslandOS · customer decision brief",
-    "Customer decision dashboard",
+    "",
+    "Decision dashboard",
     "Forecast → compare operating policies → review cost and reliability trade-offs.",
+    compact=True,
 )
 
 render_page_header(
@@ -78,14 +79,7 @@ render_page_header(
     data="A synthetic default history, or your uploaded CSV/XLSX (session-only).",
     conclusions="Which operating policy is worth comparing next, and how much of the gap is forecast-driven.",
     limits="Offline planning estimates, not measured customer savings or a site-validated forecast.",
-)
-
-st.info(
-    "Demonstration mode: all default inputs are synthetic. Replace them with "
-    "validated site data before using the results in a customer decision. "
-    "This page performs offline screening only; it does not control equipment. "
-    "Uploaded CSV files are processed by the hosted app server: upload only data "
-    "you are authorized to share, and use redacted or non-sensitive exports."
+    collapsible=True,
 )
 
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -106,6 +100,10 @@ with st.sidebar:
     wind_capacity = st.number_input("Installed wind capacity (kW)", min_value=0.0, value=20.0, step=1.0)
     grid_limit = st.number_input("Grid import limit (kW)", min_value=0.0, value=100.0, step=5.0)
     site_csv = st.file_uploader("Hourly site history CSV (optional)", type=["csv"])
+    st.caption(
+        "Uploads are processed by the hosted app server. Share only data you are "
+        "authorized to share, and redact sensitive exports."
+    )
     shared_dataset, dataset_error = read_session_dataset(st.session_state)
     if dataset_error:
         st.warning(
@@ -223,17 +221,15 @@ else:
         tariff_per_kwh=synthetic.tariff_per_kwh,
     )
 
-demo_note = f" · Demo clock pin {int(demo_hour):02d}:00 UTC" if shared_payload is None else ""
-summary_left, summary_mid, summary_right = st.columns([1.5, 1.8, 0.7])
-with summary_left:
-    st.caption(f"**Data source**  \n{source_label}")
-with summary_mid:
-    st.caption(
-        f"**History window**  \n{history_stamps[0]:%Y-%m-%d %H:%M} → "
-        f"{history_stamps[-1]:%Y-%m-%d %H:%M} UTC · {len(history_stamps)} h{demo_note}"
-    )
-with summary_right:
-    st.caption(f"**Currency**  \n{currency}")
+demo_note = f" · Demo {int(demo_hour):02d}:00" if shared_payload is None else ""
+summary_source = "Synthetic demo" if shared_payload is None else source_label
+window_start = pd.Timestamp(history_stamps[0]).strftime("%Y-%m-%d")
+window_end = pd.Timestamp(history_stamps[-1]).strftime("%Y-%m-%d")
+st.caption(
+    f"**Data source:** {summary_source} · **Window:** "
+    f"{window_start} → {window_end} UTC · {len(history_stamps)} h · "
+    f"**Currency:** {currency}{demo_note}"
+)
 if site_csv is not None:
     render_page_upload_handoff(
         page_key="decision_dashboard",
@@ -313,10 +309,6 @@ try:
         provenance=source_label,
         source_sha256=source_sha256,
     )
-    st.caption(
-        "Offline screening; synthetic defaults unless a CSV is uploaded; "
-        "not measured customer savings."
-    )
     # The whole sequence lives in islandos_core.run_orchestration: forecast → coordination
     # inputs → objective weights → optimize → service-equivalent economics → stress →
     # paired impact. The page keeps the objects it renders and nothing about the order.
@@ -395,6 +387,11 @@ try:
             "comparison, but its service differs from the grid-first reference."
         )
 
+    st.caption(
+        "Offline screening; synthetic defaults unless a CSV is uploaded; "
+        "not measured customer savings."
+    )
+
     st.subheader("Forecast: next 24 hours")
     forecast_rows = []
     for signal_name in ("pv_power", "wind_power", "essential_load", "electricity_price"):
@@ -417,10 +414,10 @@ try:
     chart_left, chart_right = st.columns(2)
     with chart_left:
         st.caption("Generation and essential load (kW)")
-        st.line_chart(energy_forecast, width="stretch")
+        st.line_chart(energy_forecast, width="stretch", height=220)
     with chart_right:
         st.caption(f"Electricity price ({currency}/kWh)")
-        st.line_chart(tariff_forecast, width="stretch")
+        st.line_chart(tariff_forecast, width="stretch", height=220)
     with st.expander("Forecast model quality and provenance"):
         st.write(f"Forecast history SHA-256: `{bundle.input_history_sha256}`")
         st.write(f"Uploaded file SHA-256: {source_sha256 or 'not applicable — synthetic data'}")
@@ -439,17 +436,23 @@ try:
         )
 
     st.subheader("Operating policy comparison")
+    policy_labels = [policy.replace("_", " ").title() for policy in candidates]
+    measures = [
+        (f"24h energy cost ({currency})", "estimated_energy_cost"),
+        ("Grid import (kWh)", "grid_import_kwh"),
+        ("Unmet load (kWh)", "unmet_load_kwh"),
+        ("Renewable curtailed (kWh)", "renewable_curtailed_kwh"),
+    ]
     comparison = []
-    for policy, item in candidates.items():
-        summary = item["summary"]
-        comparison.append({
-            "Policy": policy.replace("_", " ").title(),
-            "Estimated cost": summary["estimated_energy_cost"],
-            "Grid import (kWh)": summary["grid_import_kwh"],
-            "Unmet load (kWh)": summary["unmet_load_kwh"],
-            "Renewable curtailed (kWh)": summary["renewable_curtailed_kwh"],
-            "Physical audit": "Passed" if item["audit"]["passed"] else "Failed",
-        })
+    for measure, key in measures:
+        row = {"Measure": measure}
+        for label, item in zip(policy_labels, candidates.values()):
+            row[label] = f"{item['summary'][key]:,.2f}"
+        comparison.append(row)
+    audit_row = {"Measure": "Physical audit"}
+    for label, item in zip(policy_labels, candidates.values()):
+        audit_row[label] = "Passed" if item["audit"]["passed"] else "Failed"
+    comparison.append(audit_row)
     render_table(pd.DataFrame(comparison))
     st.caption(
         "The optimizer compares two explicit dispatch priorities using the shared "
@@ -474,9 +477,9 @@ try:
         dispatch_frame.index = pd.Index(hours, name="Hour")
 
         flow_columns = {
-            "Grid import (kW)": "grid_import_kw",
-            "Battery charge (kW)": "battery_charge_kw",
-            "Battery discharge (kW)": "battery_discharge_kw",
+            "Grid import": "grid_import_kw",
+            "Battery charge": "battery_charge_kw",
+            "Battery discharge": "battery_discharge_kw",
         }
         available_flows = {
             label: dispatch_frame[field].astype(float)
@@ -500,7 +503,7 @@ try:
             )
         if available_flows:
             st.caption("Grid import and battery flows (kW)")
-            st.line_chart(pd.DataFrame(available_flows), width="stretch")
+            st.line_chart(pd.DataFrame(available_flows), width="stretch", height=240)
         else:
             st.info(
                 "Hourly power flows are not available in this run: the dispatch rows carry none "
@@ -514,7 +517,7 @@ try:
                 "Battery SOC (%)": dispatch_frame["battery_soc"].astype(float) * 100.0,
             })
             st.caption("Battery state of charge (%)")
-            st.line_chart(soc_frame, width="stretch")
+            st.line_chart(soc_frame, width="stretch", height=240)
         else:
             st.info(
                 "Battery state of charge is not available in this run: the dispatch rows carry "
@@ -596,11 +599,22 @@ try:
                 "Estimated cost": summary["estimated_energy_cost"],
                 "Audit": "Passed" if scenario_result["audit"]["passed"] else "Failed",
             })
-    render_table(pd.DataFrame(stress_rows))
+    stress_frame = pd.DataFrame(stress_rows)
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Worst unmet load", f"{stress_frame['Unmet load (kWh)'].max():,.2f} kWh")
+    r2.metric("Worst critical unmet", f"{stress_frame['Critical unmet load (kWh)'].max():,.2f} kWh")
+    r3.metric("Highest 24h cost", f"{stress_frame['Estimated cost'].max():,.2f} {currency}")
+    r4.metric("Physical audit", "All passed" if stress_frame["Audit"].eq("Passed").all() else "Review")
     st.caption(
-        "Stress cases are deterministic forecast-envelope and grid-outage replays. "
-        "No scenario probabilities or joint confidence coverage are assigned."
+        "Stress values are worst cases across forecast-envelope and grid-outage replays, "
+        "not the base-case dispatch shown above."
     )
+    with st.expander("Stress replay detail", expanded=False):
+        render_table(stress_frame)
+        st.caption(
+            "Stress cases are deterministic forecast-envelope and grid-outage replays. "
+            "No scenario probabilities or joint confidence coverage are assigned."
+        )
 
     st.subheader("Equipment investment screen")
     economics_binding = None
@@ -698,9 +712,10 @@ try:
                 + "; ".join(binding_verification["errors"])
             )
             st.stop()
-        render_annual_economics_basis(economics_binding, include_hashes=False)
+        with st.expander("Annual-screen assumptions and provenance", expanded=False):
+            render_annual_economics_basis(economics_binding, include_hashes=False)
         st.caption(
-            "The metrics below are a screening result under the assumptions printed with them; "
+            "The metrics below are a screening result under the assumptions in the expander above; "
             "they are not a procurement guarantee."
         )
         if investment.decision == "blocked":
@@ -908,9 +923,8 @@ try:
                 .configure_view(stroke=None)
             )
             st.caption(
-                "Sensitivity varies year-one energy-bill saving by ±20%, with every other "
-                "assumption and escalation rate fixed. The dotted gold line is the base case; "
-                "the labels above and below the two sensitivity bars show the change from it."
+                "Sensitivity: year-one energy-bill saving ±20%, every other assumption fixed. "
+                "The gold line is the base case; labels show change from it."
             )
             st.altair_chart(sensitivity_chart, width="stretch")
             with st.expander("Annual investment cashflow detail", expanded=False):

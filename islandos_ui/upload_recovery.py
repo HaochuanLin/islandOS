@@ -34,7 +34,7 @@ def offer_schema_conformant_csv() -> None:
         + ". The demo's canonical site-history CSV already has them."
     )
     st.download_button(
-        "⬇ Download a site-history CSV this page accepts",
+        "Download a site-history CSV this page accepts",
         data=synthetic_forecast_history_csv(),
         file_name="islandos_site_history_canonical.csv",
         mime="text/csv",

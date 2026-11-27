@@ -254,12 +254,11 @@ def render_customer_workflow(
     peer_name = meta["other_title"]
 
     with st.container():
-        st.caption(f"Step {meta['step']} of 3 · {meta['title']}")
         if relation == "match":
             if fingerprint is not None:
                 st.caption(
-                    f"Input match: the last {peer_name} used the same shared "
-                    "input fingerprint. The pages are still separate runs with different "
+                    f"Input match: the last {peer_name} used the same shared input "
+                    "fingerprint. The pages are still separate runs with different "
                     "optimization and cost boundaries; do not compare their cost or "
                     "saving totals as interchangeable."
                 )
@@ -285,14 +284,7 @@ def render_customer_workflow(
                     "same demo clock and assumptions before comparing them."
                 )
         else:
-            st.caption(
-                f"Next: open {peer_name} from the left navigation when you want to compare "
-                "the same input window."
-            )
-        st.caption(
-            "The device flexibility planner is an optional third check with fixed synthetic "
-            "inputs; it is not a continuation of this history."
-        )
+            st.caption(f"Step {meta['step']} of 3 · next: {peer_name}")
 
 
 def render_page_upload_handoff(
