@@ -1,7 +1,7 @@
 # J-01 跨页面 Run Identity 产品定义（正式主线）
 
 - 状态：**产品规则 D1-D9 已确认；P1a、P1b 与 #359 A1-A8 均已实现并合并。**
-- 基线：`main = 3990996`（2026-11-26）；P1a #372、P3 #371、#359、P1b #373 已合并。
+- 基线：`main = f9ca1b0`（2026-11-27）；P1a #372、P3 #371、#359、P1b #373 已合并。
 - 主线：**PR #362 是 J-01 正式文档主线。PR #360 是早期 draft，不再扩展为第二套身份契约；二者不得同时作为实现依据。**
 - 范围：页面 05 / 06 / 09 的身份、项目绑定和持久化边界。P1a 实现输入组纯函数；P1b 实现 `derive_run_id` 与 run-record 字段映射；P3 实现项目上下文；页面 05/06 持久化仍未接入。
 
@@ -13,12 +13,12 @@
 | --- | --- |
 | D1-D9 产品规则 | 已确认，见 §2 |
 | PD-1 输入组 | 已收敛；P1a 已实现纯函数与固定向量 |
-| PD-2 run identity | 已收敛为“稳定模型策略身份”；本轮不实现 |
-| PD-3 成功记录幂等 | 已确认方向；状态码/错误体待 #359 作者 |
-| PD-4 失败只进审计 | 已确认方向；payload 待 #359 作者 |
+| PD-2 run identity | 已收敛为“稳定模型策略身份”；`derive_run_id` 已由 #373 实现并合并 |
+| PD-3 成功记录幂等 | 已由 #359 实现；`RunRecordConflict` + 409，重复提交返回 `idempotent_replay=true` |
+| PD-4 失败只进审计 | 已由 #359 实现；只写 `run_failed` 审计，payload 受控 |
 | PD-5 投资绑定 | 只冻结设计；本轮不建表 |
 | PD-6 旧 id 兼容 | 已确认；不重算、不改写、不删除 |
-| A1-A8 #359 契约 | 建议已整理，见 `J-01_PR359_A1_A8_CONTRACT.md`；未改 #359 |
+| A1-A8 #359 契约 | #359 已实现并合并；字段、错误码与迁移口径见 `J-01_PR359_A1_A8_CONTRACT.md` |
 
 ## 2. D1-D9 产品规则（已确认）
 
@@ -104,7 +104,7 @@ D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再
 - 技术 run 由 D5 身份定义；投资参数只生成 `investment_assumptions_sha256`。
 - `binding_sha256` 由技术 run 与投资摘要合成；同一技术 run 可关联多个 binding。
 - 投资参数变化不重跑优化、不产生新技术 `run_id`。
-- 设计为独立 append-only 表，建议 PK 至少 `(project_id, run_id, binding_sha256)`；本轮不建表、不改 #359。
+- 设计为独立 append-only 表，建议 PK 至少 `(project_id, run_id, binding_sha256)`；本轮不建表，`run_records` 不加投资列。
 - 旧 `run-dashboard-*` 是把投资参数混入 run id 的 legacy 口径，保留只读，不重算。
 
 ### PD-6 旧 id 兼容
@@ -169,7 +169,7 @@ D5 要求的是**模型选择策略身份**，不是“先把 forecast 跑完再
 - 时间范围、`hour_count`、输入顺序、空值、数值序列化规则在接口文档与测试中固定。
 - `run_request_sha256` 直接取 `run_identity_sha256`；两者覆盖同一组技术输入，不对 `run_id` 做二次 hash。
 
-## 10. PR #359 与 A1-A8
+## 10. PR #359（已合并）与 A1-A8
 
 A1-A8 已由 #359 实现并合并：`run_request_sha256`、`input_group_id`、`identity_schema_version` 三列，部分索引，幂等重放，409 冲突，失败只写审计，1.0/1.1 包兼容。字段、类型、nullable、索引、冲突分类、失败 payload 与迁移细节见：
 
@@ -185,7 +185,7 @@ A1-A8 已由 #359 实现并合并：`run_request_sha256`、`input_group_id`、`i
 | #362 J-01 文档 | 本文件与接口/向量已同步；#360 不再扩展 |
 | P1a 输入组 | #372 已合并；输入组纯函数与固定向量；未接页面 |
 | P1b run identity | #373 已合并；`derive_run_id`、Page 05/06 向量、investment/Page 09 边界 |
-| run-record 映射 | 本分支实现 `run_record_identity_fields`；映射到 #359 字段并有幂等/冲突测试 |
+| run-record 映射 | 已实现并合并；`run_record_identity_fields` 映射到 #359 字段并有幂等/冲突测试 |
 | P3 ProjectBinding | #371 已合并；项目上下文与共享 key 已接入 |
 | #359 A1-A8 | 已合并；三列、索引、A3 幂等、A4 失败审计、A6 包兼容 |
 | 页面 05/06 持久化 | 未接入；下一步需页面 owner 确认后使用映射 |
