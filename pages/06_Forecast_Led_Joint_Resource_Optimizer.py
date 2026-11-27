@@ -62,14 +62,6 @@ render_page_title(
     compact=True,
 )
 
-render_page_header(
-    question="What battery and diesel schedule follows from aligned forecasts for this site?",
-    data="The synthetic default, or an uploaded history put through the canonical forecast catalogue.",
-    conclusions="A candidate schedule, its energy balance, and whether the constraints bind.",
-    limits="A schedule-search result only: no device commands and no warranty of feasibility on real equipment.",
-    collapsible=True,
-)
-
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
@@ -186,6 +178,13 @@ st.caption(
     f"**Data source:** {summary_source} · **Window:** "
     f"{window_start} → {window_end} UTC · {len(timestamps)} h · "
     f"**Currency:** {currency}{demo_note}"
+)
+render_page_header(
+    question="What battery and diesel schedule follows from aligned forecasts for this site?",
+    data="The synthetic default, or an uploaded history put through the canonical forecast catalogue.",
+    conclusions="A candidate schedule, its energy balance, and whether the constraints bind.",
+    limits="A schedule-search result only: no device commands and no warranty of feasibility on real equipment.",
+    collapsible=True,
 )
 
 signal_history = {

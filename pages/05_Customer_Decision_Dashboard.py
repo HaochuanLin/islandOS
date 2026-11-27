@@ -74,14 +74,6 @@ render_page_title(
     compact=True,
 )
 
-render_page_header(
-    question="Given a site's history, what does the forecast imply for the cost and reliability trade-off?",
-    data="A synthetic default history, or your uploaded CSV/XLSX (session-only).",
-    conclusions="Which operating policy is worth comparing next, and how much of the gap is forecast-driven.",
-    limits="Offline planning estimates, not measured customer savings or a site-validated forecast.",
-    collapsible=True,
-)
-
 now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 with st.sidebar:
@@ -230,6 +222,13 @@ st.caption(
     f"{window_start} → {window_end} UTC · {len(history_stamps)} h · "
     f"**Currency:** {currency}{demo_note}"
 )
+render_page_header(
+    question="Given a site's history, what does the forecast imply for the cost and reliability trade-off?",
+    data="A synthetic default history, or your uploaded CSV/XLSX (session-only).",
+    conclusions="Which operating policy is worth comparing next, and how much of the gap is forecast-driven.",
+    limits="Offline planning estimates, not measured customer savings or a site-validated forecast.",
+    collapsible=True,
+)
 if site_csv is not None:
     render_page_upload_handoff(
         page_key="decision_dashboard",
@@ -342,19 +341,20 @@ try:
     )
 
     st.subheader("Decision snapshot")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Recommended policy", result_view["recommended_policy_label"])
-    m2.metric(
-        "Estimated 24h energy cost",
-        f"{result_view['estimated_24h_energy_cost']:,.2f} {result_view['currency'] or currency}",
-    )
-    m3.metric("Unmet energy", f"{result_view['unmet_load_kwh']:,.2f} kWh")
-    if result_view["service_equivalent"] and result_view["cost_comparison_valid"]:
-        saving = result_view["cost_reduction_vs_grid_first"]
-        m4.metric("Modeled cost difference vs grid-first",
-                  f"{saving:,.2f} {result_view['currency'] or currency}" if saving is not None else "Not available")
-    else:
-        m4.metric("Customer savings claim", "Withheld")
+    with st.container(key="decision-snapshot-metrics"):
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Recommended policy", result_view["recommended_policy_label"])
+        m2.metric(
+            "Estimated 24h energy cost",
+            f"{result_view['estimated_24h_energy_cost']:,.2f} {result_view['currency'] or currency}",
+        )
+        m3.metric("Unmet energy", f"{result_view['unmet_load_kwh']:,.2f} kWh")
+        if result_view["service_equivalent"] and result_view["cost_comparison_valid"]:
+            saving = result_view["cost_reduction_vs_grid_first"]
+            m4.metric("Modeled cost difference vs grid-first",
+                      f"{saving:,.2f} {result_view['currency'] or currency}" if saving is not None else "Not available")
+        else:
+            m4.metric("Customer savings claim", "Withheld")
     if not result_view["service_equivalent"]:
         st.warning(
             "The recommended policy does not deliver service equivalent to the grid-first "
@@ -386,11 +386,6 @@ try:
             f"**Why {recommended_label}:** it is the lowest modeled-cost policy in this "
             "comparison, but its service differs from the grid-first reference."
         )
-
-    st.caption(
-        "Offline screening; synthetic defaults unless a CSV is uploaded; "
-        "not measured customer savings."
-    )
 
     st.subheader("Forecast: next 24 hours")
     forecast_rows = []
@@ -437,6 +432,19 @@ try:
 
     st.subheader("Operating policy comparison")
     policy_labels = [policy.replace("_", " ").title() for policy in candidates]
+    other_labels = [label for label in policy_labels if label != recommended_label]
+    recommended_summary = candidates[recommended]["summary"]
+    st.markdown(
+        f"**Recommended: {recommended_label}** — "
+        f"{recommended_summary['estimated_energy_cost']:,.2f} {currency} 24h cost · "
+        f"{recommended_summary['grid_import_kwh']:,.2f} kWh grid import · "
+        f"{recommended_summary['unmet_load_kwh']:,.2f} kWh unmet · "
+        f"{recommended_summary['renewable_curtailed_kwh']:,.2f} kWh curtailed."
+    )
+    st.caption(
+        "The optimizer compares two explicit dispatch priorities using the shared "
+        "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
+    )
     measures = [
         (f"24h energy cost ({currency})", "estimated_energy_cost"),
         ("Grid import (kWh)", "grid_import_kwh"),
@@ -453,11 +461,9 @@ try:
     for label, item in zip(policy_labels, candidates.values()):
         audit_row[label] = "Passed" if item["audit"]["passed"] else "Failed"
     comparison.append(audit_row)
-    render_table(pd.DataFrame(comparison))
-    st.caption(
-        "The optimizer compares two explicit dispatch priorities using the shared "
-        "physical simulator. It is a bounded policy comparison, not global hourly set-point optimization."
-    )
+    compare_label = f"Compare {recommended_label} with {', '.join(other_labels)}"
+    with st.expander(compare_label, expanded=False):
+        render_table(pd.DataFrame(comparison))
 
     st.subheader("Hourly dispatch for the recommended policy")
     dispatch_rows = [dict(row) for row in selected_candidate["dispatch"].get("rows") or []]
@@ -600,13 +606,22 @@ try:
                 "Audit": "Passed" if scenario_result["audit"]["passed"] else "Failed",
             })
     stress_frame = pd.DataFrame(stress_rows)
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Worst unmet load", f"{stress_frame['Unmet load (kWh)'].max():,.2f} kWh")
-    r2.metric("Worst critical unmet", f"{stress_frame['Critical unmet load (kWh)'].max():,.2f} kWh")
-    r3.metric("Highest 24h cost", f"{stress_frame['Estimated cost'].max():,.2f} {currency}")
-    r4.metric("Physical audit", "All passed" if stress_frame["Audit"].eq("Passed").all() else "Review")
+    stress_cards = []
+    for policy in stress_frame["Policy"].unique():
+        subset = stress_frame[stress_frame["Policy"] == policy]
+        stress_cards.append(
+            '<section class="ios-stress-policy">'
+            f"<h3>{policy}</h3>"
+            "<dl>"
+            f"<div><dt>Worst unmet (kWh)</dt><dd>{subset['Unmet load (kWh)'].max():,.2f}</dd></div>"
+            f"<div><dt>Worst critical (kWh)</dt><dd>{subset['Critical unmet load (kWh)'].max():,.2f}</dd></div>"
+            f"<div><dt>Highest 24h cost ({currency})</dt><dd>{subset['Estimated cost'].max():,.2f}</dd></div>"
+            f"<div><dt>Physical audit</dt><dd>{'Passed' if subset['Audit'].eq('Passed').all() else 'Review'}</dd></div>"
+            "</dl></section>"
+        )
+    st.html(f'<div class="ios-stress-grid">{"".join(stress_cards)}</div>')
     st.caption(
-        "Stress values are worst cases across forecast-envelope and grid-outage replays, "
+        "Worst case per policy across four forecast-envelope and grid-outage replays, "
         "not the base-case dispatch shown above."
     )
     with st.expander("Stress replay detail", expanded=False):
@@ -721,11 +736,12 @@ try:
         if investment.decision == "blocked":
             st.warning(investment.reasons[0])
         else:
-            i1, i2, i3, i4 = st.columns(4)
-            i1.metric("Net present value", f"{investment.net_present_value:,.0f} {currency}")
-            i2.metric("Simple payback", f"{investment.simple_payback_years:.1f} years" if investment.simple_payback_years is not None else "Not achieved")
-            i3.metric("Discounted payback", f"{investment.discounted_payback_years:.1f} years" if investment.discounted_payback_years is not None else "Not achieved")
-            i4.metric("Break-even annual energy saving", f"{investment.break_even_annual_energy_saving:,.0f} {currency}")
+            with st.container(key="investment-metrics"):
+                i1, i2, i3, i4 = st.columns(4)
+                i1.metric("Net present value", f"{investment.net_present_value:,.0f} {currency}")
+                i2.metric("Simple payback", f"{investment.simple_payback_years:.1f} years" if investment.simple_payback_years is not None else "Not achieved")
+                i3.metric("Discounted payback", f"{investment.discounted_payback_years:.1f} years" if investment.discounted_payback_years is not None else "Not achieved")
+                i4.metric("Break-even annual energy saving", f"{investment.break_even_annual_energy_saving:,.0f} {currency}")
             st.caption(
                 f"Screen result: {investment.decision.replace('_', ' ').title()}. "
                 f"Annual energy-bill difference: {investment.annual_energy_cost_saving:,.0f} {currency}; "
@@ -922,12 +938,12 @@ try:
                 .properties(height=340, padding={"top": 30, "bottom": 24, "left": 6, "right": 14})
                 .configure_view(stroke=None)
             )
-            st.caption(
-                "Sensitivity: year-one energy-bill saving ±20%, every other assumption fixed. "
-                "The gold line is the base case; labels show change from it."
-            )
-            st.altair_chart(sensitivity_chart, width="stretch")
-            with st.expander("Annual investment cashflow detail", expanded=False):
+            with st.expander("Investment details: sensitivity and annual cashflow", expanded=False):
+                st.caption(
+                    "Sensitivity: year-one energy-bill saving ±20%, every other assumption fixed. "
+                    "The gold line is the base case; labels show change from it."
+                )
+                st.altair_chart(sensitivity_chart, width="stretch")
                 cashflow_frame = pd.DataFrame(investment.annual_cashflows)
                 render_table(cashflow_frame)
         investment_report = investment.to_dict()
@@ -1139,6 +1155,10 @@ td:first-child {{ color: #5b625d; width: 45%; }}
     )
 
     with st.expander("Technical appendix (audit identifiers)"):
+        st.caption(
+            "Offline screening; synthetic defaults unless a CSV is uploaded; "
+            "not measured customer savings."
+        )
         st.caption(f"Shared history SHA-256: {history_sha256}")
         st.caption(f"Input fingerprint: {fingerprint['fingerprint_sha256']}")
         st.caption(f"Local request SHA-256: {run_request_view['request_sha256']} — this page's own request, not a cross-page run identity")

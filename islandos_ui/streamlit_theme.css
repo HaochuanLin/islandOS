@@ -457,6 +457,55 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   padding-bottom: 0.8rem;
 }
 
+.ios-stress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 2.1rem;
+  margin: 0.2rem 0 1rem;
+}
+
+.ios-stress-policy {
+  padding: 0.85rem 0 1rem;
+  border-top: 1px solid var(--ios-line);
+  border-bottom: 1px solid var(--ios-line);
+}
+
+.ios-stress-policy h3 {
+  margin: 0 0 0.65rem;
+  color: var(--ios-ink);
+  font-family: var(--ios-serif);
+  font-size: 1.32rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.ios-stress-policy dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem 1rem;
+  margin: 0;
+}
+
+.ios-stress-policy dt {
+  margin: 0;
+  color: var(--ios-muted);
+  font-family: var(--ios-sans);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.ios-stress-policy dd {
+  margin: 0.16rem 0 0;
+  color: var(--ios-ink);
+  font-family: var(--ios-serif);
+  font-size: 1.12rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
 /* ------------------------------------------------------------------ body */
 
 [data-testid="stMarkdownContainer"] p,
@@ -947,6 +996,27 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   [data-testid="stMetricValue"] {
     margin-top: 0.2rem !important;
     font-size: 1.7rem !important;
+  }
+
+  [class*="st-key-decision-snapshot-metrics"] [data-testid="stHorizontalBlock"],
+  [class*="st-key-investment-metrics"] [data-testid="stHorizontalBlock"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.6rem !important;
+  }
+
+  [class*="st-key-decision-snapshot-metrics"] [data-testid="stHorizontalBlock"] > div,
+  [class*="st-key-investment-metrics"] [data-testid="stHorizontalBlock"] > div {
+    width: auto !important;
+  }
+
+  .ios-stress-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .ios-stress-policy dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   [data-testid="stTable"] thead th,

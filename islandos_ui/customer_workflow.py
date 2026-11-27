@@ -283,8 +283,6 @@ def render_customer_workflow(
                     "The two outputs are not like-for-like. Use the same CSV or restore the "
                     "same demo clock and assumptions before comparing them."
                 )
-        else:
-            st.caption(f"Step {meta['step']} of 3 · next: {peer_name}")
 
 
 def render_page_upload_handoff(
