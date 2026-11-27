@@ -7,13 +7,16 @@ on:
     paths:
       - ".github/workflows/opsd-public-data-backtest.yml"
       - "docs/PHASE2_PUBLIC_DATA.md"
+      - "docs/PHASE2_FORECAST_ENGINE.md"
       - "examples/phase2_opsd_backtest.py"
       - "islandos_core/opsd_adapter.py"
       - "islandos_core/prediction_engine.py"
       - "islandos_core/forecast_engine.py"
       - "islandos_core/forecast_signal_catalog.py"
+      - "islandos_core/forecast_service.py"
       - "tests/test_opsd_adapter.py"
       - "tests/test_phase2_opsd_backtest.py"
+      - "tests/test_prediction_engine.py"
       - "tests/test_prediction_engine_fold_sampling.py"
   pull_request:
     types: [opened, reopened]
@@ -22,13 +25,16 @@ on:
     paths:
       - ".github/workflows/opsd-public-data-backtest.yml"
       - "docs/PHASE2_PUBLIC_DATA.md"
+      - "docs/PHASE2_FORECAST_ENGINE.md"
       - "examples/phase2_opsd_backtest.py"
       - "islandos_core/opsd_adapter.py"
       - "islandos_core/prediction_engine.py"
       - "islandos_core/forecast_engine.py"
       - "islandos_core/forecast_signal_catalog.py"
+      - "islandos_core/forecast_service.py"
       - "tests/test_opsd_adapter.py"
       - "tests/test_phase2_opsd_backtest.py"
+      - "tests/test_prediction_engine.py"
       - "tests/test_prediction_engine_fold_sampling.py"
   workflow_dispatch:
 
