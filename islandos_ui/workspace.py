@@ -210,6 +210,7 @@ page = st.radio(
     ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
     horizontal=True,
     label_visibility="collapsed",
+    key="workspace-section-nav",
 )
 
 if page == "Overview":

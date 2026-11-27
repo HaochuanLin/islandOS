@@ -390,7 +390,8 @@ try:
             "MAE": forecast.backtest.mae,
             "RMSE": forecast.backtest.rmse,
         })
-    render_table(pd.DataFrame(model_rows))
+    with st.container(key="prediction-engine-table"):
+        render_table(pd.DataFrame(model_rows))
     st.caption(
         "Rolling-origin backtest scores; lower is better. MAE and RMSE use the signal's own unit. "
         "Built-in candidates are statistical baselines, not measured future values."
