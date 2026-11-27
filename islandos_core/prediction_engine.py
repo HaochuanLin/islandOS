@@ -662,7 +662,7 @@ class PredictionEngine:
         # same bounded fold set. Otherwise a capped selection could be paired
         # with exhaustive residuals and report inconsistent evaluation scopes.
         selected_fold_indices = tuple(
-            fold.fold_index for fold in ranking[0].fold_metrics
+            fold.fold_index - 1 for fold in ranking[0].fold_metrics
         )
         selected_metrics, absolute_errors = self._replay(
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
