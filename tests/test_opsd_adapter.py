@@ -18,15 +18,18 @@ class TestOPSDAdapter(unittest.TestCase):
             "AT_price_day_ahead",
         ]
 
-    def write_csv(self, rows):
+    def write_csv_with_columns(self, columns, rows):
         temp = tempfile.NamedTemporaryFile(mode="w", newline="", encoding="utf-8",
                                            suffix=".csv", delete=False)
         self.addCleanup(lambda: Path(temp.name).unlink(missing_ok=True))
-        writer = csv.DictWriter(temp, fieldnames=self.columns)
+        writer = csv.DictWriter(temp, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
         temp.close()
         return temp.name
+
+    def write_csv(self, rows):
+        return self.write_csv_with_columns(self.columns, rows)
 
     def make_rows(self, count=80):
         start = datetime(2020, 1, 1, tzinfo=timezone.utc)
@@ -133,6 +136,56 @@ class TestOPSDAdapter(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "negative wind"):
             load_opsd_singleindex_csv(path, "AT")
 
+
+
+    def test_loads_de_lu_bidding_zone_fields_without_relabeling_region(self):
+        columns = [
+            "utc_timestamp",
+            "DE_LU_load_actual_entsoe_transparency",
+            "DE_LU_solar_generation_actual",
+            "DE_LU_wind_generation_actual",
+            "DE_LU_price_day_ahead",
+        ]
+        rows = [{
+            "utc_timestamp": "2020-01-01T000000Z",
+            "DE_LU_load_actual_entsoe_transparency": "42000",
+            "DE_LU_solar_generation_actual": "3500",
+            "DE_LU_wind_generation_actual": "8100",
+            "DE_LU_price_day_ahead": "-12.5",
+        }]
+        result = load_opsd_singleindex_csv(
+            self.write_csv_with_columns(columns, rows), "DE_LU"
+        )
+
+        self.assertEqual(result.region_code, "DE_LU")
+        self.assertEqual(result.source_columns, {
+            "load": "DE_LU_load_actual_entsoe_transparency",
+            "solar": "DE_LU_solar_generation_actual",
+            "wind": "DE_LU_wind_generation_actual",
+            "price": "DE_LU_price_day_ahead",
+        })
+        self.assertEqual(result.units, {
+            "load": "MW", "solar": "MW", "wind": "MW", "price": "EUR/MWh",
+        })
+        self.assertEqual(result.history["price"], (-12.5,))
+
+    def test_de_lu_wind_onshore_fallback_is_recorded_exactly(self):
+        columns = [
+            "utc_timestamp",
+            "DE_LU_wind_onshore_generation_actual",
+        ]
+        rows = [{
+            "utc_timestamp": "2020-01-01T000000Z",
+            "DE_LU_wind_onshore_generation_actual": "8100",
+        }]
+        result = load_opsd_singleindex_csv(
+            self.write_csv_with_columns(columns, rows),
+            "DE_LU",
+            required_signals=("wind",),
+        )
+
+        self.assertEqual(result.source_columns["wind"], "DE_LU_wind_onshore_generation_actual")
+        self.assertEqual(result.history["wind"], (8100.0,))
 
 if __name__ == "__main__":
     unittest.main()

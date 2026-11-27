@@ -29,6 +29,8 @@ OPSD's published field documentation specifies UTC timestamps and names the unde
 
 The total-wind field is preferred when present. If it is absent, the adapter uses the onshore generation field and records the exact source column. It does not add onshore and offshore values together, avoiding accidental double counting.
 
+The region code is treated as a literal OPSD column prefix, not inferred geography. For example, `DE_LU` refers to the Germany–Luxembourg bidding zone when those prefixed columns are present; it must not be relabelled as a Germany-only national series. The adapter preserves the exact region code and selected source columns in the returned dataset.
+
 Use a region code such as `AT` or `DE` only when the corresponding columns exist in the downloaded file. Some regions do not publish every signal. Select a smaller `required_signals` tuple when needed. Water demand is not present in this source and is not synthesized.
 
 ## Data-quality contract
