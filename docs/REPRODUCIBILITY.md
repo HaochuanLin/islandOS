@@ -16,6 +16,46 @@ python -m pytest -q
 
 The CI workflow installs `requirements-ci.lock`, an exact version lock captured from a successful Python 3.11 run, and checks that every declared runtime/ML requirement is covered by that lock. `requirements-ml.lock` pins the smaller optional forecasting dependency set and is used by the measured-data workflow. The workflow records commit SHA, runner platform, Python version, and resolved installed distributions in an `environment.json` artifact. The CI and runtime lockfiles pin package versions but do not include package hashes. The Dockerfile installs `requirements-runtime.lock` (not the range-based `requirements.txt`) and runs `pip check`; its base image is pinned to `python:3.11.17-slim-trixie@sha256:b7a9e5f6a93d6d4a31f129bbd4bdee69efccb6ded0fb230d78aafaf37af98377`. Weekly Dependabot Docker updates propose reviewed tag/digest changes. The dependency-audit workflow scans the exact Python locks and retains a CycloneDX JSON audit/SBOM artifact per lock for 30 days. Those artifacts describe Python package dependencies. The container smoke workflow additionally generates a CycloneDX SBOM from the built image to inventory detectable image and OS packages; image signing is not configured. The first audit caught vulnerable `setuptools==79.0.1` (PYSEC-2026-3447); the CI lock now pins `setuptools==83.0.0`, while the runtime lock pins `setuptools==84.1.0`. These locks have separate dependency sets and must each be audited.
 
+## Page06 canonical export and replay
+
+Page06's **Download joint schedule audit (JSON)** is the customer-facing audit record. Its `application_views.request` is the request the page actually used, so replaying that request must reproduce the same canonical identity, not merely the same displayed numbers.
+
+A local replay check (the full assertion lives in `tests/test_page06_export_replay.py`):
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+from islandos_core.run_orchestration import (
+    build_joint_optimizer_manifest,
+    replay_run_request,
+)
+
+report = json.loads(Path("islandos_joint_schedule_audit.json").read_text(encoding="utf-8"))
+request = report["application_views"]["request"]
+manifest = build_joint_optimizer_manifest(request).to_dict()
+result = replay_run_request(request)["result"]
+canonical = report["canonical_run"]
+
+assert canonical["run_id"] == manifest["run_id"] == result["run_id"]
+assert canonical["manifest_sha256"] == manifest["manifest_sha256"] == result["manifest_sha256"]
+assert canonical["evidence_sha256"] == result["evidence_sha256"]
+assert report["application_views"]["result"] == result
+PY
+```
+
+`manifest_sha256` is the digest of the canonical manifest (dataset digest, site configuration, window end, currency, optimizer settings, availability, and forecast settings). `summary_sha256` and `evidence_sha256` are result digests. Matching a run id alone is not sufficient evidence.
+
+`created_at_utc` is the **last UTC hour of the history window**, not the time the export was clicked. Pinning the same window therefore downloads the same record later. The test also recomputes `request_sha256` from the exported request and covers a synthetic default window and a shared-session uploaded CSV.
+
+### Cross-environment identifiers
+
+The shared history hash quantizes every signal to six decimals (`HISTORY_HASH_DECIMALS=6` in `islandos_core/demo_site_history.py`), so the last bit of a platform's `math.sin` does not change it. The Page06 canonical manifest hashes the **raw** signal JSON when there is no uploaded-file `source_sha256`. As a result, two synthetic runs on different maths libraries can share the same shared-history SHA-256 and still have different `dataset_sha256`, `run_id`, and `manifest_sha256`. Uploaded data uses the file-byte SHA-256 as its dataset digest, so identical bytes remain stable across hosts.
+
+This was confirmed with a one-ULP probe: changing PV's first value from `18.243354954612926` to `18.24335495461293` left the shared history hash `7012014ef720e5802d1ff9147fe439b93d52736f47c538170da46d55b6d2ed70` unchanged, but changed the canonical run. On 2026-11-28, the public build `325afda` displayed the same shared history hash as a local Windows export while their canonical Page06 run ids differed. That is the expected boundary between the six-decimal display hash and the raw-manifest identity, not a replay failure.
+
+Do not "fix" this by rounding run ids. Rounding would rewrite audit identity and could merge datasets that are genuinely distinct. A stable recorded fixture, or an explicitly canonical decimal dataset export with a migration, is the reviewable path. The Page06 rule remains: quote the shared history hash for a human comparison, and quote the canonical run/manifest for the exact record.
+
 ## Reproduce the public SOWEKI demand baseline
 
 On pushes, relevant pull requests, and a weekly schedule, the public-data workflow evaluates all 11 SOWEKI series from the [Zenodo record](https://zenodo.org/records/19627517) (CC BY 4.0) in parallel. Manual dispatch still lets you select one series. Each job audits timestamp ordering, prepares hourly data without interpolation, and evaluates chronological holdout forecast baselines.

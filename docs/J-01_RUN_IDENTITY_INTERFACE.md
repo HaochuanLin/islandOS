@@ -201,6 +201,8 @@ record_run_record(
 
 旧 `ig-ca9c886e6fb1343c` / `a03cc9eb…` 是 `USD/kWh` 进入单位摘要的旧口径，已作废。
 
+注意：上表的 Page 06 `run-06-906cce6af6da7a0f` 是 **P1b 纯函数固定向量**，用于验证 `derive_run_id()`；它不是当前 Page06 页面实际展示或导出的 canonical run。页面目前仍由 `build_joint_optimizer_manifest()` 生成 `run-<sha16>`（不带 page 前缀）。在页面接入 P1b 身份前，两者不可互换，也不应作为同一条 audit record 引用。跨环境历史哈希与 canonical manifest 的区别见 `docs/REPRODUCIBILITY.md` 的 “Page06 canonical export and replay”。
+
 ## 10. 测试状态
 
 文件：`tests/test_run_identity.py`、`tests/test_run_identity_record_mapping.py`；当前 **40 passed**。
