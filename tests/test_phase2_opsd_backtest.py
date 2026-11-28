@@ -6,8 +6,10 @@ import pytest
 
 from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
+    _canonical_seasonal_holdout_report,
     _canonicalize_opsd_history,
     _score_holdout,
+    _seasonal_holdout_windows,
     build_parser,
 )
 
@@ -23,6 +25,17 @@ def _dataset(count=120):
             "price": tuple(-10.0 if index % 24 < 3 else 40.0 for index in range(count)),
         },
         units={"load": "MW", "solar": "MW", "wind": "MW", "price": "EUR/MWh"},
+        source_columns={
+            "load": "AT_load_actual_entsoe_transparency",
+            "solar": "AT_solar_generation_actual",
+            "wind": "AT_wind_generation_actual",
+            "price": "AT_price_day_ahead",
+        },
+        region_code="AT",
+        source_name="Open Power System Data",
+        source_version="2020-10-06",
+        source_url="https://data.open-power-system-data.org/time_series/2020-10-06/",
+        attribution="OPSD public historical data",
         data_sha256="a" * 64,
     )
 
@@ -292,6 +305,76 @@ def test_canonical_rolling_report_rejects_one_fold_cap_when_sampling_is_required
         )
 
 
+
+
+def test_canonical_report_requires_one_complete_selection_fold_at_long_horizons():
+    with pytest.raises(ValueError, match="at least 384 contiguous hourly observations"):
+        _canonical_prediction_report(_dataset(count=383), forecast_horizon=168)
+
+
+def test_seasonal_holdout_selection_returns_disjoint_windows_and_excludes_final_holdout():
+    dataset = _dataset(count=24 * 365)
+    windows = _seasonal_holdout_windows(
+        dataset.timestamps,
+        168,
+        minimum_training_samples=216,
+        final_holdout_samples=168,
+    )
+
+    assert [item["season"] for item in windows] == [
+        "winter_2020", "spring_2020", "summer_2020", "autumn_2020",
+    ]
+    final_holdout_start = len(dataset.timestamps) - 168
+    previous_end = None
+    for item in windows:
+        assert item["start_index"] >= 216
+        assert item["end_index"] - item["start_index"] == 168
+        assert item["end_index"] <= final_holdout_start
+        if previous_end is not None:
+            assert item["start_index"] >= previous_end
+        previous_end = item["end_index"]
+
+
+def test_seasonal_holdout_report_uses_only_pre_window_history_and_scores_all_candidates():
+    dataset = _dataset(count=24 * 200)
+    report = _canonical_seasonal_holdout_report(
+        dataset,
+        forecast_horizon=24,
+        max_rolling_folds=2,
+    )
+
+    assert report["method"] == "walk_forward_last_complete_block_per_meteorological_season"
+    assert report["horizon_hours"] == 24
+    assert report["minimum_training_samples"] == 72
+    assert report["max_rolling_folds"] == 2
+    assert report["final_holdout_excluded"] is True
+    assert [item["season"] for item in report["windows"]] == [
+        "winter_2020", "spring_2020",
+    ]
+
+    final_holdout_start = dataset.timestamps[-24]
+    for window in report["windows"]:
+        start = datetime.fromisoformat(window["window_start_utc"])
+        end = datetime.fromisoformat(window["window_end_utc_exclusive"])
+        assert end - start == timedelta(hours=24)
+        assert end <= final_holdout_start
+        assert window["training_samples"] >= report["minimum_training_samples"]
+        assert len(window["training_prefix_sha256"]) == 64
+        assert set(window["signals"]) == {"load", "solar", "wind", "price"}
+
+        for signal in window["signals"].values():
+            assert signal["selection_backtest"]["horizon_hours"] == 24
+            assert signal["selection_backtest"]["folds"] <= 2
+            assert signal["holdout_metrics"]["samples"] == 24
+            selected = [
+                item for item in signal["candidate_models"]
+                if item["model_id"] == signal["selected_model"]
+            ]
+            assert len(selected) == 1
+            assert selected[0]["selected_for_forecast"] is True
+            assert selected[0]["metrics"] == signal["holdout_metrics"]
+            assert all(item["metrics"]["samples"] == 24 for item in signal["candidate_models"])
+
 def test_opsd_cli_exposes_a_bounded_rolling_fold_default_and_override():
     parser = build_parser()
     defaults = parser.parse_args(["--csv", "history.csv"])
@@ -302,5 +385,15 @@ def test_opsd_cli_exposes_a_bounded_rolling_fold_default_and_override():
     ])
 
     assert defaults.max_rolling_folds == 168
+    assert defaults.seasonal_holdout_windows is False
+    assert defaults.max_seasonal_holdout_folds == 12
     assert configured.max_rolling_folds == 24
+
+    seasonal = parser.parse_args([
+        "--csv", "history.csv",
+        "--seasonal-holdout-windows",
+        "--max-seasonal-holdout-folds", "8",
+    ])
+    assert seasonal.seasonal_holdout_windows is True
+    assert seasonal.max_seasonal_holdout_folds == 8
 
