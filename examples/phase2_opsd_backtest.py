@@ -6,9 +6,11 @@ Example:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Sequence
 
 from islandos_core.forecast_engine import evaluate_signal_rolling, forecast_signals
@@ -102,13 +104,15 @@ def _canonical_prediction_report(
         raise ValueError("forecast_horizon must be an integer from 1 to 168 hours")
 
     timestamps = tuple(dataset.timestamps)
-    minimum_training_samples = 72
+    # Candidate selection needs at least one complete rolling block after
+    # its 48-observation initial prefix. Keep the 72-sample domain minimum too.
+    minimum_training_samples = max(72, 48 + forecast_horizon)
     if len(timestamps) < minimum_training_samples + forecast_horizon:
         required = minimum_training_samples + forecast_horizon
         raise ValueError(
             f"OPSD history requires at least {required} contiguous hourly observations: "
-            f"{minimum_training_samples} for canonical training and {forecast_horizon} "
-            "for the untouched final chronological holdout"
+            f"{minimum_training_samples} for canonical model selection and "
+            f"{forecast_horizon} for the untouched final chronological holdout"
         )
 
     canonical_history, canonical_units, source_mapping = _canonicalize_opsd_history(dataset)
@@ -395,6 +399,195 @@ def _canonical_prediction_report(
         ],
     }
 
+
+def _meteorological_season_label(stamp: datetime) -> str:
+    """Return a Northern Hemisphere meteorological season and its ending year."""
+    if stamp.month in (12, 1, 2):
+        season_year = stamp.year + (1 if stamp.month == 12 else 0)
+        return f"winter_{season_year}"
+    if stamp.month in (3, 4, 5):
+        return f"spring_{stamp.year}"
+    if stamp.month in (6, 7, 8):
+        return f"summer_{stamp.year}"
+    return f"autumn_{stamp.year}"
+
+
+def _seasonal_holdout_windows(
+    timestamps,
+    horizon: int,
+    *,
+    minimum_training_samples: int,
+    final_holdout_samples: int,
+):
+    """Select one complete final block per season, excluding the final holdout.
+
+    Each selected block is scored using only observations before its start.
+    Earlier seasonal blocks may become historical input for later windows,
+    matching a walk-forward operating process rather than a shuffled split.
+    """
+    stamps = tuple(timestamps)
+    if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
+        raise ValueError("horizon must be a positive integer")
+    if (
+        isinstance(minimum_training_samples, bool)
+        or not isinstance(minimum_training_samples, int)
+        or minimum_training_samples < 1
+    ):
+        raise ValueError("minimum_training_samples must be a positive integer")
+    if (
+        isinstance(final_holdout_samples, bool)
+        or not isinstance(final_holdout_samples, int)
+        or not 1 <= final_holdout_samples <= len(stamps)
+    ):
+        raise ValueError("final_holdout_samples must be an integer within the timestamp history")
+    normalized = []
+    for index, stamp in enumerate(stamps):
+        if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise ValueError(f"timestamps[{index}] must be timezone-aware")
+        normalized.append(stamp.astimezone(timezone.utc))
+    if any(
+        right - left != timedelta(hours=1)
+        for left, right in zip(normalized, normalized[1:])
+    ):
+        raise ValueError("seasonal holdouts require contiguous hourly UTC timestamps")
+
+    final_holdout_start = len(normalized) - final_holdout_samples
+    grouped = {}
+    for index, stamp in enumerate(normalized):
+        grouped.setdefault(_meteorological_season_label(stamp), []).append(index)
+
+    windows = []
+    for season, indices in sorted(grouped.items(), key=lambda item: item[1][0]):
+        if len(indices) < horizon:
+            continue
+        selected = indices[-horizon:]
+        start_index = selected[0]
+        end_index = selected[-1] + 1
+        if selected != list(range(start_index, end_index)):
+            continue
+        if start_index < minimum_training_samples or end_index > final_holdout_start:
+            continue
+        windows.append({
+            "season": season,
+            "start_index": start_index,
+            "end_index": end_index,
+        })
+    return windows
+
+
+def _prefix_opsd_dataset(dataset, end_index: int):
+    """Build a provenance-correct dataset prefix ending before/at one holdout."""
+    timestamps = tuple(dataset.timestamps[:end_index])
+    history = {
+        signal: tuple(values[:end_index])
+        for signal, values in dataset.history.items()
+    }
+    region_code = getattr(dataset, "region_code", "unknown")
+    source_version = getattr(dataset, "source_version", "unknown")
+    source_columns = dict(getattr(dataset, "source_columns", {}))
+    units = dict(dataset.units)
+    digest_payload = {
+        "source_version": source_version,
+        "region_code": region_code,
+        "timestamps_utc": [
+            stamp.astimezone(timezone.utc).isoformat() for stamp in timestamps
+        ],
+        "source_columns": source_columns,
+        "units": units,
+        "history": history,
+    }
+    canonical = json.dumps(
+        digest_payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+    return SimpleNamespace(
+        region_code=region_code,
+        timestamps=timestamps,
+        history=history,
+        units=units,
+        source_columns=source_columns,
+        source_name=getattr(dataset, "source_name", "Open Power System Data"),
+        source_version=source_version,
+        source_url=getattr(dataset, "source_url", ""),
+        attribution=getattr(dataset, "attribution", ""),
+        data_sha256=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    )
+
+
+def _canonical_seasonal_holdout_report(
+    dataset,
+    forecast_horizon: int,
+    *,
+    max_rolling_folds: int = 12,
+):
+    """Evaluate independent chronological holdouts near each season's end."""
+    minimum_training_samples = max(72, 48 + forecast_horizon)
+    windows = _seasonal_holdout_windows(
+        dataset.timestamps,
+        forecast_horizon,
+        minimum_training_samples=minimum_training_samples,
+        final_holdout_samples=forecast_horizon,
+    )
+    reports = []
+    for window in windows:
+        start_index = window["start_index"]
+        end_index = window["end_index"]
+        prefix = _prefix_opsd_dataset(dataset, end_index)
+        prefix_report = _canonical_prediction_report(
+            prefix,
+            forecast_horizon,
+            rolling_horizons=(),
+            max_rolling_folds=max_rolling_folds,
+        )
+        holdout = prefix_report["holdout_window"]
+        expected_start = dataset.timestamps[start_index].astimezone(timezone.utc).isoformat()
+        if holdout["holdout_start_utc"] != expected_start:
+            raise RuntimeError("seasonal holdout does not match its selected timestamp window")
+
+        signal_reports = {}
+        for source_signal, signal in prefix_report["signals"].items():
+            comparison = signal["holdout_candidate_evaluations"]
+            signal_reports[source_signal] = {
+                "canonical_signal_id": signal["canonical_signal_id"],
+                "selected_model": signal["selected_model"],
+                "selection_backtest": signal["selection_backtest"],
+                "holdout_metrics": signal["holdout_metrics"],
+                "candidate_models": [
+                    {
+                        "model_id": item["model_id"],
+                        "model_version": item["model_version"],
+                        "selected_for_forecast": item["selected_for_forecast"],
+                        "metrics": item["metrics"],
+                    }
+                    for item in comparison["models"]
+                ],
+                "excluded_candidates": comparison["excluded_candidates"],
+            }
+
+        window_end_exclusive = (
+            dataset.timestamps[end_index - 1].astimezone(timezone.utc)
+            + timedelta(hours=1)
+        )
+        reports.append({
+            "season": window["season"],
+            "window_start_utc": expected_start,
+            "window_end_utc_exclusive": window_end_exclusive.isoformat(),
+            "training_samples": start_index,
+            "training_start_utc": holdout["training_start_utc"],
+            "training_end_utc": holdout["training_end_utc"],
+            "training_prefix_sha256": prefix_report["source_data_sha256"],
+            "holdout_samples": forecast_horizon,
+            "signals": signal_reports,
+        })
+
+    return {
+        "method": "walk_forward_last_complete_block_per_meteorological_season",
+        "horizon_hours": forecast_horizon,
+        "minimum_training_samples": minimum_training_samples,
+        "max_rolling_folds": max_rolling_folds,
+        "final_holdout_excluded": True,
+        "windows": reports,
+    }
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", required=True, help="Path to the OPSD 60-minute single-index CSV")
@@ -425,6 +618,17 @@ def build_parser() -> argparse.ArgumentParser:
             "(default: 168); first and last complete folds are retained"
         ),
     )
+    parser.add_argument(
+        "--seasonal-holdout-windows",
+        action="store_true",
+        help="Evaluate separate walk-forward holdout blocks near the end of each meteorological season",
+    )
+    parser.add_argument(
+        "--max-seasonal-holdout-folds",
+        type=int,
+        default=12,
+        help="Maximum training-only rolling folds used to select a model for each seasonal holdout (default: 12)",
+    )
     return parser
 
 
@@ -433,6 +637,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.rolling_validation and args.max_rolling_folds < 2:
         parser.error("--max-rolling-folds must be at least 2 when rolling validation is enabled")
+    if args.seasonal_holdout_windows and args.max_seasonal_holdout_folds < 2:
+        parser.error("--max-seasonal-holdout-folds must be at least 2 when seasonal holdouts are enabled")
     dataset = load_opsd_singleindex_csv(
         args.csv,
         args.region,
@@ -504,6 +710,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.max_rolling_folds if args.rolling_validation else None
         ),
     )
+    if args.seasonal_holdout_windows:
+        report["canonical_prediction_service"]["seasonal_holdout_evaluations"] = (
+            _canonical_seasonal_holdout_report(
+                dataset,
+                args.horizon,
+                max_rolling_folds=args.max_seasonal_holdout_folds,
+            )
+        )
     if args.rolling_validation:
         report["rolling_validation"] = {
             "method": "expanding_window",
