@@ -335,9 +335,21 @@ jobs:
                       item["metrics"]["samples"] == 168
                       for item in seasonal_signal["candidate_models"]
                   )
+                  seasonal_candidate_ids = {
+                      item["model_id"] for item in seasonal_signal["candidate_models"]
+                  }
+                  seasonal_excluded_ids = set(seasonal_signal["excluded_candidates"])
+                  assert seasonal_candidate_ids.isdisjoint(seasonal_excluded_ids)
+                  assert seasonal_candidate_ids | seasonal_excluded_ids == {
+                      "persistence",
+                      "seasonal_naive",
+                      "recent_mean",
+                      "linear_trend",
+                      "ridge_autoregressive_lag_only",
+                  }
                   assert all(
-                      item["reason"]
-                      for item in seasonal_signal["excluded_candidates"]
+                      isinstance(reason, str) and reason
+                      for reason in seasonal_signal["excluded_candidates"].values()
                   )
 
           for signal in ("load", "solar", "wind", "price"):
