@@ -112,3 +112,29 @@ def test_flexible_load_optimizer_page_rejects_baseline_above_equipment_rating():
         "baseline_power_kw must not exceed max_power_kw" in element.value
         for element in app.error
     )
+
+
+def test_flexible_load_page_defaults_to_usd_display_label():
+    app = AppTest.from_file(str(APP), default_timeout=60).run()
+    assert not app.exception
+    app.radio[0].set_value("Flexible-load cost optimizer").run()
+    assert not app.exception
+
+    currency = next(
+        element for element in app.text_input
+        if element.label == "Currency label (used only for display)"
+    )
+    assert currency.value == "USD"
+    metric_labels = [element.label for element in app.get("metric")]
+    assert metric_labels[:3] == ["Baseline cost", "Optimized cost", "Cost difference"]
+
+
+def test_historical_ro_page_shows_public_upload_privacy_guidance():
+    app = AppTest.from_file(str(APP), default_timeout=60).run()
+    assert not app.exception
+    app.radio[0].set_value("Historical RO baseline").run()
+    assert not app.exception
+
+    warning_text = " ".join(element.value for element in app.warning)
+    assert "Do not upload confidential or personally identifiable information" in warning_text
+    assert "public hosted demo" in warning_text
