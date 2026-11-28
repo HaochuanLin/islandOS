@@ -8,6 +8,7 @@ from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
     _canonical_seasonal_holdout_report,
     _canonicalize_opsd_history,
+    _prefix_opsd_dataset,
     _score_holdout,
     _seasonal_holdout_windows,
     build_parser,
@@ -334,6 +335,33 @@ def test_seasonal_holdout_selection_returns_disjoint_windows_and_excludes_final_
             assert item["start_index"] >= previous_end
         previous_end = item["end_index"]
 
+
+
+
+def test_training_prefix_digest_excludes_seasonal_holdout_actuals():
+    original = _dataset(count=24 * 200)
+    changed = _dataset(count=24 * 200)
+    window = _seasonal_holdout_windows(
+        original.timestamps,
+        24,
+        minimum_training_samples=72,
+        final_holdout_samples=24,
+    )[0]
+    start_index = window["start_index"]
+    end_index = window["end_index"]
+    changed.history["load"] = (
+        changed.history["load"][:start_index]
+        + tuple(value + 100.0 for value in changed.history["load"][start_index:end_index])
+        + changed.history["load"][end_index:]
+    )
+
+    original_training = _prefix_opsd_dataset(original, start_index)
+    changed_training = _prefix_opsd_dataset(changed, start_index)
+    original_through_holdout = _prefix_opsd_dataset(original, end_index)
+    changed_through_holdout = _prefix_opsd_dataset(changed, end_index)
+
+    assert original_training.data_sha256 == changed_training.data_sha256
+    assert original_through_holdout.data_sha256 != changed_through_holdout.data_sha256
 
 def test_seasonal_holdout_report_uses_only_pre_window_history_and_scores_all_candidates():
     dataset = _dataset(count=24 * 200)
