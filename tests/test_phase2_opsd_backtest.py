@@ -8,6 +8,7 @@ from examples.phase2_opsd_backtest import (
     _canonical_prediction_report,
     _canonicalize_opsd_history,
     _score_holdout,
+    build_parser,
 )
 
 
@@ -210,8 +211,67 @@ def test_canonical_rolling_report_accounts_for_incomplete_trailing_block():
         "last_scored_validation_end_utc": dataset.timestamps[95].isoformat(),
         "validation_horizon_hours": 24,
         "complete_folds": 2,
+        "available_complete_folds": 2,
+        "evaluated_folds": 2,
+        "skipped_complete_folds": 0,
+        "skipped_validation_samples": 0,
+        "fold_indices": [1, 2],
+        "max_rolling_folds": None,
+        "selection_method": "all_complete_folds",
         "scored_samples": 48,
         "excluded_trailing_samples": 23,
     }
     assert all(len(model["fold_metrics"]) == 2 for model in evaluation["models"])
     assert "incomplete trailing observations are excluded" in report["rolling_evaluation_scope"]
+
+
+
+def test_canonical_rolling_report_samples_folds_evenly_and_reports_skips():
+    dataset = _dataset(count=125)
+    report = _canonical_prediction_report(
+        dataset,
+        forecast_horizon=6,
+        rolling_horizons=(1,),
+        max_rolling_folds=4,
+    )
+
+    evaluation = report["signals"]["load"]["rolling_origin_candidate_evaluations"]["1"]
+    window = evaluation["evaluation_window"]
+
+    assert window["available_complete_folds"] == 71
+    assert window["evaluated_folds"] == 4
+    assert window["skipped_complete_folds"] == 67
+    assert window["skipped_validation_samples"] == 67
+    assert window["fold_indices"] == [1, 24, 47, 71]
+    assert window["first_validation_start_utc"] == dataset.timestamps[48].isoformat()
+    assert window["last_scored_validation_end_utc"] == dataset.timestamps[118].isoformat()
+    assert window["scored_samples"] == 4
+    assert window["excluded_trailing_samples"] == 0
+    assert window["selection_method"] == (
+        "deterministic_even_spacing_with_first_and_last_fold"
+    )
+    for model in evaluation["models"]:
+        assert [fold["fold_index"] for fold in model["fold_metrics"]] == [1, 24, 47, 71]
+
+
+def test_canonical_rolling_report_rejects_one_fold_cap_when_sampling_is_required():
+    with pytest.raises(ValueError, match="at least 2"):
+        _canonical_prediction_report(
+            _dataset(count=125),
+            forecast_horizon=6,
+            rolling_horizons=(1,),
+            max_rolling_folds=1,
+        )
+
+
+def test_opsd_cli_exposes_a_bounded_rolling_fold_default_and_override():
+    parser = build_parser()
+    defaults = parser.parse_args(["--csv", "history.csv"])
+    configured = parser.parse_args([
+        "--csv", "history.csv",
+        "--rolling-validation",
+        "--max-rolling-folds", "24",
+    ])
+
+    assert defaults.max_rolling_folds == 168
+    assert configured.max_rolling_folds == 24

@@ -87,7 +87,12 @@ def _score_holdout(actual, predicted):
     }
 
 
-def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizons=()):
+def _canonical_prediction_report(
+    dataset,
+    forecast_horizon: int,
+    rolling_horizons=(),
+    max_rolling_folds: int | None = None,
+):
     """Evaluate model selection on history and score it on an untouched final block."""
     if (
         isinstance(forecast_horizon, bool)
@@ -145,22 +150,52 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
                 horizon=validation_horizon,
                 season_length=24,
                 non_negative=spec.non_negative,
+                max_folds=max_rolling_folds,
             )
+            available_complete_folds = (
+                len(training_history[signal_id]) - initial_history
+            ) // validation_horizon
+            selected_fold_indices = [
+                fold.fold_index for fold in ranking[0].fold_metrics
+            ]
+            if not selected_fold_indices:
+                raise RuntimeError("canonical rolling evaluation returned no complete folds")
             scored_samples = ranking[0].samples
+            skipped_complete_folds = (
+                available_complete_folds - len(selected_fold_indices)
+            )
+            skipped_validation_samples = skipped_complete_folds * validation_horizon
             excluded_trailing_samples = (
-                len(training_history[signal_id]) - initial_history - scored_samples
+                len(training_history[signal_id]) - initial_history
+            ) % validation_horizon
+            first_validation_index = (
+                initial_history + (selected_fold_indices[0] - 1) * validation_horizon
+            )
+            last_validation_end_index = (
+                initial_history + selected_fold_indices[-1] * validation_horizon - 1
             )
             candidate_evaluations[str(validation_horizon)] = {
                 "evaluation_window": {
                     "initial_history_samples": initial_history,
                     "initial_history_start_utc": training_timestamps[0].isoformat(),
                     "initial_history_end_utc": training_timestamps[initial_history - 1].isoformat(),
-                    "first_validation_start_utc": training_timestamps[initial_history].isoformat(),
+                    "first_validation_start_utc": training_timestamps[first_validation_index].isoformat(),
                     "last_scored_validation_end_utc": training_timestamps[
-                        initial_history + scored_samples - 1
+                        last_validation_end_index
                     ].isoformat(),
                     "validation_horizon_hours": validation_horizon,
-                    "complete_folds": ranking[0].folds,
+                    "complete_folds": available_complete_folds,
+                    "available_complete_folds": available_complete_folds,
+                    "evaluated_folds": len(selected_fold_indices),
+                    "skipped_complete_folds": skipped_complete_folds,
+                    "skipped_validation_samples": skipped_validation_samples,
+                    "fold_indices": selected_fold_indices,
+                    "max_rolling_folds": max_rolling_folds,
+                    "selection_method": (
+                        "all_complete_folds"
+                        if not skipped_complete_folds
+                        else "deterministic_even_spacing_with_first_and_last_fold"
+                    ),
                     "scored_samples": scored_samples,
                     "excluded_trailing_samples": excluded_trailing_samples,
                 },
@@ -331,8 +366,9 @@ def _canonical_prediction_report(dataset, forecast_horizon: int, rolling_horizon
         ),
         "rolling_evaluation_scope": (
             "Rolling-origin candidate evaluations use only the pre-holdout training history. "
-            "Each requested horizon is replayed in chronological expanding-window blocks using "
-            "only observations available before that block. Only complete blocks are scored; "
+            "Each requested horizon uses chronological expanding-window blocks and trains only "
+            "on observations available before each block. When max_rolling_folds is set, complete "
+            "folds are sampled deterministically and evenly with the first and last folds retained. "
             "incomplete trailing observations are excluded rather than shortened into a different horizon."
         ),
         "signals": signals,
@@ -367,11 +403,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--rolling-horizons", nargs="+", type=int, default=(1, 6, 24, 168),
         help="Rolling validation horizons in hours (default: 1 6 24 168)",
     )
+    parser.add_argument(
+        "--max-rolling-folds",
+        type=int,
+        default=168,
+        help=(
+            "Maximum canonical rolling-origin folds per signal and horizon "
+            "(default: 168); first and last complete folds are retained"
+        ),
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.rolling_validation and args.max_rolling_folds < 2:
+        parser.error("--max-rolling-folds must be at least 2 when rolling validation is enabled")
     dataset = load_opsd_singleindex_csv(
         args.csv,
         args.region,
@@ -392,9 +440,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             "version": dataset.source_version,
             "source_url": dataset.source_url,
             "attribution": dataset.attribution,
+            "evidence_class": "public_historical_regional_aggregate",
+            "measurement_scope": "country_control_area_or_bidding_zone_aggregate",
+            "site_telemetry": False,
+            "synthetic": False,
             "region_code": dataset.region_code,
             "source_columns": dict(dataset.source_columns),
             "history_sha256": dataset.data_sha256,
+            "selected_history_sha256": dataset.data_sha256,
             "observations": len(dataset.timestamps),
             "history_start_utc": dataset.timestamps[0].isoformat(),
             "history_end_utc": dataset.timestamps[-1].isoformat(),
@@ -431,7 +484,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     canonical_horizons = tuple(args.rolling_horizons) if args.rolling_validation else ()
     report["canonical_prediction_service"] = _canonical_prediction_report(
-        dataset, args.horizon, rolling_horizons=canonical_horizons
+        dataset,
+        args.horizon,
+        rolling_horizons=canonical_horizons,
+        max_rolling_folds=(
+            args.max_rolling_folds if args.rolling_validation else None
+        ),
     )
     if args.rolling_validation:
         report["rolling_validation"] = {
