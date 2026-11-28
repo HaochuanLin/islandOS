@@ -627,6 +627,9 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   line-height: 1.35 !important;
   text-transform: uppercase;
   white-space: normal !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  hyphens: none !important;
   overflow: visible !important;
   text-overflow: clip !important;
 }
@@ -952,6 +955,11 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 
   [data-testid="stMetric"] {
     min-height: 7rem;
+  }
+
+  [data-testid="stMetricLabel"] p {
+    font-size: 0.82rem !important;
+    letter-spacing: 0.035em !important;
   }
 
   [data-testid="stMetricValue"] {
