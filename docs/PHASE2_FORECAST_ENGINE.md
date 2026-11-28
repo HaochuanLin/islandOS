@@ -112,11 +112,12 @@ A model winning on one supplied history is not proof of future skill. Evaluation
 
 ## Next engineering gates
 
-1. Run the OPSD adapter and CLI on a complete, provenance-documented public historical interval; inspect data quality and rolling-origin scores.
-2. Use `evaluate_signal_rolling(...)` to compare the actual built-in persistence, seasonal-naive, and ridge candidates at multiple horizons; review stability across folds before changing automatic promotion.
-3. Add exogenous covariates only where timestamp alignment and availability-at-decision-time are proven.
-4. In the subsequent integration phase, add a typed adapter from `PlanningForecast` to the physical evaluator, then compare forecast-driven decisions against a transparent baseline without weakening service constraints.
-5. Promote a model only when it consistently beats transparent baselines on relevant held-out data and stress cases.
+1. Complete and inspect the AT / DE_LU OPSD reports with repeated meteorological-season holdouts; verify source digests, training-prefix digests, common candidate accounting, and non-overlap with the final holdout.
+2. Measure empirical-band coverage and residual growth by horizon on holdouts that were not used for candidate selection. Keep the current bands descriptive until an independent calibration method is implemented and tested.
+3. Review MAE, RMSE, signed bias, and candidate stability by signal, season, and horizon before considering any model-promotion policy. Do not use one annual aggregate score as a substitute for seasonal evidence.
+4. Add exogenous covariates only where timestamp alignment and availability-at-decision-time are proven.
+5. In the subsequent integration phase, add a typed adapter from `PlanningForecast` to the physical evaluator, then compare forecast-driven decisions against a transparent baseline without weakening service constraints.
+6. Promote a model only when it consistently beats transparent baselines on relevant held-out data and stress cases.
 
 
 ## Canonical site signal catalog
