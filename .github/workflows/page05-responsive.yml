@@ -1,0 +1,66 @@
+name: Page05 responsive layout
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: islandos-page05-responsive-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  responsive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies and Chromium
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-ci.lock
+          python -m pip install "playwright==1.65.2"
+          python -m playwright install --with-deps chromium
+      - name: Start the local app and assert Page05 layout
+        run: |
+          set -euo pipefail
+          mkdir -p build/page05-responsive/screenshots
+          python -m streamlit run app.py \
+            --server.port 8501 \
+            --server.headless true \
+            --browser.gatherUsageStats false \
+            > build/streamlit-page05.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8501/_stcore/health >/dev/null
+          python scripts/check_page05_responsive.py \
+            --base-url http://127.0.0.1:8501 \
+            --report build/page05-responsive/report.json \
+            --screenshot-dir build/page05-responsive/screenshots
+      - name: Show app log after a failure
+        if: failure()
+        run: tail -n 100 build/streamlit-page05.log || true
+      - name: Upload responsive evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: islandos-page05-responsive
+          path: build/page05-responsive
+          if-no-files-found: ignore
+          retention-days: 30
