@@ -531,6 +531,7 @@ def _canonical_seasonal_holdout_report(
     for window in windows:
         start_index = window["start_index"]
         end_index = window["end_index"]
+        training_prefix = _prefix_opsd_dataset(dataset, start_index)
         prefix = _prefix_opsd_dataset(dataset, end_index)
         prefix_report = _canonical_prediction_report(
             prefix,
@@ -574,7 +575,7 @@ def _canonical_seasonal_holdout_report(
             "training_samples": start_index,
             "training_start_utc": holdout["training_start_utc"],
             "training_end_utc": holdout["training_end_utc"],
-            "training_prefix_sha256": prefix_report["source_data_sha256"],
+            "training_prefix_sha256": training_prefix.data_sha256,
             "holdout_samples": forecast_horizon,
             "signals": signal_reports,
         })
