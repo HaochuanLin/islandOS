@@ -914,6 +914,11 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
     padding: 4rem 2.3rem 4.5rem !important;
   }
 
+  [data-testid="stMetricLabel"] p {
+    font-size: 0.82rem !important;
+    letter-spacing: 0.035em !important;
+  }
+
   .ios-brief {
     gap: 0 1.5rem;
   }
@@ -955,11 +960,6 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
 
   [data-testid="stMetric"] {
     min-height: 7rem;
-  }
-
-  [data-testid="stMetricLabel"] p {
-    font-size: 0.82rem !important;
-    letter-spacing: 0.035em !important;
   }
 
   [data-testid="stMetricValue"] {
