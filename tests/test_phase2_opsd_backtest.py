@@ -374,6 +374,20 @@ def test_seasonal_holdout_report_uses_only_pre_window_history_and_scores_all_can
             assert selected[0]["selected_for_forecast"] is True
             assert selected[0]["metrics"] == signal["holdout_metrics"]
             assert all(item["metrics"]["samples"] == 24 for item in signal["candidate_models"])
+            candidate_ids = {item["model_id"] for item in signal["candidate_models"]}
+            excluded_ids = set(signal["excluded_candidates"])
+            assert candidate_ids.isdisjoint(excluded_ids)
+            assert candidate_ids | excluded_ids == {
+                "persistence",
+                "seasonal_naive",
+                "recent_mean",
+                "linear_trend",
+                "ridge_autoregressive_lag_only",
+            }
+            assert all(
+                isinstance(reason, str) and reason
+                for reason in signal["excluded_candidates"].values()
+            )
 
 def test_opsd_cli_exposes_a_bounded_rolling_fold_default_and_override():
     parser = build_parser()
