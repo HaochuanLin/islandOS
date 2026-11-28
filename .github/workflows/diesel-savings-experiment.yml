@@ -1,0 +1,63 @@
+name: Diesel savings experiment
+
+on:
+  push:
+    branches:
+      - "experiment/diesel-savings-sweep"
+    paths:
+      - ".github/workflows/diesel-savings-experiment.yml"
+      - "experiments/run_diesel_savings_sweep.py"
+      - "islandos_core/**"
+      - "optimization/**"
+      - "requirements-ci.lock"
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: "Number of deterministic seeds per scenario"
+        required: true
+        default: "30"
+      days:
+        description: "Simulation horizon in days (1-7)"
+        required: true
+        default: "7"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diesel-savings-experiment-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.lock
+      - name: Install locked project and test dependencies
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -r requirements-ci.lock
+      - name: Verify installed dependencies
+        run: python -m pip check
+      - name: Run 30-seed, 7-day diesel savings sweep
+        env:
+          SEEDS: ${{ github.event.inputs.seeds || '30' }}
+          DAYS: ${{ github.event.inputs.days || '7' }}
+        run: |
+          python experiments/run_diesel_savings_sweep.py --seeds "$SEEDS" --days "$DAYS"
+      - name: Upload auditable experiment outputs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: islandos-diesel-savings-${{ github.run_id }}
+          path: results/diesel_savings_sweep/
+          if-no-files-found: warn
+          retention-days: 90

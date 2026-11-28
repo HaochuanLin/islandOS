@@ -151,6 +151,7 @@ def optimize_dispatch_milp(
     ro_variable_cost_per_m3: float = 0.0,
     terminal_water_inventory_min_m3: float | None = None,
     ro_min_production_m3_per_hour: float = 0.0,
+    fixed_water_production_m3_per_hour: Sequence[float] | None = None,
     price_aware_lookahead_hours: int = 6,
     flexible_load_energy_kwh: float | None = None,
     flexible_load_available_steps: Sequence[bool] | None = None,
@@ -214,6 +215,25 @@ def optimize_dispatch_milp(
         return float(value)
 
     ro_min_rate = nonneg_number("ro_min_production_m3_per_hour", ro_min_production_m3_per_hour)
+    fixed_water_rates = None
+    if fixed_water_production_m3_per_hour is not None:
+        if water_service is None:
+            raise OptimizationError("fixed water production requires water_service")
+        try:
+            fixed_water_rates = [float(value) for value in fixed_water_production_m3_per_hour]
+        except (TypeError, ValueError) as exc:
+            raise OptimizationError(
+                "fixed_water_production_m3_per_hour must be a numeric sequence"
+            ) from exc
+        if len(fixed_water_rates) != n or any(not math.isfinite(value) for value in fixed_water_rates):
+            raise OptimizationError(
+                "fixed_water_production_m3_per_hour must contain one finite value per timestep"
+            )
+        for t, rate in enumerate(fixed_water_rates):
+            if rate < -1e-9 or rate > water_service.ro_capacity_m3_per_hour + 1e-9:
+                raise OptimizationError(f"fixed water production is outside RO capacity at {t}")
+            if rate > 1e-9 and rate < ro_min_rate - 1e-9:
+                raise OptimizationError(f"fixed water production is below RO minimum at {t}")
     if (isinstance(price_aware_lookahead_hours, bool) or not isinstance(price_aware_lookahead_hours, int)
             or price_aware_lookahead_hours < 1):
         raise OptimizationError("price_aware_lookahead_hours must be a positive integer")
@@ -350,6 +370,9 @@ def optimize_dispatch_milp(
         if water_service is not None:
             upper[water_production[t]] = water_service.ro_capacity_m3_per_hour
             objective[water_production[t]] = float(ro_variable_cost_per_m3) * dt
+            if fixed_water_rates is not None:
+                lower[water_production[t]] = fixed_water_rates[t]
+                upper[water_production[t]] = fixed_water_rates[t]
         upper[discharge[t]] = battery.max_discharge_kw
         upper[diesel_power[t]] = diesel.rated_power_kw if diesel_ok[t] else 0.0
         upper[diesel_on[t]] = 1.0 if diesel_ok[t] else 0.0
