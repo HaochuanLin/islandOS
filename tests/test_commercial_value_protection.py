@@ -57,7 +57,9 @@ def test_default_dashboard_displays_the_protected_commercial_values(default_page
 
     assert values["Recommended policy"] == "Battery First"
     assert values["Estimated 24h energy cost"] == "24.52 USD"
-    assert values["Modeled cost difference vs grid-first"] == "10.55 USD"
+    # The label uses U+2011 (non-breaking hyphen) so "grid-first" cannot split
+    # across lines in the narrow two-column metric row.
+    assert values["Modeled cost difference vs grid\u2011first"] == "10.55 USD"
     assert values["Unmet energy"] == "0.00 kWh"
     assert values["Net present value"] == "21,302 USD"
     assert values["Simple payback"] == "6.0 years"
