@@ -3,6 +3,12 @@
 Notable project changes are recorded here. This is a research prototype; versioned releases are verification bundles, not site-operation approvals.
 
 ## Unreleased
+- **Customer UI follow-ups from the public release audit.**
+  Historical RO baseline now warns readers not to upload confidential or personally identifiable
+  data to the public hosted demo. The Page 06 prediction table uses a narrower mobile-only type
+  and cell-padding scale so `RMSE` stays inside the 390 px card without an inner horizontal
+  scroll. Flexible-load now defaults its display-only currency label to `USD` instead of the
+  literal `currency`; prices, calculations, units and exported values are unchanged.
 - **Page 06 and replay now share the same canonical manifest builder.**
   The earlier replay change made repeated API replays deterministic, but page 06 still built its
   manifest through a separate path. That meant a page run and a replay of its request were not

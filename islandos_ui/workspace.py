@@ -356,9 +356,9 @@ elif page == "Flexible-load cost optimizer":
     )
 
     currency = st.text_input(
-        "Currency label (used only for display)", value="currency",
+        "Currency label (used only for display)", value="USD",
         help="Enter a label such as USD, EUR, or your local currency. This does not convert prices.",
-    ).strip() or "currency"
+    ).strip() or "USD"
     max_power = st.number_input(
         "Equipment maximum power (kW)", min_value=0.1, value=2.0, step=0.1,
         help="Nameplate upper bound for the flexible load.",
@@ -1549,7 +1549,8 @@ elif page == "Historical RO baseline":
     )
     st.warning(
         "Customer-supplied data is not independently verified. The report is historical accounting only: "
-        "it does not forecast, optimize, annualize, or prove savings."
+        "it does not forecast, optimize, annualize, or prove savings. Do not upload confidential or "
+        "personally identifiable information to the public hosted demo."
     )
     baseline_file = st.file_uploader(
         "Upload historical RO CSV", type=["csv"], key="historical_ro_csv"

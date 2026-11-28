@@ -1083,6 +1083,20 @@ body:has(.ios-hero) [data-testid="stSidebarNav"]::before {
   }
 }
 
+@media (max-width: 480px) {
+  [class*="st-key-prediction-engine-table"] [data-testid="stTable"] thead th,
+  [class*="st-key-prediction-engine-table"] [data-testid="stTable"] tbody td {
+    padding: 0.45rem 0.26rem !important;
+    font-size: 0.8rem !important;
+    overflow-wrap: anywhere;
+  }
+
+  [class*="st-key-prediction-engine-table"] [data-testid="stTable"] thead th {
+    line-height: 1.15 !important;
+    white-space: normal !important;
+  }
+}
+
 @media print {
   [data-testid="stSidebar"],
   [data-testid="stHeader"] {
