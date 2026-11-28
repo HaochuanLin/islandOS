@@ -326,8 +326,9 @@ try:
     with st.container(key="prediction-engine-table"):
         render_table(pd.DataFrame(model_rows))
     st.caption(
-        "Rolling-origin backtest scores; lower is better. MAE and RMSE use the signal's own unit. "
-        "Built-in candidates are statistical baselines, not measured future values."
+        "This application path uses transparent baseline forecasts. The univariate Ridge candidate "
+        "is evaluated separately in Phase 2 and is not enabled in the default schedule run. "
+        "Backtest scores describe only the supplied history; they do not establish site accuracy."
     )
 
     st.subheader("Forecast points and intervals")

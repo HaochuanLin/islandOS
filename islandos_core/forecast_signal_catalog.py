@@ -120,6 +120,7 @@ def forecast_site_signals(
     backtest_horizon: int = 24,
     season_length: int = 24,
     confidence_level: float = 0.90,
+    max_backtest_folds: int | None = None,
 ) -> SiteForecastBundle:
     """Forecast multiple site domains through one replaceable candidate engine.
 
@@ -182,6 +183,7 @@ def forecast_site_signals(
         backtest_horizon=backtest_horizon,
         season_length=season_length,
         confidence_level=confidence_level,
+        max_backtest_folds=max_backtest_folds,
     )
     results = dict(bundle.forecasts)
     # Enforce the canonical planner contract on the same forecast bundle used by

@@ -1,8 +1,9 @@
 """Model-agnostic, evidence-gated prediction engine for IslandOS signals.
 
 The engine compares registered forecast candidates with rolling-origin replay,
-selects the best candidate by declared error metric, and emits empirical error
-bands. Built-in candidates are statistical baselines, not trained AI models.
+selects the lowest-MAE eligible candidate, and emits descriptive empirical
+error bands. The default registry contains transparent baselines; a univariate
+Ridge autoregression can be enabled explicitly for controlled evaluation.
 """
 from __future__ import annotations
 
@@ -139,6 +140,114 @@ class LinearTrendCandidate:
         return [intercept + slope * (len(window) - 1 + step) for step in range(1, horizon + 1)]
 
 
+class RidgeAutoregressiveCandidate:
+    """Fold-local univariate Ridge autoregression using lagged signal values.
+
+    The candidate is deliberately timestamp-independent: it uses lags 1, 2,
+    3 and the configured seasonal lag only. It learns no cross-signal, weather,
+    market, or calendar effects. Every call fits from the history supplied to
+    that call, so rolling-origin evaluation refits inside each training fold.
+    """
+
+    model_id = "ridge_autoregressive_lag_only"
+
+    def __init__(self, ridge_alpha: float = 1.0) -> None:
+        if (
+            isinstance(ridge_alpha, bool)
+            or not isinstance(ridge_alpha, Real)
+            or not math.isfinite(float(ridge_alpha))
+            or ridge_alpha <= 0
+        ):
+            raise ValueError("ridge_alpha must be finite and greater than zero")
+        self.ridge_alpha = float(ridge_alpha)
+
+    @property
+    def version(self) -> str:
+        # Hyperparameters are part of the registered identity and provenance.
+        return f"1.0.0+alpha{self.ridge_alpha!r}"
+
+    def predict(
+        self,
+        history: Sequence[float],
+        horizon: int,
+        *,
+        season_length: int,
+    ) -> list[float]:
+        if isinstance(history, (str, bytes)):
+            raise ValueError("history must be a finite numeric sequence")
+        if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
+            raise ValueError("horizon must be a positive integer")
+        if (
+            isinstance(season_length, bool)
+            or not isinstance(season_length, int)
+            or season_length < 1
+        ):
+            raise ValueError("season_length must be a positive integer")
+
+        values = []
+        for index, value in enumerate(history):
+            if isinstance(value, bool) or not isinstance(value, Real):
+                raise ValueError(f"history[{index}] must be finite numeric data")
+            number = float(value)
+            if not math.isfinite(number):
+                raise ValueError(f"history[{index}] must be finite numeric data")
+            values.append(number)
+
+        lags = tuple(sorted({1, 2, 3, season_length}))
+        max_lag = max(lags)
+        minimum_history = max_lag + 8
+        if len(values) < minimum_history:
+            raise ValueError(
+                f"Ridge autoregression requires at least {minimum_history} "
+                "history observations for the configured seasonal lag"
+            )
+
+        # NumPy is already a locked runtime dependency used by the Phase 2
+        # forecast engine. Import lazily so baseline-only callers pay no cost.
+        import numpy as np
+
+        train_x = np.asarray([
+            [values[index - lag] for lag in lags]
+            for index in range(max_lag, len(values))
+        ], dtype=float)
+        train_y = np.asarray(values[max_lag:], dtype=float)
+        if not np.all(np.isfinite(train_x)) or not np.all(np.isfinite(train_y)):
+            raise ValueError("Ridge training data contain non-finite values")
+
+        mean = train_x.mean(axis=0)
+        scale = train_x.std(axis=0)
+        scale[scale < 1e-9] = 1.0
+        standardized = (train_x - mean) / scale
+        design = np.column_stack((np.ones(len(standardized)), standardized))
+
+        # Augmented least squares implements L2 regularisation while leaving
+        # the intercept unpenalised and avoids explicitly inverting X'X.
+        penalty = np.eye(design.shape[1], dtype=float) * math.sqrt(self.ridge_alpha)
+        penalty[0, 0] = 0.0
+        augmented_x = np.vstack((design, penalty))
+        augmented_y = np.concatenate((
+            train_y,
+            np.zeros(design.shape[1], dtype=float),
+        ))
+        coefficients, *_ = np.linalg.lstsq(augmented_x, augmented_y, rcond=None)
+        if not np.all(np.isfinite(coefficients)):
+            raise ValueError("Ridge model produced non-finite coefficients")
+
+        extended = list(values)
+        predictions = []
+        for _ in range(horizon):
+            index = len(extended)
+            row = np.asarray([extended[index - lag] for lag in lags], dtype=float)
+            standardized_row = (row - mean) / scale
+            features = np.concatenate(([1.0], standardized_row))
+            prediction = float(features @ coefficients)
+            if not math.isfinite(prediction):
+                raise ValueError("Ridge model produced a non-finite prediction")
+            predictions.append(prediction)
+            extended.append(prediction)
+        return predictions
+
+
 @dataclass(frozen=True)
 class CandidateFoldMetrics:
     fold_index: int
@@ -160,6 +269,18 @@ class CandidateMetrics:
     wape_percent: float | None
     bias_predicted_minus_actual: float | None = None
     fold_metrics: tuple[CandidateFoldMetrics, ...] = ()
+
+
+@dataclass(frozen=True)
+class CandidateExclusion:
+    model_id: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class CandidateEvaluationReport:
+    ranked_candidates: tuple[CandidateMetrics, ...]
+    excluded_candidates: tuple[CandidateExclusion, ...]
 
 
 @dataclass(frozen=True)
@@ -231,14 +352,53 @@ def _history_digest(request: ForecastRequest) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-class PredictionEngine:
-    """Register candidates, compare them chronologically, and forecast with calibrated error bands."""
+def _select_fold_indices(total_folds: int, max_folds: int | None) -> tuple[int, ...]:
+    """Select deterministic, evenly spaced zero-based fold indices.
 
-    def __init__(self, *, include_builtin_candidates: bool = True) -> None:
+    When sampling is required, both the first and last complete folds are
+    retained. A None limit preserves exhaustive evaluation for library callers.
+    """
+    if isinstance(total_folds, bool) or not isinstance(total_folds, int) or total_folds < 0:
+        raise ValueError("total_folds must be a non-negative integer")
+    if total_folds == 0:
+        return ()
+    if max_folds is None:
+        return tuple(range(total_folds))
+    if isinstance(max_folds, bool) or not isinstance(max_folds, int) or max_folds < 1:
+        raise ValueError("max_folds must be a positive integer or None")
+    if max_folds >= total_folds:
+        return tuple(range(total_folds))
+    if max_folds < 2:
+        raise ValueError("max_folds must be at least 2 when sampling multiple complete folds")
+    return tuple(
+        (index * (total_folds - 1)) // (max_folds - 1)
+        for index in range(max_folds)
+    )
+
+class PredictionEngine:
+    """Register candidates, compare them chronologically, and emit empirical error bands."""
+
+    def __init__(
+        self,
+        *,
+        include_builtin_candidates: bool = True,
+        include_ridge_candidate: bool = False,
+    ) -> None:
+        if not isinstance(include_builtin_candidates, bool):
+            raise ValueError("include_builtin_candidates must be a boolean")
+        if not isinstance(include_ridge_candidate, bool):
+            raise ValueError("include_ridge_candidate must be a boolean")
         self._candidates: dict[str, tuple[ForecastCandidate, str]] = {}
         if include_builtin_candidates:
-            for candidate in (PersistenceCandidate(), SeasonalNaiveCandidate(), RecentMeanCandidate(), LinearTrendCandidate()):
+            for candidate in (
+                PersistenceCandidate(),
+                SeasonalNaiveCandidate(),
+                RecentMeanCandidate(),
+                LinearTrendCandidate(),
+            ):
                 self.register(candidate)
+        if include_ridge_candidate:
+            self.register(RidgeAutoregressiveCandidate())
 
     def register(self, candidate: ForecastCandidate) -> None:
         model_id = getattr(candidate, "model_id", None)
@@ -326,26 +486,31 @@ class PredictionEngine:
         horizon: int,
         season_length: int,
         non_negative: bool,
+        fold_indices: Sequence[int] | None = None,
     ) -> tuple[CandidateMetrics, list[float]]:
         candidate, version = self._candidates[model_id]
         actual_all: list[float] = []
         predicted_all: list[float] = []
-        cutoff = initial_history
-        folds = 0
+        total_folds = (len(values) - initial_history) // horizon
+        selected_fold_indices = (
+            tuple(range(total_folds)) if fold_indices is None else tuple(fold_indices)
+        )
         fold_metrics = []
-        while cutoff + horizon <= len(values):
-            # Score only complete blocks so a requested 168-hour evaluation
-            # never silently includes a shorter final block.
-            fold_horizon = horizon
+        for original_fold_index in selected_fold_indices:
+            # Preserve each sampled fold's original chronological position.
+            # Training expands only through observations before that block.
+            cutoff = initial_history + original_fold_index * horizon
             train = values[:cutoff]
             predicted = self._predict(
-                model_id, train, fold_horizon,
+                model_id, train, horizon,
                 season_length=season_length, non_negative=non_negative,
             )
-            actual = [float(value) for value in values[cutoff:cutoff + fold_horizon]]
+            actual = [
+                float(value) for value in values[cutoff:cutoff + horizon]
+            ]
             fold_mae, fold_rmse, fold_bias, _ = _metrics(actual, predicted)
             fold_metrics.append(CandidateFoldMetrics(
-                fold_index=folds + 1,
+                fold_index=original_fold_index + 1,
                 train_samples=len(train),
                 samples=len(actual),
                 mae=fold_mae,
@@ -354,13 +519,11 @@ class PredictionEngine:
             ))
             actual_all.extend(actual)
             predicted_all.extend(predicted)
-            cutoff += fold_horizon
-            folds += 1
         mae, rmse, bias, wape = _metrics(actual_all, predicted_all)
         return CandidateMetrics(
             model_id=model_id,
             model_version=version,
-            folds=folds,
+            folds=len(fold_metrics),
             samples=len(actual_all),
             mae=mae,
             rmse=rmse,
@@ -371,7 +534,7 @@ class PredictionEngine:
             abs(guess - truth) for truth, guess in zip(actual_all, predicted_all)
         ]
 
-    def evaluate_candidates(
+    def evaluate_candidates_detailed(
         self,
         history: Sequence[float],
         *,
@@ -379,7 +542,9 @@ class PredictionEngine:
         horizon: int = 24,
         season_length: int = 24,
         non_negative: bool = True,
-    ) -> tuple[CandidateMetrics, ...]:
+        max_folds: int | None = None,
+    ) -> CandidateEvaluationReport:
+        """Return ranked candidates and explicit reasons for ineligible candidates."""
         values = list(history)
         if (
             len(values) < 3
@@ -400,6 +565,10 @@ class PredictionEngine:
             raise ValueError("season_length must be a positive integer")
         if not isinstance(non_negative, bool):
             raise ValueError("non_negative must be a boolean")
+        if max_folds is not None and (
+            isinstance(max_folds, bool) or not isinstance(max_folds, int) or max_folds < 1
+        ):
+            raise ValueError("max_folds must be a positive integer or None")
         for index, value in enumerate(values):
             if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
                 raise ValueError(f"history[{index}] must be finite numeric data")
@@ -407,20 +576,58 @@ class PredictionEngine:
                 raise ValueError(f"history[{index}] cannot be negative for this signal")
         if not self._candidates:
             raise ValueError("no forecast candidates are registered")
+        available_folds = (len(values) - initial_history) // horizon
+        selected_fold_indices = _select_fold_indices(available_folds, max_folds)
         results = []
+        excluded = []
         for model_id in sorted(self._candidates):
             try:
                 metrics, _ = self._replay(
                     model_id, values, initial_history=initial_history, horizon=horizon,
                     season_length=season_length, non_negative=non_negative,
+                    fold_indices=selected_fold_indices,
                 )
                 results.append(metrics)
-            except (TypeError, ValueError, ArithmeticError):
-                # A candidate that violates the signal contract is ineligible for this signal.
-                continue
+            except (TypeError, ValueError, ArithmeticError) as exc:
+                # Preserve the reason so a report cannot silently hide an ineligible model.
+                excluded.append(CandidateExclusion(
+                    model_id=model_id,
+                    reason=f"{type(exc).__name__}: {exc}",
+                ))
         if not results:
-            raise ValueError("no registered forecast candidate passed the signal contract")
-        return tuple(sorted(results, key=lambda item: (item.mae, item.rmse, item.model_id)))
+            details = "; ".join(
+                f"{item.model_id}: {item.reason}" for item in excluded
+            )
+            suffix = f"; exclusions: {details}" if details else ""
+            raise ValueError(
+                "no registered forecast candidate passed the signal contract" + suffix
+            )
+        return CandidateEvaluationReport(
+            ranked_candidates=tuple(
+                sorted(results, key=lambda item: (item.mae, item.rmse, item.model_id))
+            ),
+            excluded_candidates=tuple(excluded),
+        )
+
+    def evaluate_candidates(
+        self,
+        history: Sequence[float],
+        *,
+        initial_history: int,
+        horizon: int = 24,
+        season_length: int = 24,
+        non_negative: bool = True,
+        max_folds: int | None = None,
+    ) -> tuple[CandidateMetrics, ...]:
+        """Return only eligible ranked metrics for backward-compatible callers."""
+        return self.evaluate_candidates_detailed(
+            history,
+            initial_history=initial_history,
+            horizon=horizon,
+            season_length=season_length,
+            non_negative=non_negative,
+            max_folds=max_folds,
+        ).ranked_candidates
 
     def forecast(
         self,
@@ -431,6 +638,7 @@ class PredictionEngine:
         backtest_horizon: int = 24,
         season_length: int = 24,
         confidence_level: float = 0.90,
+        max_backtest_folds: int | None = None,
     ) -> PredictionResult:
         if not isinstance(request, ForecastRequest):
             raise TypeError("request must be a ForecastRequest")
@@ -441,6 +649,7 @@ class PredictionEngine:
         ranking = self.evaluate_candidates(
             values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            max_folds=max_backtest_folds,
         )
         selected_id = model_id or ranking[0].model_id
         if selected_id not in self._candidates:
@@ -449,9 +658,16 @@ class PredictionEngine:
         # eligibility gate. This preserves identity-integrity and output-contract
         # errors (for example, a mutated plug-in or negative physical output)
         # instead of masking them behind a generic ranking rejection.
+        # Candidate ranking and residual-based interval estimation must use the
+        # same bounded fold set. Otherwise a capped selection could be paired
+        # with exhaustive residuals and report inconsistent evaluation scopes.
+        selected_fold_indices = tuple(
+            fold.fold_index - 1 for fold in ranking[0].fold_metrics
+        )
         selected_metrics, absolute_errors = self._replay(
             selected_id, values, initial_history=cutoff, horizon=backtest_horizon,
             season_length=season_length, non_negative=request.non_negative,
+            fold_indices=selected_fold_indices,
         )
         _, registered_version = self._candidates[selected_id]
         predictions = self._predict(
@@ -482,7 +698,8 @@ class PredictionEngine:
             backtest=selected_metrics,
             points=tuple(points),
             limitations=(
-                "Built-in candidates are statistical baselines, not trained AI models.",
+                "The default candidates are transparent baselines; optional Ridge is a univariate lag-only model. "
+                "No cross-signal or exogenous effects are learned.",
                 "Error bands summarize historical rolling-origin residuals; they are not guaranteed prediction intervals.",
                 "Candidate selection and error-band estimation reuse the same rolling-origin replay; bands are descriptive, not independently calibrated.",
                 "Backtest skill on supplied history does not establish future accuracy or site-wide operational suitability.",

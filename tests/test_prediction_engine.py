@@ -1,4 +1,5 @@
 """Tests for the model-agnostic IslandOS prediction engine."""
+import math
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -8,6 +9,7 @@ from islandos_core.prediction_engine import (
     PredictionEngine,
     PersistenceCandidate,
     RecentMeanCandidate,
+    RidgeAutoregressiveCandidate,
     SeasonalNaiveCandidate,
     SignalObservation,
 )
@@ -48,7 +50,9 @@ class TestPredictionEngine(unittest.TestCase):
         engine = PredictionEngine()
         self.assertEqual(
             {name for name, _ in engine.available_candidates()},
-            {"persistence", "seasonal_naive", "recent_mean", "linear_trend"},
+            {
+                "persistence", "seasonal_naive", "recent_mean", "linear_trend",
+            },
         )
 
     def test_persistence_baseline_repeats_last_observation(self):
@@ -205,6 +209,39 @@ class TestPredictionEngine(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must be non-negative"):
             make_request([1.0, -1.0, 2.0])
 
+    def test_detailed_evaluation_reports_ineligible_candidate_reason(self):
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(PersistenceCandidate())
+        engine.register(InvalidCandidate())
+
+        history = [float(value) for value in range(12)]
+        report = engine.evaluate_candidates_detailed(
+            history,
+            initial_history=4,
+            horizon=2,
+        )
+
+        self.assertEqual(
+            [item.model_id for item in report.ranked_candidates],
+            ["persistence"],
+        )
+        self.assertEqual(
+            [
+                (item.model_id, item.reason)
+                for item in report.excluded_candidates
+            ],
+            [("invalid", "ValueError: candidate prediction 0 must be finite")],
+        )
+        # The existing tuple-returning API remains compatible.
+        self.assertEqual(
+            engine.evaluate_candidates(
+                history,
+                initial_history=4,
+                horizon=2,
+            ),
+            report.ranked_candidates,
+        )
+
     def test_model_output_validation_and_linear_trend(self):
         candidate = LinearTrendCandidate()
         self.assertEqual(candidate.predict([1.0, 2.0, 3.0], 2, season_length=3), [4.0, 5.0])
@@ -224,6 +261,135 @@ class TestPredictionEngine(unittest.TestCase):
                 make_request([float(index % 24) for index in range(72)]),
                 model_id="mutating", initial_history=48,
             )
+
+    def test_ridge_candidate_is_opt_in_and_does_not_change_default_registry(self):
+        default_ids = {model_id for model_id, _ in PredictionEngine().available_candidates()}
+        enabled_ids = {
+            model_id
+            for model_id, _ in PredictionEngine(
+                include_ridge_candidate=True,
+            ).available_candidates()
+        }
+
+        self.assertEqual(
+            default_ids,
+            {"persistence", "seasonal_naive", "recent_mean", "linear_trend"},
+        )
+        self.assertIn("ridge_autoregressive_lag_only", enabled_ids)
+        self.assertEqual(
+            enabled_ids,
+            default_ids | {"ridge_autoregressive_lag_only"},
+        )
+
+    def test_ridge_candidate_is_deterministic_and_records_alpha_in_version(self):
+        values = [
+            20.0
+            + 3.0 * math.sin(2.0 * math.pi * index / 24.0)
+            + 0.4 * math.sin(2.0 * math.pi * index / 168.0)
+            for index in range(120)
+        ]
+        candidate = RidgeAutoregressiveCandidate(ridge_alpha=2.5)
+        first = candidate.predict(values, 12, season_length=24)
+        second = candidate.predict(values, 12, season_length=24)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 12)
+        self.assertTrue(all(math.isfinite(value) for value in first))
+        self.assertIn("alpha2.5", candidate.version)
+
+    def test_ridge_candidate_version_distinguishes_close_alpha_values(self):
+        first_alpha = 1.0000000000001
+        second_alpha = 1.0000000000002
+        first = RidgeAutoregressiveCandidate(ridge_alpha=first_alpha)
+        second = RidgeAutoregressiveCandidate(ridge_alpha=second_alpha)
+
+        self.assertNotEqual(first.ridge_alpha, second.ridge_alpha)
+        self.assertNotEqual(first.version, second.version)
+        self.assertIn(repr(first_alpha), first.version)
+        self.assertIn(repr(second_alpha), second.version)
+
+    def test_ridge_candidate_rejects_invalid_alpha_and_short_training_history(self):
+        with self.assertRaisesRegex(ValueError, "ridge_alpha"):
+            RidgeAutoregressiveCandidate(ridge_alpha=0)
+        with self.assertRaisesRegex(ValueError, "at least 32"):
+            RidgeAutoregressiveCandidate().predict(
+                [1.0] * 31, 1, season_length=24,
+            )
+
+    def test_ridge_candidate_preserves_negative_tariff_forecasts(self):
+        values = [-0.05 + (index % 24) * 0.0005 for index in range(96)]
+        request = make_request(
+            values, non_negative=False, signal_id="tariff", unit="EUR/kWh",
+        )
+        predictions = PredictionEngine(include_ridge_candidate=True).predict_candidate(
+            request, "ridge_autoregressive_lag_only", season_length=24,
+        )
+        self.assertTrue(any(value < 0 for value in predictions))
+
+    def test_ridge_candidate_refits_on_each_expanding_training_fold(self):
+        class RecordingRidge(RidgeAutoregressiveCandidate):
+            def __init__(self):
+                super().__init__()
+                self.training_lengths = []
+
+            def predict(self, history, horizon, *, season_length):
+                self.training_lengths.append(len(history))
+                return super().predict(history, horizon, season_length=season_length)
+
+        candidate = RecordingRidge()
+        engine = PredictionEngine(include_builtin_candidates=False)
+        engine.register(candidate)
+        values = [
+            25.0 + 2.0 * math.sin(2.0 * math.pi * index / 24.0)
+            for index in range(120)
+        ]
+
+        scores = engine.evaluate_candidates(
+            values, initial_history=48, horizon=24, season_length=24,
+        )
+
+        self.assertEqual(candidate.training_lengths, [48, 72, 96])
+        self.assertEqual(scores[0].model_id, "ridge_autoregressive_lag_only")
+        self.assertEqual(scores[0].folds, 3)
+        self.assertEqual(
+            [fold.train_samples for fold in scores[0].fold_metrics],
+            [48, 72, 96],
+        )
+
+        forecast = engine.forecast(
+            make_request(values),
+            model_id="ridge_autoregressive_lag_only",
+            initial_history=48,
+            backtest_horizon=24,
+        )
+        self.assertEqual(candidate.training_lengths[-1], len(values))
+        self.assertEqual(len(forecast.points), 4)
+
+    def test_forecast_bounds_selection_and_residual_replay_to_the_same_folds(self):
+        engine = PredictionEngine()
+        request = make_request([float(value) for value in range(20)])
+
+        bounded = engine.forecast(
+            request,
+            initial_history=4,
+            backtest_horizon=2,
+            max_backtest_folds=4,
+        )
+        self.assertEqual(
+            [fold.fold_index for fold in bounded.backtest.fold_metrics],
+            [1, 3, 5, 8],
+        )
+        self.assertEqual(bounded.backtest.folds, 4)
+        self.assertEqual(bounded.backtest.samples, 8)
+        self.assertEqual(bounded.interval_calibration_samples, 8)
+
+        exhaustive = engine.forecast(
+            request,
+            initial_history=4,
+            backtest_horizon=2,
+        )
+        self.assertEqual(exhaustive.backtest.folds, 8)
+        self.assertEqual(exhaustive.interval_calibration_samples, 16)
 
     def test_recent_mean_is_constant(self):
         self.assertEqual(

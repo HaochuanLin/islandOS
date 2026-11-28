@@ -64,6 +64,7 @@ class ForecastService:
         backtest_horizon: int = 24,
         season_length: int = 24,
         confidence_level: float = 0.90,
+        max_backtest_folds: int | None = None,
     ) -> ForecastBundleResult:
         if not isinstance(request, ForecastBundleRequest):
             raise TypeError("request must be a ForecastBundleRequest")
@@ -85,6 +86,7 @@ class ForecastService:
                 backtest_horizon=backtest_horizon,
                 season_length=season_length,
                 confidence_level=confidence_level,
+                max_backtest_folds=max_backtest_folds,
             )
             units[signal_request.signal_id] = signal_request.unit
 
@@ -123,7 +125,8 @@ class ForecastService:
             limitations=(
                 "Signals are forecast independently; cross-signal causal or multivariate effects are not learned.",
                 "Every signal must have complete, regular, timestamp-aligned history; missing values are not imputed.",
-                "Built-in candidates are statistical baselines, not trained AI models.",
+                "The default candidates are transparent baselines; univariate Ridge is opt-in for controlled evaluation. "
+                "Signals are still forecast independently.",
                 "Historical backtest performance does not establish future accuracy or site-wide operational suitability.",
                 "The bundle is decision-support evidence and does not issue equipment commands.",
             ),
