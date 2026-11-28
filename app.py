@@ -63,34 +63,34 @@ def _url_path(page_file: str) -> str:
 def navigation_pages() -> dict:
     """Build the single menu. Order and groups are the only thing this file owns."""
     groups = {
-        "Decision workspace": [
-            st.Page("islandos_ui/workspace.py", title="Workspace", icon="⚡", default=True),
+        "Start here": [
+            st.Page("islandos_ui/workspace.py", title="Workspace", icon=":material/space_dashboard:", default=True),
         ],
         "Customer views": [
             st.Page(
                 "pages/05_Customer_Decision_Dashboard.py",
                 title="Decision dashboard",
-                icon="📊",
+                icon=":material/insights:",
                 url_path=_url_path("pages/05_Customer_Decision_Dashboard.py"),
             ),
             st.Page(
                 "pages/06_Forecast_Led_Joint_Resource_Optimizer.py",
                 title="Joint resource optimizer",
-                icon="🔁",
+                icon=":material/tune:",
                 url_path=_url_path("pages/06_Forecast_Led_Joint_Resource_Optimizer.py"),
             ),
             st.Page(
                 "pages/09_Device_Flexibility_Planner.py",
                 title="Device flexibility planner",
-                icon="🔌",
+                icon=":material/electrical_services:",
                 url_path=_url_path("pages/09_Device_Flexibility_Planner.py"),
             ),
         ],
-        "Experimental": [
+        "Advanced / operator": [
             st.Page(
                 "pages/2_Rolling_Horizon_Lab.py",
                 title="Rolling horizon lab",
-                icon="🧪",
+                icon=":material/science:",
                 url_path=_url_path("pages/2_Rolling_Horizon_Lab.py"),
             ),
         ],
@@ -101,7 +101,7 @@ def navigation_pages() -> dict:
             st.Page(
                 "pages/07_Local_Customer_Workspace.py",
                 title="Customer workspace (local)",
-                icon="🗂️",
+                icon=":material/folder_open:",
                 url_path=_url_path("pages/07_Local_Customer_Workspace.py"),
             )
         )
@@ -110,12 +110,12 @@ def navigation_pages() -> dict:
             st.Page(
                 "pages/08_Site_Workspace.py",
                 title="Site workspace (local)",
-                icon="🏗️",
+                icon=":material/engineering:",
                 url_path=_url_path("pages/08_Site_Workspace.py"),
             )
         )
     if local_pages:
-        groups["Local deployment only"] = local_pages
+        groups["Advanced / operator"].extend(local_pages)
     return groups
 
 

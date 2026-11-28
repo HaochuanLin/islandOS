@@ -13,24 +13,39 @@ from html import escape
 import streamlit as st
 
 
-def render_page_title(kicker: str, title: str, dek: str) -> None:
+def render_page_title(
+    kicker: str,
+    title: str,
+    dek: str,
+    *,
+    compact: bool = False,
+) -> None:
     """Render the display heading in the shared IslandOS type scale.
 
-    ``kicker`` is the small all-caps line above the title, ``title`` is the H1,
-    and ``dek`` is the one-sentence orientation line.  All three are escaped
-    because they are written as HTML rather than through Streamlit's own title
-    widget, which keeps the type scale independent of Streamlit's defaults.
+    ``kicker`` is optional: an empty value omits the eyebrow entirely. ``compact``
+    is for task pages whose first screen should reach the work sooner.
     """
+    kicker_html = (
+        f'<p class="ios-kicker">{escape(kicker)}</p>' if kicker.strip() else ""
+    )
+    hero_class = "ios-hero ios-hero--compact" if compact else "ios-hero"
     st.html(
-        '<section class="ios-hero">'
-        f'<p class="ios-kicker">{escape(kicker)}</p>'
+        f'<section class="{hero_class}">'
+        f"{kicker_html}"
         f"<h1>{escape(title)}</h1>"
         f'<p class="ios-hero__dek">{escape(dek)}</p>'
         "</section>"
     )
 
 
-def render_page_header(question: str, data: str, conclusions: str, limits: str) -> None:
+def render_page_header(
+    question: str,
+    data: str,
+    conclusions: str,
+    limits: str,
+    *,
+    collapsible: bool = False,
+) -> None:
     """Render the four-part brief. Keep every argument to one short sentence."""
     items = (
         ("Answers", question),
@@ -47,4 +62,12 @@ def render_page_header(question: str, data: str, conclusions: str, limits: str) 
         )
         for label, value in items
     )
+    if collapsible:
+        st.html(
+            '<details class="ios-brief ios-brief--details" aria-label="Page brief">'
+            "<summary>Scope &amp; limits</summary>"
+            f'<div class="ios-brief__grid">{cells}</div>'
+            "</details>"
+        )
+        return
     st.html(f'<aside class="ios-brief" aria-label="Page brief">{cells}</aside>')

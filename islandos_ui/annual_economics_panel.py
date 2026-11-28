@@ -191,7 +191,7 @@ def binding_facts(binding: Mapping) -> list[tuple[str, str]]:
     ]
 
 
-def render_annual_economics_basis(binding: Mapping) -> None:
+def render_annual_economics_basis(binding: Mapping, *, include_hashes: bool = True) -> None:
     """Render the basis banner and facts; stop the page if the binding is broken."""
     errors = binding_errors(binding)
     if errors:
@@ -202,6 +202,8 @@ def render_annual_economics_basis(binding: Mapping) -> None:
         )
         st.stop()
     facts = binding_facts(binding)
+    if not include_hashes:
+        facts = [(label, value) for label, value in facts if "SHA-256" not in label]
     banner = f"{annual_basis_text(binding)} {withheld_text(binding)}"
     if basis_level(binding) == "warning":
         st.warning(banner)

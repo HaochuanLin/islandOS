@@ -7,12 +7,10 @@ changing the entry point.
 """
 from __future__ import annotations
 
-"""IslandOS interactive, simulation-first decision-support prototype.
-
-The hosted interface exposes selected energy–water screening and forecast-led decision pages; it does not yet integrate the complete five-step IslandOS workflow into one end-to-end customer journey.
-This is a planning/simulation interface, not a live microgrid controller.
-Uploaded site data is used as supplied; the built-in demo is synthetic.
-"""
+# The hosted interface exposes selected energy-water screening and forecast-led
+# decision pages; it does not yet integrate the five-step workflow into one
+# end-to-end customer journey. This is a planning/simulation interface, not a
+# live microgrid controller. Uploaded data is used as supplied; the demo is synthetic.
 
 import csv
 import hashlib
@@ -24,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import streamlit as st
 from islandos_ui.upload_guard import reject_upload
-from islandos_ui.page_header import render_page_header
+from islandos_ui.page_header import render_page_header, render_page_title
 from islandos_ui.table import render_table
 
 from experiments.compare_energy_water_strategies import REQUIRED_COLUMNS, Config
@@ -167,19 +165,19 @@ def stable_signature(payload: dict) -> str:
 
 
 with st.sidebar:
-    st.markdown("## ⚡ IslandOS")
+    st.markdown("## IslandOS")
     st.caption("Energy & resource decision support")
     st.divider()
     st.caption("Research prototype · not for real-time control")
     st.download_button(
-        "⬇ Download energy–water CSV template",
+        "Download energy–water CSV template",
         data=csv_template_bytes(),
         file_name="islandos_energy_water_template.csv",
         mime="text/csv",
         width="stretch",
     )
     st.download_button(
-        "⬇ Download site-history CSV (canonical columns)",
+        "Download site-history CSV (canonical columns)",
         data=synthetic_forecast_history_csv(),
         file_name="islandos_synthetic_forecast_demo.csv",
         mime="text/csv",
@@ -195,31 +193,27 @@ with st.sidebar:
 
 # Section tabs sit in the main column so the sidebar keeps a single menu of
 # pages; the workspace's own sub-navigation must not compete with it.
-page = st.radio(
-    "Section",
-    ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
-    horizontal=True,
-    label_visibility="collapsed",
+render_page_title(
+    "",
+    "IslandOS",
+    "Energy and water decisions, screened before you commit.",
 )
-
 render_page_header(
     question="Whether a site's energy-water plan holds up when you screen it, forecast it, optimise it and compare strategies.",
     data="The built-in synthetic demo, or a CSV/XLSX you upload; each section below states which it is using.",
     conclusions="Which options are feasible, what they cost, and where the plan breaks under stress - never one 'right' answer.",
     limits="Planning estimates from synthetic or unverified inputs; no live control and no measured savings.",
+    collapsible=True,
+)
+page = st.radio(
+    "Section",
+    ["Overview", "Data onboarding & workspace", "Forecast lab", "Flexible-load cost optimizer", "Strategy simulator", "Microgrid screening", "Historical RO baseline", "Data guide"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="workspace-section-nav",
 )
 
 if page == "Overview":
-    st.markdown(
-        """
-        <div class="hero">
-          <h1>IslandOS</h1>
-          <p>Turn energy data into forecasts, coordinated operating options, and auditable decisions.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     st.info(
         "Public demonstration · Synthetic inputs by default · Offline planning only. "
         "Uploaded files are customer-supplied and are not independently verified. "
@@ -241,7 +235,7 @@ if page == "Overview":
         st.page_link(
             "pages/06_Forecast_Led_Joint_Resource_Optimizer.py",
             label="Open joint resource optimizer",
-            icon="⚡",
+            icon=":material/tune:",
             width="stretch",
         )
     with device_col:
@@ -253,7 +247,7 @@ if page == "Overview":
         st.page_link(
             "pages/05_Customer_Decision_Dashboard.py",
             label="Open decision dashboard",
-            icon="📊",
+            icon=":material/insights:",
             width="stretch",
         )
     with compare_col:
@@ -266,7 +260,7 @@ if page == "Overview":
         st.page_link(
             "pages/09_Device_Flexibility_Planner.py",
             label="Open device flexibility planner",
-            icon="🔌",
+            icon=":material/electrical_services:",
             width="stretch",
         )
 
@@ -362,9 +356,9 @@ elif page == "Flexible-load cost optimizer":
     )
 
     currency = st.text_input(
-        "Currency label (used only for display)", value="currency",
+        "Currency label (used only for display)", value="USD",
         help="Enter a label such as USD, EUR, or your local currency. This does not convert prices.",
-    ).strip() or "currency"
+    ).strip() or "USD"
     max_power = st.number_input(
         "Equipment maximum power (kW)", min_value=0.1, value=2.0, step=0.1,
         help="Nameplate upper bound for the flexible load.",
@@ -1055,7 +1049,7 @@ elif page == "Strategy simulator":
         d1, d2 = st.columns(2)
         with d1:
             st.download_button(
-                "⬇ Download strategy summary (with provenance)",
+                "Download strategy summary (with provenance)",
                 dataframe_csv(result["summary"], result["provenance"]),
                 file_name="islandos_strategy_summary.csv",
                 mime="text/csv",
@@ -1063,7 +1057,7 @@ elif page == "Strategy simulator":
             )
         with d2:
             st.download_button(
-                "⬇ Download timestep audit (with provenance)",
+                "Download timestep audit (with provenance)",
                 dataframe_csv(result["detail"], result["provenance"]),
                 file_name="islandos_timestep_audit.csv",
                 mime="text/csv",
@@ -1555,7 +1549,8 @@ elif page == "Historical RO baseline":
     )
     st.warning(
         "Customer-supplied data is not independently verified. The report is historical accounting only: "
-        "it does not forecast, optimize, annualize, or prove savings."
+        "it does not forecast, optimize, annualize, or prove savings. Do not upload confidential or "
+        "personally identifiable information to the public hosted demo."
     )
     baseline_file = st.file_uploader(
         "Upload historical RO CSV", type=["csv"], key="historical_ro_csv"
@@ -1957,7 +1952,7 @@ else:
         """
     )
     st.download_button(
-        "⬇ Download CSV template",
+        "Download CSV template",
         data=csv_template_bytes(),
         file_name="islandos_site_data_template.csv",
         mime="text/csv",
