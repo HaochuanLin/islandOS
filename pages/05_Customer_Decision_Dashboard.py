@@ -351,7 +351,10 @@ try:
         m3.metric("Unmet energy", f"{result_view['unmet_load_kwh']:,.2f} kWh")
         if result_view["service_equivalent"] and result_view["cost_comparison_valid"]:
             saving = result_view["cost_reduction_vs_grid_first"]
-            m4.metric("Modeled cost difference vs grid-first",
+            # U+2011 is a non-breaking hyphen: it renders like "-" but keeps
+            # "grid-first" together when the four-up metric row narrows to two
+            # columns on phones, instead of leaving a bare "GRID-" line.
+            m4.metric("Modeled cost difference vs grid\u2011first",
                       f"{saving:,.2f} {result_view['currency'] or currency}" if saving is not None else "Not available")
         else:
             m4.metric("Customer savings claim", "Withheld")
